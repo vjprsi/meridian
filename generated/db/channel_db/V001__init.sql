@@ -32,11 +32,13 @@ CREATE TABLE ussd_menu (
   short_code                   varchar(16) NOT NULL,
   language                     varchar(8) NOT NULL,
   version                      integer NOT NULL DEFAULT 1,
+  cloned_from_id               uuid REFERENCES ussd_menu(id),
   root_node_key                varchar(64) NOT NULL,
   session_timeout_seconds      integer NOT NULL DEFAULT 120,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PUBLISHED', 'RETIRED')),
   published_at                 timestamptz,
   published_by                 varchar(64),
+  retired_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -56,18 +58,21 @@ COMMENT ON COLUMN ussd_menu.code IS 'Menu code';
 COMMENT ON COLUMN ussd_menu.name IS 'Name';
 COMMENT ON COLUMN ussd_menu.short_code IS 'Dialled code, e.g. *123#';
 COMMENT ON COLUMN ussd_menu.language IS 'Language';
-COMMENT ON COLUMN ussd_menu.version IS 'Version';
+COMMENT ON COLUMN ussd_menu.version IS 'Version (a clone gets the next version for the short code and language)';
+COMMENT ON COLUMN ussd_menu.cloned_from_id IS 'Version this menu was cloned from';
 COMMENT ON COLUMN ussd_menu.root_node_key IS 'Key of the first node';
 COMMENT ON COLUMN ussd_menu.session_timeout_seconds IS 'Session timeout';
 COMMENT ON COLUMN ussd_menu.status IS 'Status';
 COMMENT ON COLUMN ussd_menu.published_at IS 'Publication time';
-COMMENT ON COLUMN ussd_menu.published_by IS 'Publisher';
+COMMENT ON COLUMN ussd_menu.published_by IS 'Publisher (checker, differs from the maker)';
+COMMENT ON COLUMN ussd_menu.retired_at IS 'Time a newer version replaced it';
 COMMENT ON COLUMN ussd_menu.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ussd_menu.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ussd_menu.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ussd_menu.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ussd_menu.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_ussd_menu_tenant ON ussd_menu (tenant_id, created_at);
+CREATE INDEX ix_ussd_menu_cloned_from_id ON ussd_menu (cloned_from_id);
 ALTER TABLE ussd_menu ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ussd_menu USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_ussd_menu_touch BEFORE UPDATE ON ussd_menu FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -88,7 +93,9 @@ CREATE TABLE ussd_menu_node (
   option_number                integer,
   label                        varchar(182) NOT NULL,
   prompt                       varchar(182),
+  input_type                   varchar(40) CHECK (input_type IN ('TEXT', 'NUMBER', 'AMOUNT', 'MSISDN', 'PIN')),
   input_validation             varchar(128),
+  context_key                  varchar(64),
   action_code                  varchar(64),
   next_node_key                varchar(64),
   requires_pin                 boolean NOT NULL DEFAULT false,
@@ -112,12 +119,14 @@ COMMENT ON COLUMN ussd_menu_node.row_version IS 'Optimistic lock version; send a
 COMMENT ON COLUMN ussd_menu_node.ussd_menu_id IS 'Menu';
 COMMENT ON COLUMN ussd_menu_node.node_key IS 'Node key';
 COMMENT ON COLUMN ussd_menu_node.parent_node_key IS 'Parent node';
-COMMENT ON COLUMN ussd_menu_node.node_type IS 'Node type';
+COMMENT ON COLUMN ussd_menu_node.node_type IS 'MENU lists its children by option_number; INPUT stores the reply under context_key; CONFIRM accepts 1 (yes) or 2 (no); ACTION runs action_code; END closes the session';
 COMMENT ON COLUMN ussd_menu_node.option_number IS 'Option number in the parent menu';
-COMMENT ON COLUMN ussd_menu_node.label IS 'Text shown (182-character USSD limit)';
+COMMENT ON COLUMN ussd_menu_node.label IS 'Text shown (182-character USSD limit); {placeholders} are filled from the session context';
 COMMENT ON COLUMN ussd_menu_node.prompt IS 'Input prompt';
+COMMENT ON COLUMN ussd_menu_node.input_type IS 'Kind of input (PIN inputs are never stored)';
 COMMENT ON COLUMN ussd_menu_node.input_validation IS 'Regex the input must match';
-COMMENT ON COLUMN ussd_menu_node.action_code IS 'Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE';
+COMMENT ON COLUMN ussd_menu_node.context_key IS 'Session context variable the input is stored under (default: node_key)';
+COMMENT ON COLUMN ussd_menu_node.action_code IS 'Action executed, e.g. BALANCE, P2P_SEND, CASH_OUT, AIRTIME, MINI_STATEMENT, CHANGE_PIN';
 COMMENT ON COLUMN ussd_menu_node.next_node_key IS 'Next node after input';
 COMMENT ON COLUMN ussd_menu_node.requires_pin IS 'Ask for the PIN before the action';
 COMMENT ON COLUMN ussd_menu_node.min_kyc_tier IS 'Hide the node below this tier';
@@ -154,7 +163,9 @@ CREATE TABLE ussd_session (
   context                      jsonb,
   step_count                   integer NOT NULL DEFAULT 0,
   started_at                   timestamptz NOT NULL DEFAULT now(),
+  last_activity_at             timestamptz,
   ended_at                     timestamptz,
+  end_reason                   varchar(64),
   wallet_transaction_id        uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -183,7 +194,9 @@ COMMENT ON COLUMN ussd_session.status IS 'Status';
 COMMENT ON COLUMN ussd_session.context IS 'Inputs collected so far (PINs never stored)';
 COMMENT ON COLUMN ussd_session.step_count IS 'Steps taken';
 COMMENT ON COLUMN ussd_session.started_at IS 'Start';
+COMMENT ON COLUMN ussd_session.last_activity_at IS 'Last request (database clock; drives the timeout)';
 COMMENT ON COLUMN ussd_session.ended_at IS 'End';
+COMMENT ON COLUMN ussd_session.end_reason IS 'Why the session ended';
 COMMENT ON COLUMN ussd_session.wallet_transaction_id IS 'Transaction created';
 COMMENT ON COLUMN ussd_session.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ussd_session.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -272,10 +285,10 @@ COMMENT ON COLUMN sms_command.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN sms_command.updated_at IS 'Last update time';
 COMMENT ON COLUMN sms_command.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN sms_command.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN sms_command.keyword IS 'Keyword';
+COMMENT ON COLUMN sms_command.keyword IS 'Keyword (matched case-insensitively)';
 COMMENT ON COLUMN sms_command.short_code IS 'Short code';
 COMMENT ON COLUMN sms_command.language IS 'Language';
-COMMENT ON COLUMN sms_command.action_code IS 'Action executed';
+COMMENT ON COLUMN sms_command.action_code IS 'Action executed: BALANCE, P2P_SEND, MINI_STATEMENT, HELP';
 COMMENT ON COLUMN sms_command.syntax IS 'Syntax, e.g. SEND amount msisdn pin';
 COMMENT ON COLUMN sms_command.help_text IS 'Help reply';
 COMMENT ON COLUMN sms_command.requires_pin IS 'PIN required in the message';
@@ -308,6 +321,7 @@ CREATE TABLE sms_message (
   provider                     varchar(32),
   provider_message_id          varchar(64),
   sms_command_id               uuid REFERENCES sms_command(id),
+  reply_to_id                  uuid REFERENCES sms_message(id),
   wallet_transaction_id        uuid,
   notification_id              uuid,
   segments                     integer,
@@ -339,6 +353,7 @@ COMMENT ON COLUMN sms_message.mno IS 'Network operator';
 COMMENT ON COLUMN sms_message.provider IS 'SMS gateway';
 COMMENT ON COLUMN sms_message.provider_message_id IS 'Gateway message id';
 COMMENT ON COLUMN sms_message.sms_command_id IS 'Command matched (inbound)';
+COMMENT ON COLUMN sms_message.reply_to_id IS 'Inbound message this outbound message answers';
 COMMENT ON COLUMN sms_message.wallet_transaction_id IS 'Related transaction';
 COMMENT ON COLUMN sms_message.notification_id IS 'Related notification (outbound)';
 COMMENT ON COLUMN sms_message.segments IS 'SMS segments';
@@ -356,6 +371,7 @@ CREATE INDEX ix_sms_message_tenant ON sms_message (tenant_id, created_at);
 CREATE INDEX ix_sms_message_msisdn ON sms_message (msisdn);
 CREATE INDEX ix_sms_message_provider_message_id ON sms_message (provider_message_id);
 CREATE INDEX ix_sms_message_sms_command_id ON sms_message (sms_command_id);
+CREATE INDEX ix_sms_message_reply_to_id ON sms_message (reply_to_id);
 CREATE INDEX ix_sms_message_wallet_transaction_id ON sms_message (wallet_transaction_id);
 CREATE INDEX ix_sms_message_notification_id ON sms_message (notification_id);
 ALTER TABLE sms_message ENABLE ROW LEVEL SECURITY;

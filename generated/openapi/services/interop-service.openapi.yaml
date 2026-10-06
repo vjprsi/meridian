@@ -61,6 +61,11 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
       - name: custom_field_1
         in: query
         schema:
@@ -268,7 +273,7 @@ paths:
   /v1/interop-switches/{id}/sync-participants:
     post:
       operationId: interopSwitchesSyncParticipants
-      summary: Refresh the participant directory from the switch
+      summary: 'Refresh the participant directory from the switch: {added, updated, deactivated, total}'
       tags:
       - Interop Switches
       security:
@@ -288,7 +293,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InteropSwitch'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -308,7 +315,8 @@ paths:
   /v1/interop-switches/{id}/position:
     get:
       operationId: interopSwitchesPosition
-      summary: Net position and liquidity against the net debit cap
+      summary: 'Net position against the net debit cap and liquidity: {settlement_balance, reserved_outbound, committed_outbound,
+        committed_inbound, net_position, net_debit_cap, headroom, liquidity_limit, currency}'
       tags:
       - Interop Switches
       security:
@@ -322,8 +330,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -572,6 +586,11 @@ paths:
           - ACCEPTED
           - REJECTED
           - EXPIRED
+      - name: quote_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -695,7 +714,8 @@ paths:
   /v1/interop-quotes/lookup-party:
     post:
       operationId: interopQuotesLookupParty
-      summary: Resolve a payee by MSISDN or alias through the switch
+      summary: 'Resolve a payee by MSISDN, account or alias through the switch: {found, party_type, party_id, fsp_id, fsp_name,
+        name, currency}'
       tags:
       - Interop Quotes
       security:
@@ -704,8 +724,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -727,6 +753,54 @@ paths:
       x-service: interop-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
+      x-table: interop_quote
+  /v1/interop-quotes/callbacks:
+    post:
+      operationId: interopQuotesCallbacks
+      summary: 'Inbound quote request (QUOTE_REQUEST, we are the payee) or response (QUOTE_RESPONSE / QUOTE_ERROR for our
+        outbound quote) from the switch; HMAC-SHA256 (hex) of the canonical JSON body (keys sorted, no whitespace) in X-Switch-Signature
+        keyed with the switch secret: {quote_id, status, ilp_condition, payee_receive_amount, fee_amount, expires_at}'
+      tags:
+      - Interop Quotes
+      security: []
+      parameters:
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropQuotesCallbacksRequest'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: interop_quote
   /v1/interop-transfers:
     get:
@@ -777,6 +851,11 @@ paths:
           type: string
           format: uuid
       - name: counterparty_fsp_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: transfer_id
         in: query
         schema:
           type: string
@@ -907,7 +986,7 @@ paths:
   /v1/interop-transfers/{id}/abort:
     post:
       operationId: interopTransfersAbort
-      summary: Abort a reserved transfer
+      summary: Abort a reserved transfer and release the funds
       tags:
       - Interop Transfers
       security:
@@ -951,10 +1030,10 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: interop_transfer
-  /v1/interop-transfers/callbacks/quotes:
+  /v1/interop-transfers/expire:
     post:
-      operationId: interopTransfersCallbacksQuotes
-      summary: Inbound quote request or response from the switch
+      operationId: interopTransfersExpire
+      summary: Abort reserved transfers past their expiry and expire stale quotes
       tags:
       - Interop Transfers
       security:
@@ -963,8 +1042,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -975,12 +1060,6 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InteropTransfersCallbacksQuotesRequest'
       x-requirements:
       - PAY-01
       - WAL-08
@@ -988,20 +1067,31 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: interop_transfer
-  /v1/interop-transfers/callbacks/transfers:
+  /v1/interop-transfers/callbacks:
     post:
-      operationId: interopTransfersCallbacksTransfers
-      summary: Inbound transfer prepare or fulfil from the switch
+      operationId: interopTransfersCallbacks
+      summary: 'Inbound transfer prepare (TRANSFER_PREPARE, we are the payee) or result of our outbound transfer (TRANSFER_FULFIL
+        with the fulfilment, or TRANSFER_ERROR); HMAC-SHA256 (hex) of the canonical JSON body (keys sorted, no whitespace)
+        in X-Switch-Signature keyed with the switch secret: {transfer_id, status, fulfilment}'
       tags:
       - Interop Transfers
-      security:
-      - oauth2:
-        - wallets:write
+      security: []
       parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1017,13 +1107,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InteropTransfersCallbacksTransfersRequest'
+              $ref: '#/components/schemas/InteropTransfersCallbacksRequest'
       x-requirements:
       - PAY-01
       - WAL-08
       x-service: interop-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
-      x-required-scope: wallets:write
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: interop_transfer
 components:
   schemas:
@@ -1125,7 +1216,10 @@ components:
           format: uuid
         party_type:
           type: string
-          maxLength: 32
+          enum:
+          - MSISDN
+          - ACCOUNT
+          - ALIAS
         party_id:
           type: string
           maxLength: 64
@@ -1133,6 +1227,18 @@ components:
       - interop_switch_id
       - party_type
       - party_id
+    InteropQuotesCallbacksRequest:
+      type: object
+      properties:
+        switch_code:
+          type: string
+          maxLength: 32
+        payload:
+          type: object
+          additionalProperties: true
+      required:
+      - switch_code
+      - payload
     InteropTransferPage:
       type: object
       description: One page of InteropTransfer results (newest first)
@@ -1159,21 +1265,17 @@ components:
           maxLength: 255
       required:
       - reason
-    InteropTransfersCallbacksQuotesRequest:
+    InteropTransfersCallbacksRequest:
       type: object
       properties:
+        switch_code:
+          type: string
+          maxLength: 32
         payload:
           type: object
           additionalProperties: true
       required:
-      - payload
-    InteropTransfersCallbacksTransfersRequest:
-      type: object
-      properties:
-        payload:
-          type: object
-          additionalProperties: true
-      required:
+      - switch_code
       - payload
     InteropParticipant:
       type: object
@@ -1430,22 +1532,41 @@ components:
         quote_id:
           type: string
           maxLength: 64
-          description: Quote id on the switch
+          description: Quote id on the switch (generated for outbound, taken from the switch for inbound)
+          readOnly: true
         direction:
           type: string
           enum:
           - OUTBOUND
           - INBOUND
-          description: Outbound or inbound
+          description: Outbound (created by the API) or inbound (created by a switch callback)
+          readOnly: true
         payer_wallet_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Payer wallet (outbound)
+        payer_fsp_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Payer participant (inbound)
+          readOnly: true
+        payee_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Payee wallet resolved for an inbound quote
+          readOnly: true
         payee_party_type:
           type: string
-          maxLength: 32
+          enum:
+          - MSISDN
+          - ACCOUNT
+          - ALIAS
           description: MSISDN, ACCOUNT, ALIAS
         payee_party_id:
           type: string
@@ -1497,7 +1618,7 @@ components:
           - string
           - 'null'
           maxLength: 128
-          description: Cryptographic condition for the transfer
+          description: Cryptographic condition for the transfer (base64url SHA-256 of the fulfilment)
           readOnly: true
         status:
           type: string
@@ -1508,12 +1629,19 @@ components:
           - EXPIRED
           description: Status
           readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the quote was rejected
+          readOnly: true
         expires_at:
           type:
           - string
           - 'null'
           format: date-time
-          description: Expiry
+          description: Expiry (database clock)
           readOnly: true
         custom_field_1:
           type:
@@ -1565,23 +1693,16 @@ components:
           type: string
           format: uuid
           description: Switch
-        quote_id:
-          type: string
-          maxLength: 64
-          description: Quote id on the switch
-        direction:
-          type: string
-          enum:
-          - OUTBOUND
-          - INBOUND
-          description: Outbound or inbound
         payer_wallet_id:
           type: string
           format: uuid
           description: Payer wallet (outbound)
         payee_party_type:
           type: string
-          maxLength: 32
+          enum:
+          - MSISDN
+          - ACCOUNT
+          - ALIAS
           description: MSISDN, ACCOUNT, ALIAS
         payee_party_id:
           type: string
@@ -1623,8 +1744,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - interop_switch_id
-      - quote_id
-      - direction
       - payee_party_type
       - payee_party_id
       - amount
@@ -1708,13 +1827,13 @@ components:
           - string
           - 'null'
           maxLength: 500
-          description: Switch endpoint
+          description: Switch endpoint (empty = built-in simulator)
         settlement_account_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Settlement position account
+          description: Settlement position account in the ledger
         liquidity_limit:
           type:
           - string
@@ -1731,6 +1850,33 @@ components:
           examples:
           - '125.50'
           description: Net debit cap set by the switch
+        fee_flat:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Our flat fee on outbound transfers
+        fee_percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Our percentage fee on outbound transfers
+        quote_validity_seconds:
+          type: integer
+          format: int32
+          description: Quote validity
+        transfer_timeout_seconds:
+          type: integer
+          format: int32
+          description: Time a reserved transfer waits for the fulfilment
+        last_directory_sync_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last participant directory refresh
+          readOnly: true
         is_active:
           type: boolean
           description: Active
@@ -1774,6 +1920,10 @@ components:
       - switch_type
       - protocol
       - participant_id
+      - fee_flat
+      - fee_percentage
+      - quote_validity_seconds
+      - transfer_timeout_seconds
       - is_active
     InteropSwitchCreate:
       type: object
@@ -1813,11 +1963,11 @@ components:
         endpoint_url:
           type: string
           maxLength: 500
-          description: Switch endpoint
+          description: Switch endpoint (empty = built-in simulator)
         settlement_account_id:
           type: string
           format: uuid
-          description: Settlement position account
+          description: Settlement position account in the ledger
         liquidity_limit:
           type: string
           format: decimal
@@ -1830,6 +1980,26 @@ components:
           examples:
           - '125.50'
           description: Net debit cap set by the switch
+        fee_flat:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Our flat fee on outbound transfers
+        fee_percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Our percentage fee on outbound transfers
+        quote_validity_seconds:
+          type: integer
+          format: int32
+          description: Quote validity
+        transfer_timeout_seconds:
+          type: integer
+          format: int32
+          description: Time a reserved transfer waits for the fulfilment
         is_active:
           type: boolean
           description: Active
@@ -1897,11 +2067,11 @@ components:
         endpoint_url:
           type: string
           maxLength: 500
-          description: Switch endpoint
+          description: Switch endpoint (empty = built-in simulator)
         settlement_account_id:
           type: string
           format: uuid
-          description: Settlement position account
+          description: Settlement position account in the ledger
         liquidity_limit:
           type: string
           format: decimal
@@ -1914,6 +2084,26 @@ components:
           examples:
           - '125.50'
           description: Net debit cap set by the switch
+        fee_flat:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Our flat fee on outbound transfers
+        fee_percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Our percentage fee on outbound transfers
+        quote_validity_seconds:
+          type: integer
+          format: int32
+          description: Quote validity
+        transfer_timeout_seconds:
+          type: integer
+          format: int32
+          description: Time a reserved transfer waits for the fulfilment
         is_active:
           type: boolean
           description: Active
@@ -1988,13 +2178,15 @@ components:
         transfer_id:
           type: string
           maxLength: 64
-          description: Transfer id on the switch
+          description: Transfer id on the switch (generated for outbound)
+          readOnly: true
         direction:
           type: string
           enum:
           - OUTBOUND
           - INBOUND
-          description: Outbound or inbound
+          description: Outbound (created by the API) or inbound (created by a switch callback)
+          readOnly: true
         payer_wallet_id:
           type:
           - string
@@ -2007,6 +2199,7 @@ components:
           - 'null'
           format: uuid
           description: Payee wallet (inbound)
+          readOnly: true
         counterparty_fsp_id:
           type: string
           maxLength: 64
@@ -2027,6 +2220,22 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        fee_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fees charged to the payer
+          readOnly: true
+        ilp_condition:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Condition the fulfilment must satisfy
+          readOnly: true
         status:
           type: string
           enum:
@@ -2058,7 +2267,7 @@ components:
           - string
           - 'null'
           format: date-time
-          description: Expiry
+          description: Expiry (database clock)
           readOnly: true
         completed_at:
           type:
@@ -2084,7 +2293,7 @@ components:
         idempotency_key:
           type: string
           maxLength: 128
-          description: Client key
+          description: Client key (or switch transfer id for inbound)
           readOnly: true
         custom_field_1:
           type:
@@ -2140,24 +2349,10 @@ components:
           type: string
           format: uuid
           description: Quote
-        transfer_id:
-          type: string
-          maxLength: 64
-          description: Transfer id on the switch
-        direction:
-          type: string
-          enum:
-          - OUTBOUND
-          - INBOUND
-          description: Outbound or inbound
         payer_wallet_id:
           type: string
           format: uuid
           description: Payer wallet (outbound)
-        payee_wallet_id:
-          type: string
-          format: uuid
-          description: Payee wallet (inbound)
         counterparty_fsp_id:
           type: string
           maxLength: 64
@@ -2198,8 +2393,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - interop_switch_id
-      - transfer_id
-      - direction
       - counterparty_fsp_id
       - amount
       - currency

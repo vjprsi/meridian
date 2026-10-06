@@ -31,14 +31,19 @@ CREATE TABLE commission_plan (
   name                         varchar(120) NOT NULL,
   description                  text,
   version                      integer NOT NULL DEFAULT 1,
+  parent_plan_id               uuid REFERENCES commission_plan(id),
   applies_to                   varchar(32) NOT NULL,
   currency                     char(3) NOT NULL,
   payout_frequency             varchar(40) NOT NULL DEFAULT 'DAILY' CHECK (payout_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY')),
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
   valid_from                   date NOT NULL,
   valid_to                     date,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejection_reason             varchar(255),
+  retired_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -57,21 +62,27 @@ COMMENT ON COLUMN commission_plan.row_version IS 'Optimistic lock version; send 
 COMMENT ON COLUMN commission_plan.code IS 'Plan code';
 COMMENT ON COLUMN commission_plan.name IS 'Name';
 COMMENT ON COLUMN commission_plan.description IS 'Description';
-COMMENT ON COLUMN commission_plan.version IS 'Version';
+COMMENT ON COLUMN commission_plan.version IS 'Version (a clone gets the next version of the code)';
+COMMENT ON COLUMN commission_plan.parent_plan_id IS 'Version this plan was cloned from';
 COMMENT ON COLUMN commission_plan.applies_to IS 'AGENT, MERCHANT, BILLER, ALL';
 COMMENT ON COLUMN commission_plan.currency IS 'Currency';
 COMMENT ON COLUMN commission_plan.payout_frequency IS 'Payout frequency';
 COMMENT ON COLUMN commission_plan.status IS 'Status';
 COMMENT ON COLUMN commission_plan.valid_from IS 'Effective from';
 COMMENT ON COLUMN commission_plan.valid_to IS 'Effective to';
+COMMENT ON COLUMN commission_plan.submitted_by IS 'Maker who submitted the plan';
+COMMENT ON COLUMN commission_plan.submitted_at IS 'Submission time';
 COMMENT ON COLUMN commission_plan.approved_by IS 'Checker';
 COMMENT ON COLUMN commission_plan.approved_at IS 'Approval time';
+COMMENT ON COLUMN commission_plan.rejection_reason IS 'Reason the last submission was rejected';
+COMMENT ON COLUMN commission_plan.retired_at IS 'Retirement time';
 COMMENT ON COLUMN commission_plan.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN commission_plan.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN commission_plan.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN commission_plan.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN commission_plan.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_commission_plan_tenant ON commission_plan (tenant_id, created_at);
+CREATE INDEX ix_commission_plan_parent_plan_id ON commission_plan (parent_plan_id);
 ALTER TABLE commission_plan ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON commission_plan USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_commission_plan_touch BEFORE UPDATE ON commission_plan FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -103,6 +114,7 @@ CREATE TABLE commission_rule (
   cap_amount                   numeric(28,8),
   base                         varchar(16) NOT NULL DEFAULT 'FEE',
   beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER')),
+  beneficiary_wallet_id        uuid,
   beneficiary_share            numeric(18,10) NOT NULL DEFAULT 1,
   funded_by                    varchar(32) NOT NULL DEFAULT 'FEE',
   tax_withholding_rate         numeric(18,10),
@@ -127,8 +139,8 @@ COMMENT ON COLUMN commission_rule.priority IS 'Lower wins among equally specific
 COMMENT ON COLUMN commission_rule.txn_type IS 'Transaction type';
 COMMENT ON COLUMN commission_rule.channel IS 'Channel (empty = any)';
 COMMENT ON COLUMN commission_rule.kyc_tier IS 'Customer KYC tier (empty = any)';
-COMMENT ON COLUMN commission_rule.agent_level IS 'Agent level (empty = any)';
-COMMENT ON COLUMN commission_rule.agent_territory_id IS 'Territory (empty = any)';
+COMMENT ON COLUMN commission_rule.agent_level IS 'Agent level of the transacting agent (empty = any)';
+COMMENT ON COLUMN commission_rule.agent_territory_id IS 'Territory of the transacting agent (empty = any)';
 COMMENT ON COLUMN commission_rule.biller_id IS 'Biller (empty = any)';
 COMMENT ON COLUMN commission_rule.min_amount IS 'Applies from this transaction amount';
 COMMENT ON COLUMN commission_rule.max_amount IS 'Applies up to this transaction amount';
@@ -138,7 +150,8 @@ COMMENT ON COLUMN commission_rule.percentage IS 'Percentage of the base (0.005 =
 COMMENT ON COLUMN commission_rule.tiers IS 'Tier table for TIERED basis: [{from, to, flat, percentage}]';
 COMMENT ON COLUMN commission_rule.cap_amount IS 'Maximum commission per transaction';
 COMMENT ON COLUMN commission_rule.base IS 'Base of the percentage: AMOUNT or FEE';
-COMMENT ON COLUMN commission_rule.beneficiary IS 'Who earns it';
+COMMENT ON COLUMN commission_rule.beneficiary IS 'Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)';
+COMMENT ON COLUMN commission_rule.beneficiary_wallet_id IS 'Fixed wallet credited for PLATFORM, BILLER or CUSTOMER beneficiaries';
 COMMENT ON COLUMN commission_rule.beneficiary_share IS 'Share of the computed commission for this beneficiary';
 COMMENT ON COLUMN commission_rule.funded_by IS 'FEE, PLATFORM, BILLER, MERCHANT';
 COMMENT ON COLUMN commission_rule.tax_withholding_rate IS 'Withholding tax on commission';
@@ -152,6 +165,7 @@ CREATE INDEX ix_commission_rule_tenant ON commission_rule (tenant_id, created_at
 CREATE INDEX ix_commission_rule_commission_plan_id ON commission_rule (commission_plan_id);
 CREATE INDEX ix_commission_rule_agent_territory_id ON commission_rule (agent_territory_id);
 CREATE INDEX ix_commission_rule_biller_id ON commission_rule (biller_id);
+CREATE INDEX ix_commission_rule_beneficiary_wallet_id ON commission_rule (beneficiary_wallet_id);
 ALTER TABLE commission_rule ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON commission_rule USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_commission_rule_touch BEFORE UPDATE ON commission_rule FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -165,6 +179,7 @@ CREATE TABLE commission_earning (
   commission_plan_id           uuid NOT NULL REFERENCES commission_plan(id),
   commission_rule_id           uuid NOT NULL REFERENCES commission_rule(id),
   wallet_transaction_id        uuid NOT NULL,
+  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
   beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER')),
   beneficiary_agent_id         uuid,
   beneficiary_merchant_id      uuid,
@@ -174,14 +189,17 @@ CREATE TABLE commission_earning (
   tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
   net_amount                   numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
+  payout_frequency             varchar(40) NOT NULL CHECK (payout_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY')),
   is_clawback                  boolean NOT NULL DEFAULT false,
+  clawback_of_id               uuid REFERENCES commission_earning(id),
   earned_at                    timestamptz NOT NULL,
   payout_due_on                date NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_commission_earning_1 UNIQUE (wallet_transaction_id, commission_rule_id, beneficiary_wallet_id, is_clawback)
 );
 COMMENT ON TABLE commission_earning IS 'Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.';
 COMMENT ON COLUMN commission_earning.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -191,6 +209,7 @@ COMMENT ON COLUMN commission_earning.created_by IS 'Principal that created the r
 COMMENT ON COLUMN commission_earning.commission_plan_id IS 'Plan';
 COMMENT ON COLUMN commission_earning.commission_rule_id IS 'Rule applied';
 COMMENT ON COLUMN commission_earning.wallet_transaction_id IS 'Source transaction';
+COMMENT ON COLUMN commission_earning.txn_type IS 'Transaction type';
 COMMENT ON COLUMN commission_earning.beneficiary IS 'Beneficiary type';
 COMMENT ON COLUMN commission_earning.beneficiary_agent_id IS 'Agent beneficiary';
 COMMENT ON COLUMN commission_earning.beneficiary_merchant_id IS 'Merchant beneficiary';
@@ -200,7 +219,9 @@ COMMENT ON COLUMN commission_earning.commission_amount IS 'Gross commission (neg
 COMMENT ON COLUMN commission_earning.tax_amount IS 'Withholding tax';
 COMMENT ON COLUMN commission_earning.net_amount IS 'Net commission';
 COMMENT ON COLUMN commission_earning.currency IS 'Currency';
+COMMENT ON COLUMN commission_earning.payout_frequency IS 'Payout frequency of the plan';
 COMMENT ON COLUMN commission_earning.is_clawback IS 'Clawback of an earlier earning (reversal)';
+COMMENT ON COLUMN commission_earning.clawback_of_id IS 'Earning clawed back';
 COMMENT ON COLUMN commission_earning.earned_at IS 'Transaction completion time';
 COMMENT ON COLUMN commission_earning.payout_due_on IS 'Payout date per plan frequency';
 COMMENT ON COLUMN commission_earning.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -215,6 +236,7 @@ CREATE INDEX ix_commission_earning_wallet_transaction_id ON commission_earning (
 CREATE INDEX ix_commission_earning_beneficiary_agent_id ON commission_earning (beneficiary_agent_id);
 CREATE INDEX ix_commission_earning_beneficiary_merchant_id ON commission_earning (beneficiary_merchant_id);
 CREATE INDEX ix_commission_earning_beneficiary_wallet_id ON commission_earning (beneficiary_wallet_id);
+CREATE INDEX ix_commission_earning_clawback_of_id ON commission_earning (clawback_of_id);
 ALTER TABLE commission_earning ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON commission_earning USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_commission_earning_append_only BEFORE UPDATE OR DELETE ON commission_earning FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
@@ -232,11 +254,16 @@ CREATE TABLE commission_payout_run (
   period_start                 date NOT NULL,
   period_end                   date NOT NULL,
   currency                     char(3) NOT NULL,
-  status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'RUNNING', 'SUCCEEDED', 'PARTIALLY_SUCCEEDED', 'FAILED', 'CANCELLED')),
+  earning_count                integer,
   beneficiary_count            integer,
   total_amount                 numeric(28,8),
+  paid_count                   integer,
+  paid_amount                  numeric(28,8),
+  failed_count                 integer,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  cancel_reason                varchar(255),
   journal_entry_id             uuid,
   started_at                   timestamptz,
   finished_at                  timestamptz,
@@ -255,15 +282,20 @@ COMMENT ON COLUMN commission_payout_run.updated_at IS 'Last update time';
 COMMENT ON COLUMN commission_payout_run.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN commission_payout_run.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN commission_payout_run.payout_frequency IS 'Frequency covered';
-COMMENT ON COLUMN commission_payout_run.period_start IS 'Earnings from';
-COMMENT ON COLUMN commission_payout_run.period_end IS 'Earnings to';
+COMMENT ON COLUMN commission_payout_run.period_start IS 'Earnings due from';
+COMMENT ON COLUMN commission_payout_run.period_end IS 'Earnings due to (inclusive)';
 COMMENT ON COLUMN commission_payout_run.currency IS 'Currency';
 COMMENT ON COLUMN commission_payout_run.status IS 'Status';
-COMMENT ON COLUMN commission_payout_run.beneficiary_count IS 'Beneficiaries paid';
-COMMENT ON COLUMN commission_payout_run.total_amount IS 'Total net paid';
+COMMENT ON COLUMN commission_payout_run.earning_count IS 'Unpaid earnings included';
+COMMENT ON COLUMN commission_payout_run.beneficiary_count IS 'Beneficiaries to pay';
+COMMENT ON COLUMN commission_payout_run.total_amount IS 'Total net to pay';
+COMMENT ON COLUMN commission_payout_run.paid_count IS 'Beneficiaries paid';
+COMMENT ON COLUMN commission_payout_run.paid_amount IS 'Net paid';
+COMMENT ON COLUMN commission_payout_run.failed_count IS 'Beneficiaries whose payout failed';
 COMMENT ON COLUMN commission_payout_run.approved_by IS 'Checker';
 COMMENT ON COLUMN commission_payout_run.approved_at IS 'Approval time';
-COMMENT ON COLUMN commission_payout_run.journal_entry_id IS 'Summary posting';
+COMMENT ON COLUMN commission_payout_run.cancel_reason IS 'Cancellation reason';
+COMMENT ON COLUMN commission_payout_run.journal_entry_id IS 'Summary posting (when paid as one ledger entry)';
 COMMENT ON COLUMN commission_payout_run.started_at IS 'Start';
 COMMENT ON COLUMN commission_payout_run.finished_at IS 'End';
 COMMENT ON COLUMN commission_payout_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -277,7 +309,7 @@ ALTER TABLE commission_payout_run ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON commission_payout_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_commission_payout_run_touch BEFORE UPDATE ON commission_payout_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- commission_payout_line: Amount paid to one beneficiary in a payout run. Append-only.
+-- commission_payout_line: Amount paid to one beneficiary in a payout run attempt. Append-only; a retry appends a new line.
 CREATE TABLE commission_payout_line (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -286,12 +318,14 @@ CREATE TABLE commission_payout_line (
   commission_payout_run_id     uuid NOT NULL REFERENCES commission_payout_run(id),
   beneficiary_wallet_id        uuid NOT NULL,
   beneficiary_agent_id         uuid,
+  attempt                      integer NOT NULL DEFAULT 1,
   earning_count                integer NOT NULL,
+  earning_ids                  jsonb NOT NULL,
   gross_amount                 numeric(28,8) NOT NULL,
   tax_amount                   numeric(28,8) NOT NULL,
   net_amount                   numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
-  payout_status                varchar(16) NOT NULL,
+  payout_status                varchar(40) NOT NULL CHECK (payout_status IN ('PAID', 'FAILED')),
   wallet_transaction_id        uuid,
   failure_reason               varchar(255),
   custom_field_1               varchar(500),
@@ -300,7 +334,7 @@ CREATE TABLE commission_payout_line (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE commission_payout_line IS 'Amount paid to one beneficiary in a payout run. Append-only.';
+COMMENT ON TABLE commission_payout_line IS 'Amount paid to one beneficiary in a payout run attempt. Append-only; a retry appends a new line.';
 COMMENT ON COLUMN commission_payout_line.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN commission_payout_line.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN commission_payout_line.created_at IS 'Creation time';
@@ -308,12 +342,14 @@ COMMENT ON COLUMN commission_payout_line.created_by IS 'Principal that created t
 COMMENT ON COLUMN commission_payout_line.commission_payout_run_id IS 'Run';
 COMMENT ON COLUMN commission_payout_line.beneficiary_wallet_id IS 'Wallet paid';
 COMMENT ON COLUMN commission_payout_line.beneficiary_agent_id IS 'Agent paid';
+COMMENT ON COLUMN commission_payout_line.attempt IS 'Attempt number for this beneficiary in the run';
 COMMENT ON COLUMN commission_payout_line.earning_count IS 'Earnings included';
+COMMENT ON COLUMN commission_payout_line.earning_ids IS 'Earnings settled by this line';
 COMMENT ON COLUMN commission_payout_line.gross_amount IS 'Gross commission';
 COMMENT ON COLUMN commission_payout_line.tax_amount IS 'Tax withheld';
 COMMENT ON COLUMN commission_payout_line.net_amount IS 'Net paid';
 COMMENT ON COLUMN commission_payout_line.currency IS 'Currency';
-COMMENT ON COLUMN commission_payout_line.payout_status IS 'PAID, FAILED, HELD';
+COMMENT ON COLUMN commission_payout_line.payout_status IS 'PAID or FAILED';
 COMMENT ON COLUMN commission_payout_line.wallet_transaction_id IS 'Payout transaction';
 COMMENT ON COLUMN commission_payout_line.failure_reason IS 'Failure reason';
 COMMENT ON COLUMN commission_payout_line.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';

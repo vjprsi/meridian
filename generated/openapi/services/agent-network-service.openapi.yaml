@@ -95,6 +95,11 @@ paths:
         schema:
           type: string
           maxLength: 16
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -273,7 +278,8 @@ paths:
   /v1/agents/{id}/activate:
     post:
       operationId: agentsActivate
-      summary: Activate an onboarded agent
+      summary: Activate an onboarded or suspended agent (checker differs from the creator; at least one verified KYB document);
+        opens float and commission wallets on first activation
       tags:
       - Agents
       security:
@@ -321,7 +327,7 @@ paths:
   /v1/agents/{id}/suspend:
     post:
       operationId: agentsSuspend
-      summary: Suspend the agent and its outlets
+      summary: Suspend the agent and its wallets
       tags:
       - Agents
       security:
@@ -369,7 +375,7 @@ paths:
   /v1/agents/{id}/terminate:
     post:
       operationId: agentsTerminate
-      summary: Terminate the agency contract
+      summary: Terminate the agency contract (no active sub-agents, zero float)
       tags:
       - Agents
       security:
@@ -417,7 +423,7 @@ paths:
   /v1/agents/{id}/assign-commission-plan:
     post:
       operationId: agentsAssignCommissionPlan
-      summary: Assign a commission plan
+      summary: Assign an active commission plan
       tags:
       - Agents
       security:
@@ -487,6 +493,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AgentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: agent
+  /v1/agents/{id}/hierarchy:
+    get:
+      operationId: agentsHierarchy
+      summary: 'Upline (parent chain to the super-agent) and downline tree: {agent, upline[], downline[{agent, children[]}]}'
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -582,7 +627,7 @@ paths:
   /v1/agents/{id}/performance:
     get:
       operationId: agentsPerformance
-      summary: Daily KPIs (?from=&to=)
+      summary: Daily KPIs in a date range
       tags:
       - Agents
       security:
@@ -595,6 +640,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -617,6 +674,51 @@ paths:
       x-service: agent-network-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
       x-required-scope: wallets:read
+      x-table: agent
+  /v1/agents/eod/performance:
+    post:
+      operationId: agentsEodPerformance
+      summary: End of day - aggregate daily KPIs per agent and outlet from wallet transactions and commission earnings (idempotent
+        per business date)
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
       x-table: agent
   /v1/agent-territories:
     get:
@@ -652,6 +754,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
       - name: custom_field_1
         in: query
         schema:
@@ -1027,13 +1134,48 @@ paths:
   /v1/agent-outlets/nearby:
     get:
       operationId: agentOutletsNearby
-      summary: Outlets near a location (?lat=&lon=&radius_m=&service=)
+      summary: Active outlets of active agents within radius_m (default 5000, max 50000) of a point, nearest first (Haversine)
       tags:
       - Agent Outlets
       security:
       - oauth2:
         - wallets:read
       parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      - name: lon
+        in: query
+        required: true
+        schema:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      - name: radius_m
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: service
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CASH_IN
+          - CASH_OUT
+          - ONBOARDING
+          - BILL_PAY
+          - AIRTIME
+          - MERCHANT_PAYMENT
+          - FLOAT_SALE
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -1059,7 +1201,7 @@ paths:
   /v1/agent-outlets/{id}/close:
     post:
       operationId: agentOutletsClose
-      summary: Close the outlet
+      summary: Close the outlet (no open tills)
       tags:
       - Agent Outlets
       security:
@@ -1295,6 +1437,49 @@ paths:
       x-table: agent_float
       x-crud: true
       x-crud-update: true
+  /v1/agent-floats/{id}/check:
+    post:
+      operationId: agentFloatsCheck
+      summary: 'Read the float balance from the ledger, raise the low-float alert and request an automatic rebalance when
+        due: {balance, available, status, alert_raised, rebalance_request_id}'
+      tags:
+      - Agent Floats
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: agent_float
   /v1/agent-float-requests:
     get:
       operationId: agentFloatRequestsList
@@ -1338,6 +1523,7 @@ paths:
           - REJECTED
           - COMPLETED
           - CANCELLED
+          - FAILED
       - name: custom_field_1
         in: query
         schema:
@@ -1461,7 +1647,7 @@ paths:
   /v1/agent-float-requests/{id}/approve:
     post:
       operationId: agentFloatRequestsApprove
-      summary: Approve and execute the float movement
+      summary: Approve (checker differs from the maker) and execute the float movement in wallet-service
       tags:
       - Agent Float Requests
       security:
@@ -1628,6 +1814,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: till_number
+        in: query
+        schema:
+          type: string
+          maxLength: 32
       - name: custom_field_1
         in: query
         schema:
@@ -1751,7 +1942,7 @@ paths:
   /v1/agent-tills/{id}/open:
     post:
       operationId: agentTillsOpen
-      summary: Open the till for a shift
+      summary: Open the till for a shift with an opening cash count
       tags:
       - Agent Tills
       security:
@@ -1797,7 +1988,7 @@ paths:
   /v1/agent-tills/{id}/close:
     post:
       operationId: agentTillsClose
-      summary: Close the till with a cash count
+      summary: Close the till with a cash count; expected cash comes from the shift's cash-in/cash-out transactions
       tags:
       - Agent Tills
       security:
@@ -2054,6 +2245,53 @@ paths:
       x-table: agent_device
       x-crud: true
       x-crud-update: true
+  /v1/agent-devices/{id}/heartbeat:
+    post:
+      operationId: agentDevicesHeartbeat
+      summary: Record a heartbeat with the last known location
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDevicesHeartbeatRequest'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: agent_device
   /v1/agent-devices/{id}/report-lost:
     post:
       operationId: agentDevicesReportLost
@@ -2135,6 +2373,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDevicesRetireRequest'
       x-requirements:
       - ONB-07
       - WAL-02
@@ -2323,7 +2567,7 @@ paths:
   /v1/agent-kyc-documents/{id}/verify:
     post:
       operationId: agentKycDocumentsVerify
-      summary: Mark the document verified
+      summary: Mark the document verified (checker differs from the uploader; not expired)
       tags:
       - Agent Kyc Documents
       security:
@@ -2403,6 +2647,7 @@ paths:
           - REJECTED
           - COMPLETED
           - CANCELLED
+          - FAILED
       - name: custom_field_1
         in: query
         schema:
@@ -2566,6 +2811,52 @@ paths:
       x-table: cash_management_request
       x-crud: true
       x-crud-update: true
+  /v1/cash-management-requests/{id}/approve:
+    post:
+      operationId: cashManagementRequestsApprove
+      summary: Approve the cash-in-transit request (checker differs from the maker)
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashManagementRequestsApproveRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: cash_management_request
   /v1/cash-management-requests/{id}/complete:
     post:
       operationId: cashManagementRequestsComplete
@@ -2606,6 +2897,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CashManagementRequestsCompleteRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: cash_management_request
+  /v1/cash-management-requests/{id}/cancel:
+    post:
+      operationId: cashManagementRequestsCancel
+      summary: Cancel the request
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashManagementRequestsCancelRequest'
       x-requirements:
       - WAL-02
       x-service: agent-network-service
@@ -2889,7 +3226,29 @@ components:
       required:
       - data
       - has_more
+    AgentDevicesHeartbeatRequest:
+      type: object
+      properties:
+        latitude:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        longitude:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        app_version:
+          type: string
+          maxLength: 32
     AgentDevicesReportLostRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    AgentDevicesRetireRequest:
       type: object
       properties:
         reason:
@@ -2937,12 +3296,24 @@ components:
       required:
       - data
       - has_more
+    CashManagementRequestsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
     CashManagementRequestsCompleteRequest:
       type: object
       properties:
         cit_reference:
           type: string
           maxLength: 64
+    CashManagementRequestsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     Agent:
       type: object
       description: A cash-in/cash-out agent business at any level of the hierarchy
@@ -2984,7 +3355,8 @@ components:
         agent_code:
           type: string
           maxLength: 32
-          description: Agent code used at the till and on USSD
+          description: Agent code used at the till and on USSD (server-generated)
+          readOnly: true
         agent_level:
           type: string
           enum:
@@ -3003,7 +3375,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Top-level super-agent
+          description: Top-level super-agent (derived from the hierarchy)
+          readOnly: true
         legal_name:
           type: string
           maxLength: 200
@@ -3061,24 +3434,38 @@ components:
           - 'null'
           format: uuid
           description: Sponsoring bank branch
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Operating currency of the float and commission wallets (ISO 4217)
         float_wallet_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Main float wallet
+          description: Main float wallet (opened in wallet-service on activation)
+          readOnly: true
         commission_wallet_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Wallet receiving commissions
+          description: Wallet receiving commissions (opened on activation)
+          readOnly: true
         commission_plan_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Commission plan
+          description: Commission plan (set by /assign-commission-plan)
+          readOnly: true
+        commission_plan_effective_from:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Date the commission plan applies from
+          readOnly: true
         status:
           type: string
           enum:
@@ -3086,13 +3473,15 @@ components:
           - ACTIVE
           - SUSPENDED
           - TERMINATED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         status_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason for the current status
+          readOnly: true
         contract_start:
           type:
           - string
@@ -3118,7 +3507,8 @@ components:
           - string
           - 'null'
           maxLength: 32
-          description: PENDING, VERIFIED, REJECTED, EXPIRED
+          description: PENDING, VERIFIED, REJECTED, EXPIRED (derived from KYB documents)
+          readOnly: true
         risk_rating:
           type:
           - string
@@ -3131,6 +3521,13 @@ components:
           - 'null'
           format: date-time
           description: Activation time
+          readOnly: true
+        terminated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Termination time
           readOnly: true
         metadata:
           type:
@@ -3177,14 +3574,11 @@ components:
       - agent_level
       - legal_name
       - contact_msisdn
+      - currency
       - status
     AgentCreate:
       type: object
       properties:
-        agent_code:
-          type: string
-          maxLength: 32
-          description: Agent code used at the till and on USSD
         agent_level:
           type: string
           enum:
@@ -3196,10 +3590,6 @@ components:
           type: string
           format: uuid
           description: Direct parent (agent for sub-agents, super-agent for agents)
-        super_agent_id:
-          type: string
-          format: uuid
-          description: Top-level super-agent
         legal_name:
           type: string
           maxLength: 200
@@ -3241,30 +3631,10 @@ components:
           type: string
           format: uuid
           description: Sponsoring bank branch
-        float_wallet_id:
+        currency:
           type: string
-          format: uuid
-          description: Main float wallet
-        commission_wallet_id:
-          type: string
-          format: uuid
-          description: Wallet receiving commissions
-        commission_plan_id:
-          type: string
-          format: uuid
-          description: Commission plan
-        status:
-          type: string
-          enum:
-          - ONBOARDING
-          - ACTIVE
-          - SUSPENDED
-          - TERMINATED
-          description: Status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
+          pattern: ^[A-Z]{3}$
+          description: Operating currency of the float and commission wallets (ISO 4217)
         contract_start:
           type: string
           format: date
@@ -3279,10 +3649,6 @@ components:
           examples:
           - '125.50'
           description: Maximum float the agent may hold
-        kyc_status:
-          type: string
-          maxLength: 32
-          description: PENDING, VERIFIED, REJECTED, EXPIRED
         risk_rating:
           type: string
           maxLength: 16
@@ -3312,17 +3678,13 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - agent_code
       - agent_level
       - legal_name
       - contact_msisdn
+      - currency
     AgentUpdate:
       type: object
       properties:
-        agent_code:
-          type: string
-          maxLength: 32
-          description: Agent code used at the till and on USSD
         agent_level:
           type: string
           enum:
@@ -3334,10 +3696,6 @@ components:
           type: string
           format: uuid
           description: Direct parent (agent for sub-agents, super-agent for agents)
-        super_agent_id:
-          type: string
-          format: uuid
-          description: Top-level super-agent
         legal_name:
           type: string
           maxLength: 200
@@ -3379,30 +3737,10 @@ components:
           type: string
           format: uuid
           description: Sponsoring bank branch
-        float_wallet_id:
+        currency:
           type: string
-          format: uuid
-          description: Main float wallet
-        commission_wallet_id:
-          type: string
-          format: uuid
-          description: Wallet receiving commissions
-        commission_plan_id:
-          type: string
-          format: uuid
-          description: Commission plan
-        status:
-          type: string
-          enum:
-          - ONBOARDING
-          - ACTIVE
-          - SUSPENDED
-          - TERMINATED
-          description: Status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
+          pattern: ^[A-Z]{3}$
+          description: Operating currency of the float and commission wallets (ISO 4217)
         contract_start:
           type: string
           format: date
@@ -3417,10 +3755,6 @@ components:
           examples:
           - '125.50'
           description: Maximum float the agent may hold
-        kyc_status:
-          type: string
-          maxLength: 32
-          description: PENDING, VERIFIED, REJECTED, EXPIRED
         risk_rating:
           type: string
           maxLength: 16
@@ -3547,6 +3881,14 @@ components:
           - LOST
           - RETIRED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
         assigned_at:
           type:
           - string
@@ -3660,14 +4002,6 @@ components:
           type: string
           pattern: ^\+[1-9]\d{6,14}$
           description: SIM number (E.164)
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - LOST
-          - RETIRED
-          description: Status
         assigned_at:
           type: string
           format: date-time
@@ -3739,14 +4073,6 @@ components:
           type: string
           pattern: ^\+[1-9]\d{6,14}$
           description: SIM number (E.164)
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - LOST
-          - RETIRED
-          description: Status
         assigned_at:
           type: string
           format: date-time
@@ -3854,12 +4180,36 @@ components:
         auto_rebalance:
           type: boolean
           description: Request rebalancing automatically when low
+        rebalance_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'Amount requested by an automatic rebalance (default: max_balance - balance)'
         rebalance_source_agent_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Default source of rebalancing (usually the super-agent)
+        last_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance seen at the last check
+          readOnly: true
+        last_checked_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last balance check
+          readOnly: true
         last_alert_at:
           type:
           - string
@@ -3946,6 +4296,12 @@ components:
         auto_rebalance:
           type: boolean
           description: Request rebalancing automatically when low
+        rebalance_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'Amount requested by an automatic rebalance (default: max_balance - balance)'
         rebalance_source_agent_id:
           type: string
           format: uuid
@@ -4014,6 +4370,12 @@ components:
         auto_rebalance:
           type: boolean
           description: Request rebalancing automatically when low
+        rebalance_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'Amount requested by an automatic rebalance (default: max_balance - balance)'
         rebalance_source_agent_id:
           type: string
           format: uuid
@@ -4099,7 +4461,7 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Source wallet
+          description: 'Source wallet (default: source agent float, or the treasury wallet for bank-funded top-ups)'
         target_wallet_id:
           type: string
           format: uuid
@@ -4140,6 +4502,7 @@ components:
           - REJECTED
           - COMPLETED
           - CANCELLED
+          - FAILED
           description: Status
           readOnly: true
         approved_by:
@@ -4163,12 +4526,26 @@ components:
           format: uuid
           description: Resulting float transfer
           readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Execution time
+          readOnly: true
         rejection_reason:
           type:
           - string
           - 'null'
           maxLength: 255
-          description: Rejection reason
+          description: Rejection or cancellation reason
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Execution failure reason
           readOnly: true
         custom_field_1:
           type:
@@ -4233,7 +4610,7 @@ components:
         source_wallet_id:
           type: string
           format: uuid
-          description: Source wallet
+          description: 'Source wallet (default: source agent float, or the treasury wallet for bank-funded top-ups)'
         target_wallet_id:
           type: string
           format: uuid
@@ -4487,7 +4864,8 @@ components:
         outlet_code:
           type: string
           maxLength: 32
-          description: Outlet code
+          description: Outlet code (server-generated)
+          readOnly: true
         name:
           type: string
           maxLength: 160
@@ -4533,7 +4911,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latitude
+          description: Latitude (-90..90)
         longitude:
           type:
           - string
@@ -4541,7 +4919,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Longitude
+          description: Longitude (-180..180)
         agent_territory_id:
           type:
           - string
@@ -4553,13 +4931,22 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Opening hours per weekday
+          description: 'Opening hours per weekday, e.g. {MON: [08:00, 18:00]}'
         services:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME'
+          items:
+            type: string
+            enum:
+            - CASH_IN
+            - CASH_OUT
+            - ONBOARDING
+            - BILL_PAY
+            - AIRTIME
+            - MERCHANT_PAYMENT
+            - FLOAT_SALE
+          description: Services offered at the outlet
         float_wallet_id:
           type:
           - string
@@ -4585,6 +4972,14 @@ components:
           - INACTIVE
           - CLOSED
           description: Status
+          readOnly: true
+        closed_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the outlet was closed
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -4615,6 +5010,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        distance_m:
+          type: integer
+          format: int32
+          description: Distance in metres from the search point (nearby search only) (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at
@@ -4632,10 +5032,6 @@ components:
           type: string
           format: uuid
           description: Operating agent
-        outlet_code:
-          type: string
-          maxLength: 32
-          description: Outlet code
         name:
           type: string
           maxLength: 160
@@ -4669,13 +5065,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latitude
+          description: Latitude (-90..90)
         longitude:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Longitude
+          description: Longitude (-180..180)
         agent_territory_id:
           type: string
           format: uuid
@@ -4683,11 +5079,20 @@ components:
         opening_hours:
           type: object
           additionalProperties: true
-          description: Opening hours per weekday
+          description: 'Opening hours per weekday, e.g. {MON: [08:00, 18:00]}'
         services:
-          type: object
-          additionalProperties: true
-          description: 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME'
+          type: array
+          items:
+            type: string
+            enum:
+            - CASH_IN
+            - CASH_OUT
+            - ONBOARDING
+            - BILL_PAY
+            - AIRTIME
+            - MERCHANT_PAYMENT
+            - FLOAT_SALE
+          description: Services offered at the outlet
         float_wallet_id:
           type: string
           format: uuid
@@ -4700,13 +5105,6 @@ components:
           type: string
           format: uuid
           description: Storefront photo
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - CLOSED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -4729,7 +5127,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - agent_id
-      - outlet_code
       - name
       - country
     AgentOutletUpdate:
@@ -4739,10 +5136,6 @@ components:
           type: string
           format: uuid
           description: Operating agent
-        outlet_code:
-          type: string
-          maxLength: 32
-          description: Outlet code
         name:
           type: string
           maxLength: 160
@@ -4776,13 +5169,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latitude
+          description: Latitude (-90..90)
         longitude:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Longitude
+          description: Longitude (-180..180)
         agent_territory_id:
           type: string
           format: uuid
@@ -4790,11 +5183,20 @@ components:
         opening_hours:
           type: object
           additionalProperties: true
-          description: Opening hours per weekday
+          description: 'Opening hours per weekday, e.g. {MON: [08:00, 18:00]}'
         services:
-          type: object
-          additionalProperties: true
-          description: 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME'
+          type: array
+          items:
+            type: string
+            enum:
+            - CASH_IN
+            - CASH_OUT
+            - ONBOARDING
+            - BILL_PAY
+            - AIRTIME
+            - MERCHANT_PAYMENT
+            - FLOAT_SALE
+          description: Services offered at the outlet
         float_wallet_id:
           type: string
           format: uuid
@@ -4807,13 +5209,6 @@ components:
           type: string
           format: uuid
           description: Storefront photo
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - CLOSED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -5225,6 +5620,7 @@ components:
           - 'null'
           format: uuid
           description: Operator on shift
+          readOnly: true
         status:
           type: string
           enum:
@@ -5260,6 +5656,24 @@ components:
           - '125.50'
           description: Declared cash at opening
           readOnly: true
+        cash_in_total:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash received from customers during the shift (cash-in)
+          readOnly: true
+        cash_out_total:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash paid to customers during the shift (cash-out)
+          readOnly: true
         expected_cash:
           type:
           - string
@@ -5287,12 +5701,22 @@ components:
           - '125.50'
           description: Declared minus expected
           readOnly: true
+        variance_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - BALANCED
+          - OVER
+          - SHORT
+          description: Balanced, over or short
+          readOnly: true
         denominations:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Cash count by denomination
+          description: 'Cash count by denomination, e.g. {"1000": 12, "500": 3}'
           readOnly: true
         custom_field_1:
           type:
@@ -5344,10 +5768,6 @@ components:
           type: string
           maxLength: 32
           description: Till number
-        operator_user_id:
-          type: string
-          format: uuid
-          description: Operator on shift
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -5454,7 +5874,9 @@ components:
           - REJECTED
           - COMPLETED
           - CANCELLED
+          - FAILED
           description: Status
+          readOnly: true
         cit_provider:
           type:
           - string
@@ -5467,12 +5889,26 @@ components:
           - 'null'
           maxLength: 64
           description: CIT reference
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Approver
+          readOnly: true
         completed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Completion time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation reason
           readOnly: true
         custom_field_1:
           type:
@@ -5545,15 +5981,6 @@ components:
           type: string
           format: date-time
           description: Requested time
-        status:
-          type: string
-          enum:
-          - REQUESTED
-          - APPROVED
-          - REJECTED
-          - COMPLETED
-          - CANCELLED
-          description: Status
         cit_provider:
           type: string
           maxLength: 64
@@ -5618,15 +6045,6 @@ components:
           type: string
           format: date-time
           description: Requested time
-        status:
-          type: string
-          enum:
-          - REQUESTED
-          - APPROVED
-          - REJECTED
-          - COMPLETED
-          - CANCELLED
-          description: Status
         cit_provider:
           type: string
           maxLength: 64

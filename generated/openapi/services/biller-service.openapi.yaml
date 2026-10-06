@@ -300,7 +300,7 @@ paths:
   /v1/billers/{id}/validate-reference:
     post:
       operationId: billersValidateReference
-      summary: Validate an account reference and fetch the bill
+      summary: Validate an account reference (pattern and check digit) and fetch the bill from the biller
       tags:
       - Billers
       security:
@@ -978,7 +978,8 @@ paths:
   /v1/bill-payments/{id}/reverse:
     post:
       operationId: billPaymentsReverse
-      summary: Reverse a failed or disputed payment
+      summary: Reverse a completed (disputed) payment back to the payer wallet, or close a pending one by releasing the held
+        funds
       tags:
       - Bill Payments
       security:
@@ -1038,8 +1039,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1405,7 +1410,7 @@ paths:
   /v1/biller-settlements/{id}/approve:
     post:
       operationId: billerSettlementsApprove
-      summary: Approve the settlement (checker)
+      summary: Approve the settlement (checker differs from the maker)
       tags:
       - Biller Settlements
       security:
@@ -1451,7 +1456,7 @@ paths:
   /v1/biller-settlements/{id}/mark-paid:
     post:
       operationId: billerSettlementsMarkPaid
-      summary: Record the bank payment of the settlement
+      summary: Record the bank payment of the settlement and move the net amount out of the collection wallet
       tags:
       - Biller Settlements
       security:
@@ -1767,6 +1772,20 @@ components:
           type: string
           format: uuid
           description: Paying wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
         wallet_transaction_id:
           type:
           - string
@@ -1807,6 +1826,11 @@ components:
           maxLength: 64
           description: Operator reference
           readOnly: true
+        retry_count:
+          type: integer
+          format: int32
+          description: Operator retries
+          readOnly: true
         completed_at:
           type:
           - string
@@ -1820,6 +1844,13 @@ components:
           - 'null'
           maxLength: 255
           description: Failure reason
+          readOnly: true
+        biller_settlement_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement that paid it out
           readOnly: true
         idempotency_key:
           type: string
@@ -1863,10 +1894,12 @@ components:
       - row_version
       - biller_id
       - payer_wallet_id
+      - channel
       - target_msisdn
       - amount
       - currency
       - status
+      - retry_count
       - idempotency_key
     AirtimeTopupCreate:
       type: object
@@ -1883,6 +1916,20 @@ components:
           type: string
           format: uuid
           description: Paying wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
         target_msisdn:
           type: string
           pattern: ^\+[1-9]\d{6,14}$
@@ -1917,6 +1964,11 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pin:
+          type: string
+          maxLength: 12
+          description: Payer PIN, passed to wallet-service and never stored (write-only; not stored as a column)
+          writeOnly: true
       required:
       - biller_id
       - payer_wallet_id
@@ -2011,14 +2063,21 @@ components:
           - string
           - 'null'
           maxLength: 32
-          description: Biller response code
+          description: Biller response code (00 = found)
+          readOnly: true
+        response_message:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Biller response text
           readOnly: true
         expires_at:
           type:
           - string
           - 'null'
           format: date-time
-          description: Inquiry validity
+          description: Inquiry validity (database clock)
           readOnly: true
         custom_field_1:
           type:
@@ -2149,12 +2208,26 @@ components:
           type: string
           format: uuid
           description: Paying wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
         wallet_transaction_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Wallet transaction
+          description: Wallet transaction (funds held until the biller accepts)
           readOnly: true
         account_reference:
           type: string
@@ -2235,6 +2308,20 @@ components:
           maxLength: 255
           description: Failure reason
           readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reversal reason
+          readOnly: true
+        reversed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Reversal time
+          readOnly: true
         biller_settlement_id:
           type:
           - string
@@ -2284,6 +2371,7 @@ components:
       - row_version
       - biller_id
       - payer_wallet_id
+      - channel
       - account_reference
       - amount
       - currency
@@ -2310,6 +2398,20 @@ components:
           type: string
           format: uuid
           description: Paying wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
         account_reference:
           type: string
           maxLength: 64
@@ -2348,6 +2450,11 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pin:
+          type: string
+          maxLength: 12
+          description: Payer PIN, passed to wallet-service and never stored (write-only; not stored as a column)
+          writeOnly: true
       required:
       - biller_id
       - payer_wallet_id
@@ -2476,7 +2583,19 @@ components:
           - string
           - 'null'
           maxLength: 128
-          description: Validation pattern
+          description: Validation pattern (full match)
+        account_reference_checksum:
+          type: string
+          enum:
+          - NONE
+          - LUHN
+          - MOD97
+          - MOD11
+          description: Check-digit algorithm of the account reference
+        inquiry_validity_minutes:
+          type: integer
+          format: int32
+          description: How long a bill inquiry can be paid against
         settlement_wallet_id:
           type:
           - string
@@ -2515,6 +2634,14 @@ components:
           - SUSPENDED
           - RETIRED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2559,6 +2686,8 @@ components:
       - supports_inquiry
       - supports_partial_payment
       - supports_overpayment
+      - account_reference_checksum
+      - inquiry_validity_minutes
       - settlement_frequency
       - fee_bearer
       - status
@@ -2639,7 +2768,19 @@ components:
         account_reference_regex:
           type: string
           maxLength: 128
-          description: Validation pattern
+          description: Validation pattern (full match)
+        account_reference_checksum:
+          type: string
+          enum:
+          - NONE
+          - LUHN
+          - MOD97
+          - MOD11
+          description: Check-digit algorithm of the account reference
+        inquiry_validity_minutes:
+          type: integer
+          format: int32
+          description: How long a bill inquiry can be paid against
         settlement_wallet_id:
           type: string
           format: uuid
@@ -2665,13 +2806,6 @@ components:
           type: integer
           format: int32
           description: Order in menus
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -2776,7 +2910,19 @@ components:
         account_reference_regex:
           type: string
           maxLength: 128
-          description: Validation pattern
+          description: Validation pattern (full match)
+        account_reference_checksum:
+          type: string
+          enum:
+          - NONE
+          - LUHN
+          - MOD97
+          - MOD11
+          description: Check-digit algorithm of the account reference
+        inquiry_validity_minutes:
+          type: integer
+          format: int32
+          description: How long a bill inquiry can be paid against
         settlement_wallet_id:
           type: string
           format: uuid
@@ -2802,13 +2948,6 @@ components:
           type: integer
           format: int32
           description: Order in menus
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -3126,7 +3265,7 @@ components:
         period_end:
           type: string
           format: date
-          description: To
+          description: To (inclusive)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -3136,7 +3275,14 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Payments included
+          description: Bill payments included
+          readOnly: true
+        topup_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Airtime top-ups included
           readOnly: true
         gross_amount:
           type:
@@ -3184,12 +3330,33 @@ components:
           - FAILED
           description: Status
           readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
         payment_reference:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Bank payment reference
+          readOnly: true
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement transaction out of the collection wallet
           readOnly: true
         paid_at:
           type:
@@ -3259,7 +3426,7 @@ components:
         period_end:
           type: string
           format: date
-          description: To
+          description: To (inclusive)
         currency:
           type: string
           pattern: ^[A-Z]{3}$

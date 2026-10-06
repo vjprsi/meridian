@@ -230,7 +230,7 @@ paths:
   /v1/disbursement-programs/{id}/activate:
     post:
       operationId: disbursementProgramsActivate
-      summary: Activate the program
+      summary: Activate the program (the funding wallet must be active in the program currency)
       tags:
       - Disbursement Programs
       security:
@@ -316,7 +316,7 @@ paths:
   /v1/disbursement-programs/{id}/close:
     post:
       operationId: disbursementProgramsClose
-      summary: Close the program
+      summary: Close the program (no batch in flight)
       tags:
       - Disbursement Programs
       security:
@@ -347,6 +347,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisbursementProgramsCloseRequest'
       x-requirements:
       - WAL-07
       x-service: disbursement-service
@@ -424,6 +430,7 @@ paths:
           - PARTIALLY_COMPLETED
           - FAILED
           - CANCELLED
+          - REJECTED
       - name: batch_reference
         in: query
         schema:
@@ -555,7 +562,8 @@ paths:
   /v1/disbursement-batches/{id}/upload:
     post:
       operationId: disbursementBatchesUpload
-      summary: Attach a beneficiary file (CSV or XLSX) for parsing
+      summary: Upload the beneficiary CSV (header msisdn,amount and optional full_name,national_id,beneficiary_reference,narrative)
+        replacing any lines of a draft batch
       tags:
       - Disbursement Batches
       security:
@@ -602,7 +610,7 @@ paths:
   /v1/disbursement-batches/{id}/validate:
     post:
       operationId: disbursementBatchesValidate
-      summary: Validate beneficiaries (wallet exists, name match, tier, duplicates)
+      summary: Validate beneficiaries (wallet exists and is active, name match, KYC tier, amount cap, duplicates)
       tags:
       - Disbursement Batches
       security:
@@ -684,7 +692,8 @@ paths:
   /v1/disbursement-batches/{id}/approve:
     post:
       operationId: disbursementBatchesApprove
-      summary: Approve the batch at the current level
+      summary: Approve the batch at the current level (each level by a different principal, never the submitter); the final
+        approval executes the batch from the program funding wallet
       tags:
       - Disbursement Batches
       security:
@@ -863,6 +872,44 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: disbursement_batch
+  /v1/disbursement-batches/{id}/approvals:
+    get:
+      operationId: disbursementBatchesApprovals
+      summary: Approval decisions on the batch
+      tags:
+      - Disbursement Batches
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisbursementBatchApprovalPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-01
+      - WAL-07
+      x-service: disbursement-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/beneficiaries:
     get:
       operationId: disbursementBatchesBeneficiaries
@@ -879,6 +926,28 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: validation_status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - VALID
+          - INVALID
+          - NAME_MISMATCH
+          - DUPLICATE
+      - name: payout_status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - PAID
+          - FAILED
+          - SKIPPED
+          - RETURNED
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -904,7 +973,7 @@ paths:
   /v1/disbursement-batches/{id}/report:
     get:
       operationId: disbursementBatchesReport
-      summary: Download the execution report
+      summary: Download the execution report (one row per line with validation and payout outcome)
       tags:
       - Disbursement Batches
       security:
@@ -918,8 +987,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1209,6 +1282,12 @@ components:
           maxLength: 255
       required:
       - reason
+    DisbursementProgramsCloseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     DisbursementBatchPage:
       type: object
       description: One page of DisbursementBatch results (newest first)
@@ -1230,11 +1309,16 @@ components:
     DisbursementBatchesUploadRequest:
       type: object
       properties:
+        content:
+          type: string
+        file_name:
+          type: string
+          maxLength: 255
         file_document_id:
           type: string
           format: uuid
       required:
-      - file_document_id
+      - content
     DisbursementBatchesApproveRequest:
       type: object
       properties:
@@ -1255,6 +1339,24 @@ components:
         reason:
           type: string
           maxLength: 255
+    DisbursementBatchApprovalPage:
+      type: object
+      description: One page of DisbursementBatchApproval results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisbursementBatchApproval'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     DisbursementBeneficiaryPage:
       type: object
       description: One page of DisbursementBeneficiary results (newest first)
@@ -1318,7 +1420,8 @@ components:
         batch_reference:
           type: string
           maxLength: 64
-          description: Batch reference
+          description: Batch reference (server-generated)
+          readOnly: true
         description:
           type:
           - string
@@ -1331,6 +1434,21 @@ components:
           - 'null'
           format: uuid
           description: Uploaded beneficiary file
+          readOnly: true
+        file_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Name of the uploaded file
+          readOnly: true
+        file_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the uploaded content (re-uploading the same file is rejected)
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -1354,6 +1472,7 @@ components:
           - PARTIALLY_COMPLETED
           - FAILED
           - CANCELLED
+          - REJECTED
           description: Status
           readOnly: true
         total_count:
@@ -1379,12 +1498,28 @@ components:
           format: int32
           description: Valid lines
           readOnly: true
+        valid_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total amount of valid lines
+          readOnly: true
         invalid_count:
           type:
           - integer
           - 'null'
           format: int32
           description: Invalid lines
+          readOnly: true
+        duplicate_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Duplicate lines
           readOnly: true
         paid_count:
           type:
@@ -1425,12 +1560,52 @@ components:
           format: uuid
           description: Approval workflow
           readOnly: true
+        approvals_required:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Approvals needed (from the program)
+          readOnly: true
+        approvals_received:
+          type: integer
+          format: int32
+          description: Approvals given so far
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the batch
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Final approver
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rejection reason
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation reason
           readOnly: true
         started_at:
           type:
@@ -1485,6 +1660,7 @@ components:
       - batch_reference
       - currency
       - status
+      - approvals_received
     DisbursementBatchCreate:
       type: object
       properties:
@@ -1492,18 +1668,10 @@ components:
           type: string
           format: uuid
           description: Program
-        batch_reference:
-          type: string
-          maxLength: 64
-          description: Batch reference
         description:
           type: string
           maxLength: 255
           description: Description
-        file_document_id:
-          type: string
-          format: uuid
-          description: Uploaded beneficiary file
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -1534,8 +1702,89 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - disbursement_program_id
-      - batch_reference
       - currency
+    DisbursementBatchApproval:
+      type: object
+      description: One approval or rejection decision on a disbursement batch. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        disbursement_batch_id:
+          type: string
+          format: uuid
+          description: Batch
+        level:
+          type: integer
+          format: int32
+          description: Approval level (1..approval_levels)
+        decision:
+          type: string
+          enum:
+          - APPROVED
+          - REJECTED
+          description: Decision
+        decided_by:
+          type: string
+          maxLength: 64
+          description: Approver
+        comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Comment or rejection reason
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - disbursement_batch_id
+      - level
+      - decision
+      - decided_by
     DisbursementBeneficiary:
       type: object
       description: One beneficiary line of a disbursement batch
@@ -1612,6 +1861,7 @@ components:
           - 'null'
           format: uuid
           description: Resolved wallet
+          readOnly: true
         amount:
           type: string
           format: decimal
@@ -1661,6 +1911,11 @@ components:
           - SKIPPED
           - RETURNED
           description: Payout status
+          readOnly: true
+        attempt_count:
+          type: integer
+          format: int32
+          description: Payout attempts
           readOnly: true
         wallet_transaction_id:
           type:
@@ -1724,6 +1979,7 @@ components:
       - currency
       - validation_status
       - payout_status
+      - attempt_count
     DisbursementBeneficiaryCreate:
       type: object
       properties:
@@ -1751,10 +2007,6 @@ components:
           type: string
           maxLength: 200
           description: Name in the file
-        wallet_id:
-          type: string
-          format: uuid
-          description: Resolved wallet
         amount:
           type: string
           format: decimal
@@ -1821,10 +2073,6 @@ components:
           type: string
           maxLength: 200
           description: Name in the file
-        wallet_id:
-          type: string
-          format: uuid
-          description: Resolved wallet
         amount:
           type: string
           format: decimal
@@ -1941,7 +2189,7 @@ components:
         approval_levels:
           type: integer
           format: int32
-          description: Approvals needed per batch
+          description: Approvals needed per batch (each by a different principal, none the submitter)
         auto_create_wallets:
           type: boolean
           description: Open Tier 0 wallets for unregistered beneficiaries
@@ -1952,7 +2200,15 @@ components:
           - ACTIVE
           - SUSPENDED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
         start_date:
           type:
           - string
@@ -2053,18 +2309,10 @@ components:
         approval_levels:
           type: integer
           format: int32
-          description: Approvals needed per batch
+          description: Approvals needed per batch (each by a different principal, none the submitter)
         auto_create_wallets:
           type: boolean
           description: Open Tier 0 wallets for unregistered beneficiaries
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
         start_date:
           type: string
           format: date
@@ -2143,18 +2391,10 @@ components:
         approval_levels:
           type: integer
           format: int32
-          description: Approvals needed per batch
+          description: Approvals needed per batch (each by a different principal, none the submitter)
         auto_create_wallets:
           type: boolean
           description: Open Tier 0 wallets for unregistered beneficiaries
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
         start_date:
           type: string
           format: date

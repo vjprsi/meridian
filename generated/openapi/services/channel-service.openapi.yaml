@@ -275,7 +275,8 @@ paths:
   /v1/ussd-menus/{id}/publish:
     post:
       operationId: ussdMenusPublish
-      summary: Publish the menu version (maker-checker)
+      summary: Publish the draft version after validating the tree (checker differs from the maker); the previously published
+        version is retired
       tags:
       - Ussd Menus
       security:
@@ -321,7 +322,7 @@ paths:
   /v1/ussd-menus/{id}/clone:
     post:
       operationId: ussdMenusClone
-      summary: Create a new draft version
+      summary: Create a new draft version with copies of all nodes
       tags:
       - Ussd Menus
       security:
@@ -361,7 +362,8 @@ paths:
   /v1/ussd-menus/{id}/simulate:
     post:
       operationId: ussdMenusSimulate
-      summary: Run the menu in a simulator with scripted inputs
+      summary: 'Run the menu in a simulator with scripted inputs (no session stored, actions dry-run unless execute_actions):
+        {screens[{step, node_key, input, text, end}], ended, final_node_key}'
       tags:
       - Ussd Menus
       security:
@@ -376,8 +378,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -788,17 +796,26 @@ paths:
   /v1/ussd-sessions/callback:
     post:
       operationId: ussdSessionsCallback
-      summary: MNO gateway callback that processes one USSD request and returns the next screen
+      summary: MNO gateway callback (HMAC-SHA256 (hex) of the canonical JSON body (keys sorted, no whitespace) in X-Gateway-Signature;
+        tenant_id is part of the callback URL registered with the gateway) that processes one USSD request and returns the
+        next screen as 'CON <text>' (continue) or 'END <text>'
       tags:
       - Ussd Sessions
-      security:
-      - oauth2:
-        - wallets:write
+      security: []
       parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -815,6 +832,43 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UssdSessionsCallbackRequest'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
+      x-table: ussd_session
+  /v1/ussd-sessions/expire:
+    post:
+      operationId: ussdSessionsExpire
+      summary: Time out sessions idle longer than their menu timeout
+      tags:
+      - Ussd Sessions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - WAL-03
       x-service: channel-service
@@ -1170,17 +1224,28 @@ paths:
   /v1/sms-messages/inbound:
     post:
       operationId: smsMessagesInbound
-      summary: SMS gateway webhook for inbound messages
+      summary: 'SMS gateway webhook for inbound messages (HMAC-SHA256 (hex) of the canonical JSON body (keys sorted, no whitespace)
+        in X-Gateway-Signature): parses the keyword command, runs it and queues the reply: {inbound_id, reply_id, command,
+        reply}'
       tags:
       - Sms Messages
-      security:
-      - oauth2:
-        - wallets:write
+      security: []
       parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1201,23 +1266,34 @@ paths:
       - NOT-01
       - WAL-03
       x-service: channel-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
-      x-required-scope: wallets:write
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: sms_message
   /v1/sms-messages/delivery-reports:
     post:
       operationId: smsMessagesDeliveryReports
-      summary: SMS gateway delivery receipts
+      summary: 'SMS gateway delivery receipts (HMAC-SHA256 (hex) of the canonical JSON body (keys sorted, no whitespace) in
+        X-Gateway-Signature); status only moves forward: {sms_message_id, status}'
       tags:
       - Sms Messages
-      security:
-      - oauth2:
-        - wallets:write
+      security: []
       parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1238,8 +1314,9 @@ paths:
       - NOT-01
       - WAL-03
       x-service: channel-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
-      x-required-scope: wallets:write
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: sms_message
 components:
   schemas:
@@ -1329,8 +1406,12 @@ components:
           pattern: ^\+[1-9]\d{6,14}$
           description: E.164
         inputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 182
+        execute_actions:
+          type: boolean
       required:
       - msisdn
       - inputs
@@ -1512,7 +1593,7 @@ components:
         keyword:
           type: string
           maxLength: 32
-          description: Keyword
+          description: Keyword (matched case-insensitively)
         short_code:
           type: string
           maxLength: 16
@@ -1524,7 +1605,7 @@ components:
         action_code:
           type: string
           maxLength: 64
-          description: Action executed
+          description: 'Action executed: BALANCE, P2P_SEND, MINI_STATEMENT, HELP'
         syntax:
           type:
           - string
@@ -1590,7 +1671,7 @@ components:
         keyword:
           type: string
           maxLength: 32
-          description: Keyword
+          description: Keyword (matched case-insensitively)
         short_code:
           type: string
           maxLength: 16
@@ -1602,7 +1683,7 @@ components:
         action_code:
           type: string
           maxLength: 64
-          description: Action executed
+          description: 'Action executed: BALANCE, P2P_SEND, MINI_STATEMENT, HELP'
         syntax:
           type: string
           maxLength: 255
@@ -1648,7 +1729,7 @@ components:
         keyword:
           type: string
           maxLength: 32
-          description: Keyword
+          description: Keyword (matched case-insensitively)
         short_code:
           type: string
           maxLength: 16
@@ -1660,7 +1741,7 @@ components:
         action_code:
           type: string
           maxLength: 64
-          description: Action executed
+          description: 'Action executed: BALANCE, P2P_SEND, MINI_STATEMENT, HELP'
         syntax:
           type: string
           maxLength: 255
@@ -1788,6 +1869,12 @@ components:
           - 'null'
           format: uuid
           description: Command matched (inbound)
+        reply_to_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Inbound message this outbound message answers
         wallet_transaction_id:
           type:
           - string
@@ -1936,7 +2023,15 @@ components:
         version:
           type: integer
           format: int32
-          description: Version
+          description: Version (a clone gets the next version for the short code and language)
+          readOnly: true
+        cloned_from_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Version this menu was cloned from
+          readOnly: true
         root_node_key:
           type: string
           maxLength: 64
@@ -1965,7 +2060,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Publisher
+          description: Publisher (checker, differs from the maker)
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time a newer version replaced it
           readOnly: true
         custom_field_1:
           type:
@@ -2029,10 +2131,6 @@ components:
           type: string
           maxLength: 8
           description: Language
-        version:
-          type: integer
-          format: int32
-          description: Version
         root_node_key:
           type: string
           maxLength: 64
@@ -2086,10 +2184,6 @@ components:
           type: string
           maxLength: 8
           description: Language
-        version:
-          type: integer
-          format: int32
-          description: Version
         root_node_key:
           type: string
           maxLength: 64
@@ -2178,7 +2272,8 @@ components:
           - CONFIRM
           - ACTION
           - END
-          description: Node type
+          description: MENU lists its children by option_number; INPUT stores the reply under context_key; CONFIRM accepts
+            1 (yes) or 2 (no); ACTION runs action_code; END closes the session
         option_number:
           type:
           - integer
@@ -2188,25 +2283,42 @@ components:
         label:
           type: string
           maxLength: 182
-          description: Text shown (182-character USSD limit)
+          description: Text shown (182-character USSD limit); {placeholders} are filled from the session context
         prompt:
           type:
           - string
           - 'null'
           maxLength: 182
           description: Input prompt
+        input_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - TEXT
+          - NUMBER
+          - AMOUNT
+          - MSISDN
+          - PIN
+          description: Kind of input (PIN inputs are never stored)
         input_validation:
           type:
           - string
           - 'null'
           maxLength: 128
           description: Regex the input must match
+        context_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Session context variable the input is stored under (default: node_key)'
         action_code:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE
+          description: Action executed, e.g. BALANCE, P2P_SEND, CASH_OUT, AIRTIME, MINI_STATEMENT, CHANGE_PIN
         next_node_key:
           type:
           - string
@@ -2291,7 +2403,8 @@ components:
           - CONFIRM
           - ACTION
           - END
-          description: Node type
+          description: MENU lists its children by option_number; INPUT stores the reply under context_key; CONFIRM accepts
+            1 (yes) or 2 (no); ACTION runs action_code; END closes the session
         option_number:
           type: integer
           format: int32
@@ -2299,19 +2412,32 @@ components:
         label:
           type: string
           maxLength: 182
-          description: Text shown (182-character USSD limit)
+          description: Text shown (182-character USSD limit); {placeholders} are filled from the session context
         prompt:
           type: string
           maxLength: 182
           description: Input prompt
+        input_type:
+          type: string
+          enum:
+          - TEXT
+          - NUMBER
+          - AMOUNT
+          - MSISDN
+          - PIN
+          description: Kind of input (PIN inputs are never stored)
         input_validation:
           type: string
           maxLength: 128
           description: Regex the input must match
+        context_key:
+          type: string
+          maxLength: 64
+          description: 'Session context variable the input is stored under (default: node_key)'
         action_code:
           type: string
           maxLength: 64
-          description: Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE
+          description: Action executed, e.g. BALANCE, P2P_SEND, CASH_OUT, AIRTIME, MINI_STATEMENT, CHANGE_PIN
         next_node_key:
           type: string
           maxLength: 64
@@ -2375,7 +2501,8 @@ components:
           - CONFIRM
           - ACTION
           - END
-          description: Node type
+          description: MENU lists its children by option_number; INPUT stores the reply under context_key; CONFIRM accepts
+            1 (yes) or 2 (no); ACTION runs action_code; END closes the session
         option_number:
           type: integer
           format: int32
@@ -2383,19 +2510,32 @@ components:
         label:
           type: string
           maxLength: 182
-          description: Text shown (182-character USSD limit)
+          description: Text shown (182-character USSD limit); {placeholders} are filled from the session context
         prompt:
           type: string
           maxLength: 182
           description: Input prompt
+        input_type:
+          type: string
+          enum:
+          - TEXT
+          - NUMBER
+          - AMOUNT
+          - MSISDN
+          - PIN
+          description: Kind of input (PIN inputs are never stored)
         input_validation:
           type: string
           maxLength: 128
           description: Regex the input must match
+        context_key:
+          type: string
+          maxLength: 64
+          description: 'Session context variable the input is stored under (default: node_key)'
         action_code:
           type: string
           maxLength: 64
-          description: Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE
+          description: Action executed, e.g. BALANCE, P2P_SEND, CASH_OUT, AIRTIME, MINI_STATEMENT, CHANGE_PIN
         next_node_key:
           type: string
           maxLength: 64
@@ -2531,12 +2671,26 @@ components:
           type: string
           format: date-time
           description: Start
+        last_activity_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last request (database clock; drives the timeout)
+          readOnly: true
         ended_at:
           type:
           - string
           - 'null'
           format: date-time
           description: End
+          readOnly: true
+        end_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Why the session ended
           readOnly: true
         wallet_transaction_id:
           type:

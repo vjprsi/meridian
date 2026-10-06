@@ -38,17 +38,21 @@ CREATE TABLE wallet (
   currency                     char(3) NOT NULL,
   product_id                   uuid,
   product_version_id           uuid,
-  ledger_account_id            uuid NOT NULL,
+  ledger_account_id            uuid,
   kyc_tier                     integer NOT NULL DEFAULT 0,
+  kyc_profile_id               uuid,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'DORMANT', 'SUSPENDED', 'BLOCKED', 'CLOSED')),
   status_reason                varchar(255),
   is_default                   boolean NOT NULL DEFAULT true,
   pin_hash                     varchar(255),
+  has_pin                      boolean NOT NULL DEFAULT false,
+  pin_set_at                   timestamptz,
   pin_failed_attempts          integer NOT NULL DEFAULT 0,
   pin_locked_until             timestamptz,
   language                     varchar(8),
   opened_channel               varchar(40) CHECK (opened_channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   opened_by_agent_id           uuid,
+  activated_at                 timestamptz,
   last_activity_at             timestamptz,
   dormant_since                timestamptz,
   credit_score                 integer,
@@ -70,7 +74,7 @@ COMMENT ON COLUMN wallet.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN wallet.updated_at IS 'Last update time';
 COMMENT ON COLUMN wallet.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN wallet.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN wallet.wallet_number IS 'Public wallet number';
+COMMENT ON COLUMN wallet.wallet_number IS 'Public wallet number (server-generated, Luhn check digit)';
 COMMENT ON COLUMN wallet.wallet_type IS 'Kind of wallet';
 COMMENT ON COLUMN wallet.customer_id IS 'Owning customer (customer wallets)';
 COMMENT ON COLUMN wallet.agent_id IS 'Owning agent (agent, super-agent, float and commission wallets)';
@@ -81,17 +85,21 @@ COMMENT ON COLUMN wallet.display_name IS 'Name shown to payers for confirmation'
 COMMENT ON COLUMN wallet.currency IS 'Wallet currency';
 COMMENT ON COLUMN wallet.product_id IS 'Wallet product';
 COMMENT ON COLUMN wallet.product_version_id IS 'Product version the wallet is on';
-COMMENT ON COLUMN wallet.ledger_account_id IS 'Ledger account holding the balance';
-COMMENT ON COLUMN wallet.kyc_tier IS 'KYC tier (0 = phone only) driving limits';
-COMMENT ON COLUMN wallet.status IS 'Lifecycle status';
+COMMENT ON COLUMN wallet.ledger_account_id IS 'Ledger account holding the balance (opened on first activation)';
+COMMENT ON COLUMN wallet.kyc_tier IS 'KYC tier (0 = phone only) driving limits; changed later only by /upgrade-tier';
+COMMENT ON COLUMN wallet.kyc_profile_id IS 'KYC profile that verified the current tier';
+COMMENT ON COLUMN wallet.status IS 'Lifecycle status (changed only by actions)';
 COMMENT ON COLUMN wallet.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN wallet.is_default IS 'Default wallet of the owner for this currency';
-COMMENT ON COLUMN wallet.pin_hash IS 'Argon2id hash of the wallet PIN [SECRET]';
+COMMENT ON COLUMN wallet.pin_hash IS 'PBKDF2-HMAC-SHA256 hash of the wallet PIN (salt and iterations encoded) [SECRET]';
+COMMENT ON COLUMN wallet.has_pin IS 'Whether a PIN is set';
+COMMENT ON COLUMN wallet.pin_set_at IS 'Time the PIN was last set';
 COMMENT ON COLUMN wallet.pin_failed_attempts IS 'Consecutive failed PIN attempts';
 COMMENT ON COLUMN wallet.pin_locked_until IS 'PIN locked until this time after too many failures';
 COMMENT ON COLUMN wallet.language IS 'Preferred language for USSD/SMS';
 COMMENT ON COLUMN wallet.opened_channel IS 'Channel the wallet was opened on';
 COMMENT ON COLUMN wallet.opened_by_agent_id IS 'Agent who registered the wallet';
+COMMENT ON COLUMN wallet.activated_at IS 'First activation time';
 COMMENT ON COLUMN wallet.last_activity_at IS 'Last customer-initiated transaction';
 COMMENT ON COLUMN wallet.dormant_since IS 'Time the wallet became dormant';
 COMMENT ON COLUMN wallet.credit_score IS 'Transaction-based score for nano-loan offers';
@@ -110,6 +118,7 @@ CREATE INDEX ix_wallet_msisdn ON wallet (msisdn);
 CREATE INDEX ix_wallet_product_id ON wallet (product_id);
 CREATE INDEX ix_wallet_product_version_id ON wallet (product_version_id);
 CREATE INDEX ix_wallet_ledger_account_id ON wallet (ledger_account_id);
+CREATE INDEX ix_wallet_kyc_profile_id ON wallet (kyc_profile_id);
 CREATE INDEX ix_wallet_opened_by_agent_id ON wallet (opened_by_agent_id);
 ALTER TABLE wallet ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -154,7 +163,7 @@ COMMENT ON COLUMN wallet_tier_limit.updated_by IS 'Principal that last updated t
 COMMENT ON COLUMN wallet_tier_limit.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN wallet_tier_limit.kyc_tier IS 'KYC tier';
 COMMENT ON COLUMN wallet_tier_limit.wallet_type IS 'Wallet type';
-COMMENT ON COLUMN wallet_tier_limit.txn_type IS 'Transaction type (empty = all)';
+COMMENT ON COLUMN wallet_tier_limit.txn_type IS 'Transaction type (empty = all debits)';
 COMMENT ON COLUMN wallet_tier_limit.currency IS 'Currency';
 COMMENT ON COLUMN wallet_tier_limit.max_balance IS 'Maximum wallet balance';
 COMMENT ON COLUMN wallet_tier_limit.per_txn_min IS 'Minimum amount per transaction';
@@ -175,8 +184,8 @@ ALTER TABLE wallet_tier_limit ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet_tier_limit USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_wallet_tier_limit_touch BEFORE UPDATE ON wallet_tier_limit FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- wallet_transaction: A wallet money movement of any type, with its full lifecycle
-CREATE TABLE wallet_transaction (
+-- wallet_fee_rule: Customer fee charged on a wallet transaction; the most specific matching active rule wins
+CREATE TABLE wallet_fee_rule (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
@@ -184,187 +193,68 @@ CREATE TABLE wallet_transaction (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  reference                    varchar(32) NOT NULL,
+  code                         varchar(32) NOT NULL,
   txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
-  status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'PENDING_CONFIRMATION', 'PENDING_APPROVAL', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED', 'EXPIRED', 'CANCELLED')),
-  channel                      varchar(40) NOT NULL CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
-  payer_wallet_id              uuid REFERENCES wallet(id),
-  payee_wallet_id              uuid REFERENCES wallet(id),
-  payee_msisdn                 varchar(20),
-  payee_name                   varchar(160),
-  payee_external_ref           varchar(64),
-  amount                       numeric(28,8) NOT NULL,
+  channel                      varchar(40) CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
+  wallet_type                  varchar(40) CHECK (wallet_type IN ('CUSTOMER', 'MERCHANT', 'AGENT', 'SUPER_AGENT', 'FLOAT', 'COMMISSION', 'ESCROW', 'G2P', 'TREASURY')),
+  kyc_tier                     integer,
   currency                     char(3) NOT NULL,
-  fee_amount                   numeric(28,8) NOT NULL DEFAULT 0,
-  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
-  commission_amount            numeric(28,8) NOT NULL DEFAULT 0,
-  total_debit_amount           numeric(28,8),
-  fx_rate                      numeric(18,10),
-  settlement_amount            numeric(28,8),
-  settlement_currency          char(3),
-  initiator_type               varchar(32) NOT NULL,
-  initiated_by                 varchar(64),
-  agent_id                     uuid,
-  agent_outlet_id              uuid,
-  merchant_id                  uuid,
-  bill_payment_id              uuid,
-  disbursement_beneficiary_id  uuid,
-  interop_transfer_id          uuid,
-  payment_id                   uuid,
-  loan_id                      uuid,
-  original_transaction_id      uuid REFERENCES wallet_transaction(id),
-  journal_entry_id             uuid,
-  hold_id                      uuid,
-  idempotency_key              varchar(128) NOT NULL,
-  description                  varchar(255),
-  customer_note                varchar(160),
-  confirmation_expires_at      timestamptz,
-  completed_at                 timestamptz,
-  failure_code                 varchar(64),
-  failure_reason               varchar(255),
-  risk_score                   numeric(18,10),
-  device_id                    uuid,
-  ip_address                   inet,
-  geo_lat                      numeric(18,10),
-  geo_lon                      numeric(18,10),
-  metadata                     jsonb,
+  min_amount                   numeric(28,8),
+  max_amount                   numeric(28,8),
+  basis                        varchar(40) NOT NULL DEFAULT 'FLAT' CHECK (basis IN ('FLAT', 'PERCENTAGE', 'TIERED', 'FLAT_PLUS_PERCENTAGE')),
+  flat_fee                     numeric(28,8),
+  percentage                   numeric(18,10),
+  tiers                        jsonb,
+  min_fee                      numeric(28,8),
+  max_fee                      numeric(28,8),
+  tax_rate                     numeric(18,10),
+  priority                     integer NOT NULL DEFAULT 100,
+  valid_from                   date NOT NULL,
+  valid_to                     date,
+  is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500),
-  CONSTRAINT uq_wallet_transaction_reference UNIQUE (tenant_id, reference),
-  CONSTRAINT uq_wallet_transaction_1 UNIQUE (tenant_id, idempotency_key)
+  CONSTRAINT uq_wallet_fee_rule_1 UNIQUE (tenant_id, code, valid_from)
 );
-COMMENT ON TABLE wallet_transaction IS 'A wallet money movement of any type, with its full lifecycle';
-COMMENT ON COLUMN wallet_transaction.id IS 'Unique id (UUIDv7, time-ordered)';
-COMMENT ON COLUMN wallet_transaction.tenant_id IS 'Owning tenant; enforced by row-level security';
-COMMENT ON COLUMN wallet_transaction.created_at IS 'Creation time';
-COMMENT ON COLUMN wallet_transaction.created_by IS 'Principal that created the row';
-COMMENT ON COLUMN wallet_transaction.updated_at IS 'Last update time';
-COMMENT ON COLUMN wallet_transaction.updated_by IS 'Principal that last updated the row';
-COMMENT ON COLUMN wallet_transaction.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN wallet_transaction.reference IS 'Human-readable transaction reference shown on receipts';
-COMMENT ON COLUMN wallet_transaction.txn_type IS 'Transaction type';
-COMMENT ON COLUMN wallet_transaction.status IS 'Lifecycle status';
-COMMENT ON COLUMN wallet_transaction.channel IS 'Initiating channel';
-COMMENT ON COLUMN wallet_transaction.payer_wallet_id IS 'Debited wallet';
-COMMENT ON COLUMN wallet_transaction.payee_wallet_id IS 'Credited wallet';
-COMMENT ON COLUMN wallet_transaction.payee_msisdn IS 'Payee mobile number as entered [PII]';
-COMMENT ON COLUMN wallet_transaction.payee_name IS 'Payee name shown for confirmation [PII]';
-COMMENT ON COLUMN wallet_transaction.payee_external_ref IS 'External account / meter / bank reference';
-COMMENT ON COLUMN wallet_transaction.amount IS 'Principal amount';
-COMMENT ON COLUMN wallet_transaction.currency IS 'Currency';
-COMMENT ON COLUMN wallet_transaction.fee_amount IS 'Fee charged to the payer';
-COMMENT ON COLUMN wallet_transaction.tax_amount IS 'Tax on the fee';
-COMMENT ON COLUMN wallet_transaction.commission_amount IS 'Total commission generated';
-COMMENT ON COLUMN wallet_transaction.total_debit_amount IS 'Amount + fee + tax debited from the payer';
-COMMENT ON COLUMN wallet_transaction.fx_rate IS 'FX rate applied for cross-currency transfers';
-COMMENT ON COLUMN wallet_transaction.settlement_amount IS 'Amount credited in the payee currency';
-COMMENT ON COLUMN wallet_transaction.settlement_currency IS 'Payee currency';
-COMMENT ON COLUMN wallet_transaction.initiator_type IS 'CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF';
-COMMENT ON COLUMN wallet_transaction.initiated_by IS 'Principal that initiated the transaction';
-COMMENT ON COLUMN wallet_transaction.agent_id IS 'Agent involved (cash-in / cash-out)';
-COMMENT ON COLUMN wallet_transaction.agent_outlet_id IS 'Outlet where the transaction took place';
-COMMENT ON COLUMN wallet_transaction.merchant_id IS 'Merchant paid';
-COMMENT ON COLUMN wallet_transaction.bill_payment_id IS 'Bill payment';
-COMMENT ON COLUMN wallet_transaction.disbursement_beneficiary_id IS 'Bulk disbursement line';
-COMMENT ON COLUMN wallet_transaction.interop_transfer_id IS 'Interoperable transfer';
-COMMENT ON COLUMN wallet_transaction.payment_id IS 'Bank payment (wallet-to-bank / bank-to-wallet)';
-COMMENT ON COLUMN wallet_transaction.loan_id IS 'Nano-loan disbursed or repaid';
-COMMENT ON COLUMN wallet_transaction.original_transaction_id IS 'Transaction reversed or refunded';
-COMMENT ON COLUMN wallet_transaction.journal_entry_id IS 'Ledger posting';
-COMMENT ON COLUMN wallet_transaction.hold_id IS 'Funds hold while pending confirmation';
-COMMENT ON COLUMN wallet_transaction.idempotency_key IS 'Client key';
-COMMENT ON COLUMN wallet_transaction.description IS 'Narrative';
-COMMENT ON COLUMN wallet_transaction.customer_note IS 'Note from payer to payee';
-COMMENT ON COLUMN wallet_transaction.confirmation_expires_at IS 'Deadline for PIN/OTP confirmation';
-COMMENT ON COLUMN wallet_transaction.completed_at IS 'Completion time';
-COMMENT ON COLUMN wallet_transaction.failure_code IS 'Stable failure code';
-COMMENT ON COLUMN wallet_transaction.failure_reason IS 'Failure description';
-COMMENT ON COLUMN wallet_transaction.risk_score IS 'Fraud score 0..1';
-COMMENT ON COLUMN wallet_transaction.device_id IS 'Device used';
-COMMENT ON COLUMN wallet_transaction.ip_address IS 'Source IP (app / web)';
-COMMENT ON COLUMN wallet_transaction.geo_lat IS 'Latitude at initiation';
-COMMENT ON COLUMN wallet_transaction.geo_lon IS 'Longitude at initiation';
-COMMENT ON COLUMN wallet_transaction.metadata IS 'Client-defined key/value metadata';
-COMMENT ON COLUMN wallet_transaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
-CREATE INDEX ix_wallet_transaction_tenant ON wallet_transaction (tenant_id, created_at);
-CREATE INDEX ix_wallet_transaction_payer_wallet_id ON wallet_transaction (payer_wallet_id);
-CREATE INDEX ix_wallet_transaction_payee_wallet_id ON wallet_transaction (payee_wallet_id);
-CREATE INDEX ix_wallet_transaction_agent_id ON wallet_transaction (agent_id);
-CREATE INDEX ix_wallet_transaction_agent_outlet_id ON wallet_transaction (agent_outlet_id);
-CREATE INDEX ix_wallet_transaction_merchant_id ON wallet_transaction (merchant_id);
-CREATE INDEX ix_wallet_transaction_bill_payment_id ON wallet_transaction (bill_payment_id);
-CREATE INDEX ix_wallet_transaction_disbursement_beneficiary_id ON wallet_transaction (disbursement_beneficiary_id);
-CREATE INDEX ix_wallet_transaction_interop_transfer_id ON wallet_transaction (interop_transfer_id);
-CREATE INDEX ix_wallet_transaction_payment_id ON wallet_transaction (payment_id);
-CREATE INDEX ix_wallet_transaction_loan_id ON wallet_transaction (loan_id);
-CREATE INDEX ix_wallet_transaction_original_transaction_id ON wallet_transaction (original_transaction_id);
-CREATE INDEX ix_wallet_transaction_journal_entry_id ON wallet_transaction (journal_entry_id);
-CREATE INDEX ix_wallet_transaction_hold_id ON wallet_transaction (hold_id);
-CREATE INDEX ix_wallet_transaction_device_id ON wallet_transaction (device_id);
-CREATE INDEX ix_wallet_transaction_c1 ON wallet_transaction (payer_wallet_id, created_at);
-CREATE INDEX ix_wallet_transaction_c2 ON wallet_transaction (payee_wallet_id, created_at);
-CREATE INDEX ix_wallet_transaction_c3 ON wallet_transaction (txn_type, status);
-ALTER TABLE wallet_transaction ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON wallet_transaction USING (tenant_id = current_setting('app.tenant_id')::uuid);
-CREATE TRIGGER trg_wallet_transaction_touch BEFORE UPDATE ON wallet_transaction FOR EACH ROW EXECUTE FUNCTION touch_row();
-
--- wallet_transaction_leg: One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.
-CREATE TABLE wallet_transaction_leg (
-  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
-  tenant_id                    uuid NOT NULL,
-  created_at                   timestamptz NOT NULL DEFAULT now(),
-  created_by                   varchar(64),
-  wallet_transaction_id        uuid NOT NULL REFERENCES wallet_transaction(id),
-  leg_no                       integer NOT NULL,
-  role                         varchar(40) NOT NULL CHECK (role IN ('PAYER', 'PAYEE', 'FEE', 'COMMISSION', 'TAX', 'FLOAT')),
-  wallet_id                    uuid REFERENCES wallet(id),
-  ledger_account_id            uuid NOT NULL,
-  direction                    varchar(40) NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
-  amount                       numeric(28,8) NOT NULL,
-  currency                     char(3) NOT NULL,
-  beneficiary_type             varchar(32),
-  description                  varchar(255),
-  custom_field_1               varchar(500),
-  custom_field_2               varchar(500),
-  custom_field_3               varchar(500),
-  custom_field_4               varchar(500),
-  custom_field_5               varchar(500),
-  CONSTRAINT uq_wallet_transaction_leg_1 UNIQUE (wallet_transaction_id, leg_no)
-);
-COMMENT ON TABLE wallet_transaction_leg IS 'One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.';
-COMMENT ON COLUMN wallet_transaction_leg.id IS 'Unique id (UUIDv7, time-ordered)';
-COMMENT ON COLUMN wallet_transaction_leg.tenant_id IS 'Owning tenant; enforced by row-level security';
-COMMENT ON COLUMN wallet_transaction_leg.created_at IS 'Creation time';
-COMMENT ON COLUMN wallet_transaction_leg.created_by IS 'Principal that created the row';
-COMMENT ON COLUMN wallet_transaction_leg.wallet_transaction_id IS 'Parent transaction';
-COMMENT ON COLUMN wallet_transaction_leg.leg_no IS 'Leg number';
-COMMENT ON COLUMN wallet_transaction_leg.role IS 'Purpose of the leg';
-COMMENT ON COLUMN wallet_transaction_leg.wallet_id IS 'Wallet affected (empty for internal accounts)';
-COMMENT ON COLUMN wallet_transaction_leg.ledger_account_id IS 'Ledger account posted';
-COMMENT ON COLUMN wallet_transaction_leg.direction IS 'Debit or credit';
-COMMENT ON COLUMN wallet_transaction_leg.amount IS 'Amount';
-COMMENT ON COLUMN wallet_transaction_leg.currency IS 'Currency';
-COMMENT ON COLUMN wallet_transaction_leg.beneficiary_type IS 'AGENT, SUPER_AGENT, PLATFORM, BILLER, TAX_AUTHORITY';
-COMMENT ON COLUMN wallet_transaction_leg.description IS 'Narrative';
-COMMENT ON COLUMN wallet_transaction_leg.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction_leg.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction_leg.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction_leg.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN wallet_transaction_leg.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
-CREATE INDEX ix_wallet_transaction_leg_tenant ON wallet_transaction_leg (tenant_id, created_at);
-CREATE INDEX ix_wallet_transaction_leg_wallet_transaction_id ON wallet_transaction_leg (wallet_transaction_id);
-CREATE INDEX ix_wallet_transaction_leg_wallet_id ON wallet_transaction_leg (wallet_id);
-CREATE INDEX ix_wallet_transaction_leg_ledger_account_id ON wallet_transaction_leg (ledger_account_id);
-ALTER TABLE wallet_transaction_leg ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON wallet_transaction_leg USING (tenant_id = current_setting('app.tenant_id')::uuid);
-CREATE TRIGGER trg_wallet_transaction_leg_append_only BEFORE UPDATE OR DELETE ON wallet_transaction_leg FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+COMMENT ON TABLE wallet_fee_rule IS 'Customer fee charged on a wallet transaction; the most specific matching active rule wins';
+COMMENT ON COLUMN wallet_fee_rule.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_fee_rule.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_fee_rule.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_fee_rule.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_fee_rule.updated_at IS 'Last update time';
+COMMENT ON COLUMN wallet_fee_rule.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN wallet_fee_rule.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN wallet_fee_rule.code IS 'Rule code';
+COMMENT ON COLUMN wallet_fee_rule.txn_type IS 'Transaction type';
+COMMENT ON COLUMN wallet_fee_rule.channel IS 'Channel (empty = any)';
+COMMENT ON COLUMN wallet_fee_rule.wallet_type IS 'Payer wallet type (empty = any)';
+COMMENT ON COLUMN wallet_fee_rule.kyc_tier IS 'Payer KYC tier (empty = any)';
+COMMENT ON COLUMN wallet_fee_rule.currency IS 'Currency';
+COMMENT ON COLUMN wallet_fee_rule.min_amount IS 'Applies from this transaction amount (inclusive)';
+COMMENT ON COLUMN wallet_fee_rule.max_amount IS 'Applies up to this transaction amount (inclusive)';
+COMMENT ON COLUMN wallet_fee_rule.basis IS 'Calculation basis';
+COMMENT ON COLUMN wallet_fee_rule.flat_fee IS 'Flat fee (FLAT, FLAT_PLUS_PERCENTAGE)';
+COMMENT ON COLUMN wallet_fee_rule.percentage IS 'Percentage of the amount, 0.01 = 1% (PERCENTAGE, FLAT_PLUS_PERCENTAGE)';
+COMMENT ON COLUMN wallet_fee_rule.tiers IS 'Tier table for TIERED: [{from, to, flat, percentage}]';
+COMMENT ON COLUMN wallet_fee_rule.min_fee IS 'Minimum fee';
+COMMENT ON COLUMN wallet_fee_rule.max_fee IS 'Maximum fee';
+COMMENT ON COLUMN wallet_fee_rule.tax_rate IS 'Tax (excise / VAT) on the fee, 0.15 = 15%';
+COMMENT ON COLUMN wallet_fee_rule.priority IS 'Lower wins among equally specific rules';
+COMMENT ON COLUMN wallet_fee_rule.valid_from IS 'Effective from';
+COMMENT ON COLUMN wallet_fee_rule.valid_to IS 'Effective to';
+COMMENT ON COLUMN wallet_fee_rule.is_active IS 'Active';
+COMMENT ON COLUMN wallet_fee_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_fee_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_fee_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_fee_rule.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_fee_rule.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_fee_rule_tenant ON wallet_fee_rule (tenant_id, created_at);
+ALTER TABLE wallet_fee_rule ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_fee_rule USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_fee_rule_touch BEFORE UPDATE ON wallet_fee_rule FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- wallet_bank_link: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
 CREATE TABLE wallet_bank_link (
@@ -383,7 +273,11 @@ CREATE TABLE wallet_bank_link (
   deposit_account_id           uuid,
   currency                     char(3) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_VERIFICATION' CHECK (status IN ('PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'REMOVED')),
-  verification_method          varchar(32),
+  status_reason                varchar(255),
+  verification_method          varchar(32) NOT NULL DEFAULT 'NAME_ENQUIRY',
+  verification_code_hash       varchar(128),
+  verification_attempts        integer NOT NULL DEFAULT 0,
+  verified_by                  varchar(64),
   verified_at                  timestamptz,
   mandate_reference            varchar(64),
   is_default                   boolean NOT NULL DEFAULT false,
@@ -409,7 +303,11 @@ COMMENT ON COLUMN wallet_bank_link.account_name IS 'Account holder name returned
 COMMENT ON COLUMN wallet_bank_link.deposit_account_id IS 'Internal deposit account when held on Meridian';
 COMMENT ON COLUMN wallet_bank_link.currency IS 'Account currency';
 COMMENT ON COLUMN wallet_bank_link.status IS 'Status';
+COMMENT ON COLUMN wallet_bank_link.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN wallet_bank_link.verification_method IS 'NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL';
+COMMENT ON COLUMN wallet_bank_link.verification_code_hash IS 'Hash of the micro-deposit code [SECRET]';
+COMMENT ON COLUMN wallet_bank_link.verification_attempts IS 'Failed verification attempts';
+COMMENT ON COLUMN wallet_bank_link.verified_by IS 'Principal that verified the link';
 COMMENT ON COLUMN wallet_bank_link.verified_at IS 'Verification time';
 COMMENT ON COLUMN wallet_bank_link.mandate_reference IS 'Direct-debit mandate for bank-to-wallet pulls';
 COMMENT ON COLUMN wallet_bank_link.is_default IS 'Default link';
@@ -440,8 +338,12 @@ CREATE TABLE wallet_pin_reset (
   verification_method          varchar(32) NOT NULL,
   agent_id                     uuid,
   document_id                  uuid,
+  otp_hash                     varchar(128),
   otp_attempts                 integer NOT NULL DEFAULT 0,
+  notification_id              uuid,
   expires_at                   timestamptz NOT NULL,
+  verified_by                  varchar(64),
+  verified_at                  timestamptz,
   completed_at                 timestamptz,
   rejected_reason              varchar(255),
   custom_field_1               varchar(500),
@@ -464,8 +366,12 @@ COMMENT ON COLUMN wallet_pin_reset.status IS 'Status';
 COMMENT ON COLUMN wallet_pin_reset.verification_method IS 'OTP, ID_CHECK, AGENT, SECURITY_QUESTIONS';
 COMMENT ON COLUMN wallet_pin_reset.agent_id IS 'Agent who verified the customer';
 COMMENT ON COLUMN wallet_pin_reset.document_id IS 'ID document captured';
+COMMENT ON COLUMN wallet_pin_reset.otp_hash IS 'Hash of the OTP sent to the wallet msisdn [SECRET]';
 COMMENT ON COLUMN wallet_pin_reset.otp_attempts IS 'OTP attempts used';
-COMMENT ON COLUMN wallet_pin_reset.expires_at IS 'Request expiry';
+COMMENT ON COLUMN wallet_pin_reset.notification_id IS 'OTP notification';
+COMMENT ON COLUMN wallet_pin_reset.expires_at IS 'Request expiry (database clock)';
+COMMENT ON COLUMN wallet_pin_reset.verified_by IS 'Principal that verified the customer';
+COMMENT ON COLUMN wallet_pin_reset.verified_at IS 'Verification time';
 COMMENT ON COLUMN wallet_pin_reset.completed_at IS 'Completion time';
 COMMENT ON COLUMN wallet_pin_reset.rejected_reason IS 'Rejection reason';
 COMMENT ON COLUMN wallet_pin_reset.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -477,6 +383,7 @@ CREATE INDEX ix_wallet_pin_reset_tenant ON wallet_pin_reset (tenant_id, created_
 CREATE INDEX ix_wallet_pin_reset_wallet_id ON wallet_pin_reset (wallet_id);
 CREATE INDEX ix_wallet_pin_reset_agent_id ON wallet_pin_reset (agent_id);
 CREATE INDEX ix_wallet_pin_reset_document_id ON wallet_pin_reset (document_id);
+CREATE INDEX ix_wallet_pin_reset_notification_id ON wallet_pin_reset (notification_id);
 ALTER TABLE wallet_pin_reset ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet_pin_reset USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_wallet_pin_reset_touch BEFORE UPDATE ON wallet_pin_reset FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -577,6 +484,235 @@ CREATE INDEX ix_wallet_status_history_approval_request_id ON wallet_status_histo
 ALTER TABLE wallet_status_history ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet_status_history USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_wallet_status_history_append_only BEFORE UPDATE OR DELETE ON wallet_status_history FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- wallet_transaction: A wallet money movement of any type, with its full lifecycle
+CREATE TABLE wallet_transaction (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  reference                    varchar(32) NOT NULL,
+  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'PENDING_CONFIRMATION', 'PENDING_APPROVAL', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED', 'EXPIRED', 'CANCELLED')),
+  channel                      varchar(40) NOT NULL CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
+  payer_wallet_id              uuid REFERENCES wallet(id),
+  payee_wallet_id              uuid REFERENCES wallet(id),
+  payee_msisdn                 varchar(20),
+  payee_name                   varchar(160),
+  payee_external_ref           varchar(64),
+  counterparty_ledger_account_id uuid,
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  fee_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  commission_amount            numeric(28,8) NOT NULL DEFAULT 0,
+  total_debit_amount           numeric(28,8),
+  fx_rate                      numeric(18,10),
+  settlement_amount            numeric(28,8),
+  settlement_currency          char(3),
+  initiator_type               varchar(32) NOT NULL,
+  initiated_by                 varchar(64),
+  kyc_tier                     integer,
+  agent_id                     uuid,
+  agent_outlet_id              uuid,
+  merchant_id                  uuid,
+  biller_id                    uuid,
+  bill_payment_id              uuid,
+  disbursement_beneficiary_id  uuid,
+  interop_transfer_id          uuid,
+  wallet_bank_link_id          uuid REFERENCES wallet_bank_link(id),
+  payment_id                   uuid,
+  loan_id                      uuid,
+  original_transaction_id      uuid REFERENCES wallet_transaction(id),
+  journal_entry_id             uuid,
+  hold_id                      uuid,
+  limit_check_id               uuid,
+  fraud_score_id               uuid,
+  fraud_decision               varchar(16),
+  idempotency_key              varchar(128) NOT NULL,
+  description                  varchar(255),
+  customer_note                varchar(160),
+  confirmation_method          varchar(40) CHECK (confirmation_method IN ('PIN', 'OTP', 'SYSTEM')),
+  confirmation_otp_hash        varchar(128),
+  confirmation_attempts        integer NOT NULL DEFAULT 0,
+  confirmation_expires_at      timestamptz,
+  completed_at                 timestamptz,
+  failure_code                 varchar(64),
+  failure_reason               varchar(255),
+  reversed_amount              numeric(28,8) NOT NULL DEFAULT 0,
+  reversal_requested_by        varchar(64),
+  reversal_requested_at        timestamptz,
+  reversal_requested_amount    numeric(28,8),
+  reversal_reason              varchar(255),
+  risk_score                   numeric(18,10),
+  device_id                    uuid,
+  ip_address                   inet,
+  geo_lat                      numeric(18,10),
+  geo_lon                      numeric(18,10),
+  metadata                     jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_wallet_transaction_reference UNIQUE (tenant_id, reference),
+  CONSTRAINT uq_wallet_transaction_1 UNIQUE (tenant_id, idempotency_key)
+);
+COMMENT ON TABLE wallet_transaction IS 'A wallet money movement of any type, with its full lifecycle';
+COMMENT ON COLUMN wallet_transaction.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_transaction.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_transaction.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_transaction.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_transaction.updated_at IS 'Last update time';
+COMMENT ON COLUMN wallet_transaction.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN wallet_transaction.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN wallet_transaction.reference IS 'Human-readable transaction reference shown on receipts (server-generated)';
+COMMENT ON COLUMN wallet_transaction.txn_type IS 'Transaction type';
+COMMENT ON COLUMN wallet_transaction.status IS 'Lifecycle status';
+COMMENT ON COLUMN wallet_transaction.channel IS 'Initiating channel';
+COMMENT ON COLUMN wallet_transaction.payer_wallet_id IS 'Debited wallet';
+COMMENT ON COLUMN wallet_transaction.payee_wallet_id IS 'Credited wallet';
+COMMENT ON COLUMN wallet_transaction.payee_msisdn IS 'Payee mobile number as entered [PII]';
+COMMENT ON COLUMN wallet_transaction.payee_name IS 'Payee name shown for confirmation [PII]';
+COMMENT ON COLUMN wallet_transaction.payee_external_ref IS 'External account / meter / bank reference';
+COMMENT ON COLUMN wallet_transaction.counterparty_ledger_account_id IS 'Internal ledger account on the other side when the counterparty is not a wallet (switch settlement, bank clearing, deposit account)';
+COMMENT ON COLUMN wallet_transaction.amount IS 'Principal amount';
+COMMENT ON COLUMN wallet_transaction.currency IS 'Currency';
+COMMENT ON COLUMN wallet_transaction.fee_amount IS 'Fee charged to the payer';
+COMMENT ON COLUMN wallet_transaction.tax_amount IS 'Tax on the fee';
+COMMENT ON COLUMN wallet_transaction.commission_amount IS 'Total commission generated';
+COMMENT ON COLUMN wallet_transaction.total_debit_amount IS 'Amount + fee + tax debited from the payer';
+COMMENT ON COLUMN wallet_transaction.fx_rate IS 'FX rate applied for cross-currency transfers';
+COMMENT ON COLUMN wallet_transaction.settlement_amount IS 'Amount credited in the payee currency';
+COMMENT ON COLUMN wallet_transaction.settlement_currency IS 'Payee currency';
+COMMENT ON COLUMN wallet_transaction.initiator_type IS 'CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF';
+COMMENT ON COLUMN wallet_transaction.initiated_by IS 'Principal that initiated the transaction';
+COMMENT ON COLUMN wallet_transaction.kyc_tier IS 'Payer KYC tier at initiation';
+COMMENT ON COLUMN wallet_transaction.agent_id IS 'Agent involved (cash-in / cash-out)';
+COMMENT ON COLUMN wallet_transaction.agent_outlet_id IS 'Outlet where the transaction took place';
+COMMENT ON COLUMN wallet_transaction.merchant_id IS 'Merchant paid';
+COMMENT ON COLUMN wallet_transaction.biller_id IS 'Biller paid';
+COMMENT ON COLUMN wallet_transaction.bill_payment_id IS 'Bill payment';
+COMMENT ON COLUMN wallet_transaction.disbursement_beneficiary_id IS 'Bulk disbursement line';
+COMMENT ON COLUMN wallet_transaction.interop_transfer_id IS 'Interoperable transfer';
+COMMENT ON COLUMN wallet_transaction.wallet_bank_link_id IS 'Linked bank account (wallet-to-bank / bank-to-wallet)';
+COMMENT ON COLUMN wallet_transaction.payment_id IS 'Bank payment (wallet-to-bank / bank-to-wallet)';
+COMMENT ON COLUMN wallet_transaction.loan_id IS 'Nano-loan disbursed or repaid';
+COMMENT ON COLUMN wallet_transaction.original_transaction_id IS 'Transaction reversed or refunded';
+COMMENT ON COLUMN wallet_transaction.journal_entry_id IS 'Ledger posting';
+COMMENT ON COLUMN wallet_transaction.hold_id IS 'Funds hold while pending confirmation';
+COMMENT ON COLUMN wallet_transaction.limit_check_id IS 'Limit reservation in limits-service';
+COMMENT ON COLUMN wallet_transaction.fraud_score_id IS 'Fraud evaluation';
+COMMENT ON COLUMN wallet_transaction.fraud_decision IS 'Fraud decision (ALLOW, REVIEW, BLOCK, STEP_UP)';
+COMMENT ON COLUMN wallet_transaction.idempotency_key IS 'Client key';
+COMMENT ON COLUMN wallet_transaction.description IS 'Narrative';
+COMMENT ON COLUMN wallet_transaction.customer_note IS 'Note from payer to payee';
+COMMENT ON COLUMN wallet_transaction.confirmation_method IS 'How a pending transaction must be confirmed';
+COMMENT ON COLUMN wallet_transaction.confirmation_otp_hash IS 'Hash of the OTP sent for OTP confirmation [SECRET]';
+COMMENT ON COLUMN wallet_transaction.confirmation_attempts IS 'Failed confirmation attempts';
+COMMENT ON COLUMN wallet_transaction.confirmation_expires_at IS 'Deadline for PIN/OTP confirmation';
+COMMENT ON COLUMN wallet_transaction.completed_at IS 'Completion time';
+COMMENT ON COLUMN wallet_transaction.failure_code IS 'Stable failure code';
+COMMENT ON COLUMN wallet_transaction.failure_reason IS 'Failure description';
+COMMENT ON COLUMN wallet_transaction.reversed_amount IS 'Amount reversed so far';
+COMMENT ON COLUMN wallet_transaction.reversal_requested_by IS 'Maker of a pending reversal request';
+COMMENT ON COLUMN wallet_transaction.reversal_requested_at IS 'Time the reversal was requested';
+COMMENT ON COLUMN wallet_transaction.reversal_requested_amount IS 'Amount requested for reversal';
+COMMENT ON COLUMN wallet_transaction.reversal_reason IS 'Reason of the reversal request';
+COMMENT ON COLUMN wallet_transaction.risk_score IS 'Fraud score 0..1';
+COMMENT ON COLUMN wallet_transaction.device_id IS 'Device used';
+COMMENT ON COLUMN wallet_transaction.ip_address IS 'Source IP (app / web)';
+COMMENT ON COLUMN wallet_transaction.geo_lat IS 'Latitude at initiation';
+COMMENT ON COLUMN wallet_transaction.geo_lon IS 'Longitude at initiation';
+COMMENT ON COLUMN wallet_transaction.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN wallet_transaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_transaction_tenant ON wallet_transaction (tenant_id, created_at);
+CREATE INDEX ix_wallet_transaction_payer_wallet_id ON wallet_transaction (payer_wallet_id);
+CREATE INDEX ix_wallet_transaction_payee_wallet_id ON wallet_transaction (payee_wallet_id);
+CREATE INDEX ix_wallet_transaction_counterparty_ledger_account_id ON wallet_transaction (counterparty_ledger_account_id);
+CREATE INDEX ix_wallet_transaction_agent_id ON wallet_transaction (agent_id);
+CREATE INDEX ix_wallet_transaction_agent_outlet_id ON wallet_transaction (agent_outlet_id);
+CREATE INDEX ix_wallet_transaction_merchant_id ON wallet_transaction (merchant_id);
+CREATE INDEX ix_wallet_transaction_biller_id ON wallet_transaction (biller_id);
+CREATE INDEX ix_wallet_transaction_bill_payment_id ON wallet_transaction (bill_payment_id);
+CREATE INDEX ix_wallet_transaction_disbursement_beneficiary_id ON wallet_transaction (disbursement_beneficiary_id);
+CREATE INDEX ix_wallet_transaction_interop_transfer_id ON wallet_transaction (interop_transfer_id);
+CREATE INDEX ix_wallet_transaction_wallet_bank_link_id ON wallet_transaction (wallet_bank_link_id);
+CREATE INDEX ix_wallet_transaction_payment_id ON wallet_transaction (payment_id);
+CREATE INDEX ix_wallet_transaction_loan_id ON wallet_transaction (loan_id);
+CREATE INDEX ix_wallet_transaction_original_transaction_id ON wallet_transaction (original_transaction_id);
+CREATE INDEX ix_wallet_transaction_journal_entry_id ON wallet_transaction (journal_entry_id);
+CREATE INDEX ix_wallet_transaction_hold_id ON wallet_transaction (hold_id);
+CREATE INDEX ix_wallet_transaction_limit_check_id ON wallet_transaction (limit_check_id);
+CREATE INDEX ix_wallet_transaction_fraud_score_id ON wallet_transaction (fraud_score_id);
+CREATE INDEX ix_wallet_transaction_device_id ON wallet_transaction (device_id);
+CREATE INDEX ix_wallet_transaction_c1 ON wallet_transaction (payer_wallet_id, created_at);
+CREATE INDEX ix_wallet_transaction_c2 ON wallet_transaction (payee_wallet_id, created_at);
+CREATE INDEX ix_wallet_transaction_c3 ON wallet_transaction (txn_type, status);
+ALTER TABLE wallet_transaction ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_transaction USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_transaction_touch BEFORE UPDATE ON wallet_transaction FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- wallet_transaction_leg: One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.
+CREATE TABLE wallet_transaction_leg (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  wallet_transaction_id        uuid NOT NULL REFERENCES wallet_transaction(id),
+  leg_no                       integer NOT NULL,
+  role                         varchar(40) NOT NULL CHECK (role IN ('PAYER', 'PAYEE', 'FEE', 'COMMISSION', 'TAX', 'FLOAT')),
+  wallet_id                    uuid REFERENCES wallet(id),
+  ledger_account_id            uuid NOT NULL,
+  direction                    varchar(40) NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  journal_entry_id             uuid,
+  beneficiary_type             varchar(32),
+  description                  varchar(255),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_wallet_transaction_leg_1 UNIQUE (wallet_transaction_id, leg_no)
+);
+COMMENT ON TABLE wallet_transaction_leg IS 'One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.';
+COMMENT ON COLUMN wallet_transaction_leg.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_transaction_leg.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_transaction_leg.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_transaction_leg.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_transaction_leg.wallet_transaction_id IS 'Parent transaction';
+COMMENT ON COLUMN wallet_transaction_leg.leg_no IS 'Leg number';
+COMMENT ON COLUMN wallet_transaction_leg.role IS 'Purpose of the leg';
+COMMENT ON COLUMN wallet_transaction_leg.wallet_id IS 'Wallet affected (empty for internal accounts)';
+COMMENT ON COLUMN wallet_transaction_leg.ledger_account_id IS 'Ledger account posted';
+COMMENT ON COLUMN wallet_transaction_leg.direction IS 'Debit or credit';
+COMMENT ON COLUMN wallet_transaction_leg.amount IS 'Amount';
+COMMENT ON COLUMN wallet_transaction_leg.currency IS 'Currency';
+COMMENT ON COLUMN wallet_transaction_leg.journal_entry_id IS 'Ledger journal entry carrying the leg';
+COMMENT ON COLUMN wallet_transaction_leg.beneficiary_type IS 'AGENT, SUPER_AGENT, PLATFORM, BILLER, TAX_AUTHORITY';
+COMMENT ON COLUMN wallet_transaction_leg.description IS 'Narrative';
+COMMENT ON COLUMN wallet_transaction_leg.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction_leg.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction_leg.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction_leg.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_transaction_leg.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_transaction_leg_tenant ON wallet_transaction_leg (tenant_id, created_at);
+CREATE INDEX ix_wallet_transaction_leg_wallet_transaction_id ON wallet_transaction_leg (wallet_transaction_id);
+CREATE INDEX ix_wallet_transaction_leg_wallet_id ON wallet_transaction_leg (wallet_id);
+CREATE INDEX ix_wallet_transaction_leg_ledger_account_id ON wallet_transaction_leg (ledger_account_id);
+CREATE INDEX ix_wallet_transaction_leg_journal_entry_id ON wallet_transaction_leg (journal_entry_id);
+ALTER TABLE wallet_transaction_leg ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_transaction_leg USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_transaction_leg_append_only BEFORE UPDATE OR DELETE ON wallet_transaction_leg FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

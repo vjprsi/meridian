@@ -91,9 +91,11 @@ CREATE TABLE agent (
   contact_email                varchar(320),
   agent_territory_id           uuid REFERENCES agent_territory(id),
   branch_id                    uuid,
+  currency                     char(3) NOT NULL,
   float_wallet_id              uuid,
   commission_wallet_id         uuid,
   commission_plan_id           uuid,
+  commission_plan_effective_from date,
   status                       varchar(40) NOT NULL DEFAULT 'ONBOARDING' CHECK (status IN ('ONBOARDING', 'ACTIVE', 'SUSPENDED', 'TERMINATED')),
   status_reason                varchar(255),
   contract_start               date,
@@ -102,6 +104,7 @@ CREATE TABLE agent (
   kyc_status                   varchar(32),
   risk_rating                  varchar(16),
   onboarded_at                 timestamptz,
+  terminated_at                timestamptz,
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -118,10 +121,10 @@ COMMENT ON COLUMN agent.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN agent.updated_at IS 'Last update time';
 COMMENT ON COLUMN agent.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN agent.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN agent.agent_code IS 'Agent code used at the till and on USSD';
+COMMENT ON COLUMN agent.agent_code IS 'Agent code used at the till and on USSD (server-generated)';
 COMMENT ON COLUMN agent.agent_level IS 'Level in the hierarchy';
 COMMENT ON COLUMN agent.parent_agent_id IS 'Direct parent (agent for sub-agents, super-agent for agents)';
-COMMENT ON COLUMN agent.super_agent_id IS 'Top-level super-agent';
+COMMENT ON COLUMN agent.super_agent_id IS 'Top-level super-agent (derived from the hierarchy)';
 COMMENT ON COLUMN agent.legal_name IS 'Registered business name';
 COMMENT ON COLUMN agent.trading_name IS 'Trading name';
 COMMENT ON COLUMN agent.customer_id IS 'Business party record (KYB)';
@@ -132,17 +135,20 @@ COMMENT ON COLUMN agent.contact_msisdn IS 'Main contact mobile [PII]';
 COMMENT ON COLUMN agent.contact_email IS 'Main contact email [PII]';
 COMMENT ON COLUMN agent.agent_territory_id IS 'Territory';
 COMMENT ON COLUMN agent.branch_id IS 'Sponsoring bank branch';
-COMMENT ON COLUMN agent.float_wallet_id IS 'Main float wallet';
-COMMENT ON COLUMN agent.commission_wallet_id IS 'Wallet receiving commissions';
-COMMENT ON COLUMN agent.commission_plan_id IS 'Commission plan';
-COMMENT ON COLUMN agent.status IS 'Status';
+COMMENT ON COLUMN agent.currency IS 'Operating currency of the float and commission wallets';
+COMMENT ON COLUMN agent.float_wallet_id IS 'Main float wallet (opened in wallet-service on activation)';
+COMMENT ON COLUMN agent.commission_wallet_id IS 'Wallet receiving commissions (opened on activation)';
+COMMENT ON COLUMN agent.commission_plan_id IS 'Commission plan (set by /assign-commission-plan)';
+COMMENT ON COLUMN agent.commission_plan_effective_from IS 'Date the commission plan applies from';
+COMMENT ON COLUMN agent.status IS 'Status (changed only by actions)';
 COMMENT ON COLUMN agent.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN agent.contract_start IS 'Agency contract start';
 COMMENT ON COLUMN agent.contract_end IS 'Agency contract end';
 COMMENT ON COLUMN agent.max_float_amount IS 'Maximum float the agent may hold';
-COMMENT ON COLUMN agent.kyc_status IS 'PENDING, VERIFIED, REJECTED, EXPIRED';
+COMMENT ON COLUMN agent.kyc_status IS 'PENDING, VERIFIED, REJECTED, EXPIRED (derived from KYB documents)';
 COMMENT ON COLUMN agent.risk_rating IS 'LOW, MEDIUM, HIGH';
 COMMENT ON COLUMN agent.onboarded_at IS 'Activation time';
+COMMENT ON COLUMN agent.terminated_at IS 'Termination time';
 COMMENT ON COLUMN agent.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN agent.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -189,6 +195,7 @@ CREATE TABLE agent_outlet (
   contact_msisdn               varchar(20),
   photo_document_id            uuid,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'CLOSED')),
+  closed_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -205,7 +212,7 @@ COMMENT ON COLUMN agent_outlet.updated_at IS 'Last update time';
 COMMENT ON COLUMN agent_outlet.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN agent_outlet.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN agent_outlet.agent_id IS 'Operating agent';
-COMMENT ON COLUMN agent_outlet.outlet_code IS 'Outlet code';
+COMMENT ON COLUMN agent_outlet.outlet_code IS 'Outlet code (server-generated)';
 COMMENT ON COLUMN agent_outlet.name IS 'Outlet name';
 COMMENT ON COLUMN agent_outlet.address_line1 IS 'Address line 1';
 COMMENT ON COLUMN agent_outlet.address_line2 IS 'Address line 2';
@@ -213,15 +220,16 @@ COMMENT ON COLUMN agent_outlet.city IS 'City';
 COMMENT ON COLUMN agent_outlet.region IS 'Region / state';
 COMMENT ON COLUMN agent_outlet.postal_code IS 'Postal code';
 COMMENT ON COLUMN agent_outlet.country IS 'Country';
-COMMENT ON COLUMN agent_outlet.latitude IS 'Latitude';
-COMMENT ON COLUMN agent_outlet.longitude IS 'Longitude';
+COMMENT ON COLUMN agent_outlet.latitude IS 'Latitude (-90..90)';
+COMMENT ON COLUMN agent_outlet.longitude IS 'Longitude (-180..180)';
 COMMENT ON COLUMN agent_outlet.agent_territory_id IS 'Territory';
-COMMENT ON COLUMN agent_outlet.opening_hours IS 'Opening hours per weekday';
-COMMENT ON COLUMN agent_outlet.services IS 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME';
+COMMENT ON COLUMN agent_outlet.opening_hours IS 'Opening hours per weekday, e.g. {MON: [08:00, 18:00]}';
+COMMENT ON COLUMN agent_outlet.services IS 'Services offered at the outlet';
 COMMENT ON COLUMN agent_outlet.float_wallet_id IS 'Outlet-level float wallet when separate from the agent';
 COMMENT ON COLUMN agent_outlet.contact_msisdn IS 'Outlet phone [PII]';
 COMMENT ON COLUMN agent_outlet.photo_document_id IS 'Storefront photo';
 COMMENT ON COLUMN agent_outlet.status IS 'Status';
+COMMENT ON COLUMN agent_outlet.closed_reason IS 'Reason the outlet was closed';
 COMMENT ON COLUMN agent_outlet.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_outlet.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_outlet.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -254,7 +262,10 @@ CREATE TABLE agent_float (
   max_balance                  numeric(28,8),
   low_float_alert_threshold    numeric(28,8),
   auto_rebalance               boolean NOT NULL DEFAULT false,
+  rebalance_amount             numeric(28,8),
   rebalance_source_agent_id    uuid REFERENCES agent(id),
+  last_balance                 numeric(28,8),
+  last_checked_at              timestamptz,
   last_alert_at                timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -279,7 +290,10 @@ COMMENT ON COLUMN agent_float.min_balance IS 'Balance below which cash-in is ref
 COMMENT ON COLUMN agent_float.max_balance IS 'Maximum float';
 COMMENT ON COLUMN agent_float.low_float_alert_threshold IS 'Alert threshold';
 COMMENT ON COLUMN agent_float.auto_rebalance IS 'Request rebalancing automatically when low';
+COMMENT ON COLUMN agent_float.rebalance_amount IS 'Amount requested by an automatic rebalance (default: max_balance - balance)';
 COMMENT ON COLUMN agent_float.rebalance_source_agent_id IS 'Default source of rebalancing (usually the super-agent)';
+COMMENT ON COLUMN agent_float.last_balance IS 'Balance seen at the last check';
+COMMENT ON COLUMN agent_float.last_checked_at IS 'Last balance check';
 COMMENT ON COLUMN agent_float.last_alert_at IS 'Last low-float alert';
 COMMENT ON COLUMN agent_float.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_float.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -313,11 +327,13 @@ CREATE TABLE agent_float_request (
   funding_method               varchar(32),
   bank_reference               varchar(64),
   proof_document_id            uuid,
-  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED')),
+  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED', 'FAILED')),
   approved_by                  varchar(64),
   approved_at                  timestamptz,
   wallet_transaction_id        uuid,
+  completed_at                 timestamptz,
   rejection_reason             varchar(255),
+  failure_reason               varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -335,7 +351,7 @@ COMMENT ON COLUMN agent_float_request.row_version IS 'Optimistic lock version; s
 COMMENT ON COLUMN agent_float_request.request_type IS 'Request type';
 COMMENT ON COLUMN agent_float_request.requesting_agent_id IS 'Agent requesting';
 COMMENT ON COLUMN agent_float_request.source_agent_id IS 'Agent providing float (rebalance / transfer)';
-COMMENT ON COLUMN agent_float_request.source_wallet_id IS 'Source wallet';
+COMMENT ON COLUMN agent_float_request.source_wallet_id IS 'Source wallet (default: source agent float, or the treasury wallet for bank-funded top-ups)';
 COMMENT ON COLUMN agent_float_request.target_wallet_id IS 'Target wallet';
 COMMENT ON COLUMN agent_float_request.amount IS 'Amount';
 COMMENT ON COLUMN agent_float_request.currency IS 'Currency';
@@ -346,7 +362,9 @@ COMMENT ON COLUMN agent_float_request.status IS 'Status';
 COMMENT ON COLUMN agent_float_request.approved_by IS 'Approver';
 COMMENT ON COLUMN agent_float_request.approved_at IS 'Approval time';
 COMMENT ON COLUMN agent_float_request.wallet_transaction_id IS 'Resulting float transfer';
-COMMENT ON COLUMN agent_float_request.rejection_reason IS 'Rejection reason';
+COMMENT ON COLUMN agent_float_request.completed_at IS 'Execution time';
+COMMENT ON COLUMN agent_float_request.rejection_reason IS 'Rejection or cancellation reason';
+COMMENT ON COLUMN agent_float_request.failure_reason IS 'Execution failure reason';
 COMMENT ON COLUMN agent_float_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_float_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_float_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -380,9 +398,12 @@ CREATE TABLE agent_till (
   opened_at                    timestamptz,
   closed_at                    timestamptz,
   opening_cash                 numeric(28,8),
+  cash_in_total                numeric(28,8),
+  cash_out_total               numeric(28,8),
   expected_cash                numeric(28,8),
   declared_cash                numeric(28,8),
   variance                     numeric(28,8),
+  variance_status              varchar(40) CHECK (variance_status IN ('BALANCED', 'OVER', 'SHORT')),
   denominations                jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -407,10 +428,13 @@ COMMENT ON COLUMN agent_till.currency IS 'Currency';
 COMMENT ON COLUMN agent_till.opened_at IS 'Shift start';
 COMMENT ON COLUMN agent_till.closed_at IS 'Shift end';
 COMMENT ON COLUMN agent_till.opening_cash IS 'Declared cash at opening';
+COMMENT ON COLUMN agent_till.cash_in_total IS 'Cash received from customers during the shift (cash-in)';
+COMMENT ON COLUMN agent_till.cash_out_total IS 'Cash paid to customers during the shift (cash-out)';
 COMMENT ON COLUMN agent_till.expected_cash IS 'Opening cash + cash-in - cash-out';
 COMMENT ON COLUMN agent_till.declared_cash IS 'Declared cash at closing';
 COMMENT ON COLUMN agent_till.variance IS 'Declared minus expected';
-COMMENT ON COLUMN agent_till.denominations IS 'Cash count by denomination';
+COMMENT ON COLUMN agent_till.variance_status IS 'Balanced, over or short';
+COMMENT ON COLUMN agent_till.denominations IS 'Cash count by denomination, e.g. {"1000": 12, "500": 3}';
 COMMENT ON COLUMN agent_till.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_till.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN agent_till.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -442,6 +466,7 @@ CREATE TABLE agent_device (
   app_version                  varchar(32),
   sim_msisdn                   varchar(20),
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'LOST', 'RETIRED')),
+  status_reason                varchar(255),
   assigned_at                  timestamptz,
   last_seen_at                 timestamptz,
   last_latitude                numeric(18,10),
@@ -471,6 +496,7 @@ COMMENT ON COLUMN agent_device.os_version IS 'OS version';
 COMMENT ON COLUMN agent_device.app_version IS 'Agent app version';
 COMMENT ON COLUMN agent_device.sim_msisdn IS 'SIM number';
 COMMENT ON COLUMN agent_device.status IS 'Status';
+COMMENT ON COLUMN agent_device.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN agent_device.assigned_at IS 'Assignment time';
 COMMENT ON COLUMN agent_device.last_seen_at IS 'Last heartbeat';
 COMMENT ON COLUMN agent_device.last_latitude IS 'Last known latitude';
@@ -551,10 +577,12 @@ CREATE TABLE cash_management_request (
   currency                     char(3) NOT NULL,
   denominations                jsonb,
   requested_for                timestamptz,
-  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED')),
+  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED', 'FAILED')),
   cit_provider                 varchar(64),
   cit_reference                varchar(64),
+  approved_by                  varchar(64),
   completed_at                 timestamptz,
+  cancel_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -578,7 +606,9 @@ COMMENT ON COLUMN cash_management_request.requested_for IS 'Requested time';
 COMMENT ON COLUMN cash_management_request.status IS 'Status';
 COMMENT ON COLUMN cash_management_request.cit_provider IS 'Cash-in-transit company';
 COMMENT ON COLUMN cash_management_request.cit_reference IS 'CIT reference';
+COMMENT ON COLUMN cash_management_request.approved_by IS 'Approver';
 COMMENT ON COLUMN cash_management_request.completed_at IS 'Completion time';
+COMMENT ON COLUMN cash_management_request.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN cash_management_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cash_management_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cash_management_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

@@ -26,6 +26,8 @@ tags:
   description: A wallet money movement of any type, with its full lifecycle
 - name: Wallet Tier Limits
   description: Balance and transaction limits per KYC tier, wallet type and transaction type
+- name: Wallet Fee Rules
+  description: Customer fee charged on a wallet transaction; the most specific matching active rule wins
 - name: Wallet Bank Links
   description: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
 - name: Wallet Pin Resets
@@ -107,6 +109,11 @@ paths:
         schema:
           type: string
           maxLength: 32
+      - name: alias
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -285,13 +292,37 @@ paths:
   /v1/wallets/lookup:
     get:
       operationId: walletsLookup
-      summary: Resolve a wallet by msisdn or alias (?msisdn=&alias=) for payee name confirmation
+      summary: Resolve an active wallet by msisdn, alias or wallet number for payee name confirmation
       tags:
       - Wallets
       security:
       - oauth2:
         - wallets:read
-      parameters: []
+      parameters:
+      - name: msisdn
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+      - name: alias
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 64
+      - name: wallet_number
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 32
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
       responses:
         '200':
           description: OK
@@ -316,7 +347,7 @@ paths:
   /v1/wallets/{id}/balance:
     get:
       operationId: walletsBalance
-      summary: Current balance (posted, available, held)
+      summary: Current balance (posted, available, held) from the ledger
       tags:
       - Wallets
       security:
@@ -353,7 +384,7 @@ paths:
   /v1/wallets/{id}/transactions:
     get:
       operationId: walletsTransactions
-      summary: Transactions of the wallet, newest first
+      summary: Transactions of the wallet (as payer or payee), newest first
       tags:
       - Wallets
       security:
@@ -366,6 +397,59 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: txn_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - INITIATED
+          - PENDING_CONFIRMATION
+          - PENDING_APPROVAL
+          - PROCESSING
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          - EXPIRED
+          - CANCELLED
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -392,7 +476,9 @@ paths:
   /v1/wallets/{id}/limits:
     get:
       operationId: walletsLimits
-      summary: Effective limits and remaining headroom for the wallet tier
+      summary: 'Effective tier limits with used and remaining daily/monthly amount and count: {kyc_tier, wallet_type, currency,
+        limits[{txn_type, per_txn_min, per_txn_max, max_balance, daily_amount, daily_used, daily_remaining, daily_count, daily_count_used,
+        monthly_amount, monthly_used, monthly_remaining, monthly_count, monthly_count_used}]}'
       tags:
       - Wallets
       security:
@@ -405,15 +491,41 @@ paths:
         schema:
           type: string
           format: uuid
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
+      - name: txn_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WalletTierLimitPage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -467,10 +579,62 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
       x-required-scope: wallets:read
       x-table: wallet
+  /v1/wallets/{id}/statement:
+    get:
+      operationId: walletsStatement
+      summary: 'Mini statement from the ledger: {wallet_id, from, to, opening_balance, closing_balance, total_credits, total_debits,
+        entries[]}'
+      tags:
+      - Wallets
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-03
+      - LND-07
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet
   /v1/wallets/{id}/upgrade-tier:
     post:
       operationId: walletsUpgradeTier
-      summary: Upgrade the KYC tier after verification
+      summary: Upgrade the KYC tier after verification (tiers only go up)
       tags:
       - Wallets
       security:
@@ -518,7 +682,7 @@ paths:
   /v1/wallets/{id}/activate:
     post:
       operationId: walletsActivate
-      summary: Activate a pending or dormant wallet
+      summary: Activate a pending or dormant wallet; opens the ledger account on first activation
       tags:
       - Wallets
       security:
@@ -566,7 +730,7 @@ paths:
   /v1/wallets/{id}/suspend:
     post:
       operationId: walletsSuspend
-      summary: Suspend the wallet
+      summary: Suspend the wallet (ledger account frozen for debits)
       tags:
       - Wallets
       security:
@@ -614,7 +778,7 @@ paths:
   /v1/wallets/{id}/block:
     post:
       operationId: walletsBlock
-      summary: Block the wallet (fraud or legal)
+      summary: Block the wallet (fraud or legal; ledger account fully frozen)
       tags:
       - Wallets
       security:
@@ -662,7 +826,7 @@ paths:
   /v1/wallets/{id}/reactivate:
     post:
       operationId: walletsReactivate
-      summary: Lift a suspension or block (maker-checker)
+      summary: 'Lift a suspension or block (checker: a different principal from the one who suspended or blocked)'
       tags:
       - Wallets
       security:
@@ -710,7 +874,7 @@ paths:
   /v1/wallets/{id}/close:
     post:
       operationId: walletsClose
-      summary: Close a wallet, sweeping any residual balance
+      summary: Close a wallet, sweeping any residual balance to another wallet of the same currency
       tags:
       - Wallets
       security:
@@ -758,7 +922,7 @@ paths:
   /v1/wallets/{id}/set-pin:
     post:
       operationId: walletsSetPin
-      summary: Set or change the wallet PIN
+      summary: Set or change the wallet PIN (current_pin required when a PIN exists)
       tags:
       - Wallets
       security:
@@ -773,8 +937,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Wallet'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -802,7 +970,7 @@ paths:
   /v1/wallets/{id}/verify-pin:
     post:
       operationId: walletsVerifyPin
-      summary: Verify the wallet PIN
+      summary: 'Verify the wallet PIN; failures count towards the lockout: {valid, remaining_attempts, locked_until}'
       tags:
       - Wallets
       security:
@@ -817,8 +985,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -846,7 +1020,7 @@ paths:
   /v1/wallets/{id}/statements:
     post:
       operationId: walletsStatements
-      summary: Request a full statement delivered by notification
+      summary: 'Request a full statement delivered by notification: {notification_id, entry_count, from_date, to_date}'
       tags:
       - Wallets
       security:
@@ -861,8 +1035,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -879,6 +1059,51 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/WalletsStatementsRequest'
+      x-requirements:
+      - CIF-03
+      - LND-07
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet
+  /v1/wallets/eod/dormancy:
+    post:
+      operationId: walletsEodDormancy
+      summary: End of day - mark active wallets without customer activity for the dormancy period dormant (idempotent per
+        business date)
+      tags:
+      - Wallets
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - CIF-03
       - LND-07
@@ -970,7 +1195,17 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: agent_outlet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: merchant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: biller_id
         in: query
         schema:
           type: string
@@ -981,6 +1216,21 @@ paths:
           type: string
           maxLength: 32
       - name: original_transaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: bill_payment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: disbursement_beneficiary_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: interop_transfer_id
         in: query
         schema:
           type: string
@@ -1126,7 +1376,8 @@ paths:
   /v1/wallet-transactions/quote:
     post:
       operationId: walletTransactionsQuote
-      summary: Fee, tax and commission quote before initiation
+      summary: 'Fee and tax quote before initiation: {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount,
+        fee_rule_id, payee_name, limits_ok, limit_violation}'
       tags:
       - Wallet Transactions
       security:
@@ -1135,8 +1386,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1164,6 +1421,127 @@ paths:
       x-service: wallet-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
+      x-table: wallet_transaction
+  /v1/wallet-transactions/summary:
+    get:
+      operationId: walletTransactionsSummary
+      summary: 'Counts and sums grouped by txn_type, status and currency: {groups[{txn_type, status, currency, count, amount,
+        fee_amount, tax_amount, distinct_payers}]}'
+      tags:
+      - Wallet Transactions
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: txn_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - INITIATED
+          - PENDING_CONFIRMATION
+          - PENDING_APPROVAL
+          - PROCESSING
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          - EXPIRED
+          - CANCELLED
+      - name: merchant_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: agent_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: agent_outlet_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: biller_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: wallet_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-07
+      - PAY-01
+      - WAL-01
+      - WAL-02
+      - WAL-05
+      - WAL-06
+      - WAL-07
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
       x-table: wallet_transaction
   /v1/wallet-transactions/p2p:
     post:
@@ -1214,7 +1592,7 @@ paths:
   /v1/wallet-transactions/cash-in:
     post:
       operationId: walletTransactionsCashIn
-      summary: Agent cash-in to a customer wallet
+      summary: 'Agent cash-in: the agent float wallet pays e-value to a customer wallet'
       tags:
       - Wallet Transactions
       security:
@@ -1260,7 +1638,8 @@ paths:
   /v1/wallet-transactions/cash-out:
     post:
       operationId: walletTransactionsCashOut
-      summary: Customer cash-out at an agent outlet (customer confirms with PIN)
+      summary: 'Customer cash-out at an agent outlet: funds are held on the customer wallet until the customer confirms with
+        PIN'
       tags:
       - Wallet Transactions
       security:
@@ -1306,7 +1685,7 @@ paths:
   /v1/wallet-transactions/wallet-to-bank:
     post:
       operationId: walletTransactionsWalletToBank
-      summary: Transfer to a linked bank account
+      summary: Transfer to a linked, verified bank account
       tags:
       - Wallet Transactions
       security:
@@ -1352,7 +1731,7 @@ paths:
   /v1/wallet-transactions/bank-to-wallet:
     post:
       operationId: walletTransactionsBankToWallet
-      summary: Pull funds from a linked bank account
+      summary: Pull funds from a linked, verified bank account
       tags:
       - Wallet Transactions
       security:
@@ -1398,7 +1777,7 @@ paths:
   /v1/wallet-transactions/{id}/confirm:
     post:
       operationId: walletTransactionsConfirm
-      summary: Confirm a pending transaction with PIN or OTP
+      summary: Confirm a pending transaction with PIN or OTP (SYSTEM confirmation for upstream services); captures the hold
       tags:
       - Wallet Transactions
       security:
@@ -1450,7 +1829,7 @@ paths:
   /v1/wallet-transactions/{id}/cancel:
     post:
       operationId: walletTransactionsCancel
-      summary: Cancel a transaction awaiting confirmation
+      summary: Cancel a transaction awaiting confirmation; releases the hold
       tags:
       - Wallet Transactions
       security:
@@ -1499,10 +1878,63 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: wallet_transaction
+  /v1/wallet-transactions/{id}/request-reversal:
+    post:
+      operationId: walletTransactionsRequestReversal
+      summary: Request a full or partial reversal of a completed transaction (maker)
+      tags:
+      - Wallet Transactions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletTransactionsRequestReversalRequest'
+      x-requirements:
+      - LND-07
+      - PAY-01
+      - WAL-01
+      - WAL-02
+      - WAL-05
+      - WAL-06
+      - WAL-07
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_transaction
   /v1/wallet-transactions/{id}/reverse:
     post:
       operationId: walletTransactionsReverse
-      summary: Reverse a completed transaction (maker-checker)
+      summary: 'Reverse a completed transaction with compensating postings (checker: a different principal from the reversal
+        maker, or from the initiator when no request exists); returns the REVERSAL transaction'
       tags:
       - Wallet Transactions
       security:
@@ -1539,6 +1971,48 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/WalletTransactionsReverseRequest'
+      x-requirements:
+      - LND-07
+      - PAY-01
+      - WAL-01
+      - WAL-02
+      - WAL-05
+      - WAL-06
+      - WAL-07
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_transaction
+  /v1/wallet-transactions/expire-pending:
+    post:
+      operationId: walletTransactionsExpirePending
+      summary: Expire transactions whose confirmation deadline passed and release their holds
+      tags:
+      - Wallet Transactions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - LND-07
       - PAY-01
@@ -1597,7 +2071,7 @@ paths:
   /v1/wallet-transactions/{id}/receipt:
     get:
       operationId: walletTransactionsReceipt
-      summary: Receipt (PDF or text) for the transaction
+      summary: Printable receipt for the transaction
       tags:
       - Wallet Transactions
       security:
@@ -1611,8 +2085,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1893,6 +2371,268 @@ paths:
       x-table: wallet_tier_limit
       x-crud: true
       x-crud-delete: true
+  /v1/wallet-fee-rules:
+    get:
+      operationId: walletFeeRulesList
+      summary: List wallet fee rules
+      tags:
+      - Wallet Fee Rules
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: txn_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletFeeRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PRC-02
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet_fee_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: walletFeeRulesCreate
+      summary: Create wallet fee rule
+      tags:
+      - Wallet Fee Rules
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletFeeRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletFeeRuleCreate'
+      x-requirements:
+      - PRC-02
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_fee_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/wallet-fee-rules/{id}:
+    get:
+      operationId: walletFeeRulesGet
+      summary: Retrieve wallet fee rule
+      tags:
+      - Wallet Fee Rules
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id009
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletFeeRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRC-02
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet_fee_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: walletFeeRulesUpdate
+      summary: Update wallet fee rule
+      tags:
+      - Wallet Fee Rules
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletFeeRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletFeeRuleUpdate'
+      x-requirements:
+      - PRC-02
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_fee_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: walletFeeRulesDelete
+      summary: Delete wallet fee rule
+      tags:
+      - Wallet Fee Rules
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRC-02
+      - WAL-01
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_fee_rule
+      x-crud: true
+      x-crud-delete: true
   /v1/wallet-bank-links:
     get:
       operationId: walletBankLinksList
@@ -2021,7 +2761,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id008
+      - &id010
         name: id
         in: path
         required: true
@@ -2059,7 +2799,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id008
+      - *id010
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -2096,7 +2836,8 @@ paths:
   /v1/wallet-bank-links/{id}/verify:
     post:
       operationId: walletBankLinksVerify
-      summary: Verify ownership by name enquiry or micro-deposit code
+      summary: Verify ownership by name enquiry (on-us deposit account), micro-deposit code or manual check (checker differs
+        from the creator)
       tags:
       - Wallet Bank Links
       security:
@@ -2344,7 +3085,7 @@ paths:
   /v1/wallet-pin-resets/{id}/verify:
     post:
       operationId: walletPinResetsVerify
-      summary: Verify the customer by OTP or ID document
+      summary: Verify the customer by OTP (sent on create) or ID document / agent check
       tags:
       - Wallet Pin Resets
       security:
@@ -2390,7 +3131,7 @@ paths:
   /v1/wallet-pin-resets/{id}/complete:
     post:
       operationId: walletPinResetsComplete
-      summary: Set the new PIN
+      summary: Set the new PIN and unlock the wallet PIN
       tags:
       - Wallet Pin Resets
       security:
@@ -2597,8 +3338,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id010
-      - &id009
+      parameters: &id012
+      - &id011
         name: id
         in: path
         required: true
@@ -2636,7 +3377,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id009
+      - *id011
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -2678,7 +3419,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id010
+      parameters: *id012
       responses:
         '204':
           description: No content
@@ -2761,24 +3502,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WalletTransaction'
-        next_cursor:
-          type:
-          - string
-          - 'null'
-          description: Pass as ?cursor= to fetch the next page
-        has_more:
-          type: boolean
-      required:
-      - data
-      - has_more
-    WalletTierLimitPage:
-      type: object
-      description: One page of WalletTierLimit results (newest first)
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/WalletTierLimit'
         next_cursor:
           type:
           - string
@@ -2956,7 +3679,6 @@ components:
       - txn_type
       - amount
       - currency
-      - payer_wallet_id
     WalletTransactionsP2pRequest:
       type: object
       properties:
@@ -2970,6 +3692,9 @@ components:
           type: string
           pattern: ^\+[1-9]\d{6,14}$
           description: E.164
+        payee_alias:
+          type: string
+          maxLength: 64
         amount:
           type: string
           format: decimal
@@ -2979,9 +3704,25 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
         description:
           type: string
           maxLength: 255
+        customer_note:
+          type: string
+          maxLength: 160
         pin:
           type: string
           maxLength: 12
@@ -2992,6 +3733,9 @@ components:
     WalletTransactionsCashInRequest:
       type: object
       properties:
+        agent_wallet_id:
+          type: string
+          format: uuid
         agent_outlet_id:
           type: string
           format: uuid
@@ -3008,14 +3752,33 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
       required:
-      - agent_outlet_id
+      - agent_wallet_id
       - payee_msisdn
       - amount
       - currency
     WalletTransactionsCashOutRequest:
       type: object
       properties:
+        agent_wallet_id:
+          type: string
+          format: uuid
         agent_outlet_id:
           type: string
           format: uuid
@@ -3031,8 +3794,21 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
       required:
-      - agent_outlet_id
+      - agent_wallet_id
       - payer_wallet_id
       - amount
       - currency
@@ -3054,6 +3830,9 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        description:
+          type: string
+          maxLength: 255
         pin:
           type: string
           maxLength: 12
@@ -3080,6 +3859,9 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        description:
+          type: string
+          maxLength: 255
       required:
       - payee_wallet_id
       - wallet_bank_link_id
@@ -3100,6 +3882,19 @@ components:
         reason:
           type: string
           maxLength: 255
+    WalletTransactionsRequestReversalRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - reason
     WalletTransactionsReverseRequest:
       type: object
       properties:
@@ -3121,6 +3916,42 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WalletTransactionLeg'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTierLimitPage:
+      type: object
+      description: One page of WalletTierLimit results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTierLimit'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletFeeRulePage:
+      type: object
+      description: One page of WalletFeeRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletFeeRule'
         next_cursor:
           type:
           - string
@@ -3407,7 +4238,8 @@ components:
         wallet_number:
           type: string
           maxLength: 32
-          description: Public wallet number
+          description: Public wallet number (server-generated, Luhn check digit)
+          readOnly: true
         wallet_type:
           type: string
           enum:
@@ -3472,13 +4304,23 @@ components:
           format: uuid
           description: Product version the wallet is on
         ledger_account_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Ledger account holding the balance
+          description: Ledger account holding the balance (opened on first activation)
+          readOnly: true
         kyc_tier:
           type: integer
           format: int32
-          description: KYC tier (0 = phone only) driving limits
+          description: KYC tier (0 = phone only) driving limits; changed later only by /upgrade-tier
+        kyc_profile_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: KYC profile that verified the current tier
+          readOnly: true
         status:
           type: string
           enum:
@@ -3488,16 +4330,29 @@ components:
           - SUSPENDED
           - BLOCKED
           - CLOSED
-          description: Lifecycle status
+          description: Lifecycle status (changed only by actions)
+          readOnly: true
         status_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason for the current status
+          readOnly: true
         is_default:
           type: boolean
           description: Default wallet of the owner for this currency
+        has_pin:
+          type: boolean
+          description: Whether a PIN is set
+          readOnly: true
+        pin_set_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the PIN was last set
+          readOnly: true
         pin_locked_until:
           type:
           - string
@@ -3533,6 +4388,13 @@ components:
           - 'null'
           format: uuid
           description: Agent who registered the wallet
+        activated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: First activation time
+          readOnly: true
         last_activity_at:
           type:
           - string
@@ -3606,17 +4468,13 @@ components:
       - wallet_type
       - display_name
       - currency
-      - ledger_account_id
       - kyc_tier
       - status
       - is_default
+      - has_pin
     WalletCreate:
       type: object
       properties:
-        wallet_number:
-          type: string
-          maxLength: 32
-          description: Public wallet number
         wallet_type:
           type: string
           enum:
@@ -3666,28 +4524,10 @@ components:
           type: string
           format: uuid
           description: Product version the wallet is on
-        ledger_account_id:
-          type: string
-          format: uuid
-          description: Ledger account holding the balance
         kyc_tier:
           type: integer
           format: int32
-          description: KYC tier (0 = phone only) driving limits
-        status:
-          type: string
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          description: Lifecycle status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
+          description: KYC tier (0 = phone only) driving limits; changed later only by /upgrade-tier
         is_default:
           type: boolean
           description: Default wallet of the owner for this currency
@@ -3737,19 +4577,18 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pin:
+          type: string
+          maxLength: 12
+          description: Initial PIN (4-6 digits, not trivial); stored only as a PBKDF2 hash (write-only; not stored as a column)
+          writeOnly: true
       required:
-      - wallet_number
       - wallet_type
       - display_name
       - currency
-      - ledger_account_id
     WalletUpdate:
       type: object
       properties:
-        wallet_number:
-          type: string
-          maxLength: 32
-          description: Public wallet number
         wallet_type:
           type: string
           enum:
@@ -3799,28 +4638,10 @@ components:
           type: string
           format: uuid
           description: Product version the wallet is on
-        ledger_account_id:
-          type: string
-          format: uuid
-          description: Ledger account holding the balance
         kyc_tier:
           type: integer
           format: int32
-          description: KYC tier (0 = phone only) driving limits
-        status:
-          type: string
-          enum:
-          - PENDING
-          - ACTIVE
-          - DORMANT
-          - SUSPENDED
-          - BLOCKED
-          - CLOSED
-          description: Lifecycle status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
+          description: KYC tier (0 = phone only) driving limits; changed later only by /upgrade-tier
         is_default:
           type: boolean
           description: Default wallet of the owner for this currency
@@ -3932,6 +4753,7 @@ components:
           - 'null'
           maxLength: 160
           description: Account holder name returned by name enquiry
+          readOnly: true
         deposit_account_id:
           type:
           - string
@@ -3950,12 +4772,30 @@ components:
           - SUSPENDED
           - REMOVED
           description: Status
-        verification_method:
+          readOnly: true
+        status_reason:
           type:
           - string
           - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
+        verification_method:
+          type: string
           maxLength: 32
           description: NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL
+        verification_attempts:
+          type: integer
+          format: int32
+          description: Failed verification attempts
+          readOnly: true
+        verified_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that verified the link
+          readOnly: true
         verified_at:
           type:
           - string
@@ -4012,6 +4852,8 @@ components:
       - account_number
       - currency
       - status
+      - verification_method
+      - verification_attempts
       - is_default
     WalletBankLinkCreate:
       type: object
@@ -4032,10 +4874,6 @@ components:
           type: string
           maxLength: 34
           description: Account number or IBAN
-        account_name:
-          type: string
-          maxLength: 160
-          description: Account holder name returned by name enquiry
         deposit_account_id:
           type: string
           format: uuid
@@ -4044,14 +4882,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Account currency (ISO 4217)
-        status:
-          type: string
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - REMOVED
-          description: Status
         verification_method:
           type: string
           maxLength: 32
@@ -4107,10 +4937,6 @@ components:
           type: string
           maxLength: 34
           description: Account number or IBAN
-        account_name:
-          type: string
-          maxLength: 160
-          description: Account holder name returned by name enquiry
         deposit_account_id:
           type: string
           format: uuid
@@ -4119,14 +4945,6 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Account currency (ISO 4217)
-        status:
-          type: string
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - SUSPENDED
-          - REMOVED
-          description: Status
         verification_method:
           type: string
           maxLength: 32
@@ -4404,6 +5222,557 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletFeeRule:
+      type: object
+      description: Customer fee charged on a wallet transaction; the most specific matching active rule wins
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Rule code
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel (empty = any)
+        wallet_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Payer wallet type (empty = any)
+        kyc_tier:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Payer KYC tier (empty = any)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        min_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies from this transaction amount (inclusive)
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies up to this transaction amount (inclusive)
+        basis:
+          type: string
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          description: Calculation basis
+        flat_fee:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Flat fee (FLAT, FLAT_PLUS_PERCENTAGE)
+        percentage:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Percentage of the amount, 0.01 = 1% (PERCENTAGE, FLAT_PLUS_PERCENTAGE)
+        tiers:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Tier table for TIERED: [{from, to, flat, percentage}]'
+        min_fee:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum fee
+        max_fee:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum fee
+        tax_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax (excise / VAT) on the fee, 0.15 = 15%
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among equally specific rules
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - txn_type
+      - currency
+      - basis
+      - priority
+      - valid_from
+      - is_active
+    WalletFeeRuleCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Rule code
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel (empty = any)
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Payer wallet type (empty = any)
+        kyc_tier:
+          type: integer
+          format: int32
+          description: Payer KYC tier (empty = any)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies from this transaction amount (inclusive)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies up to this transaction amount (inclusive)
+        basis:
+          type: string
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          description: Calculation basis
+        flat_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Flat fee (FLAT, FLAT_PLUS_PERCENTAGE)
+        percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Percentage of the amount, 0.01 = 1% (PERCENTAGE, FLAT_PLUS_PERCENTAGE)
+        tiers:
+          type: array
+          items: {}
+          description: 'Tier table for TIERED: [{from, to, flat, percentage}]'
+        min_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum fee
+        max_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum fee
+        tax_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax (excise / VAT) on the fee, 0.15 = 15%
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among equally specific rules
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - txn_type
+      - currency
+      - valid_from
+    WalletFeeRuleUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Rule code
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Transaction type
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Channel (empty = any)
+        wallet_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - MERCHANT
+          - AGENT
+          - SUPER_AGENT
+          - FLOAT
+          - COMMISSION
+          - ESCROW
+          - G2P
+          - TREASURY
+          description: Payer wallet type (empty = any)
+        kyc_tier:
+          type: integer
+          format: int32
+          description: Payer KYC tier (empty = any)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        min_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies from this transaction amount (inclusive)
+        max_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Applies up to this transaction amount (inclusive)
+        basis:
+          type: string
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          description: Calculation basis
+        flat_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Flat fee (FLAT, FLAT_PLUS_PERCENTAGE)
+        percentage:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Percentage of the amount, 0.01 = 1% (PERCENTAGE, FLAT_PLUS_PERCENTAGE)
+        tiers:
+          type: array
+          items: {}
+          description: 'Tier table for TIERED: [{from, to, flat, percentage}]'
+        min_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum fee
+        max_fee:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum fee
+        tax_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax (excise / VAT) on the fee, 0.15 = 15%
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among equally specific rules
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     WalletPinReset:
       type: object
       description: A PIN reset request verified by OTP, agent or ID check
@@ -4491,10 +5860,32 @@ components:
           format: int32
           description: OTP attempts used
           readOnly: true
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: OTP notification
+          readOnly: true
         expires_at:
           type: string
           format: date-time
-          description: Request expiry
+          description: Request expiry (database clock)
+          readOnly: true
+        verified_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that verified the customer
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
         completed_at:
           type:
           - string
@@ -4583,10 +5974,6 @@ components:
           type: string
           format: uuid
           description: ID document captured
-        expires_at:
-          type: string
-          format: date-time
-          description: Request expiry
         custom_field_1:
           type: string
           maxLength: 500
@@ -4611,7 +5998,6 @@ components:
       - wallet_id
       - channel
       - verification_method
-      - expires_at
     WalletStatusHistory:
       type: object
       description: Immutable history of wallet status changes
@@ -4792,7 +6178,7 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
-          description: Transaction type (empty = all)
+          description: Transaction type (empty = all debits)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -4941,7 +6327,7 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
-          description: Transaction type (empty = all)
+          description: Transaction type (empty = all debits)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -5060,7 +6446,7 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
-          description: Transaction type (empty = all)
+          description: Transaction type (empty = all debits)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -5172,7 +6558,8 @@ components:
         reference:
           type: string
           maxLength: 32
-          description: Human-readable transaction reference shown on receipts
+          description: Human-readable transaction reference shown on receipts (server-generated)
+          readOnly: true
         txn_type:
           type: string
           enum:
@@ -5256,6 +6643,13 @@ components:
           - 'null'
           maxLength: 64
           description: External account / meter / bank reference
+        counterparty_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal ledger account on the other side when the counterparty is not a wallet (switch settlement,
+            bank clearing, deposit account)
         amount:
           type: string
           format: decimal
@@ -5331,6 +6725,14 @@ components:
           - 'null'
           maxLength: 64
           description: Principal that initiated the transaction
+          readOnly: true
+        kyc_tier:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Payer KYC tier at initiation
+          readOnly: true
         agent_id:
           type:
           - string
@@ -5349,6 +6751,12 @@ components:
           - 'null'
           format: uuid
           description: Merchant paid
+        biller_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Biller paid
         bill_payment_id:
           type:
           - string
@@ -5367,12 +6775,19 @@ components:
           - 'null'
           format: uuid
           description: Interoperable transfer
+        wallet_bank_link_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Linked bank account (wallet-to-bank / bank-to-wallet)
         payment_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Bank payment (wallet-to-bank / bank-to-wallet)
+          readOnly: true
         loan_id:
           type:
           - string
@@ -5399,6 +6814,27 @@ components:
           format: uuid
           description: Funds hold while pending confirmation
           readOnly: true
+        limit_check_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Limit reservation in limits-service
+          readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud evaluation
+          readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Fraud decision (ALLOW, REVIEW, BLOCK, STEP_UP)
+          readOnly: true
         idempotency_key:
           type: string
           maxLength: 128
@@ -5416,6 +6852,21 @@ components:
           - 'null'
           maxLength: 160
           description: Note from payer to payee
+        confirmation_method:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PIN
+          - OTP
+          - SYSTEM
+          description: How a pending transaction must be confirmed
+          readOnly: true
+        confirmation_attempts:
+          type: integer
+          format: int32
+          description: Failed confirmation attempts
+          readOnly: true
         confirmation_expires_at:
           type:
           - string
@@ -5443,6 +6894,43 @@ components:
           - 'null'
           maxLength: 255
           description: Failure description
+          readOnly: true
+        reversed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount reversed so far
+          readOnly: true
+        reversal_requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker of a pending reversal request
+          readOnly: true
+        reversal_requested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the reversal was requested
+          readOnly: true
+        reversal_requested_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount requested for reversal
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the reversal request
           readOnly: true
         risk_score:
           type:
@@ -5532,13 +7020,11 @@ components:
       - commission_amount
       - initiator_type
       - idempotency_key
+      - confirmation_attempts
+      - reversed_amount
     WalletTransactionCreate:
       type: object
       properties:
-        reference:
-          type: string
-          maxLength: 32
-          description: Human-readable transaction reference shown on receipts
         txn_type:
           type: string
           enum:
@@ -5593,6 +7079,11 @@ components:
           type: string
           maxLength: 64
           description: External account / meter / bank reference
+        counterparty_ledger_account_id:
+          type: string
+          format: uuid
+          description: Internal ledger account on the other side when the counterparty is not a wallet (switch settlement,
+            bank clearing, deposit account)
         amount:
           type: string
           format: decimal
@@ -5607,10 +7098,6 @@ components:
           type: string
           maxLength: 32
           description: CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF
-        initiated_by:
-          type: string
-          maxLength: 64
-          description: Principal that initiated the transaction
         agent_id:
           type: string
           format: uuid
@@ -5623,6 +7110,10 @@ components:
           type: string
           format: uuid
           description: Merchant paid
+        biller_id:
+          type: string
+          format: uuid
+          description: Biller paid
         bill_payment_id:
           type: string
           format: uuid
@@ -5635,10 +7126,10 @@ components:
           type: string
           format: uuid
           description: Interoperable transfer
-        payment_id:
+        wallet_bank_link_id:
           type: string
           format: uuid
-          description: Bank payment (wallet-to-bank / bank-to-wallet)
+          description: Linked bank account (wallet-to-bank / bank-to-wallet)
         loan_id:
           type: string
           format: uuid
@@ -5698,8 +7189,17 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        pin:
+          type: string
+          maxLength: 12
+          description: Payer PIN, verified and never stored (write-only; not stored as a column)
+          writeOnly: true
+        two_phase:
+          type: boolean
+          description: Reserve the funds with a ledger hold and wait for /confirm or /cancel (cash-out, interop, provider
+            calls) (write-only; not stored as a column)
+          writeOnly: true
       required:
-      - reference
       - txn_type
       - channel
       - amount
@@ -5770,6 +7270,12 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger journal entry carrying the leg
         beneficiary_type:
           type:
           - string

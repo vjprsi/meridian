@@ -269,7 +269,7 @@ paths:
   /v1/merchants/{id}/activate:
     post:
       operationId: merchantsActivate
-      summary: Activate the merchant
+      summary: Activate the merchant (checker differs from the creator); opens the merchant wallet on first activation
       tags:
       - Merchants
       security:
@@ -448,7 +448,7 @@ paths:
   /v1/merchants/{id}/transactions:
     get:
       operationId: merchantsTransactions
-      summary: Payments received
+      summary: Payments received (wallet transactions of the merchant)
       tags:
       - Merchants
       security:
@@ -461,6 +461,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -1165,7 +1177,9 @@ paths:
   /v1/merchant-qr-codes/decode:
     post:
       operationId: merchantQrCodesDecode
-      summary: Decode a scanned EMVCo QR payload into payment details
+      summary: 'Decode a scanned EMVCo QR payload (CRC verified) into payment details: {crc_valid, payload_format, point_of_initiation
+        (11 static / 12 dynamic), merchant_qr_id, merchant_id, merchant_code, merchant_name, merchant_city, mcc, country,
+        currency, amount, reference, payable, reason, tags{}}'
       tags:
       - Merchant Qr Codes
       security:
@@ -1179,7 +1193,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MerchantQr'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1206,7 +1222,7 @@ paths:
   /v1/merchant-qr-codes/pay:
     post:
       operationId: merchantQrCodesPay
-      summary: Pay a merchant QR from a wallet
+      summary: Pay a merchant QR from a wallet (amount required for static QR, must match for dynamic QR)
       tags:
       - Merchant Qr Codes
       security:
@@ -1480,6 +1496,53 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: merchant_payment_link
+  /v1/merchant-payment-links/{id}/pay:
+    post:
+      operationId: merchantPaymentLinksPay
+      summary: Pay a payment link from a wallet
+      tags:
+      - Merchant Payment Links
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantPaymentLinksPayRequest'
+      x-requirements:
+      - PAY-07
+      - WAL-06
+      x-service: merchant-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: merchant_payment_link
   /v1/merchant-fee-plans:
     get:
       operationId: merchantFeePlansList
@@ -1503,6 +1566,11 @@ paths:
         schema:
           type: string
           pattern: ^[A-Z]{3}$
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
       - name: custom_field_1
         in: query
         schema:
@@ -1822,7 +1890,7 @@ paths:
   /v1/merchant-settlements/{id}/approve:
     post:
       operationId: merchantSettlementsApprove
-      summary: Approve the settlement (checker)
+      summary: Approve the settlement (checker differs from the maker)
       tags:
       - Merchant Settlements
       security:
@@ -1868,7 +1936,7 @@ paths:
   /v1/merchant-settlements/{id}/pay:
     post:
       operationId: merchantSettlementsPay
-      summary: Pay the net amount to the settlement wallet or bank account
+      summary: Collect the MDR fee and pay the net amount to the settlement bank account (or leave it in the wallet)
       tags:
       - Merchant Settlements
       security:
@@ -1922,8 +1990,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2093,7 +2165,7 @@ paths:
   /v1/merchant-refunds/{id}/approve:
     post:
       operationId: merchantRefundsApprove
-      summary: Approve and execute the refund
+      summary: Approve (checker differs from the maker) and execute the refund
       tags:
       - Merchant Refunds
       security:
@@ -2383,6 +2455,19 @@ components:
         pin:
           type: string
           maxLength: 12
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
       required:
       - payload
       - payer_wallet_id
@@ -2404,6 +2489,35 @@ components:
       required:
       - data
       - has_more
+    MerchantPaymentLinksPayRequest:
+      type: object
+      properties:
+        payer_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        pin:
+          type: string
+          maxLength: 12
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+      required:
+      - payer_wallet_id
     MerchantFeePlanPage:
       type: object
       description: One page of MerchantFeePlan results (newest first)
@@ -2501,7 +2615,8 @@ components:
         merchant_code:
           type: string
           maxLength: 32
-          description: Merchant code / till number
+          description: Merchant code / till number (server-generated)
+          readOnly: true
         legal_name:
           type: string
           maxLength: 200
@@ -2572,16 +2687,27 @@ components:
           - 'null'
           additionalProperties: true
           description: Registered address
+        city:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
+          description: City (EMVCo tag 60)
         country:
           type: string
           pattern: ^[A-Z]{2}$
           description: Country (ISO 3166-1 alpha-2)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Acceptance currency (ISO 4217)
         settlement_wallet_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Merchant wallet receiving payments
+          description: Merchant wallet receiving payments (opened in wallet-service on activation)
+          readOnly: true
         settlement_account_id:
           type:
           - string
@@ -2630,13 +2756,15 @@ components:
           - ACTIVE
           - SUSPENDED
           - TERMINATED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         status_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason for the current status
+          readOnly: true
         onboarded_at:
           type:
           - string
@@ -2697,15 +2825,12 @@ components:
       - merchant_type
       - mcc
       - country
+      - currency
       - settlement_frequency
       - status
     MerchantCreate:
       type: object
       properties:
-        merchant_code:
-          type: string
-          maxLength: 32
-          description: Merchant code / till number
         legal_name:
           type: string
           maxLength: 200
@@ -2760,14 +2885,18 @@ components:
           type: object
           additionalProperties: true
           description: Registered address
+        city:
+          type: string
+          maxLength: 100
+          description: City (EMVCo tag 60)
         country:
           type: string
           pattern: ^[A-Z]{2}$
           description: Country (ISO 3166-1 alpha-2)
-        settlement_wallet_id:
+        currency:
           type: string
-          format: uuid
-          description: Merchant wallet receiving payments
+          pattern: ^[A-Z]{3}$
+          description: Acceptance currency (ISO 4217)
         settlement_account_id:
           type: string
           format: uuid
@@ -2799,18 +2928,6 @@ components:
           examples:
           - '125.50'
           description: Maximum daily collections
-        status:
-          type: string
-          enum:
-          - ONBOARDING
-          - ACTIVE
-          - SUSPENDED
-          - TERMINATED
-          description: Status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
         logo_document_id:
           type: string
           format: uuid
@@ -2840,19 +2957,15 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - merchant_code
       - legal_name
       - trading_name
       - merchant_type
       - mcc
       - country
+      - currency
     MerchantUpdate:
       type: object
       properties:
-        merchant_code:
-          type: string
-          maxLength: 32
-          description: Merchant code / till number
         legal_name:
           type: string
           maxLength: 200
@@ -2907,14 +3020,18 @@ components:
           type: object
           additionalProperties: true
           description: Registered address
+        city:
+          type: string
+          maxLength: 100
+          description: City (EMVCo tag 60)
         country:
           type: string
           pattern: ^[A-Z]{2}$
           description: Country (ISO 3166-1 alpha-2)
-        settlement_wallet_id:
+        currency:
           type: string
-          format: uuid
-          description: Merchant wallet receiving payments
+          pattern: ^[A-Z]{3}$
+          description: Acceptance currency (ISO 4217)
         settlement_account_id:
           type: string
           format: uuid
@@ -2946,18 +3063,6 @@ components:
           examples:
           - '125.50'
           description: Maximum daily collections
-        status:
-          type: string
-          enum:
-          - ONBOARDING
-          - ACTIVE
-          - SUSPENDED
-          - TERMINATED
-          description: Status
-        status_reason:
-          type: string
-          maxLength: 255
-          description: Reason for the current status
         logo_document_id:
           type: string
           format: uuid
@@ -3349,7 +3454,8 @@ components:
         link_code:
           type: string
           maxLength: 32
-          description: Short code in the URL
+          description: Short code in the URL (server-generated)
+          readOnly: true
         url:
           type:
           - string
@@ -3400,7 +3506,8 @@ components:
           description: Expiry
         is_active:
           type: boolean
-          description: Active
+          description: Active (deactivated by /deactivate or when max_uses is reached)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3448,10 +3555,6 @@ components:
           type: string
           format: uuid
           description: Merchant
-        link_code:
-          type: string
-          maxLength: 32
-          description: Short code in the URL
         amount:
           type: string
           format: decimal
@@ -3478,9 +3581,6 @@ components:
           type: string
           format: date-time
           description: Expiry
-        is_active:
-          type: boolean
-          description: Active
         custom_field_1:
           type: string
           maxLength: 500
@@ -3503,7 +3603,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - merchant_id
-      - link_code
       - currency
     MerchantPaymentLinkUpdate:
       type: object
@@ -3512,10 +3611,6 @@ components:
           type: string
           format: uuid
           description: Merchant
-        link_code:
-          type: string
-          maxLength: 32
-          description: Short code in the URL
         amount:
           type: string
           format: decimal
@@ -3542,9 +3637,6 @@ components:
           type: string
           format: date-time
           description: Expiry
-        is_active:
-          type: boolean
-          description: Active
         custom_field_1:
           type: string
           maxLength: 500
@@ -3629,7 +3721,7 @@ components:
           type:
           - string
           - 'null'
-          description: EMVCo QR payload string
+          description: EMVCo QR payload string (TLV with CRC-16/CCITT-FALSE in tag 63)
           readOnly: true
         amount:
           type:
@@ -3647,8 +3739,8 @@ components:
           type:
           - string
           - 'null'
-          maxLength: 64
-          description: Bill / order reference embedded in the QR
+          maxLength: 25
+          description: Bill / order reference embedded in the QR (tag 62.01)
         expires_at:
           type:
           - string
@@ -3660,9 +3752,17 @@ components:
           format: int32
           description: Times paid
           readOnly: true
+        last_paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last payment time
+          readOnly: true
         is_active:
           type: boolean
-          description: Active
+          description: Active (deactivated by /deactivate or after a dynamic QR is paid)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3736,15 +3836,12 @@ components:
           description: Currency (ISO 4217)
         reference:
           type: string
-          maxLength: 64
-          description: Bill / order reference embedded in the QR
+          maxLength: 25
+          description: Bill / order reference embedded in the QR (tag 62.01)
         expires_at:
           type: string
           format: date-time
           description: Expiry for dynamic QR
-        is_active:
-          type: boolean
-          description: Active
         custom_field_1:
           type: string
           maxLength: 500
@@ -3846,6 +3943,20 @@ components:
           maxLength: 64
           description: Approver
           readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rejection reason
+          readOnly: true
         wallet_transaction_id:
           type:
           - string
@@ -3859,6 +3970,13 @@ components:
           - 'null'
           format: date-time
           description: Completion time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
           readOnly: true
         idempotency_key:
           type: string
@@ -4007,7 +4125,7 @@ components:
         period_end:
           type: string
           format: date
-          description: To
+          description: To (inclusive)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -4070,7 +4188,29 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Wallet credited
+          description: Wallet the collections sit in
+          readOnly: true
+        settlement_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank account paid (empty = net stays in the wallet)
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
         payment_id:
           type:
           - string
@@ -4078,12 +4218,19 @@ components:
           format: uuid
           description: Bank payment when settled to bank
           readOnly: true
+        fee_wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: MDR fee transaction
+          readOnly: true
         wallet_transaction_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Settlement transaction
+          description: Settlement transaction to the bank account
           readOnly: true
         paid_at:
           type:
@@ -4091,6 +4238,13 @@ components:
           - 'null'
           format: date-time
           description: Payment time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
           readOnly: true
         report_document_id:
           type:
@@ -4153,15 +4307,11 @@ components:
         period_end:
           type: string
           format: date
-          description: To
+          description: To (inclusive)
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        settlement_wallet_id:
-          type: string
-          format: uuid
-          description: Wallet credited
         custom_field_1:
           type: string
           maxLength: 500
@@ -4557,6 +4707,14 @@ components:
           - LOST
           - RETIRED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
         last_seen_at:
           type:
           - string
@@ -4630,14 +4788,6 @@ components:
           type: string
           maxLength: 32
           description: App version
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - LOST
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -4689,14 +4839,6 @@ components:
           type: string
           maxLength: 32
           description: App version
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - INACTIVE
-          - LOST
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -4758,7 +4900,8 @@ components:
         reference:
           type: string
           maxLength: 32
-          description: Human-readable transaction reference shown on receipts
+          description: Human-readable transaction reference shown on receipts (server-generated)
+          readOnly: true
         txn_type:
           type: string
           enum:
@@ -4842,6 +4985,13 @@ components:
           - 'null'
           maxLength: 64
           description: External account / meter / bank reference
+        counterparty_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal ledger account on the other side when the counterparty is not a wallet (switch settlement,
+            bank clearing, deposit account)
         amount:
           type: string
           format: decimal
@@ -4917,6 +5067,14 @@ components:
           - 'null'
           maxLength: 64
           description: Principal that initiated the transaction
+          readOnly: true
+        kyc_tier:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Payer KYC tier at initiation
+          readOnly: true
         agent_id:
           type:
           - string
@@ -4935,6 +5093,12 @@ components:
           - 'null'
           format: uuid
           description: Merchant paid
+        biller_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Biller paid
         bill_payment_id:
           type:
           - string
@@ -4953,12 +5117,19 @@ components:
           - 'null'
           format: uuid
           description: Interoperable transfer
+        wallet_bank_link_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Linked bank account (wallet-to-bank / bank-to-wallet)
         payment_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Bank payment (wallet-to-bank / bank-to-wallet)
+          readOnly: true
         loan_id:
           type:
           - string
@@ -4985,6 +5156,27 @@ components:
           format: uuid
           description: Funds hold while pending confirmation
           readOnly: true
+        limit_check_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Limit reservation in limits-service
+          readOnly: true
+        fraud_score_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Fraud evaluation
+          readOnly: true
+        fraud_decision:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Fraud decision (ALLOW, REVIEW, BLOCK, STEP_UP)
+          readOnly: true
         idempotency_key:
           type: string
           maxLength: 128
@@ -5002,6 +5194,21 @@ components:
           - 'null'
           maxLength: 160
           description: Note from payer to payee
+        confirmation_method:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PIN
+          - OTP
+          - SYSTEM
+          description: How a pending transaction must be confirmed
+          readOnly: true
+        confirmation_attempts:
+          type: integer
+          format: int32
+          description: Failed confirmation attempts
+          readOnly: true
         confirmation_expires_at:
           type:
           - string
@@ -5029,6 +5236,43 @@ components:
           - 'null'
           maxLength: 255
           description: Failure description
+          readOnly: true
+        reversed_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount reversed so far
+          readOnly: true
+        reversal_requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker of a pending reversal request
+          readOnly: true
+        reversal_requested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the reversal was requested
+          readOnly: true
+        reversal_requested_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount requested for reversal
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the reversal request
           readOnly: true
         risk_score:
           type:
@@ -5118,6 +5362,8 @@ components:
       - commission_amount
       - initiator_type
       - idempotency_key
+      - confirmation_attempts
+      - reversed_amount
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

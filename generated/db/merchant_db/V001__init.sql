@@ -98,7 +98,9 @@ CREATE TABLE merchant (
   contact_email                varchar(320),
   website                      varchar(255),
   address                      jsonb,
+  city                         varchar(100),
   country                      char(2) NOT NULL,
+  currency                     char(3) NOT NULL,
   settlement_wallet_id         uuid,
   settlement_account_id        uuid,
   settlement_frequency         varchar(40) NOT NULL DEFAULT 'DAILY' CHECK (settlement_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY', 'ON_DEMAND')),
@@ -126,7 +128,7 @@ COMMENT ON COLUMN merchant.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN merchant.updated_at IS 'Last update time';
 COMMENT ON COLUMN merchant.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN merchant.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN merchant.merchant_code IS 'Merchant code / till number';
+COMMENT ON COLUMN merchant.merchant_code IS 'Merchant code / till number (server-generated)';
 COMMENT ON COLUMN merchant.legal_name IS 'Registered name';
 COMMENT ON COLUMN merchant.trading_name IS 'Name shown to payers';
 COMMENT ON COLUMN merchant.merchant_type IS 'Merchant type';
@@ -139,15 +141,17 @@ COMMENT ON COLUMN merchant.contact_msisdn IS 'Main contact mobile [PII]';
 COMMENT ON COLUMN merchant.contact_email IS 'Main contact email [PII]';
 COMMENT ON COLUMN merchant.website IS 'Website';
 COMMENT ON COLUMN merchant.address IS 'Registered address';
+COMMENT ON COLUMN merchant.city IS 'City (EMVCo tag 60)';
 COMMENT ON COLUMN merchant.country IS 'Country';
-COMMENT ON COLUMN merchant.settlement_wallet_id IS 'Merchant wallet receiving payments';
+COMMENT ON COLUMN merchant.currency IS 'Acceptance currency';
+COMMENT ON COLUMN merchant.settlement_wallet_id IS 'Merchant wallet receiving payments (opened in wallet-service on activation)';
 COMMENT ON COLUMN merchant.settlement_account_id IS 'Bank account for settlement sweeps';
 COMMENT ON COLUMN merchant.settlement_frequency IS 'Settlement frequency';
 COMMENT ON COLUMN merchant.merchant_fee_plan_id IS 'Fee plan';
 COMMENT ON COLUMN merchant.acquiring_agent_id IS 'Agent who onboarded the merchant';
 COMMENT ON COLUMN merchant.risk_rating IS 'LOW, MEDIUM, HIGH';
 COMMENT ON COLUMN merchant.daily_limit IS 'Maximum daily collections';
-COMMENT ON COLUMN merchant.status IS 'Status';
+COMMENT ON COLUMN merchant.status IS 'Status (changed only by actions)';
 COMMENT ON COLUMN merchant.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN merchant.onboarded_at IS 'Activation time';
 COMMENT ON COLUMN merchant.logo_document_id IS 'Logo';
@@ -241,6 +245,7 @@ CREATE TABLE merchant_terminal (
   serial_number                varchar(64),
   app_version                  varchar(32),
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'LOST', 'RETIRED')),
+  status_reason                varchar(255),
   last_seen_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -264,6 +269,7 @@ COMMENT ON COLUMN merchant_terminal.terminal_type IS 'POS, SOFT_POS, ECOMMERCE, 
 COMMENT ON COLUMN merchant_terminal.serial_number IS 'Serial number';
 COMMENT ON COLUMN merchant_terminal.app_version IS 'App version';
 COMMENT ON COLUMN merchant_terminal.status IS 'Status';
+COMMENT ON COLUMN merchant_terminal.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN merchant_terminal.last_seen_at IS 'Last heartbeat';
 COMMENT ON COLUMN merchant_terminal.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_terminal.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -293,9 +299,10 @@ CREATE TABLE merchant_qr (
   payload                      text,
   amount                       numeric(28,8),
   currency                     char(3) NOT NULL,
-  reference                    varchar(64),
+  reference                    varchar(25),
   expires_at                   timestamptz,
   scan_count                   integer NOT NULL DEFAULT 0,
+  last_paid_at                 timestamptz,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -315,13 +322,14 @@ COMMENT ON COLUMN merchant_qr.merchant_id IS 'Merchant';
 COMMENT ON COLUMN merchant_qr.merchant_store_id IS 'Store';
 COMMENT ON COLUMN merchant_qr.merchant_terminal_id IS 'Terminal';
 COMMENT ON COLUMN merchant_qr.qr_type IS 'Static (any amount) or dynamic (one payment)';
-COMMENT ON COLUMN merchant_qr.payload IS 'EMVCo QR payload string';
+COMMENT ON COLUMN merchant_qr.payload IS 'EMVCo QR payload string (TLV with CRC-16/CCITT-FALSE in tag 63)';
 COMMENT ON COLUMN merchant_qr.amount IS 'Fixed amount for dynamic QR';
 COMMENT ON COLUMN merchant_qr.currency IS 'Currency';
-COMMENT ON COLUMN merchant_qr.reference IS 'Bill / order reference embedded in the QR';
+COMMENT ON COLUMN merchant_qr.reference IS 'Bill / order reference embedded in the QR (tag 62.01)';
 COMMENT ON COLUMN merchant_qr.expires_at IS 'Expiry for dynamic QR';
 COMMENT ON COLUMN merchant_qr.scan_count IS 'Times paid';
-COMMENT ON COLUMN merchant_qr.is_active IS 'Active';
+COMMENT ON COLUMN merchant_qr.last_paid_at IS 'Last payment time';
+COMMENT ON COLUMN merchant_qr.is_active IS 'Active (deactivated by /deactivate or after a dynamic QR is paid)';
 COMMENT ON COLUMN merchant_qr.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_qr.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_qr.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -371,7 +379,7 @@ COMMENT ON COLUMN merchant_payment_link.updated_at IS 'Last update time';
 COMMENT ON COLUMN merchant_payment_link.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN merchant_payment_link.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN merchant_payment_link.merchant_id IS 'Merchant';
-COMMENT ON COLUMN merchant_payment_link.link_code IS 'Short code in the URL';
+COMMENT ON COLUMN merchant_payment_link.link_code IS 'Short code in the URL (server-generated)';
 COMMENT ON COLUMN merchant_payment_link.url IS 'Full payment URL';
 COMMENT ON COLUMN merchant_payment_link.amount IS 'Fixed amount (empty = payer enters it)';
 COMMENT ON COLUMN merchant_payment_link.currency IS 'Currency';
@@ -380,7 +388,7 @@ COMMENT ON COLUMN merchant_payment_link.reference IS 'Merchant order reference';
 COMMENT ON COLUMN merchant_payment_link.max_uses IS 'Maximum payments (empty = unlimited)';
 COMMENT ON COLUMN merchant_payment_link.use_count IS 'Payments received';
 COMMENT ON COLUMN merchant_payment_link.expires_at IS 'Expiry';
-COMMENT ON COLUMN merchant_payment_link.is_active IS 'Active';
+COMMENT ON COLUMN merchant_payment_link.is_active IS 'Active (deactivated by /deactivate or when max_uses is reached)';
 COMMENT ON COLUMN merchant_payment_link.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_payment_link.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_payment_link.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -412,9 +420,14 @@ CREATE TABLE merchant_settlement (
   net_amount                   numeric(28,8),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CALCULATED', 'APPROVED', 'PAID', 'FAILED')),
   settlement_wallet_id         uuid,
+  settlement_account_id        uuid,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
   payment_id                   uuid,
+  fee_wallet_transaction_id    uuid,
   wallet_transaction_id        uuid,
   paid_at                      timestamptz,
+  failure_reason               varchar(255),
   report_document_id           uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -432,7 +445,7 @@ COMMENT ON COLUMN merchant_settlement.updated_by IS 'Principal that last updated
 COMMENT ON COLUMN merchant_settlement.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN merchant_settlement.merchant_id IS 'Merchant';
 COMMENT ON COLUMN merchant_settlement.period_start IS 'From';
-COMMENT ON COLUMN merchant_settlement.period_end IS 'To';
+COMMENT ON COLUMN merchant_settlement.period_end IS 'To (inclusive)';
 COMMENT ON COLUMN merchant_settlement.currency IS 'Currency';
 COMMENT ON COLUMN merchant_settlement.payment_count IS 'Payments included';
 COMMENT ON COLUMN merchant_settlement.gross_amount IS 'Gross collections';
@@ -440,10 +453,15 @@ COMMENT ON COLUMN merchant_settlement.mdr_amount IS 'Merchant discount fees';
 COMMENT ON COLUMN merchant_settlement.refund_amount IS 'Refunds';
 COMMENT ON COLUMN merchant_settlement.net_amount IS 'Net payable';
 COMMENT ON COLUMN merchant_settlement.status IS 'Status';
-COMMENT ON COLUMN merchant_settlement.settlement_wallet_id IS 'Wallet credited';
+COMMENT ON COLUMN merchant_settlement.settlement_wallet_id IS 'Wallet the collections sit in';
+COMMENT ON COLUMN merchant_settlement.settlement_account_id IS 'Bank account paid (empty = net stays in the wallet)';
+COMMENT ON COLUMN merchant_settlement.approved_by IS 'Checker';
+COMMENT ON COLUMN merchant_settlement.approved_at IS 'Approval time';
 COMMENT ON COLUMN merchant_settlement.payment_id IS 'Bank payment when settled to bank';
-COMMENT ON COLUMN merchant_settlement.wallet_transaction_id IS 'Settlement transaction';
+COMMENT ON COLUMN merchant_settlement.fee_wallet_transaction_id IS 'MDR fee transaction';
+COMMENT ON COLUMN merchant_settlement.wallet_transaction_id IS 'Settlement transaction to the bank account';
 COMMENT ON COLUMN merchant_settlement.paid_at IS 'Payment time';
+COMMENT ON COLUMN merchant_settlement.failure_reason IS 'Failure reason';
 COMMENT ON COLUMN merchant_settlement.report_document_id IS 'Settlement report';
 COMMENT ON COLUMN merchant_settlement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_settlement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -453,7 +471,9 @@ COMMENT ON COLUMN merchant_settlement.custom_field_5 IS 'Tenant-defined custom f
 CREATE INDEX ix_merchant_settlement_tenant ON merchant_settlement (tenant_id, created_at);
 CREATE INDEX ix_merchant_settlement_merchant_id ON merchant_settlement (merchant_id);
 CREATE INDEX ix_merchant_settlement_settlement_wallet_id ON merchant_settlement (settlement_wallet_id);
+CREATE INDEX ix_merchant_settlement_settlement_account_id ON merchant_settlement (settlement_account_id);
 CREATE INDEX ix_merchant_settlement_payment_id ON merchant_settlement (payment_id);
+CREATE INDEX ix_merchant_settlement_fee_wallet_transaction_id ON merchant_settlement (fee_wallet_transaction_id);
 CREATE INDEX ix_merchant_settlement_wallet_transaction_id ON merchant_settlement (wallet_transaction_id);
 CREATE INDEX ix_merchant_settlement_report_document_id ON merchant_settlement (report_document_id);
 ALTER TABLE merchant_settlement ENABLE ROW LEVEL SECURITY;
@@ -476,8 +496,11 @@ CREATE TABLE merchant_refund (
   reason                       varchar(255) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'COMPLETED', 'REJECTED', 'FAILED')),
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejection_reason             varchar(255),
   wallet_transaction_id        uuid,
   completed_at                 timestamptz,
+  failure_reason               varchar(255),
   idempotency_key              varchar(128) NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -501,8 +524,11 @@ COMMENT ON COLUMN merchant_refund.currency IS 'Currency';
 COMMENT ON COLUMN merchant_refund.reason IS 'Reason';
 COMMENT ON COLUMN merchant_refund.status IS 'Status';
 COMMENT ON COLUMN merchant_refund.approved_by IS 'Approver';
+COMMENT ON COLUMN merchant_refund.approved_at IS 'Approval time';
+COMMENT ON COLUMN merchant_refund.rejection_reason IS 'Rejection reason';
 COMMENT ON COLUMN merchant_refund.wallet_transaction_id IS 'Refund transaction';
 COMMENT ON COLUMN merchant_refund.completed_at IS 'Completion time';
+COMMENT ON COLUMN merchant_refund.failure_reason IS 'Failure reason';
 COMMENT ON COLUMN merchant_refund.idempotency_key IS 'Client key';
 COMMENT ON COLUMN merchant_refund.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN merchant_refund.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

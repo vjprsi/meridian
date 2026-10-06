@@ -39,6 +39,11 @@ CREATE TABLE interop_switch (
   settlement_account_id        uuid,
   liquidity_limit              numeric(28,8),
   net_debit_cap                numeric(28,8),
+  fee_flat                     numeric(28,8) NOT NULL DEFAULT 0,
+  fee_percentage               numeric(18,10) NOT NULL DEFAULT 0,
+  quote_validity_seconds       integer NOT NULL DEFAULT 60,
+  transfer_timeout_seconds     integer NOT NULL DEFAULT 60,
+  last_directory_sync_at       timestamptz,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -62,11 +67,16 @@ COMMENT ON COLUMN interop_switch.country IS 'Country';
 COMMENT ON COLUMN interop_switch.currency IS 'Settlement currency';
 COMMENT ON COLUMN interop_switch.protocol IS 'MOJALOOP_FSPIOP, ISO20022, ISO8583, PROPRIETARY_API';
 COMMENT ON COLUMN interop_switch.participant_id IS 'Our FSP / participant id on the switch';
-COMMENT ON COLUMN interop_switch.endpoint_url IS 'Switch endpoint';
+COMMENT ON COLUMN interop_switch.endpoint_url IS 'Switch endpoint (empty = built-in simulator)';
 COMMENT ON COLUMN interop_switch.connection_config IS 'Certificates and credentials reference (secrets in Vault)';
-COMMENT ON COLUMN interop_switch.settlement_account_id IS 'Settlement position account';
+COMMENT ON COLUMN interop_switch.settlement_account_id IS 'Settlement position account in the ledger';
 COMMENT ON COLUMN interop_switch.liquidity_limit IS 'Prefunded liquidity';
 COMMENT ON COLUMN interop_switch.net_debit_cap IS 'Net debit cap set by the switch';
+COMMENT ON COLUMN interop_switch.fee_flat IS 'Our flat fee on outbound transfers';
+COMMENT ON COLUMN interop_switch.fee_percentage IS 'Our percentage fee on outbound transfers';
+COMMENT ON COLUMN interop_switch.quote_validity_seconds IS 'Quote validity';
+COMMENT ON COLUMN interop_switch.transfer_timeout_seconds IS 'Time a reserved transfer waits for the fulfilment';
+COMMENT ON COLUMN interop_switch.last_directory_sync_at IS 'Last participant directory refresh';
 COMMENT ON COLUMN interop_switch.is_active IS 'Active';
 COMMENT ON COLUMN interop_switch.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN interop_switch.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -141,7 +151,9 @@ CREATE TABLE interop_quote (
   quote_id                     varchar(64) NOT NULL,
   direction                    varchar(40) NOT NULL CHECK (direction IN ('OUTBOUND', 'INBOUND')),
   payer_wallet_id              uuid,
-  payee_party_type             varchar(32) NOT NULL,
+  payer_fsp_id                 varchar(64),
+  payee_wallet_id              uuid,
+  payee_party_type             varchar(40) NOT NULL CHECK (payee_party_type IN ('MSISDN', 'ACCOUNT', 'ALIAS')),
   payee_party_id               varchar(64) NOT NULL,
   payee_fsp_id                 varchar(64),
   payee_name                   varchar(160),
@@ -150,7 +162,9 @@ CREATE TABLE interop_quote (
   payee_receive_amount         numeric(28,8),
   fee_amount                   numeric(28,8),
   ilp_condition                varchar(128),
+  fulfilment                   varchar(128),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED', 'EXPIRED')),
+  rejection_reason             varchar(255),
   expires_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -168,9 +182,11 @@ COMMENT ON COLUMN interop_quote.updated_at IS 'Last update time';
 COMMENT ON COLUMN interop_quote.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN interop_quote.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN interop_quote.interop_switch_id IS 'Switch';
-COMMENT ON COLUMN interop_quote.quote_id IS 'Quote id on the switch';
-COMMENT ON COLUMN interop_quote.direction IS 'Outbound or inbound';
+COMMENT ON COLUMN interop_quote.quote_id IS 'Quote id on the switch (generated for outbound, taken from the switch for inbound)';
+COMMENT ON COLUMN interop_quote.direction IS 'Outbound (created by the API) or inbound (created by a switch callback)';
 COMMENT ON COLUMN interop_quote.payer_wallet_id IS 'Payer wallet (outbound)';
+COMMENT ON COLUMN interop_quote.payer_fsp_id IS 'Payer participant (inbound)';
+COMMENT ON COLUMN interop_quote.payee_wallet_id IS 'Payee wallet resolved for an inbound quote';
 COMMENT ON COLUMN interop_quote.payee_party_type IS 'MSISDN, ACCOUNT, ALIAS';
 COMMENT ON COLUMN interop_quote.payee_party_id IS 'Payee identifier [PII]';
 COMMENT ON COLUMN interop_quote.payee_fsp_id IS 'Payee participant';
@@ -179,9 +195,11 @@ COMMENT ON COLUMN interop_quote.amount IS 'Amount';
 COMMENT ON COLUMN interop_quote.currency IS 'Currency';
 COMMENT ON COLUMN interop_quote.payee_receive_amount IS 'Amount the payee receives';
 COMMENT ON COLUMN interop_quote.fee_amount IS 'Fees';
-COMMENT ON COLUMN interop_quote.ilp_condition IS 'Cryptographic condition for the transfer';
+COMMENT ON COLUMN interop_quote.ilp_condition IS 'Cryptographic condition for the transfer (base64url SHA-256 of the fulfilment)';
+COMMENT ON COLUMN interop_quote.fulfilment IS 'Fulfilment we reveal on commit (inbound quotes only)';
 COMMENT ON COLUMN interop_quote.status IS 'Status';
-COMMENT ON COLUMN interop_quote.expires_at IS 'Expiry';
+COMMENT ON COLUMN interop_quote.rejection_reason IS 'Why the quote was rejected';
+COMMENT ON COLUMN interop_quote.expires_at IS 'Expiry (database clock)';
 COMMENT ON COLUMN interop_quote.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN interop_quote.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN interop_quote.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -190,6 +208,7 @@ COMMENT ON COLUMN interop_quote.custom_field_5 IS 'Tenant-defined custom field 5
 CREATE INDEX ix_interop_quote_tenant ON interop_quote (tenant_id, created_at);
 CREATE INDEX ix_interop_quote_interop_switch_id ON interop_quote (interop_switch_id);
 CREATE INDEX ix_interop_quote_payer_wallet_id ON interop_quote (payer_wallet_id);
+CREATE INDEX ix_interop_quote_payee_wallet_id ON interop_quote (payee_wallet_id);
 ALTER TABLE interop_quote ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON interop_quote USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_interop_quote_touch BEFORE UPDATE ON interop_quote FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -213,6 +232,8 @@ CREATE TABLE interop_transfer (
   counterparty_party_id        varchar(64),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
+  fee_amount                   numeric(28,8),
+  ilp_condition                varchar(128),
   status                       varchar(40) NOT NULL DEFAULT 'QUOTE_REQUESTED' CHECK (status IN ('QUOTE_REQUESTED', 'QUOTED', 'RESERVED', 'COMMITTED', 'ABORTED', 'FAILED', 'EXPIRED')),
   wallet_transaction_id        uuid,
   hold_id                      uuid,
@@ -240,23 +261,25 @@ COMMENT ON COLUMN interop_transfer.updated_by IS 'Principal that last updated th
 COMMENT ON COLUMN interop_transfer.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN interop_transfer.interop_switch_id IS 'Switch';
 COMMENT ON COLUMN interop_transfer.interop_quote_id IS 'Quote';
-COMMENT ON COLUMN interop_transfer.transfer_id IS 'Transfer id on the switch';
-COMMENT ON COLUMN interop_transfer.direction IS 'Outbound or inbound';
+COMMENT ON COLUMN interop_transfer.transfer_id IS 'Transfer id on the switch (generated for outbound)';
+COMMENT ON COLUMN interop_transfer.direction IS 'Outbound (created by the API) or inbound (created by a switch callback)';
 COMMENT ON COLUMN interop_transfer.payer_wallet_id IS 'Payer wallet (outbound)';
 COMMENT ON COLUMN interop_transfer.payee_wallet_id IS 'Payee wallet (inbound)';
 COMMENT ON COLUMN interop_transfer.counterparty_fsp_id IS 'Other participant';
 COMMENT ON COLUMN interop_transfer.counterparty_party_id IS 'Other party identifier [PII]';
 COMMENT ON COLUMN interop_transfer.amount IS 'Amount';
 COMMENT ON COLUMN interop_transfer.currency IS 'Currency';
+COMMENT ON COLUMN interop_transfer.fee_amount IS 'Fees charged to the payer';
+COMMENT ON COLUMN interop_transfer.ilp_condition IS 'Condition the fulfilment must satisfy';
 COMMENT ON COLUMN interop_transfer.status IS 'Status';
 COMMENT ON COLUMN interop_transfer.wallet_transaction_id IS 'Wallet transaction';
 COMMENT ON COLUMN interop_transfer.hold_id IS 'Funds reserved while pending';
 COMMENT ON COLUMN interop_transfer.fulfilment IS 'Fulfilment proving the commit';
-COMMENT ON COLUMN interop_transfer.expires_at IS 'Expiry';
+COMMENT ON COLUMN interop_transfer.expires_at IS 'Expiry (database clock)';
 COMMENT ON COLUMN interop_transfer.completed_at IS 'Completion time';
 COMMENT ON COLUMN interop_transfer.error_code IS 'Switch error code';
 COMMENT ON COLUMN interop_transfer.error_description IS 'Error description';
-COMMENT ON COLUMN interop_transfer.idempotency_key IS 'Client key';
+COMMENT ON COLUMN interop_transfer.idempotency_key IS 'Client key (or switch transfer id for inbound)';
 COMMENT ON COLUMN interop_transfer.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN interop_transfer.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN interop_transfer.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

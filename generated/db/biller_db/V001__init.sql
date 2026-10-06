@@ -42,12 +42,15 @@ CREATE TABLE biller (
   max_amount                   numeric(28,8),
   account_reference_label      varchar(64),
   account_reference_regex      varchar(128),
+  account_reference_checksum   varchar(40) NOT NULL DEFAULT 'NONE' CHECK (account_reference_checksum IN ('NONE', 'LUHN', 'MOD97', 'MOD11')),
+  inquiry_validity_minutes     integer NOT NULL DEFAULT 30,
   settlement_wallet_id         uuid,
   settlement_frequency         varchar(40) NOT NULL DEFAULT 'DAILY' CHECK (settlement_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY', 'ON_DEMAND')),
   fee_bearer                   varchar(16) NOT NULL DEFAULT 'CUSTOMER',
   logo_document_id             uuid,
   display_order                integer,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'RETIRED')),
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -77,13 +80,16 @@ COMMENT ON COLUMN biller.supports_overpayment IS 'Accepts more than the amount d
 COMMENT ON COLUMN biller.min_amount IS 'Minimum payment';
 COMMENT ON COLUMN biller.max_amount IS 'Maximum payment';
 COMMENT ON COLUMN biller.account_reference_label IS 'Label shown to the customer, e.g. Meter number';
-COMMENT ON COLUMN biller.account_reference_regex IS 'Validation pattern';
+COMMENT ON COLUMN biller.account_reference_regex IS 'Validation pattern (full match)';
+COMMENT ON COLUMN biller.account_reference_checksum IS 'Check-digit algorithm of the account reference';
+COMMENT ON COLUMN biller.inquiry_validity_minutes IS 'How long a bill inquiry can be paid against';
 COMMENT ON COLUMN biller.settlement_wallet_id IS 'Biller collection wallet';
 COMMENT ON COLUMN biller.settlement_frequency IS 'Settlement frequency';
 COMMENT ON COLUMN biller.fee_bearer IS 'CUSTOMER, BILLER, SHARED';
 COMMENT ON COLUMN biller.logo_document_id IS 'Logo';
 COMMENT ON COLUMN biller.display_order IS 'Order in menus';
 COMMENT ON COLUMN biller.status IS 'Status';
+COMMENT ON COLUMN biller.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN biller.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN biller.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN biller.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -166,6 +172,7 @@ CREATE TABLE bill_inquiry (
   due_date                     date,
   inquiry_reference            varchar(64),
   response_code                varchar(32),
+  response_message             varchar(255),
   expires_at                   timestamptz,
   raw_response                 jsonb,
   custom_field_1               varchar(500),
@@ -189,8 +196,9 @@ COMMENT ON COLUMN bill_inquiry.amount_due IS 'Amount due';
 COMMENT ON COLUMN bill_inquiry.currency IS 'Currency';
 COMMENT ON COLUMN bill_inquiry.due_date IS 'Due date';
 COMMENT ON COLUMN bill_inquiry.inquiry_reference IS 'Biller inquiry reference to quote on payment';
-COMMENT ON COLUMN bill_inquiry.response_code IS 'Biller response code';
-COMMENT ON COLUMN bill_inquiry.expires_at IS 'Inquiry validity';
+COMMENT ON COLUMN bill_inquiry.response_code IS 'Biller response code (00 = found)';
+COMMENT ON COLUMN bill_inquiry.response_message IS 'Biller response text';
+COMMENT ON COLUMN bill_inquiry.expires_at IS 'Inquiry validity (database clock)';
 COMMENT ON COLUMN bill_inquiry.raw_response IS 'Raw biller response';
 COMMENT ON COLUMN bill_inquiry.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN bill_inquiry.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -217,12 +225,16 @@ CREATE TABLE biller_settlement (
   period_end                   date NOT NULL,
   currency                     char(3) NOT NULL,
   payment_count                integer,
+  topup_count                  integer,
   gross_amount                 numeric(28,8),
   fee_amount                   numeric(28,8),
   commission_amount            numeric(28,8),
   net_amount                   numeric(28,8),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CALCULATED', 'APPROVED', 'PAID', 'FAILED')),
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
   payment_reference            varchar(64),
+  wallet_transaction_id        uuid,
   paid_at                      timestamptz,
   report_document_id           uuid,
   custom_field_1               varchar(500),
@@ -241,15 +253,19 @@ COMMENT ON COLUMN biller_settlement.updated_by IS 'Principal that last updated t
 COMMENT ON COLUMN biller_settlement.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN biller_settlement.biller_id IS 'Biller';
 COMMENT ON COLUMN biller_settlement.period_start IS 'From';
-COMMENT ON COLUMN biller_settlement.period_end IS 'To';
+COMMENT ON COLUMN biller_settlement.period_end IS 'To (inclusive)';
 COMMENT ON COLUMN biller_settlement.currency IS 'Currency';
-COMMENT ON COLUMN biller_settlement.payment_count IS 'Payments included';
+COMMENT ON COLUMN biller_settlement.payment_count IS 'Bill payments included';
+COMMENT ON COLUMN biller_settlement.topup_count IS 'Airtime top-ups included';
 COMMENT ON COLUMN biller_settlement.gross_amount IS 'Collected';
 COMMENT ON COLUMN biller_settlement.fee_amount IS 'Fees retained';
 COMMENT ON COLUMN biller_settlement.commission_amount IS 'Commissions retained';
 COMMENT ON COLUMN biller_settlement.net_amount IS 'Net payable to the biller';
 COMMENT ON COLUMN biller_settlement.status IS 'Status';
+COMMENT ON COLUMN biller_settlement.approved_by IS 'Checker';
+COMMENT ON COLUMN biller_settlement.approved_at IS 'Approval time';
 COMMENT ON COLUMN biller_settlement.payment_reference IS 'Bank payment reference';
+COMMENT ON COLUMN biller_settlement.wallet_transaction_id IS 'Settlement transaction out of the collection wallet';
 COMMENT ON COLUMN biller_settlement.paid_at IS 'Payment time';
 COMMENT ON COLUMN biller_settlement.report_document_id IS 'Settlement report';
 COMMENT ON COLUMN biller_settlement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -259,6 +275,7 @@ COMMENT ON COLUMN biller_settlement.custom_field_4 IS 'Tenant-defined custom fie
 COMMENT ON COLUMN biller_settlement.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_biller_settlement_tenant ON biller_settlement (tenant_id, created_at);
 CREATE INDEX ix_biller_settlement_biller_id ON biller_settlement (biller_id);
+CREATE INDEX ix_biller_settlement_wallet_transaction_id ON biller_settlement (wallet_transaction_id);
 CREATE INDEX ix_biller_settlement_report_document_id ON biller_settlement (report_document_id);
 ALTER TABLE biller_settlement ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON biller_settlement USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -277,6 +294,7 @@ CREATE TABLE bill_payment (
   biller_product_id            uuid REFERENCES biller_product(id),
   bill_inquiry_id              uuid REFERENCES bill_inquiry(id),
   payer_wallet_id              uuid NOT NULL,
+  channel                      varchar(40) NOT NULL DEFAULT 'APP' CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   wallet_transaction_id        uuid,
   account_reference            varchar(64) NOT NULL,
   customer_name                varchar(160),
@@ -290,6 +308,8 @@ CREATE TABLE bill_payment (
   retry_count                  integer NOT NULL DEFAULT 0,
   completed_at                 timestamptz,
   failure_reason               varchar(255),
+  reversal_reason              varchar(255),
+  reversed_at                  timestamptz,
   biller_settlement_id         uuid REFERENCES biller_settlement(id),
   idempotency_key              varchar(128) NOT NULL,
   custom_field_1               varchar(500),
@@ -311,7 +331,8 @@ COMMENT ON COLUMN bill_payment.biller_id IS 'Biller';
 COMMENT ON COLUMN bill_payment.biller_product_id IS 'Product (fixed bills and bundles)';
 COMMENT ON COLUMN bill_payment.bill_inquiry_id IS 'Inquiry the payment is based on';
 COMMENT ON COLUMN bill_payment.payer_wallet_id IS 'Paying wallet';
-COMMENT ON COLUMN bill_payment.wallet_transaction_id IS 'Wallet transaction';
+COMMENT ON COLUMN bill_payment.channel IS 'Initiating channel';
+COMMENT ON COLUMN bill_payment.wallet_transaction_id IS 'Wallet transaction (funds held until the biller accepts)';
 COMMENT ON COLUMN bill_payment.account_reference IS 'Account / meter number';
 COMMENT ON COLUMN bill_payment.customer_name IS 'Name on the bill [PII]';
 COMMENT ON COLUMN bill_payment.amount IS 'Amount paid';
@@ -324,6 +345,8 @@ COMMENT ON COLUMN bill_payment.receipt_number IS 'Biller receipt number';
 COMMENT ON COLUMN bill_payment.retry_count IS 'Provider retries';
 COMMENT ON COLUMN bill_payment.completed_at IS 'Completion time';
 COMMENT ON COLUMN bill_payment.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN bill_payment.reversal_reason IS 'Reversal reason';
+COMMENT ON COLUMN bill_payment.reversed_at IS 'Reversal time';
 COMMENT ON COLUMN bill_payment.biller_settlement_id IS 'Settlement that paid it out';
 COMMENT ON COLUMN bill_payment.idempotency_key IS 'Client key';
 COMMENT ON COLUMN bill_payment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -355,14 +378,17 @@ CREATE TABLE airtime_topup (
   biller_id                    uuid NOT NULL REFERENCES biller(id),
   biller_product_id            uuid REFERENCES biller_product(id),
   payer_wallet_id              uuid NOT NULL,
+  channel                      varchar(40) NOT NULL DEFAULT 'APP' CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   wallet_transaction_id        uuid,
   target_msisdn                varchar(20) NOT NULL,
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'VALIDATED', 'PROCESSING', 'PENDING_PROVIDER', 'COMPLETED', 'FAILED', 'REVERSED')),
   provider_reference           varchar(64),
+  retry_count                  integer NOT NULL DEFAULT 0,
   completed_at                 timestamptz,
   failure_reason               varchar(255),
+  biller_settlement_id         uuid REFERENCES biller_settlement(id),
   idempotency_key              varchar(128) NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -382,14 +408,17 @@ COMMENT ON COLUMN airtime_topup.row_version IS 'Optimistic lock version; send as
 COMMENT ON COLUMN airtime_topup.biller_id IS 'Mobile operator';
 COMMENT ON COLUMN airtime_topup.biller_product_id IS 'Bundle, if any';
 COMMENT ON COLUMN airtime_topup.payer_wallet_id IS 'Paying wallet';
+COMMENT ON COLUMN airtime_topup.channel IS 'Initiating channel';
 COMMENT ON COLUMN airtime_topup.wallet_transaction_id IS 'Wallet transaction';
 COMMENT ON COLUMN airtime_topup.target_msisdn IS 'Number topped up [PII]';
 COMMENT ON COLUMN airtime_topup.amount IS 'Amount';
 COMMENT ON COLUMN airtime_topup.currency IS 'Currency';
 COMMENT ON COLUMN airtime_topup.status IS 'Status';
 COMMENT ON COLUMN airtime_topup.provider_reference IS 'Operator reference';
+COMMENT ON COLUMN airtime_topup.retry_count IS 'Operator retries';
 COMMENT ON COLUMN airtime_topup.completed_at IS 'Completion time';
 COMMENT ON COLUMN airtime_topup.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN airtime_topup.biller_settlement_id IS 'Settlement that paid it out';
 COMMENT ON COLUMN airtime_topup.idempotency_key IS 'Client key';
 COMMENT ON COLUMN airtime_topup.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN airtime_topup.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -401,6 +430,7 @@ CREATE INDEX ix_airtime_topup_biller_id ON airtime_topup (biller_id);
 CREATE INDEX ix_airtime_topup_biller_product_id ON airtime_topup (biller_product_id);
 CREATE INDEX ix_airtime_topup_payer_wallet_id ON airtime_topup (payer_wallet_id);
 CREATE INDEX ix_airtime_topup_wallet_transaction_id ON airtime_topup (wallet_transaction_id);
+CREATE INDEX ix_airtime_topup_biller_settlement_id ON airtime_topup (biller_settlement_id);
 ALTER TABLE airtime_topup ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON airtime_topup USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_airtime_topup_touch BEFORE UPDATE ON airtime_topup FOR EACH ROW EXECUTE FUNCTION touch_row();

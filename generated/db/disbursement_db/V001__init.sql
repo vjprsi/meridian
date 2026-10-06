@@ -39,6 +39,7 @@ CREATE TABLE disbursement_program (
   approval_levels              integer NOT NULL DEFAULT 2,
   auto_create_wallets          boolean NOT NULL DEFAULT false,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'SUSPENDED', 'CLOSED')),
+  status_reason                varchar(255),
   start_date                   date,
   end_date                     date,
   custom_field_1               varchar(500),
@@ -65,9 +66,10 @@ COMMENT ON COLUMN disbursement_program.currency IS 'Currency';
 COMMENT ON COLUMN disbursement_program.max_amount_per_beneficiary IS 'Cap per beneficiary per batch';
 COMMENT ON COLUMN disbursement_program.require_name_match IS 'Reject when the wallet name does not match';
 COMMENT ON COLUMN disbursement_program.require_kyc_tier IS 'Minimum KYC tier of the receiving wallet';
-COMMENT ON COLUMN disbursement_program.approval_levels IS 'Approvals needed per batch';
+COMMENT ON COLUMN disbursement_program.approval_levels IS 'Approvals needed per batch (each by a different principal, none the submitter)';
 COMMENT ON COLUMN disbursement_program.auto_create_wallets IS 'Open Tier 0 wallets for unregistered beneficiaries';
-COMMENT ON COLUMN disbursement_program.status IS 'Status';
+COMMENT ON COLUMN disbursement_program.status IS 'Status (changed only by actions)';
+COMMENT ON COLUMN disbursement_program.status_reason IS 'Reason for the current status';
 COMMENT ON COLUMN disbursement_program.start_date IS 'Start';
 COMMENT ON COLUMN disbursement_program.end_date IS 'End';
 COMMENT ON COLUMN disbursement_program.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -94,19 +96,29 @@ CREATE TABLE disbursement_batch (
   batch_reference              varchar(64) NOT NULL,
   description                  varchar(255),
   file_document_id             uuid,
+  file_name                    varchar(255),
+  file_sha256                  varchar(64),
   currency                     char(3) NOT NULL,
   scheduled_for                timestamptz,
-  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'VALIDATING', 'VALIDATED', 'PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED', 'PARTIALLY_COMPLETED', 'FAILED', 'CANCELLED')),
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'VALIDATING', 'VALIDATED', 'PENDING_APPROVAL', 'APPROVED', 'PROCESSING', 'COMPLETED', 'PARTIALLY_COMPLETED', 'FAILED', 'CANCELLED', 'REJECTED')),
   total_count                  integer,
   total_amount                 numeric(28,8),
   valid_count                  integer,
+  valid_amount                 numeric(28,8),
   invalid_count                integer,
+  duplicate_count              integer,
   paid_count                   integer,
   failed_count                 integer,
   paid_amount                  numeric(28,8),
   fee_amount                   numeric(28,8),
   approval_request_id          uuid,
+  approvals_required           integer,
+  approvals_received           integer NOT NULL DEFAULT 0,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   approved_by                  varchar(64),
+  rejection_reason             varchar(255),
+  cancel_reason                varchar(255),
   started_at                   timestamptz,
   completed_at                 timestamptz,
   custom_field_1               varchar(500),
@@ -125,22 +137,32 @@ COMMENT ON COLUMN disbursement_batch.updated_at IS 'Last update time';
 COMMENT ON COLUMN disbursement_batch.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN disbursement_batch.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN disbursement_batch.disbursement_program_id IS 'Program';
-COMMENT ON COLUMN disbursement_batch.batch_reference IS 'Batch reference';
+COMMENT ON COLUMN disbursement_batch.batch_reference IS 'Batch reference (server-generated)';
 COMMENT ON COLUMN disbursement_batch.description IS 'Description';
 COMMENT ON COLUMN disbursement_batch.file_document_id IS 'Uploaded beneficiary file';
+COMMENT ON COLUMN disbursement_batch.file_name IS 'Name of the uploaded file';
+COMMENT ON COLUMN disbursement_batch.file_sha256 IS 'SHA-256 of the uploaded content (re-uploading the same file is rejected)';
 COMMENT ON COLUMN disbursement_batch.currency IS 'Currency';
 COMMENT ON COLUMN disbursement_batch.scheduled_for IS 'Execution time';
 COMMENT ON COLUMN disbursement_batch.status IS 'Status';
 COMMENT ON COLUMN disbursement_batch.total_count IS 'Lines';
 COMMENT ON COLUMN disbursement_batch.total_amount IS 'Total amount';
 COMMENT ON COLUMN disbursement_batch.valid_count IS 'Valid lines';
+COMMENT ON COLUMN disbursement_batch.valid_amount IS 'Total amount of valid lines';
 COMMENT ON COLUMN disbursement_batch.invalid_count IS 'Invalid lines';
+COMMENT ON COLUMN disbursement_batch.duplicate_count IS 'Duplicate lines';
 COMMENT ON COLUMN disbursement_batch.paid_count IS 'Paid lines';
 COMMENT ON COLUMN disbursement_batch.failed_count IS 'Failed lines';
 COMMENT ON COLUMN disbursement_batch.paid_amount IS 'Amount paid';
 COMMENT ON COLUMN disbursement_batch.fee_amount IS 'Fees';
 COMMENT ON COLUMN disbursement_batch.approval_request_id IS 'Approval workflow';
+COMMENT ON COLUMN disbursement_batch.approvals_required IS 'Approvals needed (from the program)';
+COMMENT ON COLUMN disbursement_batch.approvals_received IS 'Approvals given so far';
+COMMENT ON COLUMN disbursement_batch.submitted_by IS 'Maker who submitted the batch';
+COMMENT ON COLUMN disbursement_batch.submitted_at IS 'Submission time';
 COMMENT ON COLUMN disbursement_batch.approved_by IS 'Final approver';
+COMMENT ON COLUMN disbursement_batch.rejection_reason IS 'Rejection reason';
+COMMENT ON COLUMN disbursement_batch.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN disbursement_batch.started_at IS 'Execution start';
 COMMENT ON COLUMN disbursement_batch.completed_at IS 'Execution end';
 COMMENT ON COLUMN disbursement_batch.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -155,6 +177,45 @@ CREATE INDEX ix_disbursement_batch_approval_request_id ON disbursement_batch (ap
 ALTER TABLE disbursement_batch ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON disbursement_batch USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_disbursement_batch_touch BEFORE UPDATE ON disbursement_batch FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- disbursement_batch_approval: One approval or rejection decision on a disbursement batch. Append-only.
+CREATE TABLE disbursement_batch_approval (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  disbursement_batch_id        uuid NOT NULL REFERENCES disbursement_batch(id),
+  level                        integer NOT NULL,
+  decision                     varchar(40) NOT NULL CHECK (decision IN ('APPROVED', 'REJECTED')),
+  decided_by                   varchar(64) NOT NULL,
+  comment                      varchar(500),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_disbursement_batch_approval_1 UNIQUE (disbursement_batch_id, level, decided_by)
+);
+COMMENT ON TABLE disbursement_batch_approval IS 'One approval or rejection decision on a disbursement batch. Append-only.';
+COMMENT ON COLUMN disbursement_batch_approval.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN disbursement_batch_approval.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN disbursement_batch_approval.created_at IS 'Creation time';
+COMMENT ON COLUMN disbursement_batch_approval.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN disbursement_batch_approval.disbursement_batch_id IS 'Batch';
+COMMENT ON COLUMN disbursement_batch_approval.level IS 'Approval level (1..approval_levels)';
+COMMENT ON COLUMN disbursement_batch_approval.decision IS 'Decision';
+COMMENT ON COLUMN disbursement_batch_approval.decided_by IS 'Approver';
+COMMENT ON COLUMN disbursement_batch_approval.comment IS 'Comment or rejection reason';
+COMMENT ON COLUMN disbursement_batch_approval.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN disbursement_batch_approval.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN disbursement_batch_approval.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN disbursement_batch_approval.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN disbursement_batch_approval.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_disbursement_batch_approval_tenant ON disbursement_batch_approval (tenant_id, created_at);
+CREATE INDEX ix_disbursement_batch_approval_disbursement_batch_id ON disbursement_batch_approval (disbursement_batch_id);
+ALTER TABLE disbursement_batch_approval ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON disbursement_batch_approval USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_disbursement_batch_approval_append_only BEFORE UPDATE OR DELETE ON disbursement_batch_approval FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- disbursement_beneficiary: One beneficiary line of a disbursement batch
 CREATE TABLE disbursement_beneficiary (
@@ -179,6 +240,7 @@ CREATE TABLE disbursement_beneficiary (
   validation_message           varchar(255),
   matched_name                 varchar(200),
   payout_status                varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (payout_status IN ('PENDING', 'PAID', 'FAILED', 'SKIPPED', 'RETURNED')),
+  attempt_count                integer NOT NULL DEFAULT 0,
   wallet_transaction_id        uuid,
   paid_at                      timestamptz,
   failure_reason               varchar(255),
@@ -211,6 +273,7 @@ COMMENT ON COLUMN disbursement_beneficiary.validation_status IS 'Validation resu
 COMMENT ON COLUMN disbursement_beneficiary.validation_message IS 'Validation detail';
 COMMENT ON COLUMN disbursement_beneficiary.matched_name IS 'Name on the resolved wallet [PII]';
 COMMENT ON COLUMN disbursement_beneficiary.payout_status IS 'Payout status';
+COMMENT ON COLUMN disbursement_beneficiary.attempt_count IS 'Payout attempts';
 COMMENT ON COLUMN disbursement_beneficiary.wallet_transaction_id IS 'Payout transaction';
 COMMENT ON COLUMN disbursement_beneficiary.paid_at IS 'Payment time';
 COMMENT ON COLUMN disbursement_beneficiary.failure_reason IS 'Failure reason';
