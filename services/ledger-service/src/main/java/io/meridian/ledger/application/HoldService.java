@@ -140,13 +140,23 @@ public class HoldService {
 
     @Transactional
     public String release(UUID holdId, String reason) {
+        return close(holdId, "RELEASED", reason);
+    }
+
+    /** Releases a hold whose expires_at has passed (end-of-day processing). */
+    @Transactional
+    public String expire(UUID holdId, String reason) {
+        return close(holdId, "EXPIRED", reason);
+    }
+
+    private String close(UUID holdId, String finalStatus, String reason) {
         HoldRow h = lock(holdId);
         requireOpen(h);
         AccountState account = store.lockAccounts(List.of(h.accountId())).get(h.accountId());
         account.unreserve(h.remaining());
         store.saveBalance(account);
-        jdbc.sql("update hold set status = 'RELEASED', released_at = now() where id = ?").param(holdId).update();
-        event(holdId, "RELEASED", h.remaining(), null, reason);
+        jdbc.sql("update hold set status = ?, released_at = now() where id = ?").params(finalStatus, holdId).update();
+        event(holdId, finalStatus, h.remaining(), null, reason);
         String row = row(holdId);
         outbox.publish("ledger.hold.released", "hold", holdId, json.readTree(row));
         return row;

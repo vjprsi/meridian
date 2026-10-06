@@ -29,6 +29,11 @@ public class MeridianTestContainers {
         KAFKA.start();
     }
 
+    /** JDBC URL for the owner role, for tests that must bypass the service (e.g. tamper simulations). */
+    public static String adminJdbcUrl() {
+        return POSTGRES.getJdbcUrl();
+    }
+
     @Bean
     DynamicPropertyRegistrar meridianTestProperties(Environment env) {
         String schema = env.getProperty("spring.flyway.default-schema", "public");

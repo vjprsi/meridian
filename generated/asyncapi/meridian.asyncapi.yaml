@@ -209,6 +209,10 @@ channels:
     messages:
       LedgerLedgerCreated:
         $ref: '#/components/messages/LedgerLedgerCreated'
+      LedgerLedgerVerified:
+        $ref: '#/components/messages/LedgerLedgerVerified'
+      LedgerEodCompleted:
+        $ref: '#/components/messages/LedgerEodCompleted'
       LedgerLedgerAccountCreated:
         $ref: '#/components/messages/LedgerLedgerAccountCreated'
       LedgerLedgerAccountStatusChanged:
@@ -3036,6 +3040,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Ledger'
+    LedgerLedgerVerified:
+      name: ledger.ledger.verified
+      title: A ledger integrity verification finished
+      summary: A ledger integrity verification finished
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.ledger.verified
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LedgerVerification'
+    LedgerEodCompleted:
+      name: ledger.eod.completed
+      title: End-of-day processing finished for a ledger and business date
+      summary: End-of-day processing finished for a ledger and business date
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.eod.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LedgerEodRun'
     LedgerLedgerAccountCreated:
       name: ledger.ledger_account.created
       title: A ledger account was opened
@@ -18961,6 +19009,215 @@ components:
       - legal_entity_id
       - base_currency
       - status
+    LedgerVerification:
+      type: object
+      description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger verified
+        accounts_checked:
+          type: integer
+          format: int32
+          description: Accounts whose balance was recomputed from entries
+        entries_checked:
+          type: integer
+          format: int32
+          description: Journal entries checked
+        balance_mismatches:
+          type: integer
+          format: int32
+          description: Accounts whose stored balance differs from the sum of entries
+        version_gaps:
+          type: integer
+          format: int32
+          description: Accounts with non-consecutive entry versions
+        unbalanced_entries:
+          type: integer
+          format: int32
+          description: Journal entries whose debits and credits differ in a currency
+        hash_mismatches:
+          type: integer
+          format: int32
+          description: Journal entries whose content hash no longer matches (tampering)
+        chain_head:
+          type: string
+          maxLength: 64
+          description: SHA-256 chain over all entry hashes in booking order
+        passed:
+          type: boolean
+          description: True when every check passed
+        details:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: First findings per check (capped)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - accounts_checked
+      - entries_checked
+      - balance_mismatches
+      - version_gaps
+      - unbalanced_entries
+      - hash_mismatches
+      - chain_head
+      - passed
+    LedgerEodRun:
+      type: object
+      description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger processed
+        business_date:
+          type: string
+          format: date
+          description: Business date closed
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Outcome
+        holds_expired:
+          type: integer
+          format: int32
+          description: Holds released because they passed expires_at
+        snapshots_written:
+          type: integer
+          format: int32
+          description: Balance snapshots written
+        snapshots_skipped:
+          type: integer
+          format: int32
+          description: Accounts already snapshotted for the date (idempotent rerun)
+        started_at:
+          type: string
+          format: date-time
+          description: Start time
+        finished_at:
+          type: string
+          format: date-time
+          description: End time
+        error:
+          type:
+          - string
+          - 'null'
+          description: Failure detail
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - business_date
+      - status
+      - holds_expired
+      - snapshots_written
+      - snapshots_skipped
+      - started_at
+      - finished_at
     LedgerAccount:
       type: object
       description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'

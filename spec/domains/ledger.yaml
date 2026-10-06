@@ -188,6 +188,39 @@ services:
           - "account_version bigint nn | Last entry version included"
         unique: [[ledger_account_id, as_of_date]]
 
+      - name: ledger_eod_run
+        prefix: leod
+        description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+        immutable: true
+        fr: [LED-04, LED-09, GL-03, OPS-01]
+        columns:
+          - "ledger_id uuid nn fk=ledger idx | Ledger processed"
+          - "business_date date nn | Business date closed"
+          - "status enum:RunStatus nn | Outcome"
+          - "holds_expired int nn default=0 | Holds released because they passed expires_at"
+          - "snapshots_written int nn default=0 | Balance snapshots written"
+          - "snapshots_skipped int nn default=0 | Accounts already snapshotted for the date (idempotent rerun)"
+          - "started_at ts nn | Start time"
+          - "finished_at ts nn | End time"
+          - "error text | Failure detail"
+
+      - name: ledger_verification
+        prefix: lver
+        description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+        immutable: true
+        fr: [LED-01, LED-02, ADM-03]
+        columns:
+          - "ledger_id uuid nn fk=ledger idx | Ledger verified"
+          - "accounts_checked int nn | Accounts whose balance was recomputed from entries"
+          - "entries_checked int nn | Journal entries checked"
+          - "balance_mismatches int nn | Accounts whose stored balance differs from the sum of entries"
+          - "version_gaps int nn | Accounts with non-consecutive entry versions"
+          - "unbalanced_entries int nn | Journal entries whose debits and credits differ in a currency"
+          - "hash_mismatches int nn | Journal entries whose content hash no longer matches (tampering)"
+          - "chain_head string(64) nn | SHA-256 chain over all entry hashes in booking order"
+          - "passed bool nn | True when every check passed"
+          - "details json | First findings per check (capped)"
+
     apis:
       - resource: ledgers
         path: /v1/ledgers
@@ -196,7 +229,8 @@ services:
         filters: [status, legal_entity_id, base_currency]
         actions:
           - "POST /{id}/lock | Lock a ledger against new postings | reason string(255) nn"
-          - "GET /{id}/verify | Verify the ledger: re-sum balances and check the hash chain | | none"
+          - "POST /{id}/verify | Verify integrity: recompute balances, versions, balancing and content hashes | | ledger_verification"
+          - "POST /{id}/eod | Run end-of-day for a business date: expire holds, write balance snapshots | business_date date nn | ledger_eod_run"
 
       - resource: ledger-accounts
         path: /v1/ledger-accounts
@@ -240,6 +274,18 @@ services:
           - "POST /{id}/release | Release the remaining held amount | reason string(255)"
           - "GET /{id}/events | History of the hold | | hold_event[]"
 
+      - resource: ledger-eod-runs
+        path: /v1/ledger-eod-runs
+        table: ledger_eod_run
+        ops: [list, get]
+        filters: [ledger_id, business_date, status]
+
+      - resource: ledger-verifications
+        path: /v1/ledger-verifications
+        table: ledger_verification
+        ops: [list, get]
+        filters: [ledger_id, passed]
+
       - resource: balance-snapshots
         path: /v1/balance-snapshots
         table: balance_snapshot
@@ -248,6 +294,8 @@ services:
 
     events:
       - "ledger.ledger.created | ledger | A ledger book was created"
+      - "ledger.ledger.verified | ledger_verification | A ledger integrity verification finished"
+      - "ledger.eod.completed | ledger_eod_run | End-of-day processing finished for a ledger and business date"
       - "ledger.ledger_account.created | ledger_account | A ledger account was opened"
       - "ledger.ledger_account.status_changed | ledger_account | An account was frozen, unfrozen or closed"
       - "ledger.journal_entry.posted | journal_entry | A balanced journal entry was committed"

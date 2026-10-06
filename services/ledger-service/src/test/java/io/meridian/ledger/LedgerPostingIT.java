@@ -190,6 +190,54 @@ class LedgerPostingIT {
         assertThat(debitNormal).isEqualByComparingTo(creditNormal);
     }
 
+    @Test
+    @Order(10)
+    void verificationPassesOnUntouchedLedger() throws Exception {
+        JsonNode v = post("/v1/ledgers/" + ledger + "/verify", "", 200);
+        assertThat(v.get("passed").asBoolean()).as(v.toString()).isTrue();
+        assertThat(v.get("accounts_checked").asInt()).isEqualTo(4);
+        assertThat(v.get("entries_checked").asInt()).isGreaterThan(50);
+        assertThat(v.get("chain_head").asString()).hasSize(64);
+    }
+
+    @Test
+    @Order(11)
+    void verificationDetectsTampering() throws Exception {
+        // Simulate a malicious/buggy direct DB change that bypasses the posting engine: a superuser disables
+        // the append-only trigger and alters one posted amount, and also corrupts a stored balance.
+        try (var c = java.sql.DriverManager.getConnection(MeridianTestContainersAccess.adminUrl(), "meridian", "meridian")) {
+            var st = c.createStatement();
+            st.execute("set search_path to ledger");
+            st.execute("alter table ledger_entry disable trigger trg_ledger_entry_append_only");
+            st.execute("update ledger_entry set amount = amount + 1 where id = (select id from ledger_entry order by id limit 1)");
+            st.execute("alter table ledger_entry enable trigger trg_ledger_entry_append_only");
+            st.execute("update account_balance set posted_balance = posted_balance + 5 where ledger_account_id = '" + bob + "'");
+        }
+        JsonNode v = post("/v1/ledgers/" + ledger + "/verify", "", 200);
+        assertThat(v.get("passed").asBoolean()).isFalse();
+        assertThat(v.get("hash_mismatches").asInt()).isEqualTo(1);
+        assertThat(v.get("unbalanced_entries").asInt()).isEqualTo(1);
+        assertThat(v.get("balance_mismatches").asInt()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    @Order(12)
+    void endOfDayWritesSnapshotsOnceAndExpiresHolds() throws Exception {
+        String hold = post("/v1/holds", """
+                {"ledger_account_id":"%s","hold_type":"PAYMENT","amount":"5.00","currency":"USD",
+                 "expires_at":"2000-01-01T00:00:00Z"}""".formatted(alice), 201).get("id").asString();
+        String today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
+        JsonNode run = post("/v1/ledgers/" + ledger + "/eod", "{\"business_date\":\"" + today + "\"}", 201);
+        assertThat(run.get("holds_expired").asInt()).isEqualTo(1);
+        assertThat(run.get("snapshots_written").asInt()).isEqualTo(4);
+        assertThat(get("/v1/holds/" + hold, TENANT).get("status").asString()).isEqualTo("EXPIRED");
+        JsonNode again = post("/v1/ledgers/" + ledger + "/eod", "{\"business_date\":\"" + today + "\"}", 201);
+        assertThat(again.get("snapshots_written").asInt()).isZero();
+        assertThat(again.get("snapshots_skipped").asInt()).isEqualTo(4);
+        JsonNode snaps = get("/v1/ledger-accounts/" + alice + "/balance-history", TENANT).get("data");
+        assertThat(snaps).hasSize(1);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String account(String code, String name, String type, String normal, boolean allowNegative) throws Exception {

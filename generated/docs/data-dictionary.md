@@ -3124,6 +3124,61 @@ API: /v1/balance-snapshots · Requirements: LED-09, GL-03
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `ledger_eod_run` (append-only)
+
+End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+
+API: /v1/ledger-eod-runs · Requirements: LED-04, LED-09, GL-03, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| ledger_id | uuid | no | FK → ledger | ledger_id | Ledger processed |
+| business_date | date | no |  | business_date | Business date closed |
+| status | varchar(40) (RunStatus) | no |  | status | Outcome |
+| holds_expired | integer | no |  | holds_expired | Holds released because they passed expires_at |
+| snapshots_written | integer | no |  | snapshots_written | Balance snapshots written |
+| snapshots_skipped | integer | no |  | snapshots_skipped | Accounts already snapshotted for the date (idempotent rerun) |
+| started_at | timestamptz | no |  | started_at | Start time |
+| finished_at | timestamptz | no |  | finished_at | End time |
+| error | text | yes |  | error | Failure detail |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `ledger_verification` (append-only)
+
+Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+
+API: /v1/ledger-verifications · Requirements: LED-01, LED-02, ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| ledger_id | uuid | no | FK → ledger | ledger_id | Ledger verified |
+| accounts_checked | integer | no |  | accounts_checked | Accounts whose balance was recomputed from entries |
+| entries_checked | integer | no |  | entries_checked | Journal entries checked |
+| balance_mismatches | integer | no |  | balance_mismatches | Accounts whose stored balance differs from the sum of entries |
+| version_gaps | integer | no |  | version_gaps | Accounts with non-consecutive entry versions |
+| unbalanced_entries | integer | no |  | unbalanced_entries | Journal entries whose debits and credits differ in a currency |
+| hash_mismatches | integer | no |  | hash_mismatches | Journal entries whose content hash no longer matches (tampering) |
+| chain_head | varchar(64) | no |  | chain_head | SHA-256 chain over all entry hashes in booking order |
+| passed | boolean | no |  | passed | True when every check passed |
+| details | jsonb | yes |  | details | First findings per check (capped) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `gl-service` — database `gl_db`
 
 Chart of accounts per legal entity, product-to-GL mapping, real-time GL aggregation from ledger events, accounting periods and continuous close, trial balance, IFRS 9 provisions and ERP export.

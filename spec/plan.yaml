@@ -99,9 +99,9 @@ tasks:
 
   - {id: PLT-CRUD-ENGINE, phase: 0, type: Platform, title: "Generic tenant-scoped CRUD engine (json_populate_record/row_to_json) wired into generated API default methods via custom methodBody template; ETag/If-Match, idempotency, keyset paging", priority: P0, est: 4, status: Done}
   - {id: PLT-TEST-RLS, phase: 0, type: Test, title: "Integration tests connect as meridian_app (RLS enforced) with Testcontainers Postgres 18 + Kafka", priority: P0, est: 1, status: Done}
-  - {id: LED-HOLD-EXPIRY, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "Hold expiry job: release holds past expires_at (system job needs cross-tenant ops role)", priority: P1, est: 2}
-  - {id: LED-VERIFY, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "Ledger verification: recompute balances from entries, seal hash chain per ledger, report", priority: P1, est: 3}
-  - {id: LED-EOD-SNAPSHOT, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "End-of-day balance snapshots (driven by business-day-service EOD run)", priority: P1, est: 2}
+  - {id: LED-HOLD-EXPIRY, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "Hold expiry job: release holds past expires_at (system job needs cross-tenant ops role)", priority: P1, est: 2, status: Done}
+  - {id: LED-VERIFY, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "Ledger verification: recompute balances from entries, seal hash chain per ledger, report", priority: P1, est: 3, status: Done}
+  - {id: LED-EOD-SNAPSHOT, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "End-of-day balance snapshots (driven by business-day-service EOD run)", priority: P1, est: 2, status: Done}
   - {id: LED-PERF, phase: 1, domain: ledger, service: ledger-service, type: Test, title: "Load test: 1,000 TPS sustained posting (gate G1), k6/Gatling scenario", priority: P0, est: 3}
   - {id: PLT-EDGE-GATEWAY, phase: 0, type: Platform, title: "Edge gateway (platform/edge-gateway): 2,480 spec-generated routes, streaming proxy, 404/405/503/504 problem+json, /openapi.yaml", priority: P0, est: 2, status: Done}
   - {id: PLT-DEV-LAUNCHER, phase: 1, type: DevOps, title: "Dev launcher: start/stop any set of services + gateway locally with health checks", priority: P1, est: 2}
@@ -117,6 +117,8 @@ status:
   "API-ledger-entries": Done
   "API-holds": Done
   "API-balance-snapshots": Done
+  "API-ledger-eod-runs": Done
+  "API-ledger-verifications": Done
 
 requirements:
   LED-01: {module: Ledger, priority: M, text: "Immutable, append-only double-entry journal; every posting balances per currency and legal entity"}

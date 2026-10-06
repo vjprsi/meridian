@@ -465,6 +465,100 @@ ALTER TABLE balance_snapshot ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON balance_snapshot USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_balance_snapshot_append_only BEFORE UPDATE OR DELETE ON balance_snapshot FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
+-- ledger_eod_run: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+CREATE TABLE ledger_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  ledger_id                    uuid NOT NULL REFERENCES ledger(id),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
+  holds_expired                integer NOT NULL DEFAULT 0,
+  snapshots_written            integer NOT NULL DEFAULT 0,
+  snapshots_skipped            integer NOT NULL DEFAULT 0,
+  started_at                   timestamptz NOT NULL,
+  finished_at                  timestamptz NOT NULL,
+  error                        text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE ledger_eod_run IS 'End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)';
+COMMENT ON COLUMN ledger_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN ledger_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN ledger_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN ledger_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN ledger_eod_run.ledger_id IS 'Ledger processed';
+COMMENT ON COLUMN ledger_eod_run.business_date IS 'Business date closed';
+COMMENT ON COLUMN ledger_eod_run.status IS 'Outcome';
+COMMENT ON COLUMN ledger_eod_run.holds_expired IS 'Holds released because they passed expires_at';
+COMMENT ON COLUMN ledger_eod_run.snapshots_written IS 'Balance snapshots written';
+COMMENT ON COLUMN ledger_eod_run.snapshots_skipped IS 'Accounts already snapshotted for the date (idempotent rerun)';
+COMMENT ON COLUMN ledger_eod_run.started_at IS 'Start time';
+COMMENT ON COLUMN ledger_eod_run.finished_at IS 'End time';
+COMMENT ON COLUMN ledger_eod_run.error IS 'Failure detail';
+COMMENT ON COLUMN ledger_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_ledger_eod_run_tenant ON ledger_eod_run (tenant_id, created_at);
+CREATE INDEX ix_ledger_eod_run_ledger_id ON ledger_eod_run (ledger_id);
+ALTER TABLE ledger_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON ledger_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_ledger_eod_run_append_only BEFORE UPDATE OR DELETE ON ledger_eod_run FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- ledger_verification: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+CREATE TABLE ledger_verification (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  ledger_id                    uuid NOT NULL REFERENCES ledger(id),
+  accounts_checked             integer NOT NULL,
+  entries_checked              integer NOT NULL,
+  balance_mismatches           integer NOT NULL,
+  version_gaps                 integer NOT NULL,
+  unbalanced_entries           integer NOT NULL,
+  hash_mismatches              integer NOT NULL,
+  chain_head                   varchar(64) NOT NULL,
+  passed                       boolean NOT NULL,
+  details                      jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE ledger_verification IS 'Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)';
+COMMENT ON COLUMN ledger_verification.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN ledger_verification.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN ledger_verification.created_at IS 'Creation time';
+COMMENT ON COLUMN ledger_verification.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN ledger_verification.ledger_id IS 'Ledger verified';
+COMMENT ON COLUMN ledger_verification.accounts_checked IS 'Accounts whose balance was recomputed from entries';
+COMMENT ON COLUMN ledger_verification.entries_checked IS 'Journal entries checked';
+COMMENT ON COLUMN ledger_verification.balance_mismatches IS 'Accounts whose stored balance differs from the sum of entries';
+COMMENT ON COLUMN ledger_verification.version_gaps IS 'Accounts with non-consecutive entry versions';
+COMMENT ON COLUMN ledger_verification.unbalanced_entries IS 'Journal entries whose debits and credits differ in a currency';
+COMMENT ON COLUMN ledger_verification.hash_mismatches IS 'Journal entries whose content hash no longer matches (tampering)';
+COMMENT ON COLUMN ledger_verification.chain_head IS 'SHA-256 chain over all entry hashes in booking order';
+COMMENT ON COLUMN ledger_verification.passed IS 'True when every check passed';
+COMMENT ON COLUMN ledger_verification.details IS 'First findings per check (capped)';
+COMMENT ON COLUMN ledger_verification.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_verification.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_verification.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_verification.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ledger_verification.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_ledger_verification_tenant ON ledger_verification (tenant_id, created_at);
+CREATE INDEX ix_ledger_verification_ledger_id ON ledger_verification (ledger_id);
+ALTER TABLE ledger_verification ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON ledger_verification USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_ledger_verification_append_only BEFORE UPDATE OR DELETE ON ledger_verification FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).
 CREATE TABLE outbox (

@@ -5,17 +5,15 @@ import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.ledger.domain.AccountState;
+import io.meridian.ledger.domain.EntryHasher;
 import io.meridian.ledger.domain.PostingLine;
 import io.meridian.ledger.domain.PostingRules;
 import io.meridian.ledger.infrastructure.LedgerStore;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -76,10 +74,10 @@ public class PostingService {
         });
 
         UUID entryId = Ids.newId();
-        OffsetDateTime effectiveAt = p.effectiveAt() != null ? p.effectiveAt() : OffsetDateTime.now();
+        OffsetDateTime effectiveAt = EntryHasher.normalize(p.effectiveAt() != null ? p.effectiveAt() : OffsetDateTime.now());
         LocalDate valueDate = p.valueDate() != null ? p.valueDate() : effectiveAt.toLocalDate();
         BigDecimal totalDebitsBase = BigDecimal.ZERO;
-        StringBuilder hashInput = new StringBuilder(entryId + "|" + ledger.id() + "|" + effectiveAt);
+        List<EntryHasher.Line> hashLines = new java.util.ArrayList<>();
 
         List<ObjectNode> lineRows = new java.util.ArrayList<>();
         int lineNo = 0;
@@ -107,8 +105,8 @@ public class PostingService {
                 row.put("description", line.description());
             }
             lineRows.add(row);
-            hashInput.append('|').append(line.accountId()).append(line.direction()).append(line.amount().toPlainString())
-                    .append(line.currency()).append(account.version);
+            hashLines.add(new EntryHasher.Line(line.accountId(), line.direction().name(), line.amount(), line.currency(),
+                    account.version));
         }
 
         ObjectNode entry = json.createObjectNode();
@@ -121,7 +119,7 @@ public class PostingService {
         entry.put("source_service", p.sourceService());
         entry.put("entry_count", p.lines().size());
         entry.put("total_debits", totalDebitsBase.toPlainString());
-        entry.put("hash", sha256(hashInput.toString()));
+        entry.put("hash", EntryHasher.hash(entryId, ledger.id(), effectiveAt.toInstant(), hashLines));
         putIfPresent(entry, "description", p.description());
         putIfPresent(entry, "source_type", p.sourceType());
         putIfPresent(entry, "source_id", p.sourceId());
@@ -200,14 +198,6 @@ public class PostingService {
     private static void putIfPresent(ObjectNode n, String key, Object v) {
         if (v != null) {
             n.put(key, v.toString());
-        }
-    }
-
-    private static String sha256(String s) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
         }
     }
 }

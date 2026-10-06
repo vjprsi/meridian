@@ -257,6 +257,12 @@ tags:
 - name: Holds
   description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
   x-domain: Ledger and Accounting
+- name: Ledger Eod Runs
+  description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+  x-domain: Ledger and Accounting
+- name: Ledger Verifications
+  description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+  x-domain: Ledger and Accounting
 - name: Balance Snapshots
   description: End-of-day balance per account; used for statements, interest and point-in-time queries
   x-domain: Ledger and Accounting
@@ -21269,14 +21275,14 @@ paths:
       x-service: ledger-service
       x-table: ledger
   /v1/ledgers/{id}/verify:
-    get:
+    post:
       operationId: ledgersVerify
-      summary: 'Verify the ledger: re-sum balances and check the hash chain'
+      summary: 'Verify integrity: recompute balances, versions, balancing and content hashes'
       tags:
       - Ledgers
       security:
       - oauth2:
-        - ledger:read
+        - ledger:write
       parameters:
       - name: id
         in: path
@@ -21284,15 +21290,69 @@ paths:
         schema:
           type: string
           format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerVerification'
         '400': *id001
         '401': *id002
         '403': *id003
         '429': *id004
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+  /v1/ledgers/{id}/eod:
+    post:
+      operationId: ledgersEod
+      summary: 'Run end-of-day for a business date: expire holds, write balance snapshots'
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgersEodRequest'
       x-requirements:
       - GL-05
       - LED-01
@@ -22595,6 +22655,228 @@ paths:
       - LED-04
       x-service: ledger-service
       x-table: hold
+  /v1/ledger-eod-runs:
+    get:
+      operationId: ledgerEodRunsList
+      summary: List ledger eod runs
+      tags:
+      - Ledger Eod Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-03
+      - LED-04
+      - LED-09
+      - OPS-01
+      x-service: ledger-service
+      x-table: ledger_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/ledger-eod-runs/{id}:
+    get:
+      operationId: ledgerEodRunsGet
+      summary: Retrieve ledger eod run
+      tags:
+      - Ledger Eod Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - LED-04
+      - LED-09
+      - OPS-01
+      x-service: ledger-service
+      x-table: ledger_eod_run
+      x-crud: true
+      x-crud-get: true
+  /v1/ledger-verifications:
+    get:
+      operationId: ledgerVerificationsList
+      summary: List ledger verifications
+      tags:
+      - Ledger Verifications
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: passed
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerVerificationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - LED-01
+      - LED-02
+      x-service: ledger-service
+      x-table: ledger_verification
+      x-crud: true
+      x-crud-list: true
+  /v1/ledger-verifications/{id}:
+    get:
+      operationId: ledgerVerificationsGet
+      summary: Retrieve ledger verification
+      tags:
+      - Ledger Verifications
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerVerification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - LED-01
+      - LED-02
+      x-service: ledger-service
+      x-table: ledger_verification
+      x-crud: true
+      x-crud-get: true
   /v1/balance-snapshots:
     get:
       operationId: balanceSnapshotsList
@@ -138651,6 +138933,14 @@ components:
           maxLength: 255
       required:
       - reason
+    LedgersEodRequest:
+      type: object
+      properties:
+        business_date:
+          type: string
+          format: date
+      required:
+      - business_date
     LedgerAccountPage:
       type: object
       description: One page of LedgerAccount results (newest first)
@@ -138819,6 +139109,42 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HoldEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerEodRunPage:
+      type: object
+      description: One page of LedgerEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEodRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerVerificationPage:
+      type: object
+      description: One page of LedgerVerification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerVerification'
         next_cursor:
           type:
           - string
@@ -141995,6 +142321,215 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    LedgerEodRun:
+      type: object
+      description: End-of-day processing of one ledger for one business date (hold expiry, balance snapshots)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger processed
+        business_date:
+          type: string
+          format: date
+          description: Business date closed
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Outcome
+        holds_expired:
+          type: integer
+          format: int32
+          description: Holds released because they passed expires_at
+        snapshots_written:
+          type: integer
+          format: int32
+          description: Balance snapshots written
+        snapshots_skipped:
+          type: integer
+          format: int32
+          description: Accounts already snapshotted for the date (idempotent rerun)
+        started_at:
+          type: string
+          format: date-time
+          description: Start time
+        finished_at:
+          type: string
+          format: date-time
+          description: End time
+        error:
+          type:
+          - string
+          - 'null'
+          description: Failure detail
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - business_date
+      - status
+      - holds_expired
+      - snapshots_written
+      - snapshots_skipped
+      - started_at
+      - finished_at
+    LedgerVerification:
+      type: object
+      description: Result of an integrity verification of a ledger (balances, versions, balancing, content hashes)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger verified
+        accounts_checked:
+          type: integer
+          format: int32
+          description: Accounts whose balance was recomputed from entries
+        entries_checked:
+          type: integer
+          format: int32
+          description: Journal entries checked
+        balance_mismatches:
+          type: integer
+          format: int32
+          description: Accounts whose stored balance differs from the sum of entries
+        version_gaps:
+          type: integer
+          format: int32
+          description: Accounts with non-consecutive entry versions
+        unbalanced_entries:
+          type: integer
+          format: int32
+          description: Journal entries whose debits and credits differ in a currency
+        hash_mismatches:
+          type: integer
+          format: int32
+          description: Journal entries whose content hash no longer matches (tampering)
+        chain_head:
+          type: string
+          maxLength: 64
+          description: SHA-256 chain over all entry hashes in booking order
+        passed:
+          type: boolean
+          description: True when every check passed
+        details:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: First findings per check (capped)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - accounts_checked
+      - entries_checked
+      - balance_mismatches
+      - version_gaps
+      - unbalanced_entries
+      - hash_mismatches
+      - chain_head
+      - passed
     PeriodCloseRun:
       type: object
       description: Execution of an EOD / EOM / EOY close with its checklist steps
