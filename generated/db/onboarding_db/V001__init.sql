@@ -40,6 +40,9 @@ CREATE TABLE onboarding_journey (
   decision_rules               jsonb,
   expiry_days                  integer NOT NULL DEFAULT 30,
   published_at                 timestamptz,
+  published_by                 varchar(64),
+  retired_at                   timestamptz,
+  retirement_reason            varchar(255),
   approval_request_id          uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -57,18 +60,21 @@ COMMENT ON COLUMN onboarding_journey.updated_at IS 'Last update time';
 COMMENT ON COLUMN onboarding_journey.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN onboarding_journey.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN onboarding_journey.code IS 'Journey code, e.g. RETAIL_WALLET_KE';
-COMMENT ON COLUMN onboarding_journey.version IS 'Version number';
+COMMENT ON COLUMN onboarding_journey.version IS 'Version number (server-managed; see new-version)';
 COMMENT ON COLUMN onboarding_journey.name IS 'Journey name';
-COMMENT ON COLUMN onboarding_journey.status IS 'Status';
+COMMENT ON COLUMN onboarding_journey.status IS 'Status (changes through publish / retire)';
 COMMENT ON COLUMN onboarding_journey.customer_type IS 'Individual or business journey';
 COMMENT ON COLUMN onboarding_journey.country IS 'Country the journey applies to';
-COMMENT ON COLUMN onboarding_journey.channels IS 'Allowed channels';
+COMMENT ON COLUMN onboarding_journey.channels IS 'Allowed channels (OnboardingChannel values)';
 COMMENT ON COLUMN onboarding_journey.product_ids IS 'Products that can be opened at the end of the journey';
 COMMENT ON COLUMN onboarding_journey.target_tier IS 'KYC tier granted on approval';
 COMMENT ON COLUMN onboarding_journey.definition IS 'Steps, branching conditions and screens (server-driven UI)';
 COMMENT ON COLUMN onboarding_journey.decision_rules IS 'Auto-approve / refer / reject rules';
 COMMENT ON COLUMN onboarding_journey.expiry_days IS 'Days before an idle application expires';
 COMMENT ON COLUMN onboarding_journey.published_at IS 'Publication time';
+COMMENT ON COLUMN onboarding_journey.published_by IS 'Checker who published the version';
+COMMENT ON COLUMN onboarding_journey.retired_at IS 'Retirement time';
+COMMENT ON COLUMN onboarding_journey.retirement_reason IS 'Reason given when retired';
 COMMENT ON COLUMN onboarding_journey.approval_request_id IS 'Maker-checker approval for publication';
 COMMENT ON COLUMN onboarding_journey.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN onboarding_journey.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -93,6 +99,7 @@ CREATE TABLE onboarding_application (
   application_number           varchar(32) NOT NULL,
   onboarding_journey_id        uuid NOT NULL REFERENCES onboarding_journey(id),
   customer_id                  uuid,
+  legal_entity_id              uuid,
   status                       varchar(40) NOT NULL DEFAULT 'STARTED' CHECK (status IN ('STARTED', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'REFERRED', 'APPROVED', 'REJECTED', 'ABANDONED', 'EXPIRED')),
   channel                      varchar(40) NOT NULL CHECK (channel IN ('MOBILE_APP', 'WEB', 'USSD', 'AGENT', 'BRANCH', 'API')),
   agent_id                     uuid,
@@ -107,8 +114,13 @@ CREATE TABLE onboarding_application (
   risk_level                   varchar(40) CHECK (risk_level IN ('LOW', 'MEDIUM', 'HIGH', 'PROHIBITED')),
   decision                     varchar(40) CHECK (decision IN ('AUTO_APPROVE', 'REFER', 'REJECT')),
   decision_reasons             jsonb,
+  risk_factors                 jsonb,
+  submitted_by                 varchar(64),
   reviewer_id                  uuid,
+  reviewed_by                  varchar(64),
+  review_comment               varchar(500),
   reviewed_at                  timestamptz,
+  info_requests                jsonb,
   product_ids                  jsonb,
   created_product_refs         jsonb,
   device_fingerprint           varchar(128),
@@ -137,7 +149,8 @@ COMMENT ON COLUMN onboarding_application.row_version IS 'Optimistic lock version
 COMMENT ON COLUMN onboarding_application.application_number IS 'Human-readable reference';
 COMMENT ON COLUMN onboarding_application.onboarding_journey_id IS 'Journey version';
 COMMENT ON COLUMN onboarding_application.customer_id IS 'Customer created or matched';
-COMMENT ON COLUMN onboarding_application.status IS 'Status';
+COMMENT ON COLUMN onboarding_application.legal_entity_id IS 'Bank entity that will hold the relationship (needed to create the customer)';
+COMMENT ON COLUMN onboarding_application.status IS 'Status (changes through the application actions)';
 COMMENT ON COLUMN onboarding_application.channel IS 'Channel';
 COMMENT ON COLUMN onboarding_application.agent_id IS 'Agent assisting (agent channel)';
 COMMENT ON COLUMN onboarding_application.branch_id IS 'Branch (branch channel)';
@@ -151,8 +164,13 @@ COMMENT ON COLUMN onboarding_application.risk_score IS 'Onboarding risk score 0.
 COMMENT ON COLUMN onboarding_application.risk_level IS 'Risk level';
 COMMENT ON COLUMN onboarding_application.decision IS 'Automated decision';
 COMMENT ON COLUMN onboarding_application.decision_reasons IS 'Rule outcomes and reason codes';
+COMMENT ON COLUMN onboarding_application.risk_factors IS 'Factor contributions of the onboarding risk score';
+COMMENT ON COLUMN onboarding_application.submitted_by IS 'Principal that submitted the application';
 COMMENT ON COLUMN onboarding_application.reviewer_id IS 'Manual reviewer';
+COMMENT ON COLUMN onboarding_application.reviewed_by IS 'Principal that approved or rejected after referral';
+COMMENT ON COLUMN onboarding_application.review_comment IS 'Checker comment on approval';
 COMMENT ON COLUMN onboarding_application.reviewed_at IS 'Review time';
+COMMENT ON COLUMN onboarding_application.info_requests IS 'Requests for more information ({message, step_codes, requested_by, requested_at})';
 COMMENT ON COLUMN onboarding_application.product_ids IS 'Products requested';
 COMMENT ON COLUMN onboarding_application.created_product_refs IS 'Accounts / wallets / cards opened on approval';
 COMMENT ON COLUMN onboarding_application.device_fingerprint IS 'Device used';
@@ -171,6 +189,7 @@ COMMENT ON COLUMN onboarding_application.custom_field_5 IS 'Tenant-defined custo
 CREATE INDEX ix_onboarding_application_tenant ON onboarding_application (tenant_id, created_at);
 CREATE INDEX ix_onboarding_application_onboarding_journey_id ON onboarding_application (onboarding_journey_id);
 CREATE INDEX ix_onboarding_application_customer_id ON onboarding_application (customer_id);
+CREATE INDEX ix_onboarding_application_legal_entity_id ON onboarding_application (legal_entity_id);
 CREATE INDEX ix_onboarding_application_agent_id ON onboarding_application (agent_id);
 CREATE INDEX ix_onboarding_application_branch_id ON onboarding_application (branch_id);
 CREATE INDEX ix_onboarding_application_staff_user_id ON onboarding_application (staff_user_id);

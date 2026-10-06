@@ -374,6 +374,171 @@ components:
           maxLength: 255
           type: string
       type: object
+    ContactVerification:
+      description: One-time-password challenge sent to verify a contact point; the code is kept only as a salted hash
+      properties:
+        attempts:
+          description: Wrong codes entered
+          format: int32
+          readOnly: true
+          type: integer
+        channel:
+          description: Delivery channel
+          enum:
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_contact_id:
+          description: Contact point being verified
+          format: uuid
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        destination_masked:
+          description: Masked phone number or email the code was sent to
+          maxLength: 64
+          readOnly: true
+          type: string
+        expires_at:
+          description: Code expiry
+          format: date-time
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        locked_until:
+          description: End of the lockout after too many wrong codes
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        max_attempts:
+          description: Wrong codes allowed before the challenge locks
+          format: int32
+          readOnly: true
+          type: integer
+        resend_available_at:
+          description: Earliest time a new code can be requested
+          format: date-time
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Challenge status
+          enum:
+          - PENDING
+          - VERIFIED
+          - EXPIRED
+          - LOCKED
+          - SUPERSEDED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified_at:
+          description: Time the code was confirmed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - customer_contact_id
+      - channel
+      - destination_masked
+      - status
+      - attempts
+      - max_attempts
+      - expires_at
+      - resend_available_at
+      type: object
+    ContactVerificationPage:
+      description: One page of ContactVerification results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ContactVerification'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
     Customer:
       description: A party that holds or applies for products; an individual or a legal entity
       properties:
@@ -401,8 +566,9 @@ components:
           - string
           - 'null'
         closure_reason:
-          description: Reason for closure
+          description: Reason for closure (set by close, merge or erasure)
           maxLength: 255
+          readOnly: true
           type:
           - string
           - 'null'
@@ -455,8 +621,9 @@ components:
           - string
           - 'null'
         customer_number:
-          description: Human-readable customer number (CIF number)
+          description: Human-readable customer number (CIF number), server-generated per tenant with a Luhn check digit
           maxLength: 32
+          readOnly: true
           type: string
         customer_type:
           description: Individual or kind of organisation
@@ -476,16 +643,26 @@ components:
           type:
           - string
           - 'null'
+        deceased_document_id:
+          description: Death certificate or notification document
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
         deceased_on:
-          description: Date of death when notified
+          description: Date of death when notified (set by mark-deceased)
           format: date
+          readOnly: true
           type:
           - string
           - 'null'
         display_name:
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
           maxLength: 200
-          type: string
+          type:
+          - string
+          - 'null'
         dormant_since:
           description: Date the customer became dormant
           format: date
@@ -509,6 +686,13 @@ components:
           - RETIRED
           - HOMEMAKER
           - OTHER
+          type:
+          - string
+          - 'null'
+        erased_at:
+          description: Time personal data was erased on request (privacy)
+          format: date-time
+          readOnly: true
           type:
           - string
           - 'null'
@@ -624,6 +808,13 @@ components:
           type:
           - string
           - 'null'
+        merged_into_customer_id:
+          description: Surviving customer this duplicate was merged into
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
         metadata:
           additionalProperties: true
           description: Client-defined key/value metadata
@@ -676,6 +867,17 @@ components:
           - AGENT
           - BRANCH
           - API
+          type:
+          - string
+          - 'null'
+        pending_tier:
+          description: Tier upgrade awaiting checker approval (change-tier)
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          readOnly: true
           type:
           - string
           - 'null'
@@ -767,9 +969,37 @@ components:
           - DECEASED
           - CLOSED
           type: string
+        status_changed_at:
+          description: Time of the last lifecycle change
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status_changed_by:
+          description: Principal that made the last lifecycle change
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status_reason:
+          description: Reason given for the last lifecycle change
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         tax_residence_country:
           description: Primary tax residence (CRS/FATCA) (ISO 3166-1 alpha-2)
           pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        tier_approval_request_id:
+          description: workflow-service approval request of the pending tier upgrade
+          format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -816,7 +1046,6 @@ components:
       - status
       - kyc_tier
       - legal_entity_id
-      - display_name
       - us_person
       - is_pep
       - is_staff
@@ -1526,10 +1755,6 @@ components:
           - '125.50'
           format: decimal
           type: string
-        closure_reason:
-          description: Reason for closure
-          maxLength: 255
-          type: string
         country_of_birth:
           description: Country of birth (ISO 3166-1 alpha-2)
           pattern: ^[A-Z]{2}$
@@ -1554,10 +1779,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
           type: string
-        customer_number:
-          description: Human-readable customer number (CIF number)
-          maxLength: 32
-          type: string
         customer_type:
           description: Individual or kind of organisation
           enum:
@@ -1574,12 +1795,8 @@ components:
           description: Date of birth
           format: date
           type: string
-        deceased_on:
-          description: Date of death when notified
-          format: date
-          type: string
         display_name:
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
           maxLength: 200
           type: string
         employer_name:
@@ -1769,10 +1986,8 @@ components:
           maxLength: 255
           type: string
       required:
-      - customer_number
       - customer_type
       - legal_entity_id
-      - display_name
       type: object
     CustomerCredential:
       description: Authentication credentials of a customer (passkeys, PIN, password, TOTP); secrets stored as hashes only
@@ -3956,10 +4171,6 @@ components:
           - '125.50'
           format: decimal
           type: string
-        closure_reason:
-          description: Reason for closure
-          maxLength: 255
-          type: string
         country_of_birth:
           description: Country of birth (ISO 3166-1 alpha-2)
           pattern: ^[A-Z]{2}$
@@ -3984,10 +4195,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
           type: string
-        customer_number:
-          description: Human-readable customer number (CIF number)
-          maxLength: 32
-          type: string
         customer_type:
           description: Individual or kind of organisation
           enum:
@@ -4004,12 +4211,8 @@ components:
           description: Date of birth
           format: date
           type: string
-        deceased_on:
-          description: Date of death when notified
-          format: date
-          type: string
         display_name:
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
           maxLength: 200
           type: string
         employer_name:
@@ -4404,11 +4607,11 @@ components:
           - string
           - 'null'
         retention_blockers:
-          additionalProperties: true
           description: Records that must be retained by law (not erased)
+          items: {}
           readOnly: true
           type:
-          - object
+          - array
           - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -4966,13 +5169,19 @@ paths:
   /v1/customers/search:
     get:
       operationId: customersSearch
-      summary: Fuzzy search by name, phone, email, identifier or customer number (?q=)
+      summary: Fuzzy search by name, phone, email, identifier or customer number
       tags:
       - Customers
       security:
       - oauth2:
         - party:read
       parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -5012,8 +5221,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5306,7 +5521,7 @@ paths:
   /v1/customers/{id}/change-tier:
     post:
       operationId: customersChangeTier
-      summary: Change KYC tier (maker-checker)
+      summary: 'Change KYC tier: downgrades apply at once, upgrades open a workflow-service approval (pending_tier)'
       tags:
       - Customers
       security:
@@ -5443,8 +5658,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5461,15 +5682,13 @@ paths:
   /v1/customers/duplicates-check:
     post:
       operationId: customersDuplicatesCheck
-      summary: Check for potential duplicates before creating
+      summary: Check for potential duplicates before creating; candidates carry match_score and match_reasons
       tags:
       - Customers
       security:
       - oauth2:
         - party:write
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
@@ -5477,7 +5696,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6204,7 +6425,7 @@ paths:
   /v1/customers/{customer_id}/contacts/{id}/send-verification:
     post:
       operationId: customerContactsSendVerification
-      summary: Send an OTP or verification link
+      summary: Send a one-time code; supersedes an earlier pending code
       tags:
       - Customer Contacts
       security:
@@ -6225,8 +6446,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactVerification'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6294,6 +6519,49 @@ paths:
       - NOT-02
       x-service: customer-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-table: customer_contact
+  /v1/customers/{customer_id}/contacts/{id}/verifications:
+    get:
+      operationId: customerContactsVerifications
+      summary: Verification challenges of the contact (newest first)
+      tags:
+      - Customer Contacts
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactVerificationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-01
+      - NOT-02
+      x-service: customer-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:read")'
       x-table: customer_contact
   /v1/customer-relationships:
     get:
@@ -6885,8 +7153,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7127,8 +7401,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7736,7 +8016,7 @@ paths:
   /v1/customers/{customer_id}/credentials/passkeys/registration-options:
     post:
       operationId: customerCredentialsPasskeysRegistrationOptions
-      summary: Start WebAuthn passkey registration
+      summary: Start WebAuthn passkey registration (PublicKeyCredentialCreationOptions)
       tags:
       - Customer Credentials
       security:
@@ -7751,8 +8031,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7837,8 +8123,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCredential'
         '400': *id001
         '401': *id002
         '403': *id003

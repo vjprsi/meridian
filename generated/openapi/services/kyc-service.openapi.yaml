@@ -197,10 +197,10 @@ components:
           - string
           - 'null'
         reason_codes:
-          additionalProperties: true
           description: Provider reason codes
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         requested_at:
           description: Request time
@@ -332,9 +332,9 @@ components:
           maxLength: 128
           type: string
         reason_codes:
-          additionalProperties: true
           description: Provider reason codes
-          type: object
+          items: {}
+          type: array
         requested_at:
           description: Request time
           format: date-time
@@ -839,7 +839,7 @@ components:
           readOnly: true
           type: boolean
         status:
-          description: Status
+          description: Status (derived by evaluate)
           enum:
           - NOT_STARTED
           - IN_PROGRESS
@@ -848,6 +848,7 @@ components:
           - REJECTED
           - EXPIRED
           - REVIEW_DUE
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -880,6 +881,42 @@ components:
       - address_verified
       - screening_clear
       - edd_required
+      type: object
+    KycProfileCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        last_reviewed_by:
+          description: Last reviewer
+          format: uuid
+          type: string
+        notes:
+          description: Analyst notes
+          type: string
+      required:
+      - customer_id
       type: object
     KycProfilePage:
       description: One page of KycProfile results (newest first)
@@ -924,18 +961,18 @@ components:
           - string
           - 'null'
         capabilities:
-          additionalProperties: true
           description: Supported capabilities (KycProviderCapability values)
-          type: object
+          items: {}
+          type: array
         code:
           description: Provider code
           maxLength: 40
           type: string
         countries:
-          additionalProperties: true
-          description: Countries supported
+          description: Countries supported (ISO 3166-1 alpha-2; empty = all)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         created_at:
           description: Creation time
@@ -949,6 +986,10 @@ components:
           type:
           - string
           - 'null'
+        credentials_ref:
+          description: Vault path of the API credentials (a reference, never the secret itself)
+          maxLength: 255
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1019,6 +1060,12 @@ components:
           type:
           - string
           - 'null'
+        webhook_secret_ref:
+          description: Vault path of the webhook signing secret (a reference)
+          maxLength: 255
+          type:
+          - string
+          - 'null'
       required:
       - id
       - created_at
@@ -1028,6 +1075,7 @@ components:
       - name
       - capabilities
       - priority
+      - credentials_ref
       - timeout_ms
       - is_active
       - is_fallback
@@ -1039,17 +1087,21 @@ components:
           maxLength: 500
           type: string
         capabilities:
-          additionalProperties: true
           description: Supported capabilities (KycProviderCapability values)
-          type: object
+          items: {}
+          type: array
         code:
           description: Provider code
           maxLength: 40
           type: string
         countries:
-          additionalProperties: true
-          description: Countries supported
-          type: object
+          description: Countries supported (ISO 3166-1 alpha-2; empty = all)
+          items: {}
+          type: array
+        credentials_ref:
+          description: Vault path of the API credentials (a reference, never the secret itself)
+          maxLength: 255
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1088,10 +1140,15 @@ components:
           description: Request timeout
           format: int32
           type: integer
+        webhook_secret_ref:
+          description: Vault path of the webhook signing secret (a reference)
+          maxLength: 255
+          type: string
       required:
       - code
       - name
       - capabilities
+      - credentials_ref
       type: object
     KycProviderPage:
       description: One page of KycProvider results (newest first)
@@ -1118,17 +1175,21 @@ components:
           maxLength: 500
           type: string
         capabilities:
-          additionalProperties: true
           description: Supported capabilities (KycProviderCapability values)
-          type: object
+          items: {}
+          type: array
         code:
           description: Provider code
           maxLength: 40
           type: string
         countries:
-          additionalProperties: true
-          description: Countries supported
-          type: object
+          description: Countries supported (ISO 3166-1 alpha-2; empty = all)
+          items: {}
+          type: array
+        credentials_ref:
+          description: Vault path of the API credentials (a reference, never the secret itself)
+          maxLength: 255
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1167,6 +1228,10 @@ components:
           description: Request timeout
           format: int32
           type: integer
+        webhook_secret_ref:
+          description: Vault path of the webhook signing secret (a reference)
+          maxLength: 255
+          type: string
       type: object
     KycReview:
       description: Periodic or event-driven KYC review (refresh) of a customer
@@ -1261,10 +1326,10 @@ components:
           - string
           - 'null'
         restrictions_applied:
-          additionalProperties: true
           description: Restrictions applied when overdue (e.g. debit block)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -1365,9 +1430,9 @@ components:
           description: Notes
           type: string
         restrictions_applied:
-          additionalProperties: true
           description: Restrictions applied when overdue (e.g. debit block)
-          type: object
+          items: {}
+          type: array
         status:
           description: Status
           enum:
@@ -1463,9 +1528,9 @@ components:
           description: Notes
           type: string
         restrictions_applied:
-          additionalProperties: true
           description: Restrictions applied when overdue (e.g. debit block)
-          type: object
+          items: {}
+          type: array
         status:
           description: Status
           enum:
@@ -1813,10 +1878,10 @@ components:
           format: int32
           type: integer
         matches:
-          additionalProperties: true
           description: Candidate matches with list, score and reasons
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         ongoing_monitoring:
           description: Enrolled in continuous monitoring
@@ -1938,9 +2003,9 @@ components:
           format: int32
           type: integer
         matches:
-          additionalProperties: true
           description: Candidate matches with list, score and reasons
-          type: object
+          items: {}
+          type: array
         ongoing_monitoring:
           description: Enrolled in continuous monitoring
           type: boolean
@@ -2294,8 +2359,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2406,6 +2477,46 @@ paths:
       x-table: kyc_profile
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: kycProfilesCreate
+      summary: Create kyc profile
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycProfileCreate'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-table: kyc_profile
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/profiles/{id}:
     get:
       operationId: kycProfilesGet
@@ -3157,19 +3268,16 @@ paths:
   /v1/kyc/checks/provider-callbacks/{provider_code}/events:
     post:
       operationId: kycChecksProviderCallbacksEvents
-      summary: Provider webhook for asynchronous results
+      summary: Provider webhook for asynchronous results (HMAC-signed payload)
       tags:
       - Kyc Checks
-      security:
-      - oauth2:
-        - party:write
+      security: []
       parameters:
       - name: provider_code
         in: path
         required: true
         schema:
           type: string
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '204':
           description: No content
@@ -3193,7 +3301,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: kyc_check
   /v1/kyc/screenings:
     get:

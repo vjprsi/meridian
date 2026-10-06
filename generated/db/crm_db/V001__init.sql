@@ -28,7 +28,7 @@ CREATE TABLE sla_policy (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   name                         varchar(120) NOT NULL,
-  applies_to                   varchar(20) NOT NULL,
+  applies_to                   varchar(40) NOT NULL CHECK (applies_to IN ('CASE', 'COMPLAINT')),
   case_type                    varchar(40) CHECK (case_type IN ('SERVICE_REQUEST', 'INQUIRY', 'CARD_ISSUE', 'PAYMENT_ISSUE', 'ACCOUNT_MAINTENANCE', 'DOCUMENT_REQUEST', 'FRAUD_REPORT', 'TECHNICAL_ISSUE', 'LOAN_SERVICING', 'KYC_UPDATE', 'CLOSURE_REQUEST', 'OTHER')),
   complaint_category           varchar(40) CHECK (complaint_category IN ('FEES_AND_CHARGES', 'SERVICE_QUALITY', 'FRAUD_AND_SCAMS', 'PAYMENTS', 'CARDS', 'LENDING', 'ACCOUNT_OPENING', 'ACCOUNT_CLOSURE', 'DATA_PRIVACY', 'DISCRIMINATION', 'MIS_SELLING', 'COLLECTIONS_CONDUCT', 'DIGITAL_CHANNELS', 'OTHER')),
   priority                     varchar(40) CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'URGENT')),
@@ -36,6 +36,12 @@ CREATE TABLE sla_policy (
   first_response_minutes       integer NOT NULL,
   resolution_minutes           integer NOT NULL,
   business_hours_only          boolean NOT NULL DEFAULT true,
+  business_day_start           varchar(5) NOT NULL DEFAULT '09:00',
+  business_day_end             varchar(5) NOT NULL DEFAULT '17:00',
+  working_days                 jsonb,
+  time_zone                    varchar(40) NOT NULL DEFAULT 'UTC',
+  pause_on_pending_customer    boolean NOT NULL DEFAULT true,
+  at_risk_percent              integer NOT NULL DEFAULT 80,
   holiday_calendar_id          uuid,
   escalation_rules             jsonb,
   is_regulatory                boolean NOT NULL DEFAULT false,
@@ -64,8 +70,14 @@ COMMENT ON COLUMN sla_policy.country IS 'Jurisdiction (regulatory SLAs differ pe
 COMMENT ON COLUMN sla_policy.first_response_minutes IS 'Target time to first response';
 COMMENT ON COLUMN sla_policy.resolution_minutes IS 'Target time to resolution';
 COMMENT ON COLUMN sla_policy.business_hours_only IS 'Count only business hours';
+COMMENT ON COLUMN sla_policy.business_day_start IS 'Start of the business day (HH:mm, policy time zone)';
+COMMENT ON COLUMN sla_policy.business_day_end IS 'End of the business day (HH:mm, policy time zone)';
+COMMENT ON COLUMN sla_policy.working_days IS 'ISO days of week counted as working days (1=Monday..7=Sunday); empty = Monday..Friday';
+COMMENT ON COLUMN sla_policy.time_zone IS 'IANA time zone of the business hours';
+COMMENT ON COLUMN sla_policy.pause_on_pending_customer IS 'Stop the resolution clock while waiting for the customer';
+COMMENT ON COLUMN sla_policy.at_risk_percent IS 'Elapsed share of the target after which an item is at risk';
 COMMENT ON COLUMN sla_policy.holiday_calendar_id IS 'Calendar for business hours';
-COMMENT ON COLUMN sla_policy.escalation_rules IS 'Escalation steps when targets are at risk or breached';
+COMMENT ON COLUMN sla_policy.escalation_rules IS 'Escalation steps when targets are at risk or breached ({at_percent, work_queue_id, priority})';
 COMMENT ON COLUMN sla_policy.is_regulatory IS 'Deadline set by a regulator';
 COMMENT ON COLUMN sla_policy.regulation_reference IS 'Rule reference, e.g. FCA DISP 1.6';
 COMMENT ON COLUMN sla_policy.is_active IS 'Active';
@@ -152,7 +164,12 @@ CREATE TABLE work_item (
   assigned_to                  uuid,
   assigned_at                  timestamptz,
   due_at                       timestamptz,
+  required_skills              jsonb,
+  started_at                   timestamptz,
   completed_at                 timestamptz,
+  release_count                integer NOT NULL DEFAULT 0,
+  last_release_reason          varchar(255),
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -172,11 +189,16 @@ COMMENT ON COLUMN work_item.subject_type IS 'SERVICE_CASE, COMPLAINT, KYC_REVIEW
 COMMENT ON COLUMN work_item.subject_id IS 'Subject id';
 COMMENT ON COLUMN work_item.title IS 'Title shown in the queue';
 COMMENT ON COLUMN work_item.priority IS 'Priority';
-COMMENT ON COLUMN work_item.status IS 'Status';
-COMMENT ON COLUMN work_item.assigned_to IS 'Assignee';
+COMMENT ON COLUMN work_item.status IS 'Status (changes through next / assign / release / complete)';
+COMMENT ON COLUMN work_item.assigned_to IS 'Assignee (set through next / assign)';
 COMMENT ON COLUMN work_item.assigned_at IS 'Assignment time';
 COMMENT ON COLUMN work_item.due_at IS 'SLA due time';
+COMMENT ON COLUMN work_item.required_skills IS 'Skills needed for this item (skills-based routing; adds to the queue''s)';
+COMMENT ON COLUMN work_item.started_at IS 'Time work started (IN_PROGRESS)';
 COMMENT ON COLUMN work_item.completed_at IS 'Completion time';
+COMMENT ON COLUMN work_item.release_count IS 'Times returned to the queue';
+COMMENT ON COLUMN work_item.last_release_reason IS 'Reason given on the last release';
+COMMENT ON COLUMN work_item.status_reason IS 'Reason of the last cancellation';
 COMMENT ON COLUMN work_item.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN work_item.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN work_item.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -188,6 +210,7 @@ CREATE INDEX ix_work_item_subject_id ON work_item (subject_id);
 CREATE INDEX ix_work_item_assigned_to ON work_item (assigned_to);
 CREATE INDEX ix_work_item_due_at ON work_item (due_at);
 CREATE INDEX ix_work_item_c1 ON work_item (subject_type, subject_id);
+CREATE INDEX ix_work_item_c2 ON work_item (work_queue_id, status, priority);
 ALTER TABLE work_item ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON work_item USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_work_item_touch BEFORE UPDATE ON work_item FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -217,6 +240,12 @@ CREATE TABLE service_case (
   resolution_due_at            timestamptz,
   first_responded_at           timestamptz,
   sla_breached                 boolean NOT NULL DEFAULT false,
+  sla_paused_at                timestamptz,
+  sla_paused_minutes           integer NOT NULL DEFAULT 0,
+  escalation_level             integer NOT NULL DEFAULT 0,
+  escalated_at                 timestamptz,
+  status_reason                varchar(1000),
+  complaint_id                 uuid,
   related_object_type          varchar(40),
   related_object_id            uuid,
   parent_case_id               uuid REFERENCES service_case(id),
@@ -242,31 +271,37 @@ COMMENT ON COLUMN service_case.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN service_case.updated_at IS 'Last update time';
 COMMENT ON COLUMN service_case.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN service_case.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN service_case.case_number IS 'Human-readable case number';
+COMMENT ON COLUMN service_case.case_number IS 'Human-readable case number (server-generated)';
 COMMENT ON COLUMN service_case.customer_id IS 'Customer';
 COMMENT ON COLUMN service_case.case_type IS 'Case type';
 COMMENT ON COLUMN service_case.subtype IS 'Finer classification';
 COMMENT ON COLUMN service_case.subject IS 'Short subject';
 COMMENT ON COLUMN service_case.description IS 'Customer''s description [PII]';
-COMMENT ON COLUMN service_case.status IS 'Status';
+COMMENT ON COLUMN service_case.status IS 'Status (changes through the case actions)';
 COMMENT ON COLUMN service_case.priority IS 'Priority';
 COMMENT ON COLUMN service_case.channel IS 'Channel where it was raised';
 COMMENT ON COLUMN service_case.work_queue_id IS 'Queue';
-COMMENT ON COLUMN service_case.assigned_to IS 'Assignee';
-COMMENT ON COLUMN service_case.sla_policy_id IS 'SLA policy applied';
+COMMENT ON COLUMN service_case.assigned_to IS 'Assignee (set through assign)';
+COMMENT ON COLUMN service_case.sla_policy_id IS 'SLA policy applied (matched on create)';
 COMMENT ON COLUMN service_case.first_response_due_at IS 'First response deadline';
 COMMENT ON COLUMN service_case.resolution_due_at IS 'Resolution deadline';
 COMMENT ON COLUMN service_case.first_responded_at IS 'First response time';
 COMMENT ON COLUMN service_case.sla_breached IS 'SLA breached';
+COMMENT ON COLUMN service_case.sla_paused_at IS 'Time the resolution clock was paused (pending customer)';
+COMMENT ON COLUMN service_case.sla_paused_minutes IS 'Business minutes the clock has been paused in total';
+COMMENT ON COLUMN service_case.escalation_level IS 'Times escalated';
+COMMENT ON COLUMN service_case.escalated_at IS 'Last escalation time';
+COMMENT ON COLUMN service_case.status_reason IS 'Reason or message of the last status change';
+COMMENT ON COLUMN service_case.complaint_id IS 'Complaint raised from this case';
 COMMENT ON COLUMN service_case.related_object_type IS 'ACCOUNT, CARD, PAYMENT, LOAN, WALLET, TRANSACTION';
 COMMENT ON COLUMN service_case.related_object_id IS 'Related object id';
 COMMENT ON COLUMN service_case.parent_case_id IS 'Parent case for linked cases';
-COMMENT ON COLUMN service_case.resolution_code IS 'Resolution code';
-COMMENT ON COLUMN service_case.resolution_summary IS 'How it was resolved';
+COMMENT ON COLUMN service_case.resolution_code IS 'Resolution code (set through resolve)';
+COMMENT ON COLUMN service_case.resolution_summary IS 'How it was resolved (set through resolve)';
 COMMENT ON COLUMN service_case.resolved_at IS 'Resolution time';
 COMMENT ON COLUMN service_case.closed_at IS 'Closure time';
 COMMENT ON COLUMN service_case.reopened_count IS 'Times reopened';
-COMMENT ON COLUMN service_case.csat_score IS 'Customer satisfaction 1..5';
+COMMENT ON COLUMN service_case.csat_score IS 'Customer satisfaction 1..5 (set through close)';
 COMMENT ON COLUMN service_case.tags IS 'Free tags';
 COMMENT ON COLUMN service_case.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN service_case.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -302,6 +337,7 @@ CREATE TABLE complaint (
   related_object_type          varchar(40),
   related_object_id            uuid,
   channel                      varchar(40) NOT NULL CHECK (channel IN ('MOBILE_APP', 'WEB', 'PHONE', 'EMAIL', 'CHAT', 'WHATSAPP', 'BRANCH', 'AGENT', 'SOCIAL_MEDIA', 'LETTER', 'USSD', 'API')),
+  country                      char(2),
   summary                      varchar(500) NOT NULL,
   details                      text,
   status                       varchar(40) NOT NULL DEFAULT 'RECEIVED' CHECK (status IN ('RECEIVED', 'ACKNOWLEDGED', 'INVESTIGATING', 'RESOLUTION_PROPOSED', 'RESOLVED', 'REJECTED', 'ESCALATED_TO_OMBUDSMAN', 'CLOSED')),
@@ -310,6 +346,8 @@ CREATE TABLE complaint (
   acknowledgement_due_at       timestamptz,
   final_response_due_at        timestamptz,
   final_response_at            timestamptz,
+  deadline_at_risk_at          timestamptz,
+  deadline_breached_at         timestamptz,
   sla_policy_id                uuid REFERENCES sla_policy(id),
   assigned_to                  uuid,
   work_queue_id                uuid REFERENCES work_queue(id),
@@ -317,12 +355,16 @@ CREATE TABLE complaint (
   root_cause                   varchar(255),
   root_cause_category          varchar(64),
   outcome                      varchar(40) CHECK (outcome IN ('UPHELD', 'PARTIALLY_UPHELD', 'NOT_UPHELD', 'WITHDRAWN')),
+  resolution_summary           text,
+  resolution_proposed_at       timestamptz,
   redress_amount               numeric(28,8),
   redress_currency             char(3),
   final_response_document_id   uuid,
   escalated_to                 varchar(120),
+  ombudsman_reference          varchar(64),
   escalated_at                 timestamptz,
   reportable                   boolean NOT NULL DEFAULT true,
+  status_reason                varchar(1000),
   closed_at                    timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -339,7 +381,7 @@ COMMENT ON COLUMN complaint.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN complaint.updated_at IS 'Last update time';
 COMMENT ON COLUMN complaint.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN complaint.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN complaint.complaint_number IS 'Human-readable complaint reference';
+COMMENT ON COLUMN complaint.complaint_number IS 'Human-readable complaint reference (server-generated)';
 COMMENT ON COLUMN complaint.customer_id IS 'Complainant';
 COMMENT ON COLUMN complaint.service_case_id IS 'Originating case';
 COMMENT ON COLUMN complaint.category IS 'Category';
@@ -347,27 +389,34 @@ COMMENT ON COLUMN complaint.product_id IS 'Product complained about';
 COMMENT ON COLUMN complaint.related_object_type IS 'ACCOUNT, CARD, PAYMENT, LOAN, WALLET';
 COMMENT ON COLUMN complaint.related_object_id IS 'Related object id';
 COMMENT ON COLUMN complaint.channel IS 'Channel';
+COMMENT ON COLUMN complaint.country IS 'Jurisdiction whose complaint rules apply (default: service configuration)';
 COMMENT ON COLUMN complaint.summary IS 'Summary';
 COMMENT ON COLUMN complaint.details IS 'Full complaint [PII]';
-COMMENT ON COLUMN complaint.status IS 'Status';
+COMMENT ON COLUMN complaint.status IS 'Status (changes through the complaint actions)';
 COMMENT ON COLUMN complaint.received_at IS 'Time received';
 COMMENT ON COLUMN complaint.acknowledged_at IS 'Acknowledgement time';
 COMMENT ON COLUMN complaint.acknowledgement_due_at IS 'Acknowledgement deadline';
 COMMENT ON COLUMN complaint.final_response_due_at IS 'Final response deadline (regulatory)';
 COMMENT ON COLUMN complaint.final_response_at IS 'Final response time';
-COMMENT ON COLUMN complaint.sla_policy_id IS 'SLA policy';
-COMMENT ON COLUMN complaint.assigned_to IS 'Handler';
+COMMENT ON COLUMN complaint.deadline_at_risk_at IS 'Time the deadline-at-risk alert was raised';
+COMMENT ON COLUMN complaint.deadline_breached_at IS 'Time the regulatory deadline breach was recorded';
+COMMENT ON COLUMN complaint.sla_policy_id IS 'SLA policy (matched on create)';
+COMMENT ON COLUMN complaint.assigned_to IS 'Handler (set through assign)';
 COMMENT ON COLUMN complaint.work_queue_id IS 'Queue';
 COMMENT ON COLUMN complaint.is_vulnerable_customer IS 'Customer flagged as vulnerable';
-COMMENT ON COLUMN complaint.root_cause IS 'Root cause';
+COMMENT ON COLUMN complaint.root_cause IS 'Root cause (set through propose-resolution)';
 COMMENT ON COLUMN complaint.root_cause_category IS 'Root cause category for trend analysis';
-COMMENT ON COLUMN complaint.outcome IS 'Outcome';
-COMMENT ON COLUMN complaint.redress_amount IS 'Total redress paid';
+COMMENT ON COLUMN complaint.outcome IS 'Outcome (set through propose-resolution or withdraw)';
+COMMENT ON COLUMN complaint.resolution_summary IS 'Proposed resolution shown in the final response';
+COMMENT ON COLUMN complaint.resolution_proposed_at IS 'Time the resolution was proposed';
+COMMENT ON COLUMN complaint.redress_amount IS 'Total redress paid (sum of paid redress)';
 COMMENT ON COLUMN complaint.redress_currency IS 'Currency of redress';
-COMMENT ON COLUMN complaint.final_response_document_id IS 'Final response letter';
+COMMENT ON COLUMN complaint.final_response_document_id IS 'Final response letter (set through final-response)';
 COMMENT ON COLUMN complaint.escalated_to IS 'Ombudsman / regulator escalated to';
+COMMENT ON COLUMN complaint.ombudsman_reference IS 'Case reference at the ombudsman';
 COMMENT ON COLUMN complaint.escalated_at IS 'Escalation time';
 COMMENT ON COLUMN complaint.reportable IS 'Included in regulatory complaint returns';
+COMMENT ON COLUMN complaint.status_reason IS 'Reason or message of the last status change';
 COMMENT ON COLUMN complaint.closed_at IS 'Closure time';
 COMMENT ON COLUMN complaint.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN complaint.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -400,10 +449,17 @@ CREATE TABLE complaint_redress (
   amount                       numeric(28,8),
   currency                     char(3),
   target_account_id            uuid,
+  ledger_id                    uuid,
+  funding_account_id           uuid,
   journal_entry_id             uuid,
   approval_request_id          uuid,
-  status                       varchar(20) NOT NULL DEFAULT 'PROPOSED',
+  status                       varchar(40) NOT NULL DEFAULT 'PROPOSED' CHECK (status IN ('PROPOSED', 'APPROVED', 'PAID', 'REJECTED', 'FAILED')),
   description                  varchar(500),
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  approval_comment             varchar(500),
+  rejection_reason             varchar(255),
+  failure_reason               varchar(500),
   paid_at                      timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -423,11 +479,18 @@ COMMENT ON COLUMN complaint_redress.complaint_id IS 'Complaint';
 COMMENT ON COLUMN complaint_redress.redress_type IS 'Redress type';
 COMMENT ON COLUMN complaint_redress.amount IS 'Amount (monetary redress)';
 COMMENT ON COLUMN complaint_redress.currency IS 'Currency';
-COMMENT ON COLUMN complaint_redress.target_account_id IS 'Account credited';
-COMMENT ON COLUMN complaint_redress.journal_entry_id IS 'Posting created';
-COMMENT ON COLUMN complaint_redress.approval_request_id IS 'Maker-checker approval';
-COMMENT ON COLUMN complaint_redress.status IS 'PROPOSED, APPROVED, PAID, REJECTED';
+COMMENT ON COLUMN complaint_redress.target_account_id IS 'Customer account credited';
+COMMENT ON COLUMN complaint_redress.ledger_id IS 'Ledger book of the posting (default: service configuration)';
+COMMENT ON COLUMN complaint_redress.funding_account_id IS 'Bank redress expense / suspense account debited (default: service configuration)';
+COMMENT ON COLUMN complaint_redress.journal_entry_id IS 'Posting created on payment';
+COMMENT ON COLUMN complaint_redress.approval_request_id IS 'Maker-checker approval, when routed through workflow-service';
+COMMENT ON COLUMN complaint_redress.status IS 'Status (changes through approve / reject / pay)';
 COMMENT ON COLUMN complaint_redress.description IS 'Description';
+COMMENT ON COLUMN complaint_redress.approved_by IS 'Checker who approved';
+COMMENT ON COLUMN complaint_redress.approved_at IS 'Approval time';
+COMMENT ON COLUMN complaint_redress.approval_comment IS 'Checker comment';
+COMMENT ON COLUMN complaint_redress.rejection_reason IS 'Reason when rejected';
+COMMENT ON COLUMN complaint_redress.failure_reason IS 'Ledger error when the payment failed';
 COMMENT ON COLUMN complaint_redress.paid_at IS 'Payment time';
 COMMENT ON COLUMN complaint_redress.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN complaint_redress.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -437,6 +500,8 @@ COMMENT ON COLUMN complaint_redress.custom_field_5 IS 'Tenant-defined custom fie
 CREATE INDEX ix_complaint_redress_tenant ON complaint_redress (tenant_id, created_at);
 CREATE INDEX ix_complaint_redress_complaint_id ON complaint_redress (complaint_id);
 CREATE INDEX ix_complaint_redress_target_account_id ON complaint_redress (target_account_id);
+CREATE INDEX ix_complaint_redress_ledger_id ON complaint_redress (ledger_id);
+CREATE INDEX ix_complaint_redress_funding_account_id ON complaint_redress (funding_account_id);
 CREATE INDEX ix_complaint_redress_journal_entry_id ON complaint_redress (journal_entry_id);
 CREATE INDEX ix_complaint_redress_approval_request_id ON complaint_redress (approval_request_id);
 ALTER TABLE complaint_redress ENABLE ROW LEVEL SECURITY;
@@ -620,16 +685,19 @@ CREATE TABLE knowledge_article (
   title                        varchar(255) NOT NULL,
   body                         text NOT NULL,
   language                     varchar(10) NOT NULL DEFAULT 'en',
-  audience                     varchar(20) NOT NULL DEFAULT 'STAFF',
+  audience                     varchar(40) NOT NULL DEFAULT 'STAFF' CHECK (audience IN ('STAFF', 'CUSTOMER', 'AGENT')),
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED')),
   tags                         jsonb,
   case_types                   jsonb,
   version                      integer NOT NULL DEFAULT 1,
   published_at                 timestamptz,
-  reviewed_by                  uuid,
+  submitted_by                 varchar(64),
+  reviewed_by                  varchar(64),
   review_due                   date,
   view_count                   integer NOT NULL DEFAULT 0,
   helpful_count                integer NOT NULL DEFAULT 0,
+  not_helpful_count            integer NOT NULL DEFAULT 0,
+  archived_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -650,22 +718,24 @@ COMMENT ON COLUMN knowledge_article.title IS 'Title';
 COMMENT ON COLUMN knowledge_article.body IS 'Article body (Markdown)';
 COMMENT ON COLUMN knowledge_article.language IS 'Language';
 COMMENT ON COLUMN knowledge_article.audience IS 'STAFF, CUSTOMER, AGENT';
-COMMENT ON COLUMN knowledge_article.status IS 'Status';
+COMMENT ON COLUMN knowledge_article.status IS 'Status (changes through submit-review / publish / archive)';
 COMMENT ON COLUMN knowledge_article.tags IS 'Tags';
-COMMENT ON COLUMN knowledge_article.case_types IS 'Case types it helps with';
+COMMENT ON COLUMN knowledge_article.case_types IS 'Case types it helps with (ServiceCaseType values)';
 COMMENT ON COLUMN knowledge_article.version IS 'Version';
 COMMENT ON COLUMN knowledge_article.published_at IS 'Publication time';
-COMMENT ON COLUMN knowledge_article.reviewed_by IS 'Reviewer';
+COMMENT ON COLUMN knowledge_article.submitted_by IS 'Author who submitted the article for review';
+COMMENT ON COLUMN knowledge_article.reviewed_by IS 'Reviewer who published it (four-eyes)';
 COMMENT ON COLUMN knowledge_article.review_due IS 'Next content review';
 COMMENT ON COLUMN knowledge_article.view_count IS 'Views';
 COMMENT ON COLUMN knowledge_article.helpful_count IS 'Helpful votes';
+COMMENT ON COLUMN knowledge_article.not_helpful_count IS 'Not-helpful votes';
+COMMENT ON COLUMN knowledge_article.archived_at IS 'Archive time';
 COMMENT ON COLUMN knowledge_article.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN knowledge_article.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN knowledge_article.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN knowledge_article.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN knowledge_article.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_knowledge_article_tenant ON knowledge_article (tenant_id, created_at);
-CREATE INDEX ix_knowledge_article_reviewed_by ON knowledge_article (reviewed_by);
 ALTER TABLE knowledge_article ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON knowledge_article USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_knowledge_article_touch BEFORE UPDATE ON knowledge_article FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -732,8 +802,11 @@ CREATE TABLE copilot_session (
   service_case_id              uuid REFERENCES service_case(id),
   complaint_id                 uuid REFERENCES complaint(id),
   prompt                       text,
+  language                     varchar(10),
+  prompt_hash                  varchar(64),
   context_refs                 jsonb NOT NULL,
   output                       text NOT NULL,
+  output_hash                  varchar(64) NOT NULL,
   citations                    jsonb,
   model                        varchar(64) NOT NULL,
   model_gateway_request_id     varchar(128),
@@ -759,8 +832,11 @@ COMMENT ON COLUMN copilot_session.customer_id IS 'Customer in context';
 COMMENT ON COLUMN copilot_session.service_case_id IS 'Case in context';
 COMMENT ON COLUMN copilot_session.complaint_id IS 'Complaint in context';
 COMMENT ON COLUMN copilot_session.prompt IS 'Staff prompt or question [PII]';
+COMMENT ON COLUMN copilot_session.language IS 'Target language (TRANSLATE) or reply language';
+COMMENT ON COLUMN copilot_session.prompt_hash IS 'SHA-256 of the prompt as sent to the model (audit)';
 COMMENT ON COLUMN copilot_session.context_refs IS 'Records and articles retrieved as grounding';
 COMMENT ON COLUMN copilot_session.output IS 'Generated summary, draft or answer [PII]';
+COMMENT ON COLUMN copilot_session.output_hash IS 'SHA-256 of the output (audit)';
 COMMENT ON COLUMN copilot_session.citations IS 'Sources cited in the output';
 COMMENT ON COLUMN copilot_session.model IS 'Model id used';
 COMMENT ON COLUMN copilot_session.model_gateway_request_id IS 'Request id at the model gateway';
@@ -792,6 +868,8 @@ CREATE TABLE copilot_feedback (
   copilot_session_id           uuid NOT NULL REFERENCES copilot_session(id),
   feedback                     varchar(40) NOT NULL CHECK (feedback IN ('ACCEPTED', 'EDITED', 'REJECTED', 'NONE')),
   edited_output                text,
+  edited_output_hash           varchar(64),
+  staff_user                   varchar(64),
   comment                      varchar(1000),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -807,6 +885,8 @@ COMMENT ON COLUMN copilot_feedback.created_by IS 'Principal that created the row
 COMMENT ON COLUMN copilot_feedback.copilot_session_id IS 'Session';
 COMMENT ON COLUMN copilot_feedback.feedback IS 'Feedback';
 COMMENT ON COLUMN copilot_feedback.edited_output IS 'Final text after staff edits [PII]';
+COMMENT ON COLUMN copilot_feedback.edited_output_hash IS 'SHA-256 of the edited text (audit)';
+COMMENT ON COLUMN copilot_feedback.staff_user IS 'Principal that gave the feedback';
 COMMENT ON COLUMN copilot_feedback.comment IS 'Comment';
 COMMENT ON COLUMN copilot_feedback.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN copilot_feedback.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -830,8 +910,9 @@ CREATE TABLE case_comment (
   row_version                  integer NOT NULL DEFAULT 1,
   service_case_id              uuid NOT NULL REFERENCES service_case(id),
   visibility                   varchar(40) NOT NULL DEFAULT 'INTERNAL' CHECK (visibility IN ('INTERNAL', 'CUSTOMER')),
-  author_type                  varchar(20) NOT NULL,
+  author_type                  varchar(40) NOT NULL DEFAULT 'STAFF' CHECK (author_type IN ('STAFF', 'CUSTOMER', 'SYSTEM', 'COPILOT')),
   author_id                    uuid,
+  author_name                  varchar(64),
   body                         text NOT NULL,
   attachments                  jsonb,
   copilot_session_id           uuid REFERENCES copilot_session(id),
@@ -853,6 +934,7 @@ COMMENT ON COLUMN case_comment.service_case_id IS 'Case';
 COMMENT ON COLUMN case_comment.visibility IS 'Who can see it';
 COMMENT ON COLUMN case_comment.author_type IS 'STAFF, CUSTOMER, SYSTEM, COPILOT';
 COMMENT ON COLUMN case_comment.author_id IS 'Staff user or customer id';
+COMMENT ON COLUMN case_comment.author_name IS 'Principal that wrote the comment';
 COMMENT ON COLUMN case_comment.body IS 'Comment text [PII]';
 COMMENT ON COLUMN case_comment.attachments IS 'Document ids';
 COMMENT ON COLUMN case_comment.copilot_session_id IS 'Copilot draft this comment came from';

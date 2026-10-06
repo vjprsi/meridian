@@ -319,13 +319,19 @@ paths:
   /v1/customers/search:
     get:
       operationId: customersSearch
-      summary: Fuzzy search by name, phone, email, identifier or customer number (?q=)
+      summary: Fuzzy search by name, phone, email, identifier or customer number
       tags:
       - Customers
       security:
       - oauth2:
         - party:read
       parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -365,8 +371,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -659,7 +671,7 @@ paths:
   /v1/customers/{id}/change-tier:
     post:
       operationId: customersChangeTier
-      summary: Change KYC tier (maker-checker)
+      summary: 'Change KYC tier: downgrades apply at once, upgrades open a workflow-service approval (pending_tier)'
       tags:
       - Customers
       security:
@@ -796,8 +808,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -814,15 +832,13 @@ paths:
   /v1/customers/duplicates-check:
     post:
       operationId: customersDuplicatesCheck
-      summary: Check for potential duplicates before creating
+      summary: Check for potential duplicates before creating; candidates carry match_score and match_reasons
       tags:
       - Customers
       security:
       - oauth2:
         - party:write
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
@@ -830,7 +846,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerPage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1557,7 +1575,7 @@ paths:
   /v1/customers/{customer_id}/contacts/{id}/send-verification:
     post:
       operationId: customerContactsSendVerification
-      summary: Send an OTP or verification link
+      summary: Send a one-time code; supersedes an earlier pending code
       tags:
       - Customer Contacts
       security:
@@ -1578,8 +1596,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactVerification'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1647,6 +1669,49 @@ paths:
       - NOT-02
       x-service: customer-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-table: customer_contact
+  /v1/customers/{customer_id}/contacts/{id}/verifications:
+    get:
+      operationId: customerContactsVerifications
+      summary: Verification challenges of the contact (newest first)
+      tags:
+      - Customer Contacts
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactVerificationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-01
+      - NOT-02
+      x-service: customer-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:read")'
       x-table: customer_contact
   /v1/customer-relationships:
     get:
@@ -2238,8 +2303,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2480,8 +2551,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3089,7 +3166,7 @@ paths:
   /v1/customers/{customer_id}/credentials/passkeys/registration-options:
     post:
       operationId: customerCredentialsPasskeysRegistrationOptions
-      summary: Start WebAuthn passkey registration
+      summary: Start WebAuthn passkey registration (PublicKeyCredentialCreationOptions)
       tags:
       - Customer Credentials
       security:
@@ -3104,8 +3181,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3190,8 +3273,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCredential'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4255,8 +4342,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4861,7 +4954,7 @@ paths:
   /v1/onboarding/applications/{id}/resume:
     post:
       operationId: onboardingApplicationsResume
-      summary: Send a resume link to the applicant
+      summary: Send a resume link to the applicant (new expiry and delivery channel)
       tags:
       - Onboarding Applications
       security:
@@ -4876,8 +4969,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5283,8 +5382,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5395,6 +5500,46 @@ paths:
       x-table: kyc_profile
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: kycProfilesCreate
+      summary: Create kyc profile
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycProfileCreate'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-table: kyc_profile
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/profiles/{id}:
     get:
       operationId: kycProfilesGet
@@ -6146,19 +6291,16 @@ paths:
   /v1/kyc/checks/provider-callbacks/{provider_code}/events:
     post:
       operationId: kycChecksProviderCallbacksEvents
-      summary: Provider webhook for asynchronous results
+      summary: Provider webhook for asynchronous results (HMAC-signed payload)
       tags:
       - Kyc Checks
-      security:
-      - oauth2:
-        - party:write
+      security: []
       parameters:
       - name: provider_code
         in: path
         required: true
         schema:
           type: string
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '204':
           description: No content
@@ -6182,7 +6324,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("party:write")'
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: kyc_check
   /v1/kyc/screenings:
     get:
@@ -7226,6 +7370,24 @@ components:
           maxLength: 10
       required:
       - code
+    ContactVerificationPage:
+      type: object
+      description: One page of ContactVerification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactVerification'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomerGroupPage:
       type: object
       description: One page of CustomerGroup results (newest first)
@@ -7575,8 +7737,8 @@ components:
           type: string
           maxLength: 1000
         step_codes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
       required:
       - message
     OnboardingOfflineBatchPage:
@@ -8060,6 +8222,153 @@ components:
       - purpose
       - policy_version
       - given_at
+    ContactVerification:
+      type: object
+      description: One-time-password challenge sent to verify a contact point; the code is kept only as a salted hash
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        customer_contact_id:
+          type: string
+          format: uuid
+          description: Contact point being verified
+        channel:
+          type: string
+          enum:
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          description: Delivery channel
+          readOnly: true
+        destination_masked:
+          type: string
+          maxLength: 64
+          description: Masked phone number or email the code was sent to
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - VERIFIED
+          - EXPIRED
+          - LOCKED
+          - SUPERSEDED
+          description: Challenge status
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Wrong codes entered
+          readOnly: true
+        max_attempts:
+          type: integer
+          format: int32
+          description: Wrong codes allowed before the challenge locks
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Code expiry
+          readOnly: true
+        resend_available_at:
+          type: string
+          format: date-time
+          description: Earliest time a new code can be requested
+          readOnly: true
+        locked_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the lockout after too many wrong codes
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the code was confirmed
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - customer_contact_id
+      - channel
+      - destination_masked
+      - status
+      - attempts
+      - max_attempts
+      - expires_at
+      - resend_available_at
     Customer:
       type: object
       description: A party that holds or applies for products; an individual or a legal entity
@@ -8101,7 +8410,8 @@ components:
         customer_number:
           type: string
           maxLength: 32
-          description: Human-readable customer number (CIF number)
+          description: Human-readable customer number (CIF number), server-generated per tenant with a Luhn check digit
+          readOnly: true
         customer_type:
           type: string
           enum:
@@ -8135,6 +8445,24 @@ components:
           - TIER_3
           description: Current KYC tier; drives limits and product eligibility
           readOnly: true
+        pending_tier:
+          type:
+          - string
+          - 'null'
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          description: Tier upgrade awaiting checker approval (change-tier)
+          readOnly: true
+        tier_approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: workflow-service approval request of the pending tier upgrade
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
@@ -8152,9 +8480,11 @@ components:
           format: uuid
           description: Assigned relationship manager
         display_name:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 200
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
         title:
           type:
           - string
@@ -8432,6 +8762,27 @@ components:
           format: date
           description: Date the customer became dormant
           readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given for the last lifecycle change
+          readOnly: true
+        status_changed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of the last lifecycle change
+          readOnly: true
+        status_changed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that made the last lifecycle change
+          readOnly: true
         closed_at:
           type:
           - string
@@ -8444,13 +8795,36 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Reason for closure
+          description: Reason for closure (set by close, merge or erasure)
+          readOnly: true
         deceased_on:
           type:
           - string
           - 'null'
           format: date
-          description: Date of death when notified
+          description: Date of death when notified (set by mark-deceased)
+          readOnly: true
+        deceased_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Death certificate or notification document
+          readOnly: true
+        merged_into_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Surviving customer this duplicate was merged into
+          readOnly: true
+        erased_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time personal data was erased on request (privacy)
+          readOnly: true
         external_ref:
           type:
           - string
@@ -8503,7 +8877,6 @@ components:
       - status
       - kyc_tier
       - legal_entity_id
-      - display_name
       - us_person
       - is_pep
       - is_staff
@@ -8511,10 +8884,6 @@ components:
     CustomerCreate:
       type: object
       properties:
-        customer_number:
-          type: string
-          maxLength: 32
-          description: Human-readable customer number (CIF number)
         customer_type:
           type: string
           enum:
@@ -8554,7 +8923,7 @@ components:
         display_name:
           type: string
           maxLength: 200
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
         title:
           type: string
           maxLength: 20
@@ -8729,14 +9098,6 @@ components:
           type: string
           maxLength: 32
           description: Referral or campaign code used at onboarding
-        closure_reason:
-          type: string
-          maxLength: 255
-          description: Reason for closure
-        deceased_on:
-          type: string
-          format: date
-          description: Date of death when notified
         external_ref:
           type: string
           maxLength: 64
@@ -8766,17 +9127,11 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - customer_number
       - customer_type
       - legal_entity_id
-      - display_name
     CustomerUpdate:
       type: object
       properties:
-        customer_number:
-          type: string
-          maxLength: 32
-          description: Human-readable customer number (CIF number)
         customer_type:
           type: string
           enum:
@@ -8816,7 +9171,7 @@ components:
         display_name:
           type: string
           maxLength: 200
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
         title:
           type: string
           maxLength: 20
@@ -8991,14 +9346,6 @@ components:
           type: string
           maxLength: 32
           description: Referral or campaign code used at onboarding
-        closure_reason:
-          type: string
-          maxLength: 255
-          description: Reason for closure
-        deceased_on:
-          type: string
-          format: date
-          description: Date of death when notified
         external_ref:
           type: string
           maxLength: 64
@@ -11687,9 +12034,9 @@ components:
           description: Human-readable outcome
         reason_codes:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Provider reason codes
         provider_reference:
           type:
@@ -11818,8 +12165,8 @@ components:
           maxLength: 500
           description: Human-readable outcome
         reason_codes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Provider reason codes
         provider_reference:
           type: string
@@ -12195,7 +12542,8 @@ components:
           - REJECTED
           - EXPIRED
           - REVIEW_DUE
-          description: Status
+          description: Status (derived by evaluate)
+          readOnly: true
         achieved_tier:
           type: string
           enum:
@@ -12320,6 +12668,42 @@ components:
       - address_verified
       - screening_clear
       - edd_required
+    KycProfileCreate:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        last_reviewed_by:
+          type: string
+          format: uuid
+          description: Last reviewer
+        notes:
+          type: string
+          description: Analyst notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - customer_id
     KycProvider:
       type: object
       description: Configured external KYC/KYB provider (e.g. Onfido, Jumio, Sumsub, Smile ID, registry APIs)
@@ -12367,15 +12751,15 @@ components:
           maxLength: 120
           description: Provider name
         capabilities:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported capabilities (KycProviderCapability values)
         countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Countries supported
+          items: {}
+          description: Countries supported (ISO 3166-1 alpha-2; empty = all)
         priority:
           type: integer
           format: int32
@@ -12386,6 +12770,16 @@ components:
           - 'null'
           maxLength: 500
           description: API base URL
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the API credentials (a reference, never the secret itself)
+        webhook_secret_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault path of the webhook signing secret (a reference)
         timeout_ms:
           type: integer
           format: int32
@@ -12435,6 +12829,7 @@ components:
       - name
       - capabilities
       - priority
+      - credentials_ref
       - timeout_ms
       - is_active
       - is_fallback
@@ -12450,13 +12845,13 @@ components:
           maxLength: 120
           description: Provider name
         capabilities:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported capabilities (KycProviderCapability values)
         countries:
-          type: object
-          additionalProperties: true
-          description: Countries supported
+          type: array
+          items: {}
+          description: Countries supported (ISO 3166-1 alpha-2; empty = all)
         priority:
           type: integer
           format: int32
@@ -12465,6 +12860,14 @@ components:
           type: string
           maxLength: 500
           description: API base URL
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the API credentials (a reference, never the secret itself)
+        webhook_secret_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the webhook signing secret (a reference)
         timeout_ms:
           type: integer
           format: int32
@@ -12499,6 +12902,7 @@ components:
       - code
       - name
       - capabilities
+      - credentials_ref
     KycProviderUpdate:
       type: object
       properties:
@@ -12511,13 +12915,13 @@ components:
           maxLength: 120
           description: Provider name
         capabilities:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Supported capabilities (KycProviderCapability values)
         countries:
-          type: object
-          additionalProperties: true
-          description: Countries supported
+          type: array
+          items: {}
+          description: Countries supported (ISO 3166-1 alpha-2; empty = all)
         priority:
           type: integer
           format: int32
@@ -12526,6 +12930,14 @@ components:
           type: string
           maxLength: 500
           description: API base URL
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the API credentials (a reference, never the secret itself)
+        webhook_secret_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the webhook signing secret (a reference)
         timeout_ms:
           type: integer
           format: int32
@@ -12659,9 +13071,9 @@ components:
           readOnly: true
         restrictions_applied:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Restrictions applied when overdue (e.g. debit block)
         custom_field_1:
           type:
@@ -12755,8 +13167,8 @@ components:
           type: string
           description: Notes
         restrictions_applied:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Restrictions applied when overdue (e.g. debit block)
         custom_field_1:
           type: string
@@ -12835,8 +13247,8 @@ components:
           type: string
           description: Notes
         restrictions_applied:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Restrictions applied when overdue (e.g. debit block)
         custom_field_1:
           type: string
@@ -13150,9 +13562,9 @@ components:
           description: Potential matches
         matches:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Candidate matches with list, score and reasons
         list_versions:
           type:
@@ -13269,8 +13681,8 @@ components:
           format: int32
           description: Potential matches
         matches:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Candidate matches with list, score and reasons
         list_versions:
           type: object
@@ -13369,6 +13781,12 @@ components:
           - 'null'
           format: uuid
           description: Customer created or matched
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank entity that will hold the relationship (needed to create the customer)
         status:
           type: string
           enum:
@@ -13381,7 +13799,8 @@ components:
           - REJECTED
           - ABANDONED
           - EXPIRED
-          description: Status
+          description: Status (changes through the application actions)
+          readOnly: true
         channel:
           type: string
           enum:
@@ -13470,10 +13889,24 @@ components:
           readOnly: true
         decision_reasons:
           type:
+          - array
+          - 'null'
+          items: {}
+          description: Rule outcomes and reason codes
+          readOnly: true
+        risk_factors:
+          type:
           - object
           - 'null'
           additionalProperties: true
-          description: Rule outcomes and reason codes
+          description: Factor contributions of the onboarding risk score
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that submitted the application
           readOnly: true
         reviewer_id:
           type:
@@ -13481,6 +13914,21 @@ components:
           - 'null'
           format: uuid
           description: Manual reviewer
+          readOnly: true
+        reviewed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that approved or rejected after referral
+          readOnly: true
+        review_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment on approval
+          readOnly: true
         reviewed_at:
           type:
           - string
@@ -13488,17 +13936,24 @@ components:
           format: date-time
           description: Review time
           readOnly: true
+        info_requests:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Requests for more information ({message, step_codes, requested_by, requested_at})
+          readOnly: true
         product_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Products requested
         created_product_refs:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Accounts / wallets / cards opened on approval
           readOnly: true
         device_fingerprint:
@@ -13606,19 +14061,10 @@ components:
           type: string
           format: uuid
           description: Customer created or matched
-        status:
+        legal_entity_id:
           type: string
-          enum:
-          - STARTED
-          - IN_PROGRESS
-          - SUBMITTED
-          - UNDER_REVIEW
-          - REFERRED
-          - APPROVED
-          - REJECTED
-          - ABANDONED
-          - EXPIRED
-          description: Status
+          format: uuid
+          description: Bank entity that will hold the relationship (needed to create the customer)
         channel:
           type: string
           enum:
@@ -13658,13 +14104,9 @@ components:
           type: object
           additionalProperties: true
           description: Data captured so far (encrypted)
-        reviewer_id:
-          type: string
-          format: uuid
-          description: Manual reviewer
         product_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Products requested
         device_fingerprint:
           type: string
@@ -13724,19 +14166,10 @@ components:
           type: string
           format: uuid
           description: Customer created or matched
-        status:
+        legal_entity_id:
           type: string
-          enum:
-          - STARTED
-          - IN_PROGRESS
-          - SUBMITTED
-          - UNDER_REVIEW
-          - REFERRED
-          - APPROVED
-          - REJECTED
-          - ABANDONED
-          - EXPIRED
-          description: Status
+          format: uuid
+          description: Bank entity that will hold the relationship (needed to create the customer)
         channel:
           type: string
           enum:
@@ -13776,13 +14209,9 @@ components:
           type: object
           additionalProperties: true
           description: Data captured so far (encrypted)
-        reviewer_id:
-          type: string
-          format: uuid
-          description: Manual reviewer
         product_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Products requested
         device_fingerprint:
           type: string
@@ -13868,7 +14297,8 @@ components:
         version:
           type: integer
           format: int32
-          description: Version number
+          description: Version number (server-managed; see new-version)
+          readOnly: true
         name:
           type: string
           maxLength: 160
@@ -13879,7 +14309,8 @@ components:
           - DRAFT
           - PUBLISHED
           - RETIRED
-          description: Status
+          description: Status (changes through publish / retire)
+          readOnly: true
         customer_type:
           type: string
           enum:
@@ -13899,14 +14330,14 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country the journey applies to (ISO 3166-1 alpha-2)
         channels:
-          type: object
-          additionalProperties: true
-          description: Allowed channels
+          type: array
+          items: {}
+          description: Allowed channels (OnboardingChannel values)
         product_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Products that can be opened at the end of the journey
         target_tier:
           type: string
@@ -13936,6 +14367,27 @@ components:
           - 'null'
           format: date-time
           description: Publication time
+          readOnly: true
+        published_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who published the version
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        retirement_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given when retired
           readOnly: true
         approval_request_id:
           type:
@@ -13994,21 +14446,10 @@ components:
           type: string
           maxLength: 64
           description: Journey code, e.g. RETAIL_WALLET_KE
-        version:
-          type: integer
-          format: int32
-          description: Version number
         name:
           type: string
           maxLength: 160
           description: Journey name
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - RETIRED
-          description: Status
         customer_type:
           type: string
           enum:
@@ -14026,12 +14467,12 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country the journey applies to (ISO 3166-1 alpha-2)
         channels:
-          type: object
-          additionalProperties: true
-          description: Allowed channels
+          type: array
+          items: {}
+          description: Allowed channels (OnboardingChannel values)
         product_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Products that can be opened at the end of the journey
         target_tier:
           type: string
@@ -14091,21 +14532,10 @@ components:
           type: string
           maxLength: 64
           description: Journey code, e.g. RETAIL_WALLET_KE
-        version:
-          type: integer
-          format: int32
-          description: Version number
         name:
           type: string
           maxLength: 160
           description: Journey name
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - RETIRED
-          description: Status
         customer_type:
           type: string
           enum:
@@ -14123,12 +14553,12 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country the journey applies to (ISO 3166-1 alpha-2)
         channels:
-          type: object
-          additionalProperties: true
-          description: Allowed channels
+          type: array
+          items: {}
+          description: Allowed channels (OnboardingChannel values)
         product_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Products that can be opened at the end of the journey
         target_tier:
           type: string
@@ -14623,9 +15053,9 @@ components:
           description: Export package or response letter
         retention_blockers:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Records that must be retained by law (not erased)
           readOnly: true
         completed_at:

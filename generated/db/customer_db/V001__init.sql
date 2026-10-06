@@ -31,10 +31,12 @@ CREATE TABLE customer (
   customer_type                varchar(40) NOT NULL CHECK (customer_type IN ('INDIVIDUAL', 'SOLE_TRADER', 'COMPANY', 'PARTNERSHIP', 'TRUST', 'NON_PROFIT', 'GOVERNMENT', 'GROUP')),
   status                       varchar(40) NOT NULL DEFAULT 'PROSPECT' CHECK (status IN ('PROSPECT', 'PENDING_KYC', 'ACTIVE', 'DORMANT', 'SUSPENDED', 'BLOCKED', 'DECEASED', 'CLOSED')),
   kyc_tier                     varchar(40) NOT NULL DEFAULT 'TIER_0' CHECK (kyc_tier IN ('TIER_0', 'TIER_1', 'TIER_2', 'TIER_3')),
+  pending_tier                 varchar(40) CHECK (pending_tier IN ('TIER_0', 'TIER_1', 'TIER_2', 'TIER_3')),
+  tier_approval_request_id     uuid,
   legal_entity_id              uuid NOT NULL,
   home_branch_id               uuid,
   relationship_manager_id      uuid,
-  display_name                 varchar(200) NOT NULL,
+  display_name                 varchar(200),
   title                        varchar(20),
   first_name                   varchar(100),
   middle_name                  varchar(100),
@@ -77,9 +79,15 @@ CREATE TABLE customer (
   onboarding_channel           varchar(40) CHECK (onboarding_channel IN ('MOBILE_APP', 'WEB', 'USSD', 'AGENT', 'BRANCH', 'API')),
   referral_code                varchar(32),
   dormant_since                date,
+  status_reason                varchar(255),
+  status_changed_at            timestamptz,
+  status_changed_by            varchar(64),
   closed_at                    timestamptz,
   closure_reason               varchar(255),
   deceased_on                  date,
+  deceased_document_id         uuid,
+  merged_into_customer_id      uuid REFERENCES customer(id),
+  erased_at                    timestamptz,
   external_ref                 varchar(64),
   metadata                     jsonb,
   custom_field_1               varchar(500),
@@ -97,14 +105,16 @@ COMMENT ON COLUMN customer.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN customer.updated_at IS 'Last update time';
 COMMENT ON COLUMN customer.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN customer.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN customer.customer_number IS 'Human-readable customer number (CIF number)';
+COMMENT ON COLUMN customer.customer_number IS 'Human-readable customer number (CIF number), server-generated per tenant with a Luhn check digit';
 COMMENT ON COLUMN customer.customer_type IS 'Individual or kind of organisation';
 COMMENT ON COLUMN customer.status IS 'Lifecycle status';
 COMMENT ON COLUMN customer.kyc_tier IS 'Current KYC tier; drives limits and product eligibility';
+COMMENT ON COLUMN customer.pending_tier IS 'Tier upgrade awaiting checker approval (change-tier)';
+COMMENT ON COLUMN customer.tier_approval_request_id IS 'workflow-service approval request of the pending tier upgrade';
 COMMENT ON COLUMN customer.legal_entity_id IS 'Bank entity that holds the customer relationship';
 COMMENT ON COLUMN customer.home_branch_id IS 'Home branch';
 COMMENT ON COLUMN customer.relationship_manager_id IS 'Assigned relationship manager';
-COMMENT ON COLUMN customer.display_name IS 'Name shown in channels and consoles [PII]';
+COMMENT ON COLUMN customer.display_name IS 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name) [PII]';
 COMMENT ON COLUMN customer.title IS 'Salutation, e.g. Mr, Ms, Dr [PII]';
 COMMENT ON COLUMN customer.first_name IS 'Given name (individuals) [PII]';
 COMMENT ON COLUMN customer.middle_name IS 'Middle name(s) [PII]';
@@ -147,9 +157,15 @@ COMMENT ON COLUMN customer.onboarded_at IS 'Time the customer became ACTIVE';
 COMMENT ON COLUMN customer.onboarding_channel IS 'Channel used to onboard';
 COMMENT ON COLUMN customer.referral_code IS 'Referral or campaign code used at onboarding';
 COMMENT ON COLUMN customer.dormant_since IS 'Date the customer became dormant';
+COMMENT ON COLUMN customer.status_reason IS 'Reason given for the last lifecycle change';
+COMMENT ON COLUMN customer.status_changed_at IS 'Time of the last lifecycle change';
+COMMENT ON COLUMN customer.status_changed_by IS 'Principal that made the last lifecycle change';
 COMMENT ON COLUMN customer.closed_at IS 'Closure time';
-COMMENT ON COLUMN customer.closure_reason IS 'Reason for closure';
-COMMENT ON COLUMN customer.deceased_on IS 'Date of death when notified [PII]';
+COMMENT ON COLUMN customer.closure_reason IS 'Reason for closure (set by close, merge or erasure)';
+COMMENT ON COLUMN customer.deceased_on IS 'Date of death when notified (set by mark-deceased) [PII]';
+COMMENT ON COLUMN customer.deceased_document_id IS 'Death certificate or notification document';
+COMMENT ON COLUMN customer.merged_into_customer_id IS 'Surviving customer this duplicate was merged into';
+COMMENT ON COLUMN customer.erased_at IS 'Time personal data was erased on request (privacy)';
 COMMENT ON COLUMN customer.external_ref IS 'Client system reference (core migration, partner id)';
 COMMENT ON COLUMN customer.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN customer.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -158,16 +174,55 @@ COMMENT ON COLUMN customer.custom_field_3 IS 'Tenant-defined custom field 3; lab
 COMMENT ON COLUMN customer.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN customer.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_customer_tenant ON customer (tenant_id, created_at);
+CREATE INDEX ix_customer_tier_approval_request_id ON customer (tier_approval_request_id);
 CREATE INDEX ix_customer_legal_entity_id ON customer (legal_entity_id);
 CREATE INDEX ix_customer_home_branch_id ON customer (home_branch_id);
 CREATE INDEX ix_customer_relationship_manager_id ON customer (relationship_manager_id);
 CREATE INDEX ix_customer_registration_number ON customer (registration_number);
+CREATE INDEX ix_customer_deceased_document_id ON customer (deceased_document_id);
+CREATE INDEX ix_customer_merged_into_customer_id ON customer (merged_into_customer_id);
 CREATE INDEX ix_customer_external_ref ON customer (external_ref);
 CREATE INDEX ix_customer_c1 ON customer (last_name, date_of_birth);
 CREATE INDEX ix_customer_c2 ON customer (legal_name);
 ALTER TABLE customer ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON customer USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_customer_touch BEFORE UPDATE ON customer FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- customer_number_counter: Per-tenant sequence behind server-generated customer numbers (internal; one row per tenant)
+CREATE TABLE customer_number_counter (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  last_value                   bigint NOT NULL DEFAULT 0,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_customer_number_counter_1 UNIQUE (tenant_id)
+);
+COMMENT ON TABLE customer_number_counter IS 'Per-tenant sequence behind server-generated customer numbers (internal; one row per tenant)';
+COMMENT ON COLUMN customer_number_counter.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN customer_number_counter.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN customer_number_counter.created_at IS 'Creation time';
+COMMENT ON COLUMN customer_number_counter.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN customer_number_counter.updated_at IS 'Last update time';
+COMMENT ON COLUMN customer_number_counter.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN customer_number_counter.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN customer_number_counter.last_value IS 'Last number issued';
+COMMENT ON COLUMN customer_number_counter.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_number_counter.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_number_counter.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_number_counter.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_number_counter.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_customer_number_counter_tenant ON customer_number_counter (tenant_id, created_at);
+ALTER TABLE customer_number_counter ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON customer_number_counter USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_customer_number_counter_touch BEFORE UPDATE ON customer_number_counter FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- customer_identifier: Government or registry identifiers of a customer (national id, passport, tax id, company number)
 CREATE TABLE customer_identifier (
@@ -780,6 +835,65 @@ CREATE INDEX ix_customer_credential_customer_device_id ON customer_credential (c
 ALTER TABLE customer_credential ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON customer_credential USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_customer_credential_touch BEFORE UPDATE ON customer_credential FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- contact_verification: One-time-password challenge sent to verify a contact point; the code is kept only as a salted hash
+CREATE TABLE contact_verification (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  customer_id                  uuid NOT NULL REFERENCES customer(id),
+  customer_contact_id          uuid NOT NULL REFERENCES customer_contact(id),
+  channel                      varchar(40) NOT NULL CHECK (channel IN ('SMS', 'EMAIL', 'WHATSAPP')),
+  destination_masked           varchar(64) NOT NULL,
+  code_hash                    varchar(255) NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'VERIFIED', 'EXPIRED', 'LOCKED', 'SUPERSEDED')),
+  attempts                     integer NOT NULL DEFAULT 0,
+  max_attempts                 integer NOT NULL DEFAULT 5,
+  expires_at                   timestamptz NOT NULL,
+  resend_available_at          timestamptz NOT NULL,
+  locked_until                 timestamptz,
+  verified_at                  timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE contact_verification IS 'One-time-password challenge sent to verify a contact point; the code is kept only as a salted hash';
+COMMENT ON COLUMN contact_verification.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN contact_verification.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN contact_verification.created_at IS 'Creation time';
+COMMENT ON COLUMN contact_verification.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN contact_verification.updated_at IS 'Last update time';
+COMMENT ON COLUMN contact_verification.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN contact_verification.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN contact_verification.customer_id IS 'Customer';
+COMMENT ON COLUMN contact_verification.customer_contact_id IS 'Contact point being verified';
+COMMENT ON COLUMN contact_verification.channel IS 'Delivery channel';
+COMMENT ON COLUMN contact_verification.destination_masked IS 'Masked phone number or email the code was sent to';
+COMMENT ON COLUMN contact_verification.code_hash IS 'Salted hash of the one-time code [SECRET]';
+COMMENT ON COLUMN contact_verification.status IS 'Challenge status';
+COMMENT ON COLUMN contact_verification.attempts IS 'Wrong codes entered';
+COMMENT ON COLUMN contact_verification.max_attempts IS 'Wrong codes allowed before the challenge locks';
+COMMENT ON COLUMN contact_verification.expires_at IS 'Code expiry';
+COMMENT ON COLUMN contact_verification.resend_available_at IS 'Earliest time a new code can be requested';
+COMMENT ON COLUMN contact_verification.locked_until IS 'End of the lockout after too many wrong codes';
+COMMENT ON COLUMN contact_verification.verified_at IS 'Time the code was confirmed';
+COMMENT ON COLUMN contact_verification.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN contact_verification.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN contact_verification.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN contact_verification.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN contact_verification.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_contact_verification_tenant ON contact_verification (tenant_id, created_at);
+CREATE INDEX ix_contact_verification_customer_id ON contact_verification (customer_id);
+CREATE INDEX ix_contact_verification_customer_contact_id ON contact_verification (customer_contact_id);
+ALTER TABLE contact_verification ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON contact_verification USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_contact_verification_touch BEFORE UPDATE ON contact_verification FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- consent: Consent given or withdrawn by a customer for a purpose and scope (GDPR, LGPD, DPDP, POPIA, open banking)
 CREATE TABLE consent (

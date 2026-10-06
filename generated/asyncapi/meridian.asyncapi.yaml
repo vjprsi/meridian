@@ -431,6 +431,8 @@ channels:
         $ref: '#/components/messages/PartyCustomerStatusChanged'
       PartyCustomerTierChanged:
         $ref: '#/components/messages/PartyCustomerTierChanged'
+      PartyCustomerTierChangeRequested:
+        $ref: '#/components/messages/PartyCustomerTierChangeRequested'
       PartyCustomerMerged:
         $ref: '#/components/messages/PartyCustomerMerged'
       PartyCustomerRelationshipChanged:
@@ -441,20 +443,30 @@ channels:
         $ref: '#/components/messages/PartyCustomerDeviceRevoked'
       PartyCustomerCredentialLocked:
         $ref: '#/components/messages/PartyCustomerCredentialLocked'
+      PartyCustomerContactVerified:
+        $ref: '#/components/messages/PartyCustomerContactVerified'
+      PartyContactVerificationLocked:
+        $ref: '#/components/messages/PartyContactVerificationLocked'
       PartyConsentGiven:
         $ref: '#/components/messages/PartyConsentGiven'
       PartyConsentWithdrawn:
         $ref: '#/components/messages/PartyConsentWithdrawn'
       PartyPrivacyRequestCompleted:
         $ref: '#/components/messages/PartyPrivacyRequestCompleted'
+      PartyPrivacyRequestRejected:
+        $ref: '#/components/messages/PartyPrivacyRequestRejected'
       PartyOnboardingJourneyPublished:
         $ref: '#/components/messages/PartyOnboardingJourneyPublished'
+      PartyOnboardingJourneyRetired:
+        $ref: '#/components/messages/PartyOnboardingJourneyRetired'
       PartyOnboardingApplicationStarted:
         $ref: '#/components/messages/PartyOnboardingApplicationStarted'
       PartyOnboardingApplicationSubmitted:
         $ref: '#/components/messages/PartyOnboardingApplicationSubmitted'
       PartyOnboardingApplicationReferred:
         $ref: '#/components/messages/PartyOnboardingApplicationReferred'
+      PartyOnboardingApplicationInfoRequested:
+        $ref: '#/components/messages/PartyOnboardingApplicationInfoRequested'
       PartyOnboardingApplicationApproved:
         $ref: '#/components/messages/PartyOnboardingApplicationApproved'
       PartyOnboardingApplicationRejected:
@@ -463,6 +475,8 @@ channels:
         $ref: '#/components/messages/PartyOnboardingApplicationAbandoned'
       PartyOnboardingOfflineBatchProcessed:
         $ref: '#/components/messages/PartyOnboardingOfflineBatchProcessed'
+      PartyKycProfileCreated:
+        $ref: '#/components/messages/PartyKycProfileCreated'
       PartyKycProfileVerified:
         $ref: '#/components/messages/PartyKycProfileVerified'
       PartyKycProfileStatusChanged:
@@ -473,6 +487,10 @@ channels:
         $ref: '#/components/messages/PartyKycCheckCompleted'
       PartyKycDocumentExpiring:
         $ref: '#/components/messages/PartyKycDocumentExpiring'
+      PartyKycDocumentAccepted:
+        $ref: '#/components/messages/PartyKycDocumentAccepted'
+      PartyKycDocumentRejected:
+        $ref: '#/components/messages/PartyKycDocumentRejected'
       PartyKycScreeningMatchFound:
         $ref: '#/components/messages/PartyKycScreeningMatchFound'
       PartyKycScreeningDisposed:
@@ -909,6 +927,12 @@ channels:
     messages:
       ServicingServiceCaseCreated:
         $ref: '#/components/messages/ServicingServiceCaseCreated'
+      ServicingServiceCaseStatusChanged:
+        $ref: '#/components/messages/ServicingServiceCaseStatusChanged'
+      ServicingServiceCaseReopened:
+        $ref: '#/components/messages/ServicingServiceCaseReopened'
+      ServicingCaseCommentAdded:
+        $ref: '#/components/messages/ServicingCaseCommentAdded'
       ServicingServiceCaseAssigned:
         $ref: '#/components/messages/ServicingServiceCaseAssigned'
       ServicingServiceCaseEscalated:
@@ -923,20 +947,50 @@ channels:
         $ref: '#/components/messages/ServicingComplaintReceived'
       ServicingComplaintAcknowledged:
         $ref: '#/components/messages/ServicingComplaintAcknowledged'
+      ServicingComplaintAssigned:
+        $ref: '#/components/messages/ServicingComplaintAssigned'
+      ServicingComplaintResolutionProposed:
+        $ref: '#/components/messages/ServicingComplaintResolutionProposed'
+      ServicingComplaintWithdrawn:
+        $ref: '#/components/messages/ServicingComplaintWithdrawn'
+      ServicingComplaintClosed:
+        $ref: '#/components/messages/ServicingComplaintClosed'
+      ServicingComplaintDeadlineBreached:
+        $ref: '#/components/messages/ServicingComplaintDeadlineBreached'
       ServicingComplaintDeadlineAtRisk:
         $ref: '#/components/messages/ServicingComplaintDeadlineAtRisk'
       ServicingComplaintResolved:
         $ref: '#/components/messages/ServicingComplaintResolved'
       ServicingComplaintEscalated:
         $ref: '#/components/messages/ServicingComplaintEscalated'
+      ServicingComplaintRedressProposed:
+        $ref: '#/components/messages/ServicingComplaintRedressProposed'
+      ServicingComplaintRedressApproved:
+        $ref: '#/components/messages/ServicingComplaintRedressApproved'
+      ServicingComplaintRedressRejected:
+        $ref: '#/components/messages/ServicingComplaintRedressRejected'
       ServicingComplaintRedressPaid:
         $ref: '#/components/messages/ServicingComplaintRedressPaid'
+      ServicingComplaintRedressFailed:
+        $ref: '#/components/messages/ServicingComplaintRedressFailed'
       ServicingInteractionLogged:
         $ref: '#/components/messages/ServicingInteractionLogged'
+      ServicingWorkItemCreated:
+        $ref: '#/components/messages/ServicingWorkItemCreated'
       ServicingWorkItemAssigned:
         $ref: '#/components/messages/ServicingWorkItemAssigned'
+      ServicingWorkItemReleased:
+        $ref: '#/components/messages/ServicingWorkItemReleased'
+      ServicingWorkItemCompleted:
+        $ref: '#/components/messages/ServicingWorkItemCompleted'
+      ServicingKnowledgeArticlePublished:
+        $ref: '#/components/messages/ServicingKnowledgeArticlePublished'
+      ServicingKnowledgeArticleArchived:
+        $ref: '#/components/messages/ServicingKnowledgeArticleArchived'
       ServicingCopilotSessionCreated:
         $ref: '#/components/messages/ServicingCopilotSessionCreated'
+      ServicingCopilotFeedbackRecorded:
+        $ref: '#/components/messages/ServicingCopilotFeedbackRecorded'
   treasury:
     address: meridian.treasury.v1
     description: Treasury and ALM events
@@ -5406,6 +5460,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CustomerKycTierHistory'
+    PartyCustomerTierChangeRequested:
+      name: party.customer.tier_change_requested
+      title: A KYC tier upgrade was submitted for approval
+      summary: A KYC tier upgrade was submitted for approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.customer.tier_change_requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Customer'
     PartyCustomerMerged:
       name: party.customer.merged
       title: A duplicate customer was merged
@@ -5516,6 +5592,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CustomerCredential'
+    PartyCustomerContactVerified:
+      name: party.customer_contact.verified
+      title: A contact point was verified with a one-time code
+      summary: A contact point was verified with a one-time code
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.customer_contact.verified
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerContact'
+    PartyContactVerificationLocked:
+      name: party.contact_verification.locked
+      title: A verification challenge locked after too many wrong codes
+      summary: A verification challenge locked after too many wrong codes
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.contact_verification.locked
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ContactVerification'
     PartyConsentGiven:
       name: party.consent.given
       title: Consent was given
@@ -5582,6 +5702,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/PrivacyRequest'
+    PartyPrivacyRequestRejected:
+      name: party.privacy_request.rejected
+      title: A data subject request was rejected
+      summary: A data subject request was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.privacy_request.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PrivacyRequest'
     PartyOnboardingJourneyPublished:
       name: party.onboarding_journey.published
       title: A journey version was published
@@ -5592,6 +5734,28 @@ components:
           ce_type:
             type: string
             const: party.onboarding_journey.published
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/OnboardingJourney'
+    PartyOnboardingJourneyRetired:
+      name: party.onboarding_journey.retired
+      title: A journey version was retired
+      summary: A journey version was retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.onboarding_journey.retired
           ce_source:
             type: string
           ce_id:
@@ -5658,6 +5822,28 @@ components:
           ce_type:
             type: string
             const: party.onboarding_application.referred
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/OnboardingApplication'
+    PartyOnboardingApplicationInfoRequested:
+      name: party.onboarding_application.info_requested
+      title: The applicant was asked for more information
+      summary: The applicant was asked for more information
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.onboarding_application.info_requested
           ce_source:
             type: string
           ce_id:
@@ -5758,6 +5944,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/OnboardingOfflineBatch'
+    PartyKycProfileCreated:
+      name: party.kyc_profile.created
+      title: A KYC profile was opened for a customer
+      summary: A KYC profile was opened for a customer
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.kyc_profile.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/KycProfile'
     PartyKycProfileVerified:
       name: party.kyc_profile.verified
       title: A customer's identity was verified
@@ -5856,6 +6064,50 @@ components:
           ce_type:
             type: string
             const: party.kyc_document.expiring
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/KycDocument'
+    PartyKycDocumentAccepted:
+      name: party.kyc_document.accepted
+      title: A document was accepted after review
+      summary: A document was accepted after review
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.kyc_document.accepted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/KycDocument'
+    PartyKycDocumentRejected:
+      name: party.kyc_document.rejected
+      title: A document was rejected
+      summary: A document was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: party.kyc_document.rejected
           ce_source:
             type: string
           ce_id:
@@ -10400,6 +10652,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ServiceCase'
+    ServicingServiceCaseStatusChanged:
+      name: servicing.service_case.status_changed
+      title: A case started, went pending customer, resumed or was cancelled
+      summary: A case started, went pending customer, resumed or was cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.service_case.status_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ServiceCase'
+    ServicingServiceCaseReopened:
+      name: servicing.service_case.reopened
+      title: A case was reopened
+      summary: A case was reopened
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.service_case.reopened
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ServiceCase'
+    ServicingCaseCommentAdded:
+      name: servicing.case_comment.added
+      title: A comment was added to a case
+      summary: A comment was added to a case
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.case_comment.added
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CaseComment'
     ServicingServiceCaseAssigned:
       name: servicing.service_case.assigned
       title: A case was assigned
@@ -10554,6 +10872,116 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Complaint'
+    ServicingComplaintAssigned:
+      name: servicing.complaint.assigned
+      title: A complaint handler was assigned
+      summary: A complaint handler was assigned
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint.assigned
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Complaint'
+    ServicingComplaintResolutionProposed:
+      name: servicing.complaint.resolution_proposed
+      title: An outcome and redress were proposed
+      summary: An outcome and redress were proposed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint.resolution_proposed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Complaint'
+    ServicingComplaintWithdrawn:
+      name: servicing.complaint.withdrawn
+      title: The complainant withdrew the complaint
+      summary: The complainant withdrew the complaint
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint.withdrawn
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Complaint'
+    ServicingComplaintClosed:
+      name: servicing.complaint.closed
+      title: A complaint was closed
+      summary: A complaint was closed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint.closed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Complaint'
+    ServicingComplaintDeadlineBreached:
+      name: servicing.complaint.deadline_breached
+      title: A complaint passed its regulatory deadline
+      summary: A complaint passed its regulatory deadline
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint.deadline_breached
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Complaint'
     ServicingComplaintDeadlineAtRisk:
       name: servicing.complaint.deadline_at_risk
       title: A complaint is close to its regulatory deadline
@@ -10620,6 +11048,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Complaint'
+    ServicingComplaintRedressProposed:
+      name: servicing.complaint_redress.proposed
+      title: Redress was proposed
+      summary: Redress was proposed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint_redress.proposed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ComplaintRedress'
+    ServicingComplaintRedressApproved:
+      name: servicing.complaint_redress.approved
+      title: Redress was approved by a checker
+      summary: Redress was approved by a checker
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint_redress.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ComplaintRedress'
+    ServicingComplaintRedressRejected:
+      name: servicing.complaint_redress.rejected
+      title: Redress was rejected
+      summary: Redress was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint_redress.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ComplaintRedress'
     ServicingComplaintRedressPaid:
       name: servicing.complaint_redress.paid
       title: Redress was paid
@@ -10630,6 +11124,28 @@ components:
           ce_type:
             type: string
             const: servicing.complaint_redress.paid
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ComplaintRedress'
+    ServicingComplaintRedressFailed:
+      name: servicing.complaint_redress.failed
+      title: The redress posting failed
+      summary: The redress posting failed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.complaint_redress.failed
           ce_source:
             type: string
           ce_id:
@@ -10664,6 +11180,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Interaction'
+    ServicingWorkItemCreated:
+      name: servicing.work_item.created
+      title: A work item was queued
+      summary: A work item was queued
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.work_item.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WorkItem'
     ServicingWorkItemAssigned:
       name: servicing.work_item.assigned
       title: A work item was assigned
@@ -10686,6 +11224,94 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/WorkItem'
+    ServicingWorkItemReleased:
+      name: servicing.work_item.released
+      title: A work item was returned to its queue
+      summary: A work item was returned to its queue
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.work_item.released
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WorkItem'
+    ServicingWorkItemCompleted:
+      name: servicing.work_item.completed
+      title: A work item was completed or cancelled
+      summary: A work item was completed or cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.work_item.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WorkItem'
+    ServicingKnowledgeArticlePublished:
+      name: servicing.knowledge_article.published
+      title: An article was published
+      summary: An article was published
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.knowledge_article.published
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/KnowledgeArticle'
+    ServicingKnowledgeArticleArchived:
+      name: servicing.knowledge_article.archived
+      title: An article was archived
+      summary: An article was archived
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.knowledge_article.archived
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/KnowledgeArticle'
     ServicingCopilotSessionCreated:
       name: servicing.copilot_session.created
       title: A copilot output was generated
@@ -10708,6 +11334,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CopilotSession'
+    ServicingCopilotFeedbackRecorded:
+      name: servicing.copilot_feedback.recorded
+      title: Staff gave feedback on a copilot output
+      summary: Staff gave feedback on a copilot output
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: servicing.copilot_feedback.recorded
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CopilotFeedback'
     TreasuryCounterpartyApproved:
       name: treasury.counterparty.approved
       title: A treasury counterparty was approved
@@ -29687,7 +30335,8 @@ components:
         customer_number:
           type: string
           maxLength: 32
-          description: Human-readable customer number (CIF number)
+          description: Human-readable customer number (CIF number), server-generated per tenant with a Luhn check digit
+          readOnly: true
         customer_type:
           type: string
           enum:
@@ -29721,6 +30370,24 @@ components:
           - TIER_3
           description: Current KYC tier; drives limits and product eligibility
           readOnly: true
+        pending_tier:
+          type:
+          - string
+          - 'null'
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          description: Tier upgrade awaiting checker approval (change-tier)
+          readOnly: true
+        tier_approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: workflow-service approval request of the pending tier upgrade
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
@@ -29738,9 +30405,11 @@ components:
           format: uuid
           description: Assigned relationship manager
         display_name:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 200
-          description: Name shown in channels and consoles
+          description: 'Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name)'
         title:
           type:
           - string
@@ -30018,6 +30687,27 @@ components:
           format: date
           description: Date the customer became dormant
           readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given for the last lifecycle change
+          readOnly: true
+        status_changed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of the last lifecycle change
+          readOnly: true
+        status_changed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that made the last lifecycle change
+          readOnly: true
         closed_at:
           type:
           - string
@@ -30030,13 +30720,36 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Reason for closure
+          description: Reason for closure (set by close, merge or erasure)
+          readOnly: true
         deceased_on:
           type:
           - string
           - 'null'
           format: date
-          description: Date of death when notified
+          description: Date of death when notified (set by mark-deceased)
+          readOnly: true
+        deceased_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Death certificate or notification document
+          readOnly: true
+        merged_into_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Surviving customer this duplicate was merged into
+          readOnly: true
+        erased_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time personal data was erased on request (privacy)
+          readOnly: true
         external_ref:
           type:
           - string
@@ -30089,7 +30802,6 @@ components:
       - status
       - kyc_tier
       - legal_entity_id
-      - display_name
       - us_person
       - is_pep
       - is_staff
@@ -30687,6 +31399,296 @@ components:
       - credential_type
       - status
       - failed_attempts
+    CustomerContact:
+      type: object
+      description: Phone numbers, emails and messaging handles of a customer
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        contact_type:
+          type: string
+          enum:
+          - MOBILE
+          - LANDLINE
+          - EMAIL
+          - WHATSAPP
+          - FAX
+          description: Contact type
+        phone:
+          type:
+          - string
+          - 'null'
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Phone number (E.164) for phone-type contacts (E.164)
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 320
+          description: Email address for email-type contacts
+        label:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Free label, e.g. Work
+        is_primary:
+          type: boolean
+          description: Primary contact of this type
+        is_verified:
+          type: boolean
+          description: Verified by OTP or link
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
+        can_receive_otp:
+          type: boolean
+          description: May be used for one-time passwords
+        can_receive_marketing:
+          type: boolean
+          description: Marketing allowed on this contact (subject to consent)
+        valid_from:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Valid from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Valid to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - contact_type
+      - is_primary
+      - is_verified
+      - can_receive_otp
+      - can_receive_marketing
+    ContactVerification:
+      type: object
+      description: One-time-password challenge sent to verify a contact point; the code is kept only as a salted hash
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        customer_contact_id:
+          type: string
+          format: uuid
+          description: Contact point being verified
+        channel:
+          type: string
+          enum:
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          description: Delivery channel
+          readOnly: true
+        destination_masked:
+          type: string
+          maxLength: 64
+          description: Masked phone number or email the code was sent to
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - PENDING
+          - VERIFIED
+          - EXPIRED
+          - LOCKED
+          - SUPERSEDED
+          description: Challenge status
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Wrong codes entered
+          readOnly: true
+        max_attempts:
+          type: integer
+          format: int32
+          description: Wrong codes allowed before the challenge locks
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Code expiry
+          readOnly: true
+        resend_available_at:
+          type: string
+          format: date-time
+          description: Earliest time a new code can be requested
+          readOnly: true
+        locked_until:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the lockout after too many wrong codes
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the code was confirmed
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - customer_contact_id
+      - channel
+      - destination_masked
+      - status
+      - attempts
+      - max_attempts
+      - expires_at
+      - resend_available_at
     Consent:
       type: object
       description: Consent given or withdrawn by a customer for a purpose and scope (GDPR, LGPD, DPDP, POPIA, open banking)
@@ -30950,9 +31952,9 @@ components:
           description: Export package or response letter
         retention_blockers:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Records that must be retained by law (not erased)
           readOnly: true
         completed_at:
@@ -31053,7 +32055,8 @@ components:
         version:
           type: integer
           format: int32
-          description: Version number
+          description: Version number (server-managed; see new-version)
+          readOnly: true
         name:
           type: string
           maxLength: 160
@@ -31064,7 +32067,8 @@ components:
           - DRAFT
           - PUBLISHED
           - RETIRED
-          description: Status
+          description: Status (changes through publish / retire)
+          readOnly: true
         customer_type:
           type: string
           enum:
@@ -31084,14 +32088,14 @@ components:
           pattern: ^[A-Z]{2}$
           description: Country the journey applies to (ISO 3166-1 alpha-2)
         channels:
-          type: object
-          additionalProperties: true
-          description: Allowed channels
+          type: array
+          items: {}
+          description: Allowed channels (OnboardingChannel values)
         product_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Products that can be opened at the end of the journey
         target_tier:
           type: string
@@ -31121,6 +32125,27 @@ components:
           - 'null'
           format: date-time
           description: Publication time
+          readOnly: true
+        published_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who published the version
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        retirement_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given when retired
           readOnly: true
         approval_request_id:
           type:
@@ -31224,6 +32249,12 @@ components:
           - 'null'
           format: uuid
           description: Customer created or matched
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank entity that will hold the relationship (needed to create the customer)
         status:
           type: string
           enum:
@@ -31236,7 +32267,8 @@ components:
           - REJECTED
           - ABANDONED
           - EXPIRED
-          description: Status
+          description: Status (changes through the application actions)
+          readOnly: true
         channel:
           type: string
           enum:
@@ -31325,10 +32357,24 @@ components:
           readOnly: true
         decision_reasons:
           type:
+          - array
+          - 'null'
+          items: {}
+          description: Rule outcomes and reason codes
+          readOnly: true
+        risk_factors:
+          type:
           - object
           - 'null'
           additionalProperties: true
-          description: Rule outcomes and reason codes
+          description: Factor contributions of the onboarding risk score
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that submitted the application
           readOnly: true
         reviewer_id:
           type:
@@ -31336,6 +32382,21 @@ components:
           - 'null'
           format: uuid
           description: Manual reviewer
+          readOnly: true
+        reviewed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that approved or rejected after referral
+          readOnly: true
+        review_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment on approval
+          readOnly: true
         reviewed_at:
           type:
           - string
@@ -31343,17 +32404,24 @@ components:
           format: date-time
           description: Review time
           readOnly: true
+        info_requests:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Requests for more information ({message, step_codes, requested_by, requested_at})
+          readOnly: true
         product_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Products requested
         created_product_refs:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Accounts / wallets / cards opened on approval
           readOnly: true
         device_fingerprint:
@@ -31631,7 +32699,8 @@ components:
           - REJECTED
           - EXPIRED
           - REVIEW_DUE
-          description: Status
+          description: Status (derived by evaluate)
+          readOnly: true
         achieved_tier:
           type: string
           enum:
@@ -31979,9 +33048,9 @@ components:
           description: Human-readable outcome
         reason_codes:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Provider reason codes
         provider_reference:
           type:
@@ -32308,9 +33377,9 @@ components:
           description: Potential matches
         matches:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Candidate matches with list, score and reasons
         list_versions:
           type:
@@ -32484,9 +33553,9 @@ components:
           readOnly: true
         restrictions_applied:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Restrictions applied when overdue (e.g. debit block)
         custom_field_1:
           type:
@@ -48831,7 +49900,8 @@ components:
         case_number:
           type: string
           maxLength: 32
-          description: Human-readable case number
+          description: Human-readable case number (server-generated)
+          readOnly: true
         customer_id:
           type: string
           format: uuid
@@ -48880,7 +49950,8 @@ components:
           - CLOSED
           - CANCELLED
           - REOPENED
-          description: Status
+          description: Status (changes through the case actions)
+          readOnly: true
         priority:
           type: string
           enum:
@@ -48916,13 +49987,15 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Assignee
+          description: Assignee (set through assign)
+          readOnly: true
         sla_policy_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: SLA policy applied
+          description: SLA policy applied (matched on create)
+          readOnly: true
         first_response_due_at:
           type:
           - string
@@ -48948,6 +50021,44 @@ components:
           type: boolean
           description: SLA breached
           readOnly: true
+        sla_paused_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the resolution clock was paused (pending customer)
+          readOnly: true
+        sla_paused_minutes:
+          type: integer
+          format: int32
+          description: Business minutes the clock has been paused in total
+          readOnly: true
+        escalation_level:
+          type: integer
+          format: int32
+          description: Times escalated
+          readOnly: true
+        escalated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last escalation time
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+          description: Reason or message of the last status change
+          readOnly: true
+        complaint_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Complaint raised from this case
+          readOnly: true
         related_object_type:
           type:
           - string
@@ -48971,12 +50082,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Resolution code
+          description: Resolution code (set through resolve)
+          readOnly: true
         resolution_summary:
           type:
           - string
           - 'null'
-          description: How it was resolved
+          description: How it was resolved (set through resolve)
+          readOnly: true
         resolved_at:
           type:
           - string
@@ -49001,12 +50114,13 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Customer satisfaction 1..5
+          description: Customer satisfaction 1..5 (set through close)
+          readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags
         custom_field_1:
           type:
@@ -49051,7 +50165,132 @@ components:
       - priority
       - channel
       - sla_breached
+      - sla_paused_minutes
+      - escalation_level
       - reopened_count
+    CaseComment:
+      type: object
+      description: Comment on a case, internal or visible to the customer
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        service_case_id:
+          type: string
+          format: uuid
+          description: Case
+        visibility:
+          type: string
+          enum:
+          - INTERNAL
+          - CUSTOMER
+          description: Who can see it
+        author_type:
+          type: string
+          enum:
+          - STAFF
+          - CUSTOMER
+          - SYSTEM
+          - COPILOT
+          description: STAFF, CUSTOMER, SYSTEM, COPILOT
+        author_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Staff user or customer id
+        author_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that wrote the comment
+          readOnly: true
+        body:
+          type: string
+          description: Comment text
+        attachments:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Document ids
+        copilot_session_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Copilot draft this comment came from
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - service_case_id
+      - visibility
+      - author_type
+      - body
     Complaint:
       type: object
       description: A formal complaint handled under regulatory rules with deadlines, root cause and redress
@@ -49093,7 +50332,8 @@ components:
         complaint_number:
           type: string
           maxLength: 32
-          description: Human-readable complaint reference
+          description: Human-readable complaint reference (server-generated)
+          readOnly: true
         customer_id:
           type: string
           format: uuid
@@ -49156,6 +50396,12 @@ components:
           - USSD
           - API
           description: Channel
+        country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: 'Jurisdiction whose complaint rules apply (default: service configuration) (ISO 3166-1 alpha-2)'
         summary:
           type: string
           maxLength: 500
@@ -49176,7 +50422,8 @@ components:
           - REJECTED
           - ESCALATED_TO_OMBUDSMAN
           - CLOSED
-          description: Status
+          description: Status (changes through the complaint actions)
+          readOnly: true
         received_at:
           type: string
           format: date-time
@@ -49209,18 +50456,34 @@ components:
           format: date-time
           description: Final response time
           readOnly: true
+        deadline_at_risk_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the deadline-at-risk alert was raised
+          readOnly: true
+        deadline_breached_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the regulatory deadline breach was recorded
+          readOnly: true
         sla_policy_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: SLA policy
+          description: SLA policy (matched on create)
+          readOnly: true
         assigned_to:
           type:
           - string
           - 'null'
           format: uuid
-          description: Handler
+          description: Handler (set through assign)
+          readOnly: true
         work_queue_id:
           type:
           - string
@@ -49235,13 +50498,15 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Root cause
+          description: Root cause (set through propose-resolution)
+          readOnly: true
         root_cause_category:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Root cause category for trend analysis
+          readOnly: true
         outcome:
           type:
           - string
@@ -49251,7 +50516,21 @@ components:
           - PARTIALLY_UPHELD
           - NOT_UPHELD
           - WITHDRAWN
-          description: Outcome
+          description: Outcome (set through propose-resolution or withdraw)
+          readOnly: true
+        resolution_summary:
+          type:
+          - string
+          - 'null'
+          description: Proposed resolution shown in the final response
+          readOnly: true
+        resolution_proposed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the resolution was proposed
+          readOnly: true
         redress_amount:
           type:
           - string
@@ -49259,34 +50538,53 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Total redress paid
+          description: Total redress paid (sum of paid redress)
+          readOnly: true
         redress_currency:
           type:
           - string
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Currency of redress (ISO 4217)
+          readOnly: true
         final_response_document_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Final response letter
+          description: Final response letter (set through final-response)
+          readOnly: true
         escalated_to:
           type:
           - string
           - 'null'
           maxLength: 120
           description: Ombudsman / regulator escalated to
+          readOnly: true
+        ombudsman_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Case reference at the ombudsman
+          readOnly: true
         escalated_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Escalation time
+          readOnly: true
         reportable:
           type: boolean
           description: Included in regulatory complaint returns
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+          description: Reason or message of the last status change
+          readOnly: true
         closed_at:
           type:
           - string
@@ -49409,29 +50707,84 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Account credited
+          description: Customer account credited
+        ledger_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Ledger book of the posting (default: service configuration)'
+        funding_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Bank redress expense / suspense account debited (default: service configuration)'
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Posting created
+          description: Posting created on payment
+          readOnly: true
         approval_request_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Maker-checker approval
+          description: Maker-checker approval, when routed through workflow-service
+          readOnly: true
         status:
           type: string
-          maxLength: 20
-          description: PROPOSED, APPROVED, PAID, REJECTED
+          enum:
+          - PROPOSED
+          - APPROVED
+          - PAID
+          - REJECTED
+          - FAILED
+          description: Status (changes through approve / reject / pay)
+          readOnly: true
         description:
           type:
           - string
           - 'null'
           maxLength: 500
           description: Description
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason when rejected
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Ledger error when the payment failed
+          readOnly: true
         paid_at:
           type:
           - string
@@ -49744,13 +51097,15 @@ components:
           - IN_PROGRESS
           - DONE
           - CANCELLED
-          description: Status
+          description: Status (changes through next / assign / release / complete)
+          readOnly: true
         assigned_to:
           type:
           - string
           - 'null'
           format: uuid
-          description: Assignee
+          description: Assignee (set through next / assign)
+          readOnly: true
         assigned_at:
           type:
           - string
@@ -49764,12 +51119,44 @@ components:
           - 'null'
           format: date-time
           description: SLA due time
+        required_skills:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Skills needed for this item (skills-based routing; adds to the queue's)
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time work started (IN_PROGRESS)
+          readOnly: true
         completed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Completion time
+          readOnly: true
+        release_count:
+          type: integer
+          format: int32
+          description: Times returned to the queue
+          readOnly: true
+        last_release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on the last release
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last cancellation
           readOnly: true
         custom_field_1:
           type:
@@ -49812,6 +51199,187 @@ components:
       - title
       - priority
       - status
+      - release_count
+    KnowledgeArticle:
+      type: object
+      description: Knowledge-base article for staff and customers; also grounding content for the copilot
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        slug:
+          type: string
+          maxLength: 160
+          description: URL slug
+        title:
+          type: string
+          maxLength: 255
+          description: Title
+        body:
+          type: string
+          description: Article body (Markdown)
+        language:
+          type: string
+          maxLength: 10
+          description: Language
+        audience:
+          type: string
+          enum:
+          - STAFF
+          - CUSTOMER
+          - AGENT
+          description: STAFF, CUSTOMER, AGENT
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - IN_REVIEW
+          - PUBLISHED
+          - ARCHIVED
+          description: Status (changes through submit-review / publish / archive)
+          readOnly: true
+        tags:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Tags
+        case_types:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Case types it helps with (ServiceCaseType values)
+        version:
+          type: integer
+          format: int32
+          description: Version
+          readOnly: true
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Author who submitted the article for review
+          readOnly: true
+        reviewed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Reviewer who published it (four-eyes)
+          readOnly: true
+        review_due:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Next content review
+        view_count:
+          type: integer
+          format: int32
+          description: Views
+          readOnly: true
+        helpful_count:
+          type: integer
+          format: int32
+          description: Helpful votes
+          readOnly: true
+        not_helpful_count:
+          type: integer
+          format: int32
+          description: Not-helpful votes
+          readOnly: true
+        archived_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Archive time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - slug
+      - title
+      - body
+      - language
+      - audience
+      - status
+      - version
+      - view_count
+      - helpful_count
+      - not_helpful_count
     CopilotSession:
       type: object
       description: One AI copilot invocation by a staff member, with inputs, output, sources and feedback (audit trail)
@@ -49872,56 +51440,84 @@ components:
           - string
           - 'null'
           description: Staff prompt or question
+        language:
+          type:
+          - string
+          - 'null'
+          maxLength: 10
+          description: Target language (TRANSLATE) or reply language
+        prompt_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the prompt as sent to the model (audit)
+          readOnly: true
         context_refs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Records and articles retrieved as grounding
+          readOnly: true
         output:
           type: string
           description: Generated summary, draft or answer
+          readOnly: true
+        output_hash:
+          type: string
+          maxLength: 64
+          description: SHA-256 of the output (audit)
+          readOnly: true
         citations:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Sources cited in the output
+          readOnly: true
         model:
           type: string
           maxLength: 64
           description: Model id used
+          readOnly: true
         model_gateway_request_id:
           type:
           - string
           - 'null'
           maxLength: 128
           description: Request id at the model gateway
+          readOnly: true
         input_tokens:
           type:
           - integer
           - 'null'
           format: int32
           description: Input tokens
+          readOnly: true
         output_tokens:
           type:
           - integer
           - 'null'
           format: int32
           description: Output tokens
+          readOnly: true
         latency_ms:
           type:
           - integer
           - 'null'
           format: int32
           description: Latency
+          readOnly: true
         pii_redacted:
           type: boolean
           description: PII redacted before sending to the model
+          readOnly: true
         guardrail_flags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Guardrail triggers, if any
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -49959,8 +51555,102 @@ components:
       - task
       - context_refs
       - output
+      - output_hash
       - model
       - pii_redacted
+    CopilotFeedback:
+      type: object
+      description: Staff feedback on a copilot output (accepted, edited, rejected)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        copilot_session_id:
+          type: string
+          format: uuid
+          description: Session
+        feedback:
+          type: string
+          enum:
+          - ACCEPTED
+          - EDITED
+          - REJECTED
+          - NONE
+          description: Feedback
+        edited_output:
+          type:
+          - string
+          - 'null'
+          description: Final text after staff edits
+        edited_output_hash:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the edited text (audit)
+          readOnly: true
+        staff_user:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that gave the feedback
+          readOnly: true
+        comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+          description: Comment
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - copilot_session_id
+      - feedback
     TreasuryCounterparty:
       type: object
       description: Treasury counterparty (bank, central bank, broker, corporate) with identifiers and rating

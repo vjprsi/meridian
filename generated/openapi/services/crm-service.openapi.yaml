@@ -442,21 +442,27 @@ components:
       type: object
     CannedResponsesRenderRequest:
       properties:
+        complaint_id:
+          format: uuid
+          type: string
         customer_id:
           format: uuid
           type: string
         service_case_id:
           format: uuid
           type: string
+        values:
+          additionalProperties: true
+          type: object
       type: object
     CaseComment:
       description: Comment on a case, internal or visible to the customer
       properties:
         attachments:
-          additionalProperties: true
           description: Document ids
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         author_id:
           description: Staff user or customer id
@@ -464,9 +470,20 @@ components:
           type:
           - string
           - 'null'
+        author_name:
+          description: Principal that wrote the comment
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         author_type:
           description: STAFF, CUSTOMER, SYSTEM, COPILOT
-          maxLength: 20
+          enum:
+          - STAFF
+          - CUSTOMER
+          - SYSTEM
+          - COPILOT
           type: string
         body:
           description: Comment text
@@ -597,8 +614,9 @@ components:
           - string
           - 'null'
         assigned_to:
-          description: Handler
+          description: Handler (set through assign)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -644,9 +662,16 @@ components:
           - string
           - 'null'
         complaint_number:
-          description: Human-readable complaint reference
+          description: Human-readable complaint reference (server-generated)
           maxLength: 32
+          readOnly: true
           type: string
+        country:
+          description: 'Jurisdiction whose complaint rules apply (default: service configuration) (ISO 3166-1 alpha-2)'
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -693,6 +718,20 @@ components:
           description: Complainant
           format: uuid
           type: string
+        deadline_at_risk_at:
+          description: Time the deadline-at-risk alert was raised
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        deadline_breached_at:
+          description: Time the regulatory deadline breach was recorded
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         details:
           description: Full complaint
           type:
@@ -701,12 +740,14 @@ components:
         escalated_at:
           description: Escalation time
           format: date-time
+          readOnly: true
           type:
           - string
           - 'null'
         escalated_to:
           description: Ombudsman / regulator escalated to
           maxLength: 120
+          readOnly: true
           type:
           - string
           - 'null'
@@ -718,8 +759,9 @@ components:
           - string
           - 'null'
         final_response_document_id:
-          description: Final response letter
+          description: Final response letter (set through final-response)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -738,13 +780,21 @@ components:
         is_vulnerable_customer:
           description: Customer flagged as vulnerable
           type: boolean
+        ombudsman_reference:
+          description: Case reference at the ombudsman
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         outcome:
-          description: Outcome
+          description: Outcome (set through propose-resolution or withdraw)
           enum:
           - UPHELD
           - PARTIALLY_UPHELD
           - NOT_UPHELD
           - WITHDRAWN
+          readOnly: true
           type:
           - string
           - 'null'
@@ -759,16 +809,18 @@ components:
           format: date-time
           type: string
         redress_amount:
-          description: Total redress paid
+          description: Total redress paid (sum of paid redress)
           examples:
           - '125.50'
           format: decimal
+          readOnly: true
           type:
           - string
           - 'null'
         redress_currency:
           description: Currency of redress (ISO 4217)
           pattern: ^[A-Z]{3}$
+          readOnly: true
           type:
           - string
           - 'null'
@@ -787,15 +839,30 @@ components:
         reportable:
           description: Included in regulatory complaint returns
           type: boolean
+        resolution_proposed_at:
+          description: Time the resolution was proposed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        resolution_summary:
+          description: Proposed resolution shown in the final response
+          readOnly: true
+          type:
+          - string
+          - 'null'
         root_cause:
-          description: Root cause
+          description: Root cause (set through propose-resolution)
           maxLength: 255
+          readOnly: true
           type:
           - string
           - 'null'
         root_cause_category:
           description: Root cause category for trend analysis
           maxLength: 64
+          readOnly: true
           type:
           - string
           - 'null'
@@ -811,13 +878,14 @@ components:
           - string
           - 'null'
         sla_policy_id:
-          description: SLA policy
+          description: SLA policy (matched on create)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
         status:
-          description: Status
+          description: Status (changes through the complaint actions)
           enum:
           - RECEIVED
           - ACKNOWLEDGED
@@ -827,7 +895,15 @@ components:
           - REJECTED
           - ESCALATED_TO_OMBUDSMAN
           - CLOSED
+          readOnly: true
           type: string
+        status_reason:
+          description: Reason or message of the last status change
+          maxLength: 1000
+          readOnly: true
+          type:
+          - string
+          - 'null'
         summary:
           description: Summary
           maxLength: 500
@@ -867,10 +943,6 @@ components:
       type: object
     ComplaintCreate:
       properties:
-        assigned_to:
-          description: Handler
-          format: uuid
-          type: string
         category:
           description: Category
           enum:
@@ -905,9 +977,9 @@ components:
           - USSD
           - API
           type: string
-        complaint_number:
-          description: Human-readable complaint reference
-          maxLength: 32
+        country:
+          description: 'Jurisdiction whose complaint rules apply (default: service configuration) (ISO 3166-1 alpha-2)'
+          pattern: ^[A-Z]{2}$
           type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
@@ -936,29 +1008,9 @@ components:
         details:
           description: Full complaint
           type: string
-        escalated_at:
-          description: Escalation time
-          format: date-time
-          type: string
-        escalated_to:
-          description: Ombudsman / regulator escalated to
-          maxLength: 120
-          type: string
-        final_response_document_id:
-          description: Final response letter
-          format: uuid
-          type: string
         is_vulnerable_customer:
           description: Customer flagged as vulnerable
           type: boolean
-        outcome:
-          description: Outcome
-          enum:
-          - UPHELD
-          - PARTIALLY_UPHELD
-          - NOT_UPHELD
-          - WITHDRAWN
-          type: string
         product_id:
           description: Product complained about
           format: uuid
@@ -966,16 +1018,6 @@ components:
         received_at:
           description: Time received
           format: date-time
-          type: string
-        redress_amount:
-          description: Total redress paid
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        redress_currency:
-          description: Currency of redress (ISO 4217)
-          pattern: ^[A-Z]{3}$
           type: string
         related_object_id:
           description: Related object id
@@ -988,33 +1030,9 @@ components:
         reportable:
           description: Included in regulatory complaint returns
           type: boolean
-        root_cause:
-          description: Root cause
-          maxLength: 255
-          type: string
-        root_cause_category:
-          description: Root cause category for trend analysis
-          maxLength: 64
-          type: string
         service_case_id:
           description: Originating case
           format: uuid
-          type: string
-        sla_policy_id:
-          description: SLA policy
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - RECEIVED
-          - ACKNOWLEDGED
-          - INVESTIGATING
-          - RESOLUTION_PROPOSED
-          - RESOLVED
-          - REJECTED
-          - ESCALATED_TO_OMBUDSMAN
-          - CLOSED
           type: string
         summary:
           description: Summary
@@ -1025,7 +1043,6 @@ components:
           format: uuid
           type: string
       required:
-      - complaint_number
       - customer_id
       - category
       - channel
@@ -1060,9 +1077,31 @@ components:
           type:
           - string
           - 'null'
+        approval_comment:
+          description: Checker comment
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
         approval_request_id:
-          description: Maker-checker approval
+          description: Maker-checker approval, when routed through workflow-service
           format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_at:
+          description: Approval time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Checker who approved
+          maxLength: 64
+          readOnly: true
           type:
           - string
           - 'null'
@@ -1124,13 +1163,33 @@ components:
           type:
           - string
           - 'null'
+        failure_reason:
+          description: Ledger error when the payment failed
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        funding_account_id:
+          description: 'Bank redress expense / suspense account debited (default: service configuration)'
+          format: uuid
+          type:
+          - string
+          - 'null'
         id:
           description: Unique id (UUIDv7, time-ordered)
           format: uuid
           readOnly: true
           type: string
         journal_entry_id:
-          description: Posting created
+          description: Posting created on payment
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        ledger_id:
+          description: 'Ledger book of the posting (default: service configuration)'
           format: uuid
           type:
           - string
@@ -1152,17 +1211,30 @@ components:
           - APOLOGY
           - PROCESS_CHANGE
           type: string
+        rejection_reason:
+          description: Reason when rejected
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
         status:
-          description: PROPOSED, APPROVED, PAID, REJECTED
-          maxLength: 20
+          description: Status (changes through approve / reject / pay)
+          enum:
+          - PROPOSED
+          - APPROVED
+          - PAID
+          - REJECTED
+          - FAILED
+          readOnly: true
           type: string
         target_account_id:
-          description: Account credited
+          description: Customer account credited
           format: uuid
           type:
           - string
@@ -1202,10 +1274,6 @@ components:
           - '125.50'
           format: decimal
           type: string
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type: string
         complaint_id:
           description: Complaint
           format: uuid
@@ -1238,8 +1306,12 @@ components:
           description: Description
           maxLength: 500
           type: string
-        journal_entry_id:
-          description: Posting created
+        funding_account_id:
+          description: 'Bank redress expense / suspense account debited (default: service configuration)'
+          format: uuid
+          type: string
+        ledger_id:
+          description: 'Ledger book of the posting (default: service configuration)'
           format: uuid
           type: string
         redress_type:
@@ -1252,12 +1324,8 @@ components:
           - APOLOGY
           - PROCESS_CHANGE
           type: string
-        status:
-          description: PROPOSED, APPROVED, PAID, REJECTED
-          maxLength: 20
-          type: string
         target_account_id:
-          description: Account credited
+          description: Customer account credited
           format: uuid
           type: string
       required:
@@ -1292,10 +1360,6 @@ components:
       type: object
     ComplaintUpdate:
       properties:
-        assigned_to:
-          description: Handler
-          format: uuid
-          type: string
         category:
           description: Category
           enum:
@@ -1330,9 +1394,9 @@ components:
           - USSD
           - API
           type: string
-        complaint_number:
-          description: Human-readable complaint reference
-          maxLength: 32
+        country:
+          description: 'Jurisdiction whose complaint rules apply (default: service configuration) (ISO 3166-1 alpha-2)'
+          pattern: ^[A-Z]{2}$
           type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
@@ -1361,29 +1425,9 @@ components:
         details:
           description: Full complaint
           type: string
-        escalated_at:
-          description: Escalation time
-          format: date-time
-          type: string
-        escalated_to:
-          description: Ombudsman / regulator escalated to
-          maxLength: 120
-          type: string
-        final_response_document_id:
-          description: Final response letter
-          format: uuid
-          type: string
         is_vulnerable_customer:
           description: Customer flagged as vulnerable
           type: boolean
-        outcome:
-          description: Outcome
-          enum:
-          - UPHELD
-          - PARTIALLY_UPHELD
-          - NOT_UPHELD
-          - WITHDRAWN
-          type: string
         product_id:
           description: Product complained about
           format: uuid
@@ -1391,16 +1435,6 @@ components:
         received_at:
           description: Time received
           format: date-time
-          type: string
-        redress_amount:
-          description: Total redress paid
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        redress_currency:
-          description: Currency of redress (ISO 4217)
-          pattern: ^[A-Z]{3}$
           type: string
         related_object_id:
           description: Related object id
@@ -1413,33 +1447,9 @@ components:
         reportable:
           description: Included in regulatory complaint returns
           type: boolean
-        root_cause:
-          description: Root cause
-          maxLength: 255
-          type: string
-        root_cause_category:
-          description: Root cause category for trend analysis
-          maxLength: 64
-          type: string
         service_case_id:
           description: Originating case
           format: uuid
-          type: string
-        sla_policy_id:
-          description: SLA policy
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - RECEIVED
-          - ACKNOWLEDGED
-          - INVESTIGATING
-          - RESOLUTION_PROPOSED
-          - RESOLVED
-          - REJECTED
-          - ESCALATED_TO_OMBUDSMAN
-          - CLOSED
           type: string
         summary:
           description: Summary
@@ -1469,6 +1479,9 @@ components:
         escalated_to:
           maxLength: 120
           type: string
+        ombudsman_reference:
+          maxLength: 64
+          type: string
       required:
       - escalated_to
       type: object
@@ -1489,6 +1502,8 @@ components:
           - NOT_UPHELD
           - WITHDRAWN
           type: string
+        resolution_summary:
+          type: string
         root_cause:
           maxLength: 255
           type: string
@@ -1498,6 +1513,14 @@ components:
       required:
       - outcome
       - root_cause
+      type: object
+    ComplaintsWithdrawRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
       type: object
     CopilotFeedback:
       description: Staff feedback on a copilot output (accepted, edited, rejected)
@@ -1559,6 +1582,13 @@ components:
           type:
           - string
           - 'null'
+        edited_output_hash:
+          description: SHA-256 of the edited text (audit)
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         feedback:
           description: Feedback
           enum:
@@ -1572,6 +1602,13 @@ components:
           format: uuid
           readOnly: true
           type: string
+        staff_user:
+          description: Principal that gave the feedback
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
       required:
       - id
       - created_at
@@ -1600,10 +1637,11 @@ components:
       description: One AI copilot invocation by a staff member, with inputs, output, sources and feedback (audit trail)
       properties:
         citations:
-          additionalProperties: true
           description: Sources cited in the output
+          items: {}
+          readOnly: true
           type:
-          - object
+          - array
           - 'null'
         complaint_id:
           description: Complaint in context
@@ -1612,9 +1650,10 @@ components:
           - string
           - 'null'
         context_refs:
-          additionalProperties: true
           description: Records and articles retrieved as grounding
-          type: object
+          items: {}
+          readOnly: true
+          type: array
         created_at:
           description: Creation time
           format: date-time
@@ -1664,10 +1703,11 @@ components:
           - string
           - 'null'
         guardrail_flags:
-          additionalProperties: true
           description: Guardrail triggers, if any
+          items: {}
+          readOnly: true
           type:
-          - object
+          - array
           - 'null'
         id:
           description: Unique id (UUIDv7, time-ordered)
@@ -1677,39 +1717,64 @@ components:
         input_tokens:
           description: Input tokens
           format: int32
+          readOnly: true
           type:
           - integer
+          - 'null'
+        language:
+          description: Target language (TRANSLATE) or reply language
+          maxLength: 10
+          type:
+          - string
           - 'null'
         latency_ms:
           description: Latency
           format: int32
+          readOnly: true
           type:
           - integer
           - 'null'
         model:
           description: Model id used
           maxLength: 64
+          readOnly: true
           type: string
         model_gateway_request_id:
           description: Request id at the model gateway
           maxLength: 128
+          readOnly: true
           type:
           - string
           - 'null'
         output:
           description: Generated summary, draft or answer
+          readOnly: true
+          type: string
+        output_hash:
+          description: SHA-256 of the output (audit)
+          maxLength: 64
+          readOnly: true
           type: string
         output_tokens:
           description: Output tokens
           format: int32
+          readOnly: true
           type:
           - integer
           - 'null'
         pii_redacted:
           description: PII redacted before sending to the model
+          readOnly: true
           type: boolean
         prompt:
           description: Staff prompt or question
+          type:
+          - string
+          - 'null'
+        prompt_hash:
+          description: SHA-256 of the prompt as sent to the model (audit)
+          maxLength: 64
+          readOnly: true
           type:
           - string
           - 'null'
@@ -1742,23 +1807,16 @@ components:
       - task
       - context_refs
       - output
+      - output_hash
       - model
       - pii_redacted
       type: object
     CopilotSessionCreate:
       properties:
-        citations:
-          additionalProperties: true
-          description: Sources cited in the output
-          type: object
         complaint_id:
           description: Complaint in context
           format: uuid
           type: string
-        context_refs:
-          additionalProperties: true
-          description: Records and articles retrieved as grounding
-          type: object
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1783,36 +1841,10 @@ components:
           description: Customer in context
           format: uuid
           type: string
-        guardrail_flags:
-          additionalProperties: true
-          description: Guardrail triggers, if any
-          type: object
-        input_tokens:
-          description: Input tokens
-          format: int32
-          type: integer
-        latency_ms:
-          description: Latency
-          format: int32
-          type: integer
-        model:
-          description: Model id used
-          maxLength: 64
+        language:
+          description: Target language (TRANSLATE) or reply language
+          maxLength: 10
           type: string
-        model_gateway_request_id:
-          description: Request id at the model gateway
-          maxLength: 128
-          type: string
-        output:
-          description: Generated summary, draft or answer
-          type: string
-        output_tokens:
-          description: Output tokens
-          format: int32
-          type: integer
-        pii_redacted:
-          description: PII redacted before sending to the model
-          type: boolean
         prompt:
           description: Staff prompt or question
           type: string
@@ -1839,9 +1871,6 @@ components:
       required:
       - staff_user_id
       - task
-      - context_refs
-      - output
-      - model
       type: object
     CopilotSessionPage:
       description: One page of CopilotSession results (newest first)
@@ -1968,10 +1997,10 @@ components:
           - string
           - 'null'
         visible_to_roles:
-          additionalProperties: true
           description: Restrict visibility to roles
+          items: {}
           type:
-          - object
+          - array
           - 'null'
       required:
       - id
@@ -2023,9 +2052,9 @@ components:
           description: Shown as a banner on the customer 360
           type: boolean
         visible_to_roles:
-          additionalProperties: true
           description: Restrict visibility to roles
-          type: object
+          items: {}
+          type: array
       required:
       - customer_id
       - body
@@ -2089,9 +2118,9 @@ components:
           description: Shown as a banner on the customer 360
           type: boolean
         visible_to_roles:
-          additionalProperties: true
           description: Restrict visibility to roles
-          type: object
+          items: {}
+          type: array
       type: object
     CustomerTimelineEvent:
       description: Read model of the customer timeline, projected from interactions, cases and domain events. Append-only.
@@ -2647,18 +2676,28 @@ components:
     KnowledgeArticle:
       description: Knowledge-base article for staff and customers; also grounding content for the copilot
       properties:
+        archived_at:
+          description: Archive time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         audience:
           description: STAFF, CUSTOMER, AGENT
-          maxLength: 20
+          enum:
+          - STAFF
+          - CUSTOMER
+          - AGENT
           type: string
         body:
           description: Article body (Markdown)
           type: string
         case_types:
-          additionalProperties: true
-          description: Case types it helps with
+          description: Case types it helps with (ServiceCaseType values)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         created_at:
           description: Creation time
@@ -2716,6 +2755,11 @@ components:
           description: Language
           maxLength: 10
           type: string
+        not_helpful_count:
+          description: Not-helpful votes
+          format: int32
+          readOnly: true
+          type: integer
         published_at:
           description: Publication time
           format: date-time
@@ -2730,8 +2774,9 @@ components:
           - string
           - 'null'
         reviewed_by:
-          description: Reviewer
-          format: uuid
+          description: Reviewer who published it (four-eyes)
+          maxLength: 64
+          readOnly: true
           type:
           - string
           - 'null'
@@ -2745,18 +2790,26 @@ components:
           maxLength: 160
           type: string
         status:
-          description: Status
+          description: Status (changes through submit-review / publish / archive)
           enum:
           - DRAFT
           - IN_REVIEW
           - PUBLISHED
           - ARCHIVED
+          readOnly: true
           type: string
-        tags:
-          additionalProperties: true
-          description: Tags
+        submitted_by:
+          description: Author who submitted the article for review
+          maxLength: 64
+          readOnly: true
           type:
-          - object
+          - string
+          - 'null'
+        tags:
+          description: Tags
+          items: {}
+          type:
+          - array
           - 'null'
         title:
           description: Title
@@ -2798,20 +2851,24 @@ components:
       - version
       - view_count
       - helpful_count
+      - not_helpful_count
       type: object
     KnowledgeArticleCreate:
       properties:
         audience:
           description: STAFF, CUSTOMER, AGENT
-          maxLength: 20
+          enum:
+          - STAFF
+          - CUSTOMER
+          - AGENT
           type: string
         body:
           description: Article body (Markdown)
           type: string
         case_types:
-          additionalProperties: true
-          description: Case types it helps with
-          type: object
+          description: Case types it helps with (ServiceCaseType values)
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -2840,26 +2897,14 @@ components:
           description: Next content review
           format: date
           type: string
-        reviewed_by:
-          description: Reviewer
-          format: uuid
-          type: string
         slug:
           description: URL slug
           maxLength: 160
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - IN_REVIEW
-          - PUBLISHED
-          - ARCHIVED
-          type: string
         tags:
-          additionalProperties: true
           description: Tags
-          type: object
+          items: {}
+          type: array
         title:
           description: Title
           maxLength: 255
@@ -2891,15 +2936,18 @@ components:
       properties:
         audience:
           description: STAFF, CUSTOMER, AGENT
-          maxLength: 20
+          enum:
+          - STAFF
+          - CUSTOMER
+          - AGENT
           type: string
         body:
           description: Article body (Markdown)
           type: string
         case_types:
-          additionalProperties: true
-          description: Case types it helps with
-          type: object
+          description: Case types it helps with (ServiceCaseType values)
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -2928,26 +2976,14 @@ components:
           description: Next content review
           format: date
           type: string
-        reviewed_by:
-          description: Reviewer
-          format: uuid
-          type: string
         slug:
           description: URL slug
           maxLength: 160
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - IN_REVIEW
-          - PUBLISHED
-          - ARCHIVED
-          type: string
         tags:
-          additionalProperties: true
           description: Tags
-          type: object
+          items: {}
+          type: array
         title:
           description: Title
           maxLength: 255
@@ -3000,14 +3036,16 @@ components:
       description: A customer service request or issue handled by servicing staff
       properties:
         assigned_to:
-          description: Assignee
+          description: Assignee (set through assign)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
         case_number:
-          description: Human-readable case number
+          description: Human-readable case number (server-generated)
           maxLength: 32
+          readOnly: true
           type: string
         case_type:
           description: Case type
@@ -3048,6 +3086,13 @@ components:
           type:
           - string
           - 'null'
+        complaint_id:
+          description: Complaint raised from this case
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -3061,8 +3106,9 @@ components:
           - string
           - 'null'
         csat_score:
-          description: Customer satisfaction 1..5
+          description: Customer satisfaction 1..5 (set through close)
           format: int32
+          readOnly: true
           type:
           - integer
           - 'null'
@@ -3105,6 +3151,18 @@ components:
           type:
           - string
           - 'null'
+        escalated_at:
+          description: Last escalation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        escalation_level:
+          description: Times escalated
+          format: int32
+          readOnly: true
+          type: integer
         first_responded_at:
           description: First response time
           format: date-time
@@ -3156,8 +3214,9 @@ components:
           readOnly: true
           type: integer
         resolution_code:
-          description: Resolution code
+          description: Resolution code (set through resolve)
           maxLength: 64
+          readOnly: true
           type:
           - string
           - 'null'
@@ -3169,7 +3228,8 @@ components:
           - string
           - 'null'
         resolution_summary:
-          description: How it was resolved
+          description: How it was resolved (set through resolve)
+          readOnly: true
           type:
           - string
           - 'null'
@@ -3189,14 +3249,27 @@ components:
           description: SLA breached
           readOnly: true
           type: boolean
+        sla_paused_at:
+          description: Time the resolution clock was paused (pending customer)
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        sla_paused_minutes:
+          description: Business minutes the clock has been paused in total
+          format: int32
+          readOnly: true
+          type: integer
         sla_policy_id:
-          description: SLA policy applied
+          description: SLA policy applied (matched on create)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
         status:
-          description: Status
+          description: Status (changes through the case actions)
           enum:
           - NEW
           - OPEN
@@ -3208,7 +3281,15 @@ components:
           - CLOSED
           - CANCELLED
           - REOPENED
+          readOnly: true
           type: string
+        status_reason:
+          description: Reason or message of the last status change
+          maxLength: 1000
+          readOnly: true
+          type:
+          - string
+          - 'null'
         subject:
           description: Short subject
           maxLength: 255
@@ -3220,10 +3301,10 @@ components:
           - string
           - 'null'
         tags:
-          additionalProperties: true
           description: Free tags
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         updated_at:
           description: Last update time
@@ -3256,18 +3337,12 @@ components:
       - priority
       - channel
       - sla_breached
+      - sla_paused_minutes
+      - escalation_level
       - reopened_count
       type: object
     ServiceCaseCreate:
       properties:
-        assigned_to:
-          description: Assignee
-          format: uuid
-          type: string
-        case_number:
-          description: Human-readable case number
-          maxLength: 32
-          type: string
         case_type:
           description: Case type
           enum:
@@ -3300,10 +3375,6 @@ components:
           - USSD
           - API
           type: string
-        csat_score:
-          description: Customer satisfaction 1..5
-          format: int32
-          type: integer
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -3351,31 +3422,6 @@ components:
           description: ACCOUNT, CARD, PAYMENT, LOAN, WALLET, TRANSACTION
           maxLength: 40
           type: string
-        resolution_code:
-          description: Resolution code
-          maxLength: 64
-          type: string
-        resolution_summary:
-          description: How it was resolved
-          type: string
-        sla_policy_id:
-          description: SLA policy applied
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - NEW
-          - OPEN
-          - IN_PROGRESS
-          - PENDING_CUSTOMER
-          - PENDING_INTERNAL
-          - ESCALATED
-          - RESOLVED
-          - CLOSED
-          - CANCELLED
-          - REOPENED
-          type: string
         subject:
           description: Short subject
           maxLength: 255
@@ -3385,15 +3431,14 @@ components:
           maxLength: 64
           type: string
         tags:
-          additionalProperties: true
           description: Free tags
-          type: object
+          items: {}
+          type: array
         work_queue_id:
           description: Queue
           format: uuid
           type: string
       required:
-      - case_number
       - customer_id
       - case_type
       - subject
@@ -3419,14 +3464,6 @@ components:
       type: object
     ServiceCaseUpdate:
       properties:
-        assigned_to:
-          description: Assignee
-          format: uuid
-          type: string
-        case_number:
-          description: Human-readable case number
-          maxLength: 32
-          type: string
         case_type:
           description: Case type
           enum:
@@ -3459,10 +3496,6 @@ components:
           - USSD
           - API
           type: string
-        csat_score:
-          description: Customer satisfaction 1..5
-          format: int32
-          type: integer
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -3510,31 +3543,6 @@ components:
           description: ACCOUNT, CARD, PAYMENT, LOAN, WALLET, TRANSACTION
           maxLength: 40
           type: string
-        resolution_code:
-          description: Resolution code
-          maxLength: 64
-          type: string
-        resolution_summary:
-          description: How it was resolved
-          type: string
-        sla_policy_id:
-          description: SLA policy applied
-          format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - NEW
-          - OPEN
-          - IN_PROGRESS
-          - PENDING_CUSTOMER
-          - PENDING_INTERNAL
-          - ESCALATED
-          - RESOLVED
-          - CLOSED
-          - CANCELLED
-          - REOPENED
-          type: string
         subject:
           description: Short subject
           maxLength: 255
@@ -3544,9 +3552,9 @@ components:
           maxLength: 64
           type: string
         tags:
-          additionalProperties: true
           description: Free tags
-          type: object
+          items: {}
+          type: array
         work_queue_id:
           description: Queue
           format: uuid
@@ -3560,6 +3568,14 @@ components:
       required:
       - assigned_to
       type: object
+    ServiceCasesCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
     ServiceCasesCloseRequest:
       properties:
         csat_score:
@@ -3569,9 +3585,22 @@ components:
     ServiceCasesCommentsRequest:
       properties:
         attachments:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
+        author_id:
+          format: uuid
+          type: string
+        author_type:
+          enum:
+          - STAFF
+          - CUSTOMER
+          - SYSTEM
+          - COPILOT
+          type: string
         body:
+          type: string
+        copilot_session_id:
+          format: uuid
           type: string
         visibility:
           enum:
@@ -3603,6 +3632,12 @@ components:
           type: string
       required:
       - category
+      type: object
+    ServiceCasesCustomerRespondedRequest:
+      properties:
+        message:
+          maxLength: 1000
+          type: string
       type: object
     ServiceCasesEscalateRequest:
       properties:
@@ -3646,7 +3681,21 @@ components:
       properties:
         applies_to:
           description: CASE or COMPLAINT
-          maxLength: 20
+          enum:
+          - CASE
+          - COMPLAINT
+          type: string
+        at_risk_percent:
+          description: Elapsed share of the target after which an item is at risk
+          format: int32
+          type: integer
+        business_day_end:
+          description: End of the business day (HH:mm, policy time zone)
+          maxLength: 5
+          type: string
+        business_day_start:
+          description: Start of the business day (HH:mm, policy time zone)
+          maxLength: 5
           type: string
         business_hours_only:
           description: Count only business hours
@@ -3738,10 +3787,10 @@ components:
           - string
           - 'null'
         escalation_rules:
-          additionalProperties: true
-          description: Escalation steps when targets are at risk or breached
+          description: Escalation steps when targets are at risk or breached ({at_percent, work_queue_id, priority})
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         first_response_minutes:
           description: Target time to first response
@@ -3768,6 +3817,9 @@ components:
           description: Policy name
           maxLength: 120
           type: string
+        pause_on_pending_customer:
+          description: Stop the resolution clock while waiting for the customer
+          type: boolean
         priority:
           description: Priority (empty = any)
           enum:
@@ -3793,6 +3845,10 @@ components:
           format: int32
           readOnly: true
           type: integer
+        time_zone:
+          description: IANA time zone of the business hours
+          maxLength: 40
+          type: string
         updated_at:
           description: Last update time
           format: date-time
@@ -3805,6 +3861,12 @@ components:
           type:
           - string
           - 'null'
+        working_days:
+          description: ISO days of week counted as working days (1=Monday..7=Sunday); empty = Monday..Friday
+          items: {}
+          type:
+          - array
+          - 'null'
       required:
       - id
       - created_at
@@ -3815,6 +3877,11 @@ components:
       - first_response_minutes
       - resolution_minutes
       - business_hours_only
+      - business_day_start
+      - business_day_end
+      - time_zone
+      - pause_on_pending_customer
+      - at_risk_percent
       - is_regulatory
       - is_active
       type: object
@@ -3822,7 +3889,21 @@ components:
       properties:
         applies_to:
           description: CASE or COMPLAINT
-          maxLength: 20
+          enum:
+          - CASE
+          - COMPLAINT
+          type: string
+        at_risk_percent:
+          description: Elapsed share of the target after which an item is at risk
+          format: int32
+          type: integer
+        business_day_end:
+          description: End of the business day (HH:mm, policy time zone)
+          maxLength: 5
+          type: string
+        business_day_start:
+          description: Start of the business day (HH:mm, policy time zone)
+          maxLength: 5
           type: string
         business_hours_only:
           description: Count only business hours
@@ -3886,9 +3967,9 @@ components:
           maxLength: 500
           type: string
         escalation_rules:
-          additionalProperties: true
-          description: Escalation steps when targets are at risk or breached
-          type: object
+          description: Escalation steps when targets are at risk or breached ({at_percent, work_queue_id, priority})
+          items: {}
+          type: array
         first_response_minutes:
           description: Target time to first response
           format: int32
@@ -3907,6 +3988,9 @@ components:
           description: Policy name
           maxLength: 120
           type: string
+        pause_on_pending_customer:
+          description: Stop the resolution clock while waiting for the customer
+          type: boolean
         priority:
           description: Priority (empty = any)
           enum:
@@ -3923,6 +4007,14 @@ components:
           description: Target time to resolution
           format: int32
           type: integer
+        time_zone:
+          description: IANA time zone of the business hours
+          maxLength: 40
+          type: string
+        working_days:
+          description: ISO days of week counted as working days (1=Monday..7=Sunday); empty = Monday..Friday
+          items: {}
+          type: array
       required:
       - name
       - applies_to
@@ -3951,7 +4043,21 @@ components:
       properties:
         applies_to:
           description: CASE or COMPLAINT
-          maxLength: 20
+          enum:
+          - CASE
+          - COMPLAINT
+          type: string
+        at_risk_percent:
+          description: Elapsed share of the target after which an item is at risk
+          format: int32
+          type: integer
+        business_day_end:
+          description: End of the business day (HH:mm, policy time zone)
+          maxLength: 5
+          type: string
+        business_day_start:
+          description: Start of the business day (HH:mm, policy time zone)
+          maxLength: 5
           type: string
         business_hours_only:
           description: Count only business hours
@@ -4015,9 +4121,9 @@ components:
           maxLength: 500
           type: string
         escalation_rules:
-          additionalProperties: true
-          description: Escalation steps when targets are at risk or breached
-          type: object
+          description: Escalation steps when targets are at risk or breached ({at_percent, work_queue_id, priority})
+          items: {}
+          type: array
         first_response_minutes:
           description: Target time to first response
           format: int32
@@ -4036,6 +4142,9 @@ components:
           description: Policy name
           maxLength: 120
           type: string
+        pause_on_pending_customer:
+          description: Stop the resolution clock while waiting for the customer
+          type: boolean
         priority:
           description: Priority (empty = any)
           enum:
@@ -4052,6 +4161,14 @@ components:
           description: Target time to resolution
           format: int32
           type: integer
+        time_zone:
+          description: IANA time zone of the business hours
+          maxLength: 40
+          type: string
+        working_days:
+          description: ISO days of week counted as working days (1=Monday..7=Sunday); empty = Monday..Friday
+          items: {}
+          type: array
       type: object
     WorkItem:
       description: An item of work in a queue, pointing at a case, complaint or any other business object
@@ -4064,8 +4181,9 @@ components:
           - string
           - 'null'
         assigned_to:
-          description: Assignee
+          description: Assignee (set through next / assign)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -4129,6 +4247,13 @@ components:
           format: uuid
           readOnly: true
           type: string
+        last_release_reason:
+          description: Reason given on the last release
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         priority:
           description: Priority
           enum:
@@ -4137,20 +4262,46 @@ components:
           - HIGH
           - URGENT
           type: string
+        release_count:
+          description: Times returned to the queue
+          format: int32
+          readOnly: true
+          type: integer
+        required_skills:
+          description: Skills needed for this item (skills-based routing; adds to the queue's)
+          items: {}
+          type:
+          - array
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
+        started_at:
+          description: Time work started (IN_PROGRESS)
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         status:
-          description: Status
+          description: Status (changes through next / assign / release / complete)
           enum:
           - QUEUED
           - ASSIGNED
           - IN_PROGRESS
           - DONE
           - CANCELLED
+          readOnly: true
           type: string
+        status_reason:
+          description: Reason of the last cancellation
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         subject_id:
           description: Subject id
           format: uuid
@@ -4190,13 +4341,10 @@ components:
       - title
       - priority
       - status
+      - release_count
       type: object
     WorkItemCreate:
       properties:
-        assigned_to:
-          description: Assignee
-          format: uuid
-          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -4229,15 +4377,10 @@ components:
           - HIGH
           - URGENT
           type: string
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - ASSIGNED
-          - IN_PROGRESS
-          - DONE
-          - CANCELLED
-          type: string
+        required_skills:
+          description: Skills needed for this item (skills-based routing; adds to the queue's)
+          items: {}
+          type: array
         subject_id:
           description: Subject id
           format: uuid
@@ -4280,10 +4423,6 @@ components:
       type: object
     WorkItemUpdate:
       properties:
-        assigned_to:
-          description: Assignee
-          format: uuid
-          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -4316,15 +4455,10 @@ components:
           - HIGH
           - URGENT
           type: string
-        status:
-          description: Status
-          enum:
-          - QUEUED
-          - ASSIGNED
-          - IN_PROGRESS
-          - DONE
-          - CANCELLED
-          type: string
+        required_skills:
+          description: Skills needed for this item (skills-based routing; adds to the queue's)
+          items: {}
+          type: array
         subject_id:
           description: Subject id
           format: uuid
@@ -4350,11 +4484,27 @@ components:
       required:
       - assigned_to
       type: object
+    WorkItemsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
     WorkItemsNextRequest:
       properties:
+        assignee_id:
+          format: uuid
+          type: string
+        skills:
+          items: {}
+          type: array
         work_queue_id:
           format: uuid
           type: string
+      required:
+      - assignee_id
       type: object
     WorkItemsReleaseRequest:
       properties:
@@ -4439,10 +4589,10 @@ components:
           maxLength: 120
           type: string
         required_skills:
-          additionalProperties: true
           description: Skills required for skills-based routing
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         routing:
           description: Assignment strategy
@@ -4531,9 +4681,9 @@ components:
           maxLength: 120
           type: string
         required_skills:
-          additionalProperties: true
           description: Skills required for skills-based routing
-          type: object
+          items: {}
+          type: array
         routing:
           description: Assignment strategy
           enum:
@@ -4613,9 +4763,9 @@ components:
           maxLength: 120
           type: string
         required_skills:
-          additionalProperties: true
           description: Skills required for skills-based routing
-          type: object
+          items: {}
+          type: array
         routing:
           description: Assignment strategy
           enum:
@@ -4675,7 +4825,9 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 20
+          enum:
+          - CASE
+          - COMPLAINT
       - name: case_type
         in: query
         schema:
@@ -5148,7 +5300,7 @@ paths:
   /v1/servicing/work-queues/{id}/stats:
     get:
       operationId: workQueuesStats
-      summary: Queue size, ageing and SLA risk
+      summary: Queue size, ageing, per-assignee load and SLA risk
       tags:
       - Work Queues
       security:
@@ -5162,8 +5314,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5390,7 +5548,7 @@ paths:
   /v1/servicing/work-items/next:
     post:
       operationId: workItemsNext
-      summary: Pull the next item for the current user
+      summary: Pull the next item for the current user (priority, due time and skills routing)
       tags:
       - Work Items
       security:
@@ -5466,6 +5624,45 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/WorkItemsAssignRequest'
+      x-requirements:
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: work_item
+  /v1/servicing/work-items/{id}/start:
+    post:
+      operationId: workItemsStart
+      summary: Start working on an assigned item
+      tags:
+      - Work Items
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - SRV-01
       x-service: crm-service
@@ -5550,6 +5747,51 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: work_item
+  /v1/servicing/work-items/{id}/cancel:
+    post:
+      operationId: workItemsCancel
+      summary: Cancel an item that no longer needs work
+      tags:
+      - Work Items
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkItemsCancelRequest'
       x-requirements:
       - SRV-01
       x-service: crm-service
@@ -5911,6 +6153,46 @@ paths:
       x-service: crm-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
       x-table: service_case
+  /v1/servicing/cases/{id}/start:
+    post:
+      operationId: serviceCasesStart
+      summary: Start work on the case
+      tags:
+      - Service Cases
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceCase'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-02
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: service_case
   /v1/servicing/cases/{id}/pending-customer:
     post:
       operationId: serviceCasesPendingCustomer
@@ -5951,6 +6233,98 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ServiceCasesPendingCustomerRequest'
+      x-requirements:
+      - CIF-02
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: service_case
+  /v1/servicing/cases/{id}/customer-responded:
+    post:
+      operationId: serviceCasesCustomerResponded
+      summary: 'Customer input received: resume work and the SLA clock'
+      tags:
+      - Service Cases
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceCase'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCasesCustomerRespondedRequest'
+      x-requirements:
+      - CIF-02
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: service_case
+  /v1/servicing/cases/{id}/cancel:
+    post:
+      operationId: serviceCasesCancel
+      summary: Cancel the case (raised in error or withdrawn)
+      tags:
+      - Service Cases
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceCase'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCasesCancelRequest'
       x-requirements:
       - CIF-02
       - SRV-01
@@ -6217,6 +6591,42 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ServiceCasesCommentsRequest'
+      x-requirements:
+      - CIF-02
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: service_case
+  /v1/servicing/cases/sla-check:
+    post:
+      operationId: serviceCasesSlaCheck
+      summary: Evaluate SLA breaches and at-risk deadlines (called by the scheduler)
+      tags:
+      - Service Cases
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - CIF-02
       - SRV-01
@@ -6550,6 +6960,45 @@ paths:
       x-service: crm-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
       x-table: complaint
+  /v1/servicing/complaints/{id}/investigate:
+    post:
+      operationId: complaintsInvestigate
+      summary: Start the investigation
+      tags:
+      - Complaints
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: complaint
   /v1/servicing/complaints/{id}/propose-resolution:
     post:
       operationId: complaintsProposeResolution
@@ -6685,6 +7134,51 @@ paths:
       x-service: crm-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
       x-table: complaint
+  /v1/servicing/complaints/{id}/withdraw:
+    post:
+      operationId: complaintsWithdraw
+      summary: The complainant withdrew the complaint
+      tags:
+      - Complaints
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplaintsWithdrawRequest'
+      x-requirements:
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: complaint
   /v1/servicing/complaints/{id}/close:
     post:
       operationId: complaintsClose
@@ -6763,16 +7257,40 @@ paths:
   /v1/servicing/complaints/reports/regulatory:
     get:
       operationId: complaintsReportsRegulatory
-      summary: Complaint statistics for regulatory returns (?from=&to=&country=)
+      summary: Complaint statistics for regulatory returns
       tags:
       - Complaints
       security:
       - oauth2:
         - servicing:read
-      parameters: []
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: country
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6783,6 +7301,41 @@ paths:
       - SRV-01
       x-service: crm-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:read")'
+      x-table: complaint
+  /v1/servicing/complaints/deadline-check:
+    post:
+      operationId: complaintsDeadlineCheck
+      summary: Flag complaints close to or past their regulatory deadlines (called by the scheduler)
+      tags:
+      - Complaints
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
       x-table: complaint
   /v1/servicing/complaint-redress:
     get:
@@ -6818,7 +7371,12 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 20
+          enum:
+          - PROPOSED
+          - APPROVED
+          - PAID
+          - REJECTED
+          - FAILED
       - name: custom_field_1
         in: query
         schema:
@@ -7608,6 +8166,55 @@ paths:
       x-table: customer_timeline_event
       x-crud: true
       x-crud-list: true
+  /v1/servicing/customers/{customer_id}/timeline/summary:
+    get:
+      operationId: customerTimelineSummary
+      summary: 'Aggregated timeline: counts per domain and type, open items, latest highlights'
+      tags:
+      - Customer Timeline
+      security:
+      - oauth2:
+        - servicing:read
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-02
+      - SRV-01
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:read")'
+      x-table: customer_timeline_event
   /v1/servicing/knowledge-articles:
     get:
       operationId: knowledgeArticlesList
@@ -7640,7 +8247,10 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 20
+          enum:
+          - STAFF
+          - CUSTOMER
+          - AGENT
       - name: slug
         in: query
         schema:
@@ -7808,13 +8418,37 @@ paths:
   /v1/servicing/knowledge-articles/search:
     get:
       operationId: knowledgeArticlesSearch
-      summary: Semantic search over published articles (?q=)
+      summary: Ranked search over published articles
       tags:
       - Knowledge Articles
       security:
       - oauth2:
         - servicing:read
       parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+      - name: audience
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+      - name: case_type
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -7877,7 +8511,7 @@ paths:
   /v1/servicing/knowledge-articles/{id}/publish:
     post:
       operationId: knowledgeArticlesPublish
-      summary: Publish
+      summary: Publish (reviewer must differ from the submitter)
       tags:
       - Knowledge Articles
       security:
@@ -7952,6 +8586,45 @@ paths:
       x-service: crm-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
       x-table: knowledge_article
+  /v1/servicing/knowledge-articles/{id}/new-version:
+    post:
+      operationId: knowledgeArticlesNewVersion
+      summary: Return a published or archived article to DRAFT as the next version
+      tags:
+      - Knowledge Articles
+      security:
+      - oauth2:
+        - servicing:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeArticle'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - SRV-02
+      x-service: crm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("servicing:write")'
+      x-table: knowledge_article
   /v1/servicing/knowledge-articles/{id}/feedback:
     post:
       operationId: knowledgeArticlesFeedback
@@ -7970,8 +8643,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeArticle'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8261,7 +8938,7 @@ paths:
   /v1/servicing/canned-responses/{id}/render:
     post:
       operationId: cannedResponsesRender
-      summary: Render with placeholders filled for a case or customer
+      summary: Render with placeholders filled for a case, complaint or customer
       tags:
       - Canned Responses
       security:
@@ -8276,8 +8953,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

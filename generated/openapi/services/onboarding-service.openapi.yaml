@@ -139,11 +139,11 @@ components:
           - string
           - 'null'
         created_product_refs:
-          additionalProperties: true
           description: Accounts / wallets / cards opened on approval
+          items: {}
           readOnly: true
           type:
-          - object
+          - array
           - 'null'
         current_step:
           description: Code of the current step
@@ -198,11 +198,11 @@ components:
           - string
           - 'null'
         decision_reasons:
-          additionalProperties: true
           description: Rule outcomes and reason codes
+          items: {}
           readOnly: true
           type:
-          - object
+          - array
           - 'null'
         device_fingerprint:
           description: Device used
@@ -234,8 +234,21 @@ components:
           format: uuid
           readOnly: true
           type: string
+        info_requests:
+          description: Requests for more information ({message, step_codes, requested_by, requested_at})
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         ip_address:
           description: IP address at start (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Bank entity that will hold the relationship (needed to create the customer)
+          format: uuid
           type:
           - string
           - 'null'
@@ -250,10 +263,10 @@ components:
           - string
           - 'null'
         product_ids:
-          additionalProperties: true
           description: Products requested
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         progress_percent:
           description: Completion percentage
@@ -267,6 +280,13 @@ components:
           type:
           - string
           - 'null'
+        review_comment:
+          description: Checker comment on approval
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
         reviewed_at:
           description: Review time
           format: date-time
@@ -274,11 +294,26 @@ components:
           type:
           - string
           - 'null'
+        reviewed_by:
+          description: Principal that approved or rejected after referral
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         reviewer_id:
           description: Manual reviewer
           format: uuid
+          readOnly: true
           type:
           - string
+          - 'null'
+        risk_factors:
+          additionalProperties: true
+          description: Factor contributions of the onboarding risk score
+          readOnly: true
+          type:
+          - object
           - 'null'
         risk_level:
           description: Risk level
@@ -310,7 +345,7 @@ components:
           - string
           - 'null'
         status:
-          description: Status
+          description: Status (changes through the application actions)
           enum:
           - STARTED
           - IN_PROGRESS
@@ -321,10 +356,18 @@ components:
           - REJECTED
           - ABANDONED
           - EXPIRED
+          readOnly: true
           type: string
         submitted_at:
           description: Submission time
           format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        submitted_by:
+          description: Principal that submitted the application
+          maxLength: 64
           readOnly: true
           type:
           - string
@@ -434,6 +477,10 @@ components:
         ip_address:
           description: IP address at start (IPv4 or IPv6 address)
           type: string
+        legal_entity_id:
+          description: Bank entity that will hold the relationship (needed to create the customer)
+          format: uuid
+          type: string
         onboarding_journey_id:
           description: Journey version
           format: uuid
@@ -443,29 +490,12 @@ components:
           pattern: ^\+[1-9]\d{6,14}$
           type: string
         product_ids:
-          additionalProperties: true
           description: Products requested
-          type: object
-        reviewer_id:
-          description: Manual reviewer
-          format: uuid
-          type: string
+          items: {}
+          type: array
         staff_user_id:
           description: Staff member assisting
           format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - STARTED
-          - IN_PROGRESS
-          - SUBMITTED
-          - UNDER_REVIEW
-          - REFERRED
-          - APPROVED
-          - REJECTED
-          - ABANDONED
-          - EXPIRED
           type: string
         utm:
           additionalProperties: true
@@ -570,6 +600,10 @@ components:
         ip_address:
           description: IP address at start (IPv4 or IPv6 address)
           type: string
+        legal_entity_id:
+          description: Bank entity that will hold the relationship (needed to create the customer)
+          format: uuid
+          type: string
         onboarding_journey_id:
           description: Journey version
           format: uuid
@@ -579,29 +613,12 @@ components:
           pattern: ^\+[1-9]\d{6,14}$
           type: string
         product_ids:
-          additionalProperties: true
           description: Products requested
-          type: object
-        reviewer_id:
-          description: Manual reviewer
-          format: uuid
-          type: string
+          items: {}
+          type: array
         staff_user_id:
           description: Staff member assisting
           format: uuid
-          type: string
-        status:
-          description: Status
-          enum:
-          - STARTED
-          - IN_PROGRESS
-          - SUBMITTED
-          - UNDER_REVIEW
-          - REFERRED
-          - APPROVED
-          - REJECTED
-          - ABANDONED
-          - EXPIRED
           type: string
         utm:
           additionalProperties: true
@@ -628,8 +645,8 @@ components:
           maxLength: 1000
           type: string
         step_codes:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
       required:
       - message
       type: object
@@ -651,9 +668,9 @@ components:
           - string
           - 'null'
         channels:
-          additionalProperties: true
-          description: Allowed channels
-          type: object
+          description: Allowed channels (OnboardingChannel values)
+          items: {}
+          type: array
         code:
           description: Journey code, e.g. RETAIL_WALLET_KE
           maxLength: 64
@@ -742,14 +759,35 @@ components:
           maxLength: 160
           type: string
         product_ids:
-          additionalProperties: true
           description: Products that can be opened at the end of the journey
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         published_at:
           description: Publication time
           format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        published_by:
+          description: Checker who published the version
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        retired_at:
+          description: Retirement time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        retirement_reason:
+          description: Reason given when retired
+          maxLength: 255
           readOnly: true
           type:
           - string
@@ -760,11 +798,12 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changes through publish / retire)
           enum:
           - DRAFT
           - PUBLISHED
           - RETIRED
+          readOnly: true
           type: string
         target_tier:
           description: KYC tier granted on approval
@@ -787,8 +826,9 @@ components:
           - string
           - 'null'
         version:
-          description: Version number
+          description: Version number (server-managed; see new-version)
           format: int32
+          readOnly: true
           type: integer
       required:
       - id
@@ -812,9 +852,9 @@ components:
           format: uuid
           type: string
         channels:
-          additionalProperties: true
-          description: Allowed channels
-          type: object
+          description: Allowed channels (OnboardingChannel values)
+          items: {}
+          type: array
         code:
           description: Journey code, e.g. RETAIL_WALLET_KE
           maxLength: 64
@@ -872,16 +912,9 @@ components:
           maxLength: 160
           type: string
         product_ids:
-          additionalProperties: true
           description: Products that can be opened at the end of the journey
-          type: object
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - RETIRED
-          type: string
+          items: {}
+          type: array
         target_tier:
           description: KYC tier granted on approval
           enum:
@@ -890,10 +923,6 @@ components:
           - TIER_2
           - TIER_3
           type: string
-        version:
-          description: Version number
-          format: int32
-          type: integer
       required:
       - code
       - name
@@ -927,9 +956,9 @@ components:
           format: uuid
           type: string
         channels:
-          additionalProperties: true
-          description: Allowed channels
-          type: object
+          description: Allowed channels (OnboardingChannel values)
+          items: {}
+          type: array
         code:
           description: Journey code, e.g. RETAIL_WALLET_KE
           maxLength: 64
@@ -987,16 +1016,9 @@ components:
           maxLength: 160
           type: string
         product_ids:
-          additionalProperties: true
           description: Products that can be opened at the end of the journey
-          type: object
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - RETIRED
-          type: string
+          items: {}
+          type: array
         target_tier:
           description: KYC tier granted on approval
           enum:
@@ -1005,10 +1027,6 @@ components:
           - TIER_2
           - TIER_3
           type: string
-        version:
-          description: Version number
-          format: int32
-          type: integer
       type: object
     OnboardingJourneysRetireRequest:
       properties:
@@ -1820,8 +1838,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2426,7 +2450,7 @@ paths:
   /v1/onboarding/applications/{id}/resume:
     post:
       operationId: onboardingApplicationsResume
-      summary: Send a resume link to the applicant
+      summary: Send a resume link to the applicant (new expiry and delivery channel)
       tags:
       - Onboarding Applications
       security:
@@ -2441,8 +2465,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

@@ -168,7 +168,7 @@ class BillingFlowIT {
         assertThat(expect(send("GET", "/v1/billing/usage/summary?to=" + p0, null, null, TENANT), 400)
                 .get("code").asString()).isEqualTo("missing_parameter");
         assertThat(expect(send("GET", "/v1/billing/usage/summary?from=bad&to=" + p0, null, null, TENANT), 400)
-                .get("code").asString()).isEqualTo("missing_parameter");
+                .get("code").asString()).isEqualTo("malformed_request");
         assertThat(events("platform.usage_record.recorded")).isEqualTo(5);
     }
 

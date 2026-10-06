@@ -6387,14 +6387,16 @@ API: /v1/customers · Requirements: CIF-01, CIF-02, CIF-03
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| customer_number | varchar(32) | no | UQ | customer_number | Human-readable customer number (CIF number) |
+| customer_number | varchar(32) | no | UQ | customer_number (read-only) | Human-readable customer number (CIF number), server-generated per tenant with a Luhn check digit |
 | customer_type | varchar(40) (CustomerType) | no |  | customer_type | Individual or kind of organisation |
 | status | varchar(40) (CustomerStatus) | no |  | status | Lifecycle status |
 | kyc_tier | varchar(40) (CustomerKycTier) | no |  | kyc_tier (read-only) | Current KYC tier; drives limits and product eligibility |
+| pending_tier | varchar(40) (CustomerKycTier) | yes |  | pending_tier (read-only) | Tier upgrade awaiting checker approval (change-tier) |
+| tier_approval_request_id | uuid | yes | ref → approval_request | tier_approval_request_id (read-only) | workflow-service approval request of the pending tier upgrade |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Bank entity that holds the customer relationship |
 | home_branch_id | uuid | yes | ref → branch | home_branch_id | Home branch |
 | relationship_manager_id | uuid | yes | ref → app_user | relationship_manager_id | Assigned relationship manager |
-| display_name | varchar(200) | no |  | display_name | Name shown in channels and consoles PII |
+| display_name | varchar(200) | yes |  | display_name | Name shown in channels and consoles (derived when absent: first + last name, or trading / legal name) PII |
 | title | varchar(20) | yes |  | title | Salutation, e.g. Mr, Ms, Dr PII |
 | first_name | varchar(100) | yes |  | first_name | Given name (individuals) PII |
 | middle_name | varchar(100) | yes |  | middle_name | Middle name(s) PII |
@@ -6437,11 +6439,39 @@ API: /v1/customers · Requirements: CIF-01, CIF-02, CIF-03
 | onboarding_channel | varchar(40) (OnboardingChannel) | yes |  | onboarding_channel | Channel used to onboard |
 | referral_code | varchar(32) | yes |  | referral_code | Referral or campaign code used at onboarding |
 | dormant_since | date | yes |  | dormant_since (read-only) | Date the customer became dormant |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason given for the last lifecycle change |
+| status_changed_at | timestamptz | yes |  | status_changed_at (read-only) | Time of the last lifecycle change |
+| status_changed_by | varchar(64) | yes |  | status_changed_by (read-only) | Principal that made the last lifecycle change |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closure time |
-| closure_reason | varchar(255) | yes |  | closure_reason | Reason for closure |
-| deceased_on | date | yes |  | deceased_on | Date of death when notified PII |
+| closure_reason | varchar(255) | yes |  | closure_reason (read-only) | Reason for closure (set by close, merge or erasure) |
+| deceased_on | date | yes |  | deceased_on (read-only) | Date of death when notified (set by mark-deceased) PII |
+| deceased_document_id | uuid | yes | ref → document | deceased_document_id (read-only) | Death certificate or notification document |
+| merged_into_customer_id | uuid | yes | FK → customer | merged_into_customer_id (read-only) | Surviving customer this duplicate was merged into |
+| erased_at | timestamptz | yes |  | erased_at (read-only) | Time personal data was erased on request (privacy) |
 | external_ref | varchar(64) | yes |  | external_ref | Client system reference (core migration, partner id) |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `customer_number_counter`
+
+Per-tenant sequence behind server-generated customer numbers (internal; one row per tenant)
+
+API: internal only · Requirements: CIF-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| last_value | bigint | no |  | last_value | Last number issued |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -6790,6 +6820,39 @@ API: /v1/customers/{customer_id}/credentials · Requirements: CIF-01
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `contact_verification`
+
+One-time-password challenge sent to verify a contact point; the code is kept only as a salted hash
+
+API: internal only · Requirements: CIF-01, NOT-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | FK → customer | customer_id | Customer |
+| customer_contact_id | uuid | no | FK → customer_contact | customer_contact_id | Contact point being verified |
+| channel | varchar(40) (ContactVerificationChannel) | no |  | channel (read-only) | Delivery channel |
+| destination_masked | varchar(64) | no |  | destination_masked (read-only) | Masked phone number or email the code was sent to |
+| code_hash | varchar(255) | no |  | — | Salted hash of the one-time code secret |
+| status | varchar(40) (ContactVerificationStatus) | no |  | status (read-only) | Challenge status |
+| attempts | integer | no |  | attempts (read-only) | Wrong codes entered |
+| max_attempts | integer | no |  | max_attempts (read-only) | Wrong codes allowed before the challenge locks |
+| expires_at | timestamptz | no |  | expires_at (read-only) | Code expiry |
+| resend_available_at | timestamptz | no |  | resend_available_at (read-only) | Earliest time a new code can be requested |
+| locked_until | timestamptz | yes |  | locked_until (read-only) | End of the lockout after too many wrong codes |
+| verified_at | timestamptz | yes |  | verified_at (read-only) | Time the code was confirmed |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 #### `consent`
 
 Consent given or withdrawn by a customer for a purpose and scope (GDPR, LGPD, DPDP, POPIA, open banking)
@@ -6877,18 +6940,21 @@ API: /v1/onboarding/journeys · Requirements: ONB-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | code | varchar(64) | no |  | code | Journey code, e.g. RETAIL_WALLET_KE |
-| version | integer | no |  | version | Version number |
+| version | integer | no |  | version (read-only) | Version number (server-managed; see new-version) |
 | name | varchar(160) | no |  | name | Journey name |
-| status | varchar(40) (OnboardingJourneyStatus) | no |  | status | Status |
+| status | varchar(40) (OnboardingJourneyStatus) | no |  | status (read-only) | Status (changes through publish / retire) |
 | customer_type | varchar(40) (CustomerType) | no |  | customer_type | Individual or business journey |
 | country | char(2) | yes |  | country | Country the journey applies to |
-| channels | jsonb | no |  | channels | Allowed channels |
+| channels | jsonb | no |  | channels | Allowed channels (OnboardingChannel values) |
 | product_ids | jsonb | yes |  | product_ids | Products that can be opened at the end of the journey |
 | target_tier | varchar(40) (CustomerKycTier) | no |  | target_tier | KYC tier granted on approval |
 | definition | jsonb | no |  | definition | Steps, branching conditions and screens (server-driven UI) |
 | decision_rules | jsonb | yes |  | decision_rules | Auto-approve / refer / reject rules |
 | expiry_days | integer | no |  | expiry_days | Days before an idle application expires |
 | published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
+| published_by | varchar(64) | yes |  | published_by (read-only) | Checker who published the version |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
+| retirement_reason | varchar(255) | yes |  | retirement_reason (read-only) | Reason given when retired |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval for publication |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -6914,7 +6980,8 @@ API: /v1/onboarding/applications · Requirements: ONB-01, ONB-05
 | application_number | varchar(32) | no | UQ | application_number | Human-readable reference |
 | onboarding_journey_id | uuid | no | FK → onboarding_journey | onboarding_journey_id | Journey version |
 | customer_id | uuid | yes | ref → customer | customer_id | Customer created or matched |
-| status | varchar(40) (OnboardingApplicationStatus) | no |  | status | Status |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Bank entity that will hold the relationship (needed to create the customer) |
+| status | varchar(40) (OnboardingApplicationStatus) | no |  | status (read-only) | Status (changes through the application actions) |
 | channel | varchar(40) (OnboardingChannel) | no |  | channel | Channel |
 | agent_id | uuid | yes | ref → agent | agent_id | Agent assisting (agent channel) |
 | branch_id | uuid | yes | ref → branch | branch_id | Branch (branch channel) |
@@ -6928,8 +6995,13 @@ API: /v1/onboarding/applications · Requirements: ONB-01, ONB-05
 | risk_level | varchar(40) (KycRiskLevel) | yes |  | risk_level (read-only) | Risk level |
 | decision | varchar(40) (OnboardingDecision) | yes |  | decision (read-only) | Automated decision |
 | decision_reasons | jsonb | yes |  | decision_reasons (read-only) | Rule outcomes and reason codes |
-| reviewer_id | uuid | yes | ref → app_user | reviewer_id | Manual reviewer |
+| risk_factors | jsonb | yes |  | risk_factors (read-only) | Factor contributions of the onboarding risk score |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Principal that submitted the application |
+| reviewer_id | uuid | yes | ref → app_user | reviewer_id (read-only) | Manual reviewer |
+| reviewed_by | varchar(64) | yes |  | reviewed_by (read-only) | Principal that approved or rejected after referral |
+| review_comment | varchar(500) | yes |  | review_comment (read-only) | Checker comment on approval |
 | reviewed_at | timestamptz | yes |  | reviewed_at (read-only) | Review time |
+| info_requests | jsonb | yes |  | info_requests (read-only) | Requests for more information ({message, step_codes, requested_by, requested_at}) |
 | product_ids | jsonb | yes |  | product_ids | Products requested |
 | created_product_refs | jsonb | yes |  | created_product_refs (read-only) | Accounts / wallets / cards opened on approval |
 | device_fingerprint | varchar(128) | yes |  | device_fingerprint | Device used |
@@ -7032,11 +7104,11 @@ API: /v1/kyc/providers · Requirements: ONB-02, ONB-04
 | code | varchar(40) | no | UQ | code | Provider code |
 | name | varchar(120) | no |  | name | Provider name |
 | capabilities | jsonb | no |  | capabilities | Supported capabilities (KycProviderCapability values) |
-| countries | jsonb | yes |  | countries | Countries supported |
+| countries | jsonb | yes |  | countries | Countries supported (ISO 3166-1 alpha-2; empty = all) |
 | priority | integer | no |  | priority | Routing priority (lower first) |
 | base_url | varchar(500) | yes |  | base_url | API base URL |
-| credentials_ref | varchar(255) | no |  | — | Vault path of the API credentials secret |
-| webhook_secret_ref | varchar(255) | yes |  | — | Vault path of the webhook signing secret secret |
+| credentials_ref | varchar(255) | no |  | credentials_ref | Vault path of the API credentials (a reference, never the secret itself) |
+| webhook_secret_ref | varchar(255) | yes |  | webhook_secret_ref | Vault path of the webhook signing secret (a reference) |
 | timeout_ms | integer | no |  | timeout_ms | Request timeout |
 | is_active | boolean | no |  | is_active | Active |
 | is_fallback | boolean | no |  | is_fallback | Used only when the primary provider fails |
@@ -7062,7 +7134,7 @@ API: /v1/kyc/profiles · Requirements: CIF-03, ONB-05, ONB-06
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| status | varchar(40) (KycProfileStatus) | no |  | status | Status |
+| status | varchar(40) (KycProfileStatus) | no |  | status (read-only) | Status (derived by evaluate) |
 | achieved_tier | varchar(40) (CustomerKycTier) | no |  | achieved_tier (read-only) | Highest tier the evidence supports |
 | risk_level | varchar(40) (KycRiskLevel) | yes |  | risk_level (read-only) | Current risk level |
 | risk_score | integer | yes |  | risk_score (read-only) | Current risk score 0..1000 |
@@ -13358,7 +13430,7 @@ API: /v1/servicing/sla-policies · Requirements: SRV-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | name | varchar(120) | no |  | name | Policy name |
-| applies_to | varchar(20) | no |  | applies_to | CASE or COMPLAINT |
+| applies_to | varchar(40) (SlaAppliesTo) | no |  | applies_to | CASE or COMPLAINT |
 | case_type | varchar(40) (ServiceCaseType) | yes |  | case_type | Case type (empty = any) |
 | complaint_category | varchar(40) (ComplaintCategory) | yes |  | complaint_category | Complaint category (empty = any) |
 | priority | varchar(40) (ServiceCasePriority) | yes |  | priority | Priority (empty = any) |
@@ -13366,8 +13438,14 @@ API: /v1/servicing/sla-policies · Requirements: SRV-01
 | first_response_minutes | integer | no |  | first_response_minutes | Target time to first response |
 | resolution_minutes | integer | no |  | resolution_minutes | Target time to resolution |
 | business_hours_only | boolean | no |  | business_hours_only | Count only business hours |
+| business_day_start | varchar(5) | no |  | business_day_start | Start of the business day (HH:mm, policy time zone) |
+| business_day_end | varchar(5) | no |  | business_day_end | End of the business day (HH:mm, policy time zone) |
+| working_days | jsonb | yes |  | working_days | ISO days of week counted as working days (1=Monday..7=Sunday); empty = Monday..Friday |
+| time_zone | varchar(40) | no |  | time_zone | IANA time zone of the business hours |
+| pause_on_pending_customer | boolean | no |  | pause_on_pending_customer | Stop the resolution clock while waiting for the customer |
+| at_risk_percent | integer | no |  | at_risk_percent | Elapsed share of the target after which an item is at risk |
 | holiday_calendar_id | uuid | yes | ref → holiday_calendar | holiday_calendar_id | Calendar for business hours |
-| escalation_rules | jsonb | yes |  | escalation_rules | Escalation steps when targets are at risk or breached |
+| escalation_rules | jsonb | yes |  | escalation_rules | Escalation steps when targets are at risk or breached ({at_percent, work_queue_id, priority}) |
 | is_regulatory | boolean | no |  | is_regulatory | Deadline set by a regulator |
 | regulation_reference | varchar(120) | yes |  | regulation_reference | Rule reference, e.g. FCA DISP 1.6 |
 | is_active | boolean | no |  | is_active | Active |
@@ -13427,11 +13505,16 @@ API: /v1/servicing/work-items · Requirements: SRV-01
 | subject_id | uuid | no |  | subject_id | Subject id |
 | title | varchar(255) | no |  | title | Title shown in the queue |
 | priority | varchar(40) (ServiceCasePriority) | no |  | priority | Priority |
-| status | varchar(40) (WorkItemStatus) | no |  | status | Status |
-| assigned_to | uuid | yes | ref → app_user | assigned_to | Assignee |
+| status | varchar(40) (WorkItemStatus) | no |  | status (read-only) | Status (changes through next / assign / release / complete) |
+| assigned_to | uuid | yes | ref → app_user | assigned_to (read-only) | Assignee (set through next / assign) |
 | assigned_at | timestamptz | yes |  | assigned_at (read-only) | Assignment time |
 | due_at | timestamptz | yes |  | due_at | SLA due time |
+| required_skills | jsonb | yes |  | required_skills | Skills needed for this item (skills-based routing; adds to the queue's) |
+| started_at | timestamptz | yes |  | started_at (read-only) | Time work started (IN_PROGRESS) |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
+| release_count | integer | no |  | release_count (read-only) | Times returned to the queue |
+| last_release_reason | varchar(255) | yes |  | last_release_reason (read-only) | Reason given on the last release |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last cancellation |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13453,31 +13536,37 @@ API: /v1/servicing/cases · Requirements: SRV-01, CIF-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| case_number | varchar(32) | no | UQ | case_number | Human-readable case number |
+| case_number | varchar(32) | no | UQ | case_number (read-only) | Human-readable case number (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | case_type | varchar(40) (ServiceCaseType) | no |  | case_type | Case type |
 | subtype | varchar(64) | yes |  | subtype | Finer classification |
 | subject | varchar(255) | no |  | subject | Short subject |
 | description | text | yes |  | description | Customer's description PII |
-| status | varchar(40) (ServiceCaseStatus) | no |  | status | Status |
+| status | varchar(40) (ServiceCaseStatus) | no |  | status (read-only) | Status (changes through the case actions) |
 | priority | varchar(40) (ServiceCasePriority) | no |  | priority | Priority |
 | channel | varchar(40) (ServiceChannel) | no |  | channel | Channel where it was raised |
 | work_queue_id | uuid | yes | FK → work_queue | work_queue_id | Queue |
-| assigned_to | uuid | yes | ref → app_user | assigned_to | Assignee |
-| sla_policy_id | uuid | yes | FK → sla_policy | sla_policy_id | SLA policy applied |
+| assigned_to | uuid | yes | ref → app_user | assigned_to (read-only) | Assignee (set through assign) |
+| sla_policy_id | uuid | yes | FK → sla_policy | sla_policy_id (read-only) | SLA policy applied (matched on create) |
 | first_response_due_at | timestamptz | yes |  | first_response_due_at (read-only) | First response deadline |
 | resolution_due_at | timestamptz | yes |  | resolution_due_at (read-only) | Resolution deadline |
 | first_responded_at | timestamptz | yes |  | first_responded_at (read-only) | First response time |
 | sla_breached | boolean | no |  | sla_breached (read-only) | SLA breached |
+| sla_paused_at | timestamptz | yes |  | sla_paused_at (read-only) | Time the resolution clock was paused (pending customer) |
+| sla_paused_minutes | integer | no |  | sla_paused_minutes (read-only) | Business minutes the clock has been paused in total |
+| escalation_level | integer | no |  | escalation_level (read-only) | Times escalated |
+| escalated_at | timestamptz | yes |  | escalated_at (read-only) | Last escalation time |
+| status_reason | varchar(1000) | yes |  | status_reason (read-only) | Reason or message of the last status change |
+| complaint_id | uuid | yes |  | complaint_id (read-only) | Complaint raised from this case |
 | related_object_type | varchar(40) | yes |  | related_object_type | ACCOUNT, CARD, PAYMENT, LOAN, WALLET, TRANSACTION |
 | related_object_id | uuid | yes |  | related_object_id | Related object id |
 | parent_case_id | uuid | yes | FK → service_case | parent_case_id | Parent case for linked cases |
-| resolution_code | varchar(64) | yes |  | resolution_code | Resolution code |
-| resolution_summary | text | yes |  | resolution_summary | How it was resolved |
+| resolution_code | varchar(64) | yes |  | resolution_code (read-only) | Resolution code (set through resolve) |
+| resolution_summary | text | yes |  | resolution_summary (read-only) | How it was resolved (set through resolve) |
 | resolved_at | timestamptz | yes |  | resolved_at (read-only) | Resolution time |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closure time |
 | reopened_count | integer | no |  | reopened_count (read-only) | Times reopened |
-| csat_score | integer | yes |  | csat_score | Customer satisfaction 1..5 |
+| csat_score | integer | yes |  | csat_score (read-only) | Customer satisfaction 1..5 (set through close) |
 | tags | jsonb | yes |  | tags | Free tags |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -13502,8 +13591,9 @@ API: internal only · Requirements: SRV-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | service_case_id | uuid | no | FK → service_case | service_case_id | Case |
 | visibility | varchar(40) (CaseCommentVisibility) | no |  | visibility | Who can see it |
-| author_type | varchar(20) | no |  | author_type | STAFF, CUSTOMER, SYSTEM, COPILOT |
+| author_type | varchar(40) (CaseCommentAuthorType) | no |  | author_type | STAFF, CUSTOMER, SYSTEM, COPILOT |
 | author_id | uuid | yes |  | author_id | Staff user or customer id |
+| author_name | varchar(64) | yes |  | author_name (read-only) | Principal that wrote the comment |
 | body | text | no |  | body | Comment text PII |
 | attachments | jsonb | yes |  | attachments | Document ids |
 | copilot_session_id | uuid | yes | FK → copilot_session | copilot_session_id | Copilot draft this comment came from |
@@ -13528,7 +13618,7 @@ API: /v1/servicing/complaints · Requirements: SRV-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| complaint_number | varchar(32) | no | UQ | complaint_number | Human-readable complaint reference |
+| complaint_number | varchar(32) | no | UQ | complaint_number (read-only) | Human-readable complaint reference (server-generated) |
 | customer_id | uuid | no | ref → customer | customer_id | Complainant |
 | service_case_id | uuid | yes | FK → service_case | service_case_id | Originating case |
 | category | varchar(40) (ComplaintCategory) | no |  | category | Category |
@@ -13536,27 +13626,34 @@ API: /v1/servicing/complaints · Requirements: SRV-01
 | related_object_type | varchar(40) | yes |  | related_object_type | ACCOUNT, CARD, PAYMENT, LOAN, WALLET |
 | related_object_id | uuid | yes |  | related_object_id | Related object id |
 | channel | varchar(40) (ServiceChannel) | no |  | channel | Channel |
+| country | char(2) | yes |  | country | Jurisdiction whose complaint rules apply (default: service configuration) |
 | summary | varchar(500) | no |  | summary | Summary |
 | details | text | yes |  | details | Full complaint PII |
-| status | varchar(40) (ComplaintStatus) | no |  | status | Status |
+| status | varchar(40) (ComplaintStatus) | no |  | status (read-only) | Status (changes through the complaint actions) |
 | received_at | timestamptz | no |  | received_at | Time received |
 | acknowledged_at | timestamptz | yes |  | acknowledged_at (read-only) | Acknowledgement time |
 | acknowledgement_due_at | timestamptz | yes |  | acknowledgement_due_at (read-only) | Acknowledgement deadline |
 | final_response_due_at | timestamptz | yes |  | final_response_due_at (read-only) | Final response deadline (regulatory) |
 | final_response_at | timestamptz | yes |  | final_response_at (read-only) | Final response time |
-| sla_policy_id | uuid | yes | FK → sla_policy | sla_policy_id | SLA policy |
-| assigned_to | uuid | yes | ref → app_user | assigned_to | Handler |
+| deadline_at_risk_at | timestamptz | yes |  | deadline_at_risk_at (read-only) | Time the deadline-at-risk alert was raised |
+| deadline_breached_at | timestamptz | yes |  | deadline_breached_at (read-only) | Time the regulatory deadline breach was recorded |
+| sla_policy_id | uuid | yes | FK → sla_policy | sla_policy_id (read-only) | SLA policy (matched on create) |
+| assigned_to | uuid | yes | ref → app_user | assigned_to (read-only) | Handler (set through assign) |
 | work_queue_id | uuid | yes | FK → work_queue | work_queue_id | Queue |
 | is_vulnerable_customer | boolean | no |  | is_vulnerable_customer | Customer flagged as vulnerable |
-| root_cause | varchar(255) | yes |  | root_cause | Root cause |
-| root_cause_category | varchar(64) | yes |  | root_cause_category | Root cause category for trend analysis |
-| outcome | varchar(40) (ComplaintOutcome) | yes |  | outcome | Outcome |
-| redress_amount | numeric(28,8) | yes |  | redress_amount | Total redress paid |
-| redress_currency | char(3) | yes |  | redress_currency | Currency of redress |
-| final_response_document_id | uuid | yes | ref → document | final_response_document_id | Final response letter |
-| escalated_to | varchar(120) | yes |  | escalated_to | Ombudsman / regulator escalated to |
-| escalated_at | timestamptz | yes |  | escalated_at | Escalation time |
+| root_cause | varchar(255) | yes |  | root_cause (read-only) | Root cause (set through propose-resolution) |
+| root_cause_category | varchar(64) | yes |  | root_cause_category (read-only) | Root cause category for trend analysis |
+| outcome | varchar(40) (ComplaintOutcome) | yes |  | outcome (read-only) | Outcome (set through propose-resolution or withdraw) |
+| resolution_summary | text | yes |  | resolution_summary (read-only) | Proposed resolution shown in the final response |
+| resolution_proposed_at | timestamptz | yes |  | resolution_proposed_at (read-only) | Time the resolution was proposed |
+| redress_amount | numeric(28,8) | yes |  | redress_amount (read-only) | Total redress paid (sum of paid redress) |
+| redress_currency | char(3) | yes |  | redress_currency (read-only) | Currency of redress |
+| final_response_document_id | uuid | yes | ref → document | final_response_document_id (read-only) | Final response letter (set through final-response) |
+| escalated_to | varchar(120) | yes |  | escalated_to (read-only) | Ombudsman / regulator escalated to |
+| ombudsman_reference | varchar(64) | yes |  | ombudsman_reference (read-only) | Case reference at the ombudsman |
+| escalated_at | timestamptz | yes |  | escalated_at (read-only) | Escalation time |
 | reportable | boolean | no |  | reportable | Included in regulatory complaint returns |
+| status_reason | varchar(1000) | yes |  | status_reason (read-only) | Reason or message of the last status change |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closure time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -13583,11 +13680,18 @@ API: /v1/servicing/complaint-redress · Requirements: SRV-01
 | redress_type | varchar(40) (RedressType) | no |  | redress_type | Redress type |
 | amount | numeric(28,8) | yes |  | amount | Amount (monetary redress) |
 | currency | char(3) | yes |  | currency | Currency |
-| target_account_id | uuid | yes | ref → ledger_account | target_account_id | Account credited |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Posting created |
-| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
-| status | varchar(20) | no |  | status | PROPOSED, APPROVED, PAID, REJECTED |
+| target_account_id | uuid | yes | ref → ledger_account | target_account_id | Customer account credited |
+| ledger_id | uuid | yes | ref → ledger | ledger_id | Ledger book of the posting (default: service configuration) |
+| funding_account_id | uuid | yes | ref → ledger_account | funding_account_id | Bank redress expense / suspense account debited (default: service configuration) |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Posting created on payment |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Maker-checker approval, when routed through workflow-service |
+| status | varchar(40) (RedressStatus) | no |  | status (read-only) | Status (changes through approve / reject / pay) |
 | description | varchar(500) | yes |  | description | Description |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| approval_comment | varchar(500) | yes |  | approval_comment (read-only) | Checker comment |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Reason when rejected |
+| failure_reason | varchar(500) | yes |  | failure_reason (read-only) | Ledger error when the payment failed |
 | paid_at | timestamptz | yes |  | paid_at (read-only) | Payment time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -13705,16 +13809,19 @@ API: /v1/servicing/knowledge-articles · Requirements: SRV-02
 | title | varchar(255) | no |  | title | Title |
 | body | text | no |  | body | Article body (Markdown) |
 | language | varchar(10) | no |  | language | Language |
-| audience | varchar(20) | no |  | audience | STAFF, CUSTOMER, AGENT |
-| status | varchar(40) (KnowledgeArticleStatus) | no |  | status | Status |
+| audience | varchar(40) (KnowledgeAudience) | no |  | audience | STAFF, CUSTOMER, AGENT |
+| status | varchar(40) (KnowledgeArticleStatus) | no |  | status (read-only) | Status (changes through submit-review / publish / archive) |
 | tags | jsonb | yes |  | tags | Tags |
-| case_types | jsonb | yes |  | case_types | Case types it helps with |
+| case_types | jsonb | yes |  | case_types | Case types it helps with (ServiceCaseType values) |
 | version | integer | no |  | version (read-only) | Version |
 | published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
-| reviewed_by | uuid | yes | ref → app_user | reviewed_by | Reviewer |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Author who submitted the article for review |
+| reviewed_by | varchar(64) | yes |  | reviewed_by (read-only) | Reviewer who published it (four-eyes) |
 | review_due | date | yes |  | review_due | Next content review |
 | view_count | integer | no |  | view_count (read-only) | Views |
 | helpful_count | integer | no |  | helpful_count (read-only) | Helpful votes |
+| not_helpful_count | integer | no |  | not_helpful_count (read-only) | Not-helpful votes |
+| archived_at | timestamptz | yes |  | archived_at (read-only) | Archive time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13768,16 +13875,19 @@ API: /v1/servicing/copilot · Requirements: SRV-02, AI-01
 | service_case_id | uuid | yes | FK → service_case | service_case_id | Case in context |
 | complaint_id | uuid | yes | FK → complaint | complaint_id | Complaint in context |
 | prompt | text | yes |  | prompt | Staff prompt or question PII |
-| context_refs | jsonb | no |  | context_refs | Records and articles retrieved as grounding |
-| output | text | no |  | output | Generated summary, draft or answer PII |
-| citations | jsonb | yes |  | citations | Sources cited in the output |
-| model | varchar(64) | no |  | model | Model id used |
-| model_gateway_request_id | varchar(128) | yes |  | model_gateway_request_id | Request id at the model gateway |
-| input_tokens | integer | yes |  | input_tokens | Input tokens |
-| output_tokens | integer | yes |  | output_tokens | Output tokens |
-| latency_ms | integer | yes |  | latency_ms | Latency |
-| pii_redacted | boolean | no |  | pii_redacted | PII redacted before sending to the model |
-| guardrail_flags | jsonb | yes |  | guardrail_flags | Guardrail triggers, if any |
+| language | varchar(10) | yes |  | language | Target language (TRANSLATE) or reply language |
+| prompt_hash | varchar(64) | yes |  | prompt_hash (read-only) | SHA-256 of the prompt as sent to the model (audit) |
+| context_refs | jsonb | no |  | context_refs (read-only) | Records and articles retrieved as grounding |
+| output | text | no |  | output (read-only) | Generated summary, draft or answer PII |
+| output_hash | varchar(64) | no |  | output_hash (read-only) | SHA-256 of the output (audit) |
+| citations | jsonb | yes |  | citations (read-only) | Sources cited in the output |
+| model | varchar(64) | no |  | model (read-only) | Model id used |
+| model_gateway_request_id | varchar(128) | yes |  | model_gateway_request_id (read-only) | Request id at the model gateway |
+| input_tokens | integer | yes |  | input_tokens (read-only) | Input tokens |
+| output_tokens | integer | yes |  | output_tokens (read-only) | Output tokens |
+| latency_ms | integer | yes |  | latency_ms (read-only) | Latency |
+| pii_redacted | boolean | no |  | pii_redacted (read-only) | PII redacted before sending to the model |
+| guardrail_flags | jsonb | yes |  | guardrail_flags (read-only) | Guardrail triggers, if any |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13799,6 +13909,8 @@ API: internal only · Requirements: SRV-02, AI-01
 | copilot_session_id | uuid | no | FK → copilot_session | copilot_session_id | Session |
 | feedback | varchar(40) (CopilotFeedback) | no |  | feedback | Feedback |
 | edited_output | text | yes |  | edited_output | Final text after staff edits PII |
+| edited_output_hash | varchar(64) | yes |  | edited_output_hash (read-only) | SHA-256 of the edited text (audit) |
+| staff_user | varchar(64) | yes |  | staff_user (read-only) | Principal that gave the feedback |
 | comment | varchar(1000) | yes |  | comment | Comment |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
