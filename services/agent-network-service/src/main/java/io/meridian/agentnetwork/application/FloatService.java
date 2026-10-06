@@ -4,9 +4,13 @@ import io.meridian.agentnetwork.config.AgentNetworkProperties;
 import io.meridian.agentnetwork.domain.Hierarchy;
 import io.meridian.agentnetwork.infrastructure.Downstream;
 import io.meridian.agentnetwork.infrastructure.Rows;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -23,14 +27,19 @@ import tools.jackson.databind.node.ObjectNode;
 public class FloatService {
     static final String FLOAT = "agent_float";
     static final String REQUEST = "agent_float_request";
+    /** Approval resource type for float requests in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "agent_float_request";
 
     private final Rows rows;
     private final Downstream downstream;
     private final Events events;
     private final AgentNetworkProperties props;
     private final TransactionTemplate tx;
+    private final Approvals approvals;
 
-    public FloatService(Rows rows, Downstream downstream, Events events, AgentNetworkProperties props, TransactionTemplate tx) {
+    public FloatService(Rows rows, Downstream downstream, Events events, AgentNetworkProperties props, TransactionTemplate tx,
+                        Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.downstream = downstream;
         this.events = events;
@@ -161,7 +170,9 @@ public class FloatService {
         r.put("currency", Rows.str(f, "currency"));
         r.put("funding_method", "SUPER_AGENT");
         r.put("status", "REQUESTED");
-        return Rows.uuid(rows.insert(REQUEST, r), "id");
+        ObjectNode row = rows.insert(REQUEST, r);
+        requestApproval(row);
+        return Rows.uuid(row, "id");
     }
 
     // ------------------------------------------------------------------ float requests
@@ -240,8 +251,43 @@ public class FloatService {
                 }
             }
             v.put("status", "REQUESTED");
-            return rows.insert(REQUEST, v);
+            ObjectNode row = rows.insert(REQUEST, v);
+            requestApproval(row);
+            return row;
         });
+    }
+
+    /**
+     * Central maker-checker: opens the approval in workflow-service (inside the creating transaction); the checker
+     * decides in the inbox and {@code FloatRequestApprovalHandler} applies the decision. Amount is the fingerprint.
+     */
+    private void requestApproval(ObjectNode row) {
+        UUID id = Rows.uuid(row, "id");
+        BigDecimal amount = Rows.dec(row, "amount");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("request_type", Rows.str(row, "request_type"));
+        payload.put("requesting_agent_id", Rows.str(row, "requesting_agent_id"));
+        payload.put("source_agent_id", Rows.str(row, "source_agent_id"));
+        payload.put("source_wallet_id", Rows.str(row, "source_wallet_id"));
+        payload.put("target_wallet_id", Rows.str(row, "target_wallet_id"));
+        payload.put("amount", amount.toPlainString());
+        payload.put("currency", Rows.str(row, "currency"));
+        payload.put("funding_method", Rows.str(row, "funding_method"));
+        payload.put("bank_reference", Rows.str(row, "bank_reference"));
+        payload.put("proof_document_id", Rows.str(row, "proof_document_id"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                        "Float " + Rows.str(row, "request_type").replace('_', ' ').toLowerCase() + " " + amount.toPlainString()
+                                + " " + Rows.str(row, "currency"), payload)
+                        .withAmount(amount, Rows.str(row, "currency")),
+                "submit:" + id);
+    }
+
+    /** True while the request is REQUESTED for the submitted amount. */
+    public boolean awaitsApproval(UUID id, BigDecimal amount) {
+        return rows.find(REQUEST, id)
+                .filter(r -> "REQUESTED".equals(Rows.str(r, "status")))
+                .filter(r -> amount == null || amount.compareTo(Rows.dec(r, "amount")) == 0)
+                .isPresent();
     }
 
     private void requireOwnFloat(ObjectNode agent, UUID target) {
@@ -281,7 +327,7 @@ public class FloatService {
             if (e.status() >= 500) {
                 throw e;
             }
-            return tx.execute(s -> {
+            ObjectNode failed = tx.execute(s -> {
                 rows.lock(REQUEST, id);
                 ObjectNode v = rows.object();
                 v.put("status", "FAILED");
@@ -292,8 +338,10 @@ public class FloatService {
                 rows.execute("update agent_float_request set approved_at = now() where id = ?", id);
                 return rows.get(REQUEST, id);
             });
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+            return failed;
         }
-        return tx.execute(s -> {
+        ObjectNode done = tx.execute(s -> {
             ObjectNode cur = rows.lock(REQUEST, id);
             if (!"REQUESTED".equals(Rows.str(cur, "status"))) {
                 return cur;
@@ -308,6 +356,8 @@ public class FloatService {
             events.publish("wallets.agent_float_request.approved", REQUEST, row);
             return row;
         });
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+        return done;
     }
 
     public ObjectNode close(UUID id, String to, String reason) {
@@ -322,6 +372,7 @@ public class FloatService {
             v.put("rejection_reason", reason == null ? to.toLowerCase() : reason);
             ObjectNode row = rows.update(REQUEST, id, v);
             events.publish("wallets.agent_float_request.rejected", REQUEST, row);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, to.toLowerCase() + " directly");
             return row;
         });
     }

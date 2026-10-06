@@ -1,5 +1,7 @@
 package io.meridian.wallet.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.wallet.domain.PinPolicy;
@@ -8,7 +10,9 @@ import io.meridian.wallet.infrastructure.Rows;
 import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -26,13 +30,19 @@ public class BankLinkService {
     static final String TABLE = "wallet_bank_link";
     static final Set<String> METHODS = Set.of("NAME_ENQUIRY", "MICRO_DEPOSIT", "OPEN_BANKING", "MANUAL");
     static final int MAX_ATTEMPTS = 3;
+    /** Methods verified by a checker (four-eyes); these are routed through workflow-service in workflow mode. */
+    static final Set<String> CHECKER_METHODS = Set.of("OPEN_BANKING", "MANUAL");
+    /** Approval resource type for checker-verified bank links in workflow-service (G11); the action is {@code verify}. */
+    public static final String APPROVAL_RESOURCE = "wallet_bank_link";
 
     private final Rows rows;
     private final Downstream downstream;
     private final Events events;
     private final TransactionTemplate tx;
+    private final Approvals approvals;
 
-    public BankLinkService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx) {
+    public BankLinkService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.downstream = downstream;
         this.events = events;
@@ -70,8 +80,38 @@ public class BankLinkService {
                 // the code travels in the narrative of the micro-deposit sent by the bank rail; only its hash is kept
                 v.put("verification_code_hash", PinPolicy.hashOtp(PinPolicy.otp(6)));
             }
-            return rows.insert(TABLE, v);
+            ObjectNode row = rows.insert(TABLE, v);
+            if (CHECKER_METHODS.contains(method)) {
+                // Central maker-checker: the checker verifies in the workflow inbox; BankLinkApprovalHandler applies it.
+                UUID id = Rows.uuid(row, "id");
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("wallet_id", Rows.str(row, "wallet_id"));
+                payload.put("wallet_number", Rows.str(wallet, "wallet_number"));
+                payload.put("wallet_name", Rows.str(wallet, "display_name"));
+                payload.put("verification_method", method);
+                payload.put("bank_code", Rows.str(row, "bank_code"));
+                payload.put("account_number", Rows.str(row, "account_number"));
+                payload.put("account_name", Rows.str(row, "account_name"));
+                payload.put("currency", Rows.str(row, "currency"));
+                approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "verify",
+                        "Verify bank link " + Rows.str(row, "bank_code") + " " + Rows.str(row, "account_number")
+                                + " for wallet " + Rows.str(wallet, "wallet_number"), payload), "verify:" + id);
+            }
+            return row;
         });
+    }
+
+    /**
+     * True while a checker-verified link is PENDING_VERIFICATION for the submitted bank account (the fingerprint:
+     * bank code and account number).
+     */
+    public boolean awaitsVerification(UUID id, String bankCode, String accountNumber) {
+        return rows.find(TABLE, id)
+                .filter(l -> "PENDING_VERIFICATION".equals(Rows.str(l, "status")))
+                .filter(l -> CHECKER_METHODS.contains(Rows.str(l, "verification_method")))
+                .filter(l -> bankCode == null || bankCode.equals(Rows.str(l, "bank_code")))
+                .filter(l -> accountNumber == null || accountNumber.equals(Rows.str(l, "account_number")))
+                .isPresent();
     }
 
     public ObjectNode verify(UUID id, String code) {
@@ -144,6 +184,7 @@ public class BankLinkService {
             rows.execute("update wallet_bank_link set verified_at = now(), verification_code_hash = null where id = ?", id);
             ObjectNode after = rows.get(TABLE, id);
             events.publish("wallets.wallet_bank_link.verified", TABLE, after);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "verified directly");
             return after;
         });
     }
@@ -165,6 +206,7 @@ public class BankLinkService {
             v.put("is_default", false);
             ObjectNode after = rows.update(TABLE, id, v);
             events.publish("wallets.wallet_bank_link.removed", TABLE, after);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "removed directly");
             return after;
         });
     }

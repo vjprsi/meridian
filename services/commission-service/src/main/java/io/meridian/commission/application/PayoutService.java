@@ -1,5 +1,7 @@
 package io.meridian.commission.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.commission.config.CommissionProperties;
 import io.meridian.commission.infrastructure.Downstream;
 import io.meridian.commission.infrastructure.Rows;
@@ -8,7 +10,9 @@ import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -38,8 +42,14 @@ public class PayoutService {
     private final Events events;
     private final TransactionTemplate tx;
     private final CommissionProperties props;
+    private final Approvals approvals;
 
-    public PayoutService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx, CommissionProperties props) {
+    /** Approval resource type for commission payout runs in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "commission_payout_run";
+
+    public PayoutService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx, CommissionProperties props,
+                         Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.downstream = downstream;
         this.events = events;
@@ -99,9 +109,33 @@ public class PayoutService {
             v.put("status", "PENDING_APPROVAL");
             v.put("earning_count", earnings);
             v.put("beneficiary_count", payable.size());
-            v.put("total_amount", payable.stream().map(Group::net).reduce(BigDecimal.ZERO, BigDecimal::add).toPlainString());
-            return rows.insert(RUN, v);
+            BigDecimal total = payable.stream().map(Group::net).reduce(BigDecimal.ZERO, BigDecimal::add);
+            v.put("total_amount", total.toPlainString());
+            ObjectNode row = rows.insert(RUN, v);
+            // Central maker-checker: the checker decides in the workflow inbox; PayoutRunApprovalHandler applies it.
+            UUID id = Rows.uuid(row, "id");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("payout_frequency", freq);
+            payload.put("currency", ccy);
+            payload.put("period_start", start.toString());
+            payload.put("period_end", end.toString());
+            payload.put("earning_count", earnings);
+            payload.put("beneficiary_count", payable.size());
+            payload.put("total_amount", Rows.str(row, "total_amount"));
+            payload.put("created_by", Rows.str(row, "created_by"));
+            approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                            "Commission payout run " + freq + " " + ccy + " " + start + ".." + end, payload)
+                    .withAmount(total, ccy), "create:" + id);
+            return row;
         });
+    }
+
+    /** True while the run is PENDING_APPROVAL with the previewed total unchanged. */
+    public boolean awaitsApproval(UUID id, String totalAmount) {
+        return rows.find(RUN, id)
+                .filter(r -> "PENDING_APPROVAL".equals(Rows.str(r, "status")))
+                .filter(r -> totalAmount == null || new BigDecimal(totalAmount).compareTo(Rows.dec(r, "total_amount")) == 0)
+                .isPresent();
     }
 
     /** Checker approval, then execution. */
@@ -129,7 +163,9 @@ public class PayoutService {
                 pay(run, g);
             }
         }
-        return finish(id);
+        ObjectNode done = finish(id);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+        return done;
     }
 
     public ObjectNode cancel(UUID id, String reason) {
@@ -143,6 +179,7 @@ public class PayoutService {
             v.put("cancel_reason", reason == null ? "Cancelled" : reason);
             rows.update(RUN, id, v);
             rows.execute("update commission_payout_run set finished_at = now() where id = ?", id);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "cancelled directly");
             return rows.get(RUN, id);
         });
     }

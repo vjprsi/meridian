@@ -1,5 +1,7 @@
 package io.meridian.commission.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.commission.domain.CommissionEngine;
 import io.meridian.commission.infrastructure.Rows;
 import io.meridian.common.error.ApiException;
@@ -7,7 +9,9 @@ import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -28,11 +32,16 @@ public class PlanService {
     static final Set<String> APPLIES_TO = Set.of("AGENT", "MERCHANT", "BILLER", "ALL");
     static final Set<String> FUNDED_BY = Set.of("FEE", "PLATFORM", "BILLER", "MERCHANT");
 
+    /** Approval resource type for commission plan versions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "commission_plan";
+
     private final Rows rows;
     private final Events events;
     private final Hierarchy hierarchy;
+    private final Approvals approvals;
 
-    public PlanService(Rows rows, Events events, Hierarchy hierarchy) {
+    public PlanService(Rows rows, Events events, Hierarchy hierarchy, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.events = events;
         this.hierarchy = hierarchy;
@@ -172,6 +181,22 @@ public class PlanService {
         rows.execute("update commission_plan set submitted_at = now() where id = ?", id);
         ObjectNode after = rows.get(PLAN, id);
         events.publish("wallets.commission_plan.submitted", PLAN, after);
+        // Central maker-checker: the checker decides in the workflow inbox; PlanApprovalHandler applies the decision.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", Rows.str(after, "code"));
+        payload.put("version", Rows.integer(after, "version"));
+        payload.put("name", Rows.str(after, "name"));
+        payload.put("applies_to", Rows.str(after, "applies_to"));
+        payload.put("currency", Rows.str(after, "currency"));
+        payload.put("payout_frequency", Rows.str(after, "payout_frequency"));
+        payload.put("valid_from", Rows.str(after, "valid_from"));
+        payload.put("valid_to", Rows.str(after, "valid_to"));
+        payload.put("active_rule_count", active);
+        payload.put("submitted_by", Rows.str(after, "submitted_by"));
+        payload.put("submitted_at", Rows.str(after, "submitted_at"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Commission plan " + Rows.str(after, "code") + " v" + Rows.integer(after, "version"), payload),
+                "submit:" + id + ":" + Rows.str(after, "submitted_at"));
         return after;
     }
 
@@ -194,6 +219,7 @@ public class PlanService {
         rows.execute("update commission_plan set approved_at = now() where id = ?", id);
         ObjectNode after = rows.get(PLAN, id);
         events.publish("wallets.commission_plan.activated", PLAN, after);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return after;
     }
 
@@ -204,7 +230,18 @@ public class PlanService {
         ObjectNode v = rows.object();
         v.put("status", "DRAFT");
         v.put("rejection_reason", reason);
-        return rows.update(PLAN, id, v);
+        ObjectNode after = rows.update(PLAN, id, v);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return after;
+    }
+
+    /** True while the plan is PENDING_APPROVAL from the same submission (submitted_at unchanged). */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String submittedAt) {
+        return rows.find(PLAN, id)
+                .filter(p -> "PENDING_APPROVAL".equals(Rows.str(p, "status")))
+                .filter(p -> submittedAt == null || submittedAt.equals(Rows.str(p, "submitted_at")))
+                .isPresent();
     }
 
     @Transactional

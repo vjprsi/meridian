@@ -1,5 +1,7 @@
 package io.meridian.wallet.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
@@ -14,7 +16,9 @@ import io.meridian.wallet.infrastructure.LedgerClient;
 import io.meridian.wallet.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -53,9 +57,14 @@ public class TransactionEngine {
     private final Events events;
     private final TransactionTemplate tx;
     private final WalletProperties props;
+    private final Approvals approvals;
+
+    /** Approval resource type for requested reversals in workflow-service (G11); the action is {@code reverse}. */
+    public static final String REVERSAL_RESOURCE = "wallet_transaction";
 
     public TransactionEngine(Rows rows, LedgerClient ledger, Downstream downstream, Tariffs tariffs, PinGuard pins,
-                             Events events, TransactionTemplate tx, WalletProperties props) {
+                             Events events, TransactionTemplate tx, WalletProperties props, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.ledger = ledger;
         this.downstream = downstream;
@@ -684,7 +693,58 @@ public class TransactionEngine {
             rows.execute("update wallet_transaction set reversal_requested_at = now() where id = ?", id);
             ObjectNode after = rows.get(TABLE, id);
             events.publish("wallets.wallet_transaction.reversal_requested", TABLE, after);
+            // Central maker-checker: the checker decides in the workflow inbox; ReversalApprovalHandler applies it.
+            String requestedAt = Rows.str(after, "reversal_requested_at");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("reference", Rows.str(after, "reference"));
+            payload.put("txn_type", Rows.str(after, "txn_type"));
+            payload.put("original_amount", Rows.str(after, "amount"));
+            payload.put("already_reversed", dec(after, "reversed_amount").toPlainString());
+            payload.put("reversal_amount", amt.setScale(2, java.math.RoundingMode.UNNECESSARY).toPlainString());
+            payload.put("currency", Rows.str(after, "currency"));
+            payload.put("payer_wallet_id", Rows.str(after, "payer_wallet_id"));
+            payload.put("payee_wallet_id", Rows.str(after, "payee_wallet_id"));
+            payload.put("initiated_by", Rows.str(after, "initiated_by"));
+            payload.put("reason", reason);
+            payload.put("requested_at", requestedAt);
+            approvals.request(ApprovalSpec.of(REVERSAL_RESOURCE, id, "reverse",
+                            "Reverse wallet transaction " + Rows.str(after, "reference"), payload)
+                    .withAmount(amt.setScale(2, java.math.RoundingMode.UNNECESSARY), Rows.str(after, "currency")),
+                    "reversal:" + id + ":" + requestedAt);
             return after;
+        });
+    }
+
+    /**
+     * True while the transaction still awaits the reversal requested at {@code requestedAt} (the submission's
+     * fingerprint) for {@code amount}; a later, decided or withdrawn request does not match.
+     */
+    public boolean awaitsReversal(UUID id, String requestedAt, BigDecimal amount) {
+        return rows.find(TABLE, id)
+                .filter(t -> "COMPLETED".equals(Rows.str(t, "status")))
+                .filter(t -> t.hasNonNull("reversal_requested_by"))
+                .filter(t -> requestedAt == null || requestedAt.equals(Rows.str(t, "reversal_requested_at")))
+                .filter(t -> amount == null || amount.compareTo(dec(t, "reversal_requested_amount")) == 0)
+                .isPresent();
+    }
+
+    /** Declines a pending reversal request (checker rejected it): the request is cleared, the transaction unchanged. */
+    public ObjectNode declineReversal(UUID id, String reason) {
+        return tx.execute(s -> {
+            ObjectNode row = rows.lock(TABLE, id);
+            if (!row.hasNonNull("reversal_requested_by")) {
+                throw ApiException.conflict("invalid_transition", "No reversal is awaiting approval");
+            }
+            if (TenantContext.principal().equals(Rows.str(row, "reversal_requested_by"))) {
+                throw ApiException.unprocessable("four_eyes_violation",
+                        "The reversal must be decided by a different user than the one who requested it");
+            }
+            log.info("Reversal request on wallet transaction {} declined: {}", id, reason);
+            ObjectNode v = rows.object();
+            v.putNull("reversal_requested_by");
+            v.putNull("reversal_requested_amount");
+            v.putNull("reversal_requested_at");
+            return rows.update(TABLE, id, v);
         });
     }
 
@@ -737,7 +797,7 @@ public class TransactionEngine {
         UUID je = ledger.post("wtx-" + revId + "-post", "REVERSAL", "Reversal of " + Rows.str(row, "reference")
                         + (reason == null ? "" : ": " + reason), Rows.str(row, "currency"), ref, "WALLET_TRANSACTION",
                 revId, lines);
-        return tx.execute(s -> {
+        ObjectNode result = tx.execute(s -> {
             ObjectNode cur = rows.lock(TABLE, id);
             ObjectNode rv = rows.object();
             rv.put("id", revId.toString());
@@ -785,6 +845,8 @@ public class TransactionEngine {
             events.publish("wallets.wallet_transaction.completed", TABLE, revRow);
             return revRow;
         });
+        approvals.cancelOpen(REVERSAL_RESOURCE, id, null, "reversed directly");
+        return result;
     }
 
     private static void copy(ObjectNode from, ObjectNode to, String src, String dst) {

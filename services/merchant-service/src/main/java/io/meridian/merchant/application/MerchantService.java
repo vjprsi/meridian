@@ -1,11 +1,15 @@
 package io.meridian.merchant.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.merchant.domain.EmvQr;
 import io.meridian.merchant.domain.MerchantRules;
 import io.meridian.merchant.infrastructure.Rows;
 import io.meridian.merchant.infrastructure.WalletClient;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +24,16 @@ public class MerchantService {
     private final Rows rows;
     private final WalletClient wallets;
     private final Events events;
+    private final Approvals approvals;
 
-    public MerchantService(Rows rows, WalletClient wallets, Events events) {
+    /**
+     * Approval resource type for merchant onboarding (first activation) in workflow-service (G11); the action is
+     * {@code activate}. Reactivation after a suspension stays a direct action (no submit step).
+     */
+    public static final String APPROVAL_RESOURCE = "merchant";
+
+    public MerchantService(Rows rows, WalletClient wallets, Events events, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.wallets = wallets;
         this.events = events;
@@ -50,7 +62,29 @@ public class MerchantService {
         } while (rows.scalar("select count(*) from merchant where merchant_code = ?", Long.class, code).orElse(0L) > 0);
         v.put("merchant_code", code);
         v.put("status", "ONBOARDING");
-        return rows.insert(TABLE, v);
+        ObjectNode row = rows.insert(TABLE, v);
+        // Central maker-checker: onboarding is approved in the workflow inbox; MerchantApprovalHandler activates.
+        UUID id = Rows.uuid(row, "id");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("merchant_code", code);
+        payload.put("legal_name", Rows.str(row, "legal_name"));
+        payload.put("trading_name", Rows.str(row, "trading_name"));
+        payload.put("mcc", Rows.str(row, "mcc"));
+        payload.put("currency", Rows.str(row, "currency"));
+        payload.put("merchant_fee_plan_id", Rows.str(row, "merchant_fee_plan_id"));
+        payload.put("daily_limit", Rows.str(row, "daily_limit"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "activate",
+                "Onboard merchant " + Rows.str(row, "trading_name") + " (" + code + ")", payload), "activate:" + id);
+        return row;
+    }
+
+    /** True while the merchant is still ONBOARDING under the submitted merchant code (never activated). */
+    @Transactional(readOnly = true)
+    public boolean awaitsOnboarding(UUID id, String merchantCode) {
+        return rows.find(TABLE, id)
+                .filter(m -> "ONBOARDING".equals(Rows.str(m, "status")))
+                .filter(m -> merchantCode == null || merchantCode.equals(Rows.str(m, "merchant_code")))
+                .isPresent();
     }
 
     void requireFeePlan(UUID planId, String currency) {
@@ -86,6 +120,9 @@ public class MerchantService {
         rows.execute("update merchant set onboarded_at = coalesce(onboarded_at, now()) where id = ?", id);
         ObjectNode row = rows.get(TABLE, id);
         events.publish(first ? "wallets.merchant.onboarded" : "wallets.merchant.status_changed", TABLE, row);
+        if ("ONBOARDING".equals(from)) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "activated directly");
+        }
         return row;
     }
 
@@ -98,6 +135,7 @@ public class MerchantService {
     @Transactional
     public ObjectNode terminate(UUID id, String reason) {
         ObjectNode row = change(id, "TERMINATED", reason);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "terminated");
         rows.execute("update merchant_qr set is_active = false where merchant_id = ? and is_active", id);
         rows.execute("update merchant_payment_link set is_active = false where merchant_id = ? and is_active", id);
         rows.execute("""

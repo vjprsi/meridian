@@ -45,8 +45,10 @@ public class CashManagementRequestsController implements CashManagementRequestsA
         if (actions.tree(body).hasNonNull("amount") && Http.decimal(actions.tree(body), "amount").signum() <= 0) {
             throw io.meridian.common.error.ApiException.unprocessable("invalid_amount", "amount must be positive");
         }
-        return actions.guardedUpdate(crud, "cash_management_request", CashManagementRequest.class, id, ifMatch, body,
-                PROTECTED, "create a new request instead");
+        ResponseEntity<CashManagementRequest> updated = actions.guardedUpdate(crud, "cash_management_request",
+                CashManagementRequest.class, id, ifMatch, body, PROTECTED, "create a new request instead");
+        compliance.resubmitCash(id); // central maker-checker: the approval follows the changed content
+        return updated;
     }
 
     @Override

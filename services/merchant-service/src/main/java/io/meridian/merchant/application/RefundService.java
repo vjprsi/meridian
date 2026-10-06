@@ -1,11 +1,16 @@
 package io.meridian.merchant.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.merchant.config.MerchantProperties;
 import io.meridian.merchant.infrastructure.Rows;
 import io.meridian.merchant.infrastructure.WalletClient;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,8 +31,14 @@ public class RefundService {
     private final Events events;
     private final TransactionTemplate tx;
     private final MerchantProperties props;
+    private final Approvals approvals;
 
-    public RefundService(Rows rows, WalletClient wallets, Events events, TransactionTemplate tx, MerchantProperties props) {
+    /** Approval resource type for merchant refunds in workflow-service (G11); the action is {@code approve}. */
+    public static final String APPROVAL_RESOURCE = "merchant_refund";
+
+    public RefundService(Rows rows, WalletClient wallets, Events events, TransactionTemplate tx, MerchantProperties props,
+                         Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.wallets = wallets;
         this.events = events;
@@ -80,8 +91,37 @@ public class RefundService {
             }
             v.put("status", "REQUESTED");
             v.put("idempotency_key", key);
-            return rows.insert(TABLE, v);
+            ObjectNode row = rows.insert(TABLE, v);
+            // Central maker-checker: the checker decides in the workflow inbox; RefundApprovalHandler applies it.
+            UUID id = Rows.uuid(row, "id");
+            BigDecimal amt = amount.setScale(2, RoundingMode.UNNECESSARY);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("merchant_id", merchantId.toString());
+            payload.put("merchant_code", Rows.str(m, "merchant_code"));
+            payload.put("trading_name", Rows.str(m, "trading_name"));
+            payload.put("original_transaction_id", original.toString());
+            payload.put("original_reference", o.path("reference").asString(null));
+            payload.put("original_amount", paid.toPlainString());
+            payload.put("already_refunded_or_pending", already.toPlainString());
+            payload.put("amount", amt.toPlainString());
+            payload.put("currency", Rows.str(row, "currency"));
+            payload.put("reason", Rows.str(row, "reason"));
+            approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                            "Refund " + amt.toPlainString() + " " + Rows.str(row, "currency") + " by merchant "
+                                    + Rows.str(m, "trading_name"), payload)
+                    .withAmount(amt, Rows.str(row, "currency")), "approve:" + id);
+            return row;
         });
+    }
+
+    /** True while the refund is REQUESTED for the submitted amount and payment (the submission's fingerprint). */
+    public boolean awaitsApproval(UUID id, String amount, String originalTransactionId) {
+        return rows.find(TABLE, id)
+                .filter(r -> "REQUESTED".equals(Rows.str(r, "status")))
+                .filter(r -> amount == null || new BigDecimal(amount).compareTo(Rows.dec(r, "amount")) == 0)
+                .filter(r -> originalTransactionId == null
+                        || originalTransactionId.equals(Rows.str(r, "original_transaction_id")))
+                .isPresent();
     }
 
     public ObjectNode approve(UUID id, String comment) {
@@ -126,6 +166,7 @@ public class RefundService {
                 String msg = e.code() + ": " + e.getMessage();
                 v.put("failure_reason", msg.length() > 255 ? msg.substring(0, 255) : msg);
                 rows.update(TABLE, id, v);
+                approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "refund failed");
             });
             throw new ApiException(422, e.code(), "Refund failed: " + e.getMessage());
         }
@@ -139,6 +180,7 @@ public class RefundService {
             rows.execute("update merchant_refund set approved_at = now(), completed_at = now() where id = ?", id);
             ObjectNode after = rows.get(TABLE, id);
             events.publish("wallets.merchant_refund.completed", TABLE, after);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
             return after;
         });
     }
@@ -163,6 +205,7 @@ public class RefundService {
             v.put("approved_by", TenantContext.principal());
             ObjectNode after = rows.update(TABLE, id, v);
             events.publish("wallets.merchant_refund.rejected", TABLE, after);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
             return after;
         });
     }
