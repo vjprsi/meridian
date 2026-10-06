@@ -64,3 +64,15 @@ cd ../.. && bash tools/db/apply-ddl.sh          # (re)create all 52 service data
 
 Services must connect as `meridian_app` (not the superuser) so row-level tenant isolation applies.
 `tools/db/smoke-test.sql` verifies RLS, append-only tables, optimistic locking, enums and custom fields.
+
+## Running services locally
+
+```bash
+python tools/dev.py up ledger-service gateway   # build jars, create DBs, start on JDK 25, wait for health
+python tools/dev.py up --phase 1                # every phase-1 service + the gateway
+python tools/dev.py status | logs <name> | down # inspect / stop
+```
+
+The edge gateway serves every API at `http://localhost:18000/v1/...` (routes generated from the spec) and the
+bundled contract at `http://localhost:18000/openapi.yaml`. Local mode uses `X-Tenant-Id: <uuid>` instead of tokens.
+When a service's generated schema changes, the launcher recreates that local database (dev data only).
