@@ -5,7 +5,6 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.identity.domain.UserLifecycle;
 import io.meridian.identity.infrastructure.IdentityStore;
-import io.meridian.identity.infrastructure.WorkflowGateway;
 import io.meridian.web.crud.CrudEngine;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -22,11 +21,11 @@ public class UserService {
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final SessionService sessions;
-    private final WorkflowGateway workflow;
+    private final IdentityApprovals workflow;
     private final JsonMapper json;
 
     public UserService(IdentityStore store, CrudEngine crud, OutboxWriter outbox, SessionService sessions,
-                       WorkflowGateway workflow, JsonMapper json) {
+                       IdentityApprovals workflow, JsonMapper json) {
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;

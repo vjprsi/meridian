@@ -15,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Consumes binary-mode CloudEvents from every domain topic ({@code meridian.<domain>.v1}) and hands them to the
- * notification rules (and maker-checker outcomes for templates). Deduplication is by CloudEvent id
+ * notification rules. Deduplication is by CloudEvent id
  * ({@code source_event_id}), so at-least-once delivery is safe.
  */
 @Component

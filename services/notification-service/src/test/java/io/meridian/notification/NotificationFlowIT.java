@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import io.meridian.approvals.ApprovalDecision;
+import io.meridian.approvals.ApprovalEventsDispatcher;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.notification.application.NotificationService;
 import io.meridian.notification.application.RuleService;
@@ -68,6 +70,9 @@ class NotificationFlowIT {
 
     @Autowired
     RuleService rules;
+
+    @Autowired
+    ApprovalEventsDispatcher approvalEvents;
 
     @Autowired
     NotificationService notifications;
@@ -468,10 +473,12 @@ class NotificationFlowIT {
 
     // ------------------------------------------------------------------ helpers
 
+    /** A workflow-service decision (platform.approval_request.{verb}) as delivered through libs/meridian-approvals. */
     private void approvalOutcome(String templateId, String verb, String status) throws Exception {
-        String payload = """
-                {"resource_type":"notification_template","resource_id":"%s","status":"%s"}""".formatted(templateId, status);
-        callAs(() -> rules.onEvent(UUID.randomUUID().toString(), "platform.approval_request." + verb, json.readTree(payload)));
+        String row = """
+                {"id":"%s","resource_type":"notification_template","resource_id":"%s","action":"publish","status":"%s",
+                 "maker":"maker-1","updated_by":"checker-1","payload":{}}""".formatted(UUID.randomUUID(), templateId, status);
+        approvalEvents.dispatch(UUID.fromString(TENANT), json.readTree(row), ApprovalDecision.Outcome.ofEventSuffix(verb));
     }
 
     /** A provider callback as a provider sends it: no bearer token, tenant header or Idempotency-Key. */

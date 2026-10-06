@@ -4,7 +4,6 @@ import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.events.OutboxWriter;
 import io.meridian.identity.infrastructure.IdentityStore;
-import io.meridian.identity.infrastructure.WorkflowGateway;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import java.util.ArrayList;
@@ -25,10 +24,10 @@ public class RoleService {
     private final IdentityStore store;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
-    private final WorkflowGateway workflow;
+    private final IdentityApprovals workflow;
     private final JsonMapper json;
 
-    public RoleService(IdentityStore store, CrudEngine crud, OutboxWriter outbox, WorkflowGateway workflow,
+    public RoleService(IdentityStore store, CrudEngine crud, OutboxWriter outbox, IdentityApprovals workflow,
                        JsonMapper json) {
         this.store = store;
         this.crud = crud;

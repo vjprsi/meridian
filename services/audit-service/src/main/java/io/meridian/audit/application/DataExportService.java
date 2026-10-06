@@ -1,5 +1,7 @@
 package io.meridian.audit.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.audit.domain.ExportRules;
 import io.meridian.audit.infrastructure.AuditEventStore;
 import io.meridian.audit.infrastructure.DownloadUrlSigner;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,10 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Regulator / DSAR / legal-discovery exports under four-eyes: a request is queued and an approval request is
  * opened in workflow-service; only an approval by someone other than the requester runs the export.
+ *
+ * <p>Approvals go through libs/meridian-approvals (G11). There is no local decision endpoint, so exports are
+ * always sent to workflow-service whatever {@code meridian.approvals.mode} says; decisions come back through
+ * {@link DataExportApprovalHandler}.
  */
 @Service
 public class DataExportService {
@@ -39,17 +46,18 @@ public class DataExportService {
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final OutboxWriter outbox;
-    private final ServiceClient services;
+    private final Approvals approvals;
     private final AuditEventStore events;
     private final DownloadUrlSigner signer;
 
     public DataExportService(CrudEngine crud, JdbcClient jdbc, JsonMapper json, OutboxWriter outbox,
-                             ServiceClient services, AuditEventStore events, DownloadUrlSigner signer) {
+                             ServiceClient services, @Value("${spring.application.name}") String application,
+                             AuditEventStore events, DownloadUrlSigner signer) {
         this.crud = crud;
         this.jdbc = jdbc;
         this.json = json;
         this.outbox = outbox;
-        this.services = services;
+        this.approvals = new Approvals(services, application, "workflow");
         this.events = events;
         this.signer = signer;
     }
@@ -91,18 +99,13 @@ public class DataExportService {
         v.put("status", "QUEUED");
         String row = crud.insert(RESOURCE_TYPE, v);
 
-        ObjectNode approval = json.createObjectNode();
-        approval.put("resource_type", RESOURCE_TYPE);
-        approval.put("resource_id", id.toString());
-        approval.put("action", "execute");
         String title = "Data export " + type + " for " + v.path("requested_for").asString("");
-        approval.put("title", title.length() > 255 ? title.substring(0, 255) : title);
-        approval.put("summary", "Export of " + type + (from == null ? "" : " from " + from)
-                + (to == null ? "" : " to " + to) + " requested by " + TenantContext.principal());
-        approval.put("priority", ExportRules.SUBJECT_TYPES_REQUIRED.contains(type) ? "HIGH" : "NORMAL");
-        approval.set("payload", json.readTree(row));
-        JsonNode created = services.post("workflow-service", "/v1/approval-requests", approval,
-                truncate("audit-service:" + idempotencyKey, 128));
+        JsonNode created = approvals.request(new ApprovalSpec(RESOURCE_TYPE, id, "execute",
+                title.length() > 255 ? title.substring(0, 255) : title,
+                "Export of " + type + (from == null ? "" : " from " + from) + (to == null ? "" : " to " + to)
+                        + " requested by " + TenantContext.principal(),
+                json.readTree(row), null, null, ExportRules.SUBJECT_TYPES_REQUIRED.contains(type) ? "HIGH" : "NORMAL"),
+                "execute:" + id);
         if (created == null || !created.hasNonNull("id")) {
             throw new ApiException(502, "upstream_error", "workflow-service did not return an approval request id");
         }
@@ -172,9 +175,7 @@ public class DataExportService {
         outbox.publish("platform.data_export_request.cancelled", RESOURCE_TYPE, id, json.readTree(row(id)));
         if (e.approvalRequestId() != null) {
             try {
-                services.post("workflow-service", "/v1/approval-requests/" + e.approvalRequestId() + "/cancel",
-                        Map.of("reason", truncate("Export cancelled: " + reason, 255)),
-                        "audit-service:cancel:" + id);
+                approvals.cancel(e.approvalRequestId(), truncate("Export cancelled: " + reason, 255));
             } catch (RuntimeException ex) {
                 // The approval can no longer execute anything (export is CANCELLED); closing it is best effort.
                 log.warn("Could not cancel approval request {} for export {}: {}", e.approvalRequestId(), id, ex.toString());

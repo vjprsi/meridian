@@ -1,17 +1,24 @@
 package io.meridian.notification.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
+import io.meridian.common.tenancy.TenantContext;
 import io.meridian.notification.domain.DeliveryPolicy;
 import io.meridian.notification.domain.TemplateRenderer;
 import io.meridian.notification.infrastructure.NotificationStore;
 import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -22,6 +29,10 @@ import tools.jackson.databind.node.ObjectNode;
  * Template lifecycle: DRAFT (editable) -> PENDING_APPROVAL (publish, via workflow-service maker-checker) -> ACTIVE
  * (approved; the previously active version of the same code/channel/locale is RETIRED) or back to DRAFT (rejected).
  * A new version of an existing template is created by POSTing the same code/channel/locale again.
+ *
+ * <p>The publish approval goes through libs/meridian-approvals (G11). There is no local decision endpoint, so
+ * publishing always opens the request in workflow-service whatever {@code meridian.approvals.mode} says; the
+ * decision comes back through {@link NotificationTemplateApprovalHandler}.
  */
 @Service
 public class TemplateService {
@@ -30,15 +41,16 @@ public class TemplateService {
 
     private final NotificationStore store;
     private final CrudEngine crud;
-    private final ServiceClient services;
+    private final Approvals approvals;
     private final NotificationService notifications;
     private final JsonMapper json;
 
     public TemplateService(NotificationStore store, CrudEngine crud, ServiceClient services,
+                           @Value("${spring.application.name}") String application,
                            NotificationService notifications, JsonMapper json) {
         this.store = store;
         this.crud = crud;
-        this.services = services;
+        this.approvals = new Approvals(services, application, "workflow");
         this.notifications = notifications;
         this.json = json;
     }
@@ -113,22 +125,49 @@ public class TemplateService {
             payload.put("subject", t.get("subject").asString());
         }
         payload.put("body", t.get("body").asString());
-        ObjectNode request = json.createObjectNode();
-        request.put("resource_type", RESOURCE_TYPE);
-        request.put("resource_id", id.toString());
-        request.put("action", "publish");
-        request.put("title", "Publish notification template " + t.get("code").asString() + " v" + t.get("version").asInt()
-                + " (" + t.get("channel").asString() + "/" + t.get("locale").asString() + ")");
-        request.put("summary", "Activate version " + t.get("version").asInt() + " of " + t.get("code").asString()
-                + "; the currently active version will be retired.");
-        request.set("payload", payload);
-        String key = ("ntp-publish:" + id + ":" + idempotencyKey);
-        return services.post("workflow-service", "/v1/approval-requests", request,
-                key.substring(0, Math.min(128, key.length())));
+        payload.put("checksum", checksum(t));
+        return approvals.request(ApprovalSpec.of(RESOURCE_TYPE, id, "publish",
+                "Publish notification template " + t.get("code").asString() + " v" + t.get("version").asInt()
+                        + " (" + t.get("channel").asString() + "/" + t.get("locale").asString() + ")", payload)
+                .withSummary("Activate version " + t.get("version").asInt() + " of " + t.get("code").asString()
+                        + "; the currently active version will be retired."), "publish:" + id + ":" + idempotencyKey);
     }
 
     /**
-     * Applies a maker-checker outcome for a template (from platform.approval_request.* events). Approved or executed
+     * A decision from workflow-service on a publish request: ignored unless the template is still PENDING_APPROVAL
+     * with the submitted content (checksum); an approval by the template's maker is refused
+     * ({@code four_eyes_violation}).
+     */
+    @Transactional
+    public void onWorkflowDecision(UUID templateId, String checksum, String approvalStatus, String maker) {
+        JsonNode t = store.lockTemplate(templateId).map(json::readTree).orElse(null);
+        if (t == null || !"PENDING_APPROVAL".equals(t.get("status").asString())
+                || (checksum != null && !checksum.equals(checksum(t)))) {
+            return;
+        }
+        String principal = TenantContext.principal();
+        if ("APPROVED".equals(approvalStatus)
+                && (principal.equals(maker) || principal.equals(t.path("created_by").asString(null)))) {
+            throw ApiException.unprocessable("four_eyes_violation",
+                    "The maker of a template cannot approve its publication; another user must act as checker");
+        }
+        onApprovalDecided(templateId, approvalStatus);
+    }
+
+    /** Content fingerprint of a template version (what approvers saw). */
+    static String checksum(JsonNode t) {
+        String content = t.path("subject").asString("") + "\u0000" + t.path("body").asString("") + "\u0000"
+                + t.path("variables_schema").toString() + "\u0000" + t.path("category").asString("");
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(content.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Applies a maker-checker outcome for a template (from workflow-service decisions). Approved or executed
      * activates the template and retires the previous active version; rejected, changes requested, cancelled or
      * expired returns it to
      * DRAFT. Ignored unless the template is PENDING_APPROVAL (events are delivered at least once).

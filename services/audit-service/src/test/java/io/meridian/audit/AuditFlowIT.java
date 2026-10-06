@@ -11,7 +11,8 @@ import static org.mockito.Mockito.when;
 
 import io.meridian.audit.application.AuditRecorder;
 import io.meridian.audit.application.DataExportService;
-import io.meridian.audit.infrastructure.ApprovalListener;
+import io.meridian.approvals.ApprovalEventsDispatcher;
+import io.meridian.audit.application.DataExportApprovalHandler;
 import io.meridian.audit.infrastructure.DomainEventAuditListener;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
@@ -82,7 +83,7 @@ class AuditFlowIT {
     DomainEventAuditListener domainEvents;
 
     @Autowired
-    ApprovalListener approvals;
+    DataExportApprovalHandler exportApprovals;
 
     @Autowired
     Environment env;
@@ -261,9 +262,9 @@ class AuditFlowIT {
         assertThat(export.get("status").asString()).isEqualTo("QUEUED");
         String approvalId = export.get("approval_request_id").asString();
         verify(services).post(eq("workflow-service"), eq("/v1/approval-requests"),
-                argThat(b -> ((JsonNode) b).get("resource_type").asString().equals("data_export_request")
-                        && ((JsonNode) b).get("resource_id").asString().equals(id)),
-                eq("audit-service:" + k));
+                argThat(b -> json.valueToTree(b).get("resource_type").asString().equals("data_export_request")
+                        && json.valueToTree(b).get("resource_id").asString().equals(id)),
+                eq("audit-service:" + TENANT + ":execute:" + id));
 
         HttpResponse<String> replay = send("POST", "/v1/data-exports", body, k, TENANT, "maker");
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
@@ -388,6 +389,8 @@ class AuditFlowIT {
     @Test
     @Order(10)
     void rejectedOrSentBackApprovalCancelsTheQueuedExport() throws Exception {
+        // the approvals listener is disabled in this test: drive the library dispatcher with the CloudEvent directly
+        ApprovalEventsDispatcher approvals = new ApprovalEventsDispatcher(java.util.List.of(exportApprovals), json);
         for (String outcome : new String[] {"rejected", "changes_requested", "cancelled"}) {
             JsonNode export = post("/v1/data-exports", """
                     {"export_type":"REGULATOR_EXTRACT","requested_for":"Inspection %s"}""".formatted(outcome), 201, TENANT);
