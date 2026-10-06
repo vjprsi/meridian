@@ -750,8 +750,8 @@ components:
     JournalEntriesBatchRequest:
       properties:
         entries:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
       required:
       - entries
       type: object
@@ -895,6 +895,13 @@ components:
           type:
           - string
           - 'null'
+        reference:
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
+          maxLength: 128
+          type:
+          - string
+          - 'null'
         reversal_of_id:
           description: Entry this one reverses (set by POST /{id}/reverse)
           format: uuid
@@ -1009,6 +1016,11 @@ components:
           additionalProperties: true
           description: Client-defined key/value metadata
           type: object
+        reference:
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
+          maxLength: 128
+          type: string
         source_id:
           description: Business object id
           format: uuid
@@ -1269,7 +1281,7 @@ components:
           format: date-time
           type: string
         overdraft_limit:
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
           examples:
           - '125.50'
           format: decimal
@@ -1298,13 +1310,14 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Posting restrictions
+          description: Posting restrictions (changed by /freeze, /unfreeze, /close)
           enum:
           - ACTIVE
           - FROZEN_DEBIT
           - FROZEN_CREDIT
           - FROZEN
           - CLOSED
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -1415,7 +1428,7 @@ components:
           format: date-time
           type: string
         overdraft_limit:
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
           examples:
           - '125.50'
           format: decimal
@@ -1431,15 +1444,6 @@ components:
         parent_id:
           description: Parent for hierarchies, sub-ledgers and virtual accounts
           format: uuid
-          type: string
-        status:
-          description: Posting restrictions
-          enum:
-          - ACTIVE
-          - FROZEN_DEBIT
-          - FROZEN_CREDIT
-          - FROZEN
-          - CLOSED
           type: string
       required:
       - ledger_id
@@ -1547,7 +1551,7 @@ components:
           format: date-time
           type: string
         overdraft_limit:
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
           examples:
           - '125.50'
           format: decimal
@@ -1563,15 +1567,6 @@ components:
         parent_id:
           description: Parent for hierarchies, sub-ledgers and virtual accounts
           format: uuid
-          type: string
-        status:
-          description: Posting restrictions
-          enum:
-          - ACTIVE
-          - FROZEN_DEBIT
-          - FROZEN_CREDIT
-          - FROZEN
-          - CLOSED
           type: string
       type: object
     LedgerAccountsCloseRequest:
@@ -1596,6 +1591,19 @@ components:
       required:
       - status
       - reason
+      type: object
+    LedgerAccountsOverdraftLimitRequest:
+      properties:
+        limit:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - limit
       type: object
     LedgerAccountsUnfreezeRequest:
       properties:
@@ -1781,6 +1789,18 @@ components:
           format: int32
           readOnly: true
           type: integer
+        reference:
+          description: Copied from the journal entry (reconciliation matches on reference)
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value_date:
+          description: Copied from the journal entry (reconciliation matches on value date)
+          format: date
+          readOnly: true
+          type: string
       required:
       - id
       - created_at
@@ -1792,6 +1812,7 @@ components:
       - currency
       - base_amount
       - effective_at
+      - value_date
       - account_version
       - balance_after
       type: object
@@ -3018,7 +3039,7 @@ paths:
   /v1/ledger-accounts/{id}/freeze:
     post:
       operationId: ledgerAccountsFreeze
-      summary: Restrict debits, credits or both
+      summary: 'Restrict debits, credits or both (idempotent: an account already in the target status is returned unchanged)'
       tags:
       - Ledger Accounts
       security:
@@ -3066,7 +3087,7 @@ paths:
   /v1/ledger-accounts/{id}/unfreeze:
     post:
       operationId: ledgerAccountsUnfreeze
-      summary: Remove posting restrictions
+      summary: 'Remove posting restrictions (idempotent: an ACTIVE account is returned unchanged)'
       tags:
       - Ledger Accounts
       security:
@@ -3103,6 +3124,55 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LedgerAccountsUnfreezeRequest'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/overdraft-limit:
+    post:
+      operationId: ledgerAccountsOverdraftLimit
+      summary: 'Set the arranged overdraft limit and recompute the available balance (idempotent: the same limit returns the
+        account unchanged)'
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountsOverdraftLimitRequest'
       x-requirements:
       - LED-01
       - LED-02
@@ -3208,6 +3278,11 @@ paths:
           type: string
           format: uuid
       - name: correlation_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: reference
         in: query
         schema:
           type: string
@@ -3428,7 +3503,8 @@ paths:
   /v1/journal-entries/batch:
     post:
       operationId: journalEntriesBatch
-      summary: Post up to 1,000 journal entries atomically per entry
+      summary: Post up to 1,000 journal entries, each atomic on its own (item i uses key <Idempotency-Key>:<i>); returns per-item
+        results
       tags:
       - Journal Entries
       security:
@@ -3437,8 +3513,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

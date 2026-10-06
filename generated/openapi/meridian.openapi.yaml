@@ -279,7 +279,11 @@ tags:
   description: GL balance per account, period and currency, aggregated in real time from ledger events
   x-domain: Ledger and Accounting
 - name: Gl Journals
-  description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+  description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post
+    to the GL balances only once a gl_journal_approval exists for them.
+  x-domain: Ledger and Accounting
+- name: Gl Journal Approvals
+  description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
   x-domain: Ledger and Accounting
 - name: Period Close Runs
   description: Execution of an EOD / EOM / EOY close with its checklist steps
@@ -22218,7 +22222,7 @@ paths:
   /v1/ledger-accounts/{id}/freeze:
     post:
       operationId: ledgerAccountsFreeze
-      summary: Restrict debits, credits or both
+      summary: 'Restrict debits, credits or both (idempotent: an account already in the target status is returned unchanged)'
       tags:
       - Ledger Accounts
       security:
@@ -22266,7 +22270,7 @@ paths:
   /v1/ledger-accounts/{id}/unfreeze:
     post:
       operationId: ledgerAccountsUnfreeze
-      summary: Remove posting restrictions
+      summary: 'Remove posting restrictions (idempotent: an ACTIVE account is returned unchanged)'
       tags:
       - Ledger Accounts
       security:
@@ -22303,6 +22307,55 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LedgerAccountsUnfreezeRequest'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/overdraft-limit:
+    post:
+      operationId: ledgerAccountsOverdraftLimit
+      summary: 'Set the arranged overdraft limit and recompute the available balance (idempotent: the same limit returns the
+        account unchanged)'
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountsOverdraftLimitRequest'
       x-requirements:
       - LED-01
       - LED-02
@@ -22408,6 +22461,11 @@ paths:
           type: string
           format: uuid
       - name: correlation_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: reference
         in: query
         schema:
           type: string
@@ -22628,7 +22686,8 @@ paths:
   /v1/journal-entries/batch:
     post:
       operationId: journalEntriesBatch
-      summary: Post up to 1,000 journal entries atomically per entry
+      summary: Post up to 1,000 journal entries, each atomic on its own (item i uses key <Idempotency-Key>:<i>); returns per-item
+        results
       tags:
       - Journal Entries
       security:
@@ -22637,8 +22696,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -23879,7 +23944,7 @@ paths:
   /v1/gl/mapping-rules/simulate:
     post:
       operationId: glMappingRulesSimulate
-      summary: Show which GL account a posting would map to
+      summary: 'Show which GL account a posting would map to: returns {gl_account, mapping_rule, as_of}'
       tags:
       - Gl Mapping Rules
       security:
@@ -23893,7 +23958,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlAccount'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -24073,7 +24140,7 @@ paths:
   /v1/gl/periods/{id}/close:
     post:
       operationId: accountingPeriodsClose
-      summary: Start the period close (maker)
+      summary: 'Start the period close (maker): checklist incl. year-end transfer of P&L to retained earnings'
       tags:
       - Accounting Periods
       security:
@@ -24202,7 +24269,8 @@ paths:
   /v1/gl/periods/{id}/trial-balance:
     get:
       operationId: accountingPeriodsTrialBalance
-      summary: Trial balance for the period
+      summary: 'Trial balance for the period: {accounting_period_id, balanced, currencies[{currency, debits, credits, balanced}],
+        lines[GL balance + account code, name, class]}'
       tags:
       - Accounting Periods
       security:
@@ -24215,15 +24283,15 @@ paths:
         schema:
           type: string
           format: uuid
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlBalancePage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -24539,7 +24607,7 @@ paths:
   /v1/gl/journals/{id}/approve:
     post:
       operationId: glJournalsApprove
-      summary: Approve a manual GL journal (checker)
+      summary: Approve a manual GL journal (checker, four-eyes) and post it to the GL balances
       tags:
       - Gl Journals
       security:
@@ -24559,7 +24627,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlJournal'
+                $ref: '#/components/schemas/GlJournalApproval'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -24582,6 +24650,111 @@ paths:
       x-service: gl-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-table: gl_journal
+  /v1/gl/journal-approvals:
+    get:
+      operationId: glJournalApprovalsList
+      summary: List gl journal approvals
+      tags:
+      - Gl Journal Approvals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: gl_journal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: approved_by
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalApprovalPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-table: gl_journal_approval
+      x-crud: true
+      x-crud-list: true
+  /v1/gl/journal-approvals/{id}:
+    get:
+      operationId: glJournalApprovalsGet
+      summary: Retrieve gl journal approval
+      tags:
+      - Gl Journal Approvals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalApproval'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-table: gl_journal_approval
+      x-crud: true
+      x-crud-get: true
   /v1/gl/close-runs:
     get:
       operationId: periodCloseRunsList
@@ -24818,7 +24991,10 @@ paths:
   /v1/gl/ecl-provisions/calculate:
     post:
       operationId: eclProvisionsCalculate
-      summary: Run the ECL calculation for a reporting date
+      summary: Run the ECL calculation for a reporting date; exposures [{exposure_type, exposure_id, stage, ead, pd_12m, pd_lifetime
+        (or pd), lgd, currency}] (omitted = roll forward the latest provisions); with both GL accounts the ECL change is posted
+        as a PROVISION journal. Returns {legal_entity_id, reporting_date, model_version, exposures, total_ecl{ccy}, gl_journal_id,
+        period_close_run_id, provisions[]}
       tags:
       - Ecl Provisions
       security:
@@ -24832,7 +25008,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PeriodCloseRun'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -25009,7 +25187,7 @@ paths:
   /v1/gl/erp-exports/{id}/download:
     get:
       operationId: erpExportsDownload
-      summary: Signed URL to download the export file
+      summary: Download the export file (CSV; checksum in X-Checksum-SHA256)
       tags:
       - Erp Exports
       security:
@@ -25023,8 +25201,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -25306,44 +25488,6 @@ paths:
       x-table: recon_file
       x-crud: true
       x-crud-list: true
-    post:
-      operationId: reconFilesCreate
-      summary: Create recon file
-      tags:
-      - Recon Files
-      security:
-      - oauth2:
-        - ledger:write
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconFile'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReconFileCreate'
-      x-requirements:
-      - REC-01
-      x-service: reconciliation-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
-      x-table: recon_file
-      x-crud: true
-      x-crud-create: true
   /v1/reconciliation/files/{id}:
     get:
       operationId: reconFilesGet
@@ -25380,6 +25524,47 @@ paths:
       x-table: recon_file
       x-crud: true
       x-crud-get: true
+  /v1/reconciliation/files/import:
+    post:
+      operationId: reconFilesImport
+      summary: Import a statement or settlement file, sent as raw content (CSV, camt.053/054 XML, JSON per the source's file_format)
+        or as pre-parsed records [{value_date, direction, amount, currency, external_ref, end_to_end_id, booking_date, counterparty,
+        narrative}]; de-duplicated by SHA-256 and parsed synchronously (status PARSED or FAILED)
+      tags:
+      - Recon Files
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconFilesImportRequest'
+      x-requirements:
+      - REC-01
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-table: recon_file
   /v1/reconciliation/files/{id}/records:
     get:
       operationId: reconFilesRecords
@@ -74978,7 +75163,7 @@ paths:
   /v1/products/{id}/eligibility-check:
     get:
       operationId: productsEligibilityCheck
-      summary: Check whether a customer is eligible (?customer_id=)
+      summary: Check whether an applicant profile is eligible (existing_products = comma-separated product codes)
       tags:
       - Products
       security:
@@ -74991,9 +75176,113 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: customer_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: age
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: date_of_birth
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: residency_country
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: nationality
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: kyc_tier
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: segment
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - RETAIL
+          - SME
+          - CORPORATE
+          - PRIVATE
+          - YOUTH
+          - STUDENT
+          - SENIOR
+          - STAFF
+          - GOVERNMENT
+          - NON_PROFIT
+      - name: income
+        in: query
+        required: false
+        schema:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      - name: credit_score
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: existing_products
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 500
+      - name: customer_type
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 32
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - USSD
+          - API
+          - CALL_CENTER
+          - PARTNER
+      - name: as_of
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -75024,8 +75313,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -75478,7 +75773,7 @@ paths:
   /v1/product-versions/{id}/diff:
     get:
       operationId: productVersionsDiff
-      summary: Differences against another version (?against=)
+      summary: Differences from another version to this one
       tags:
       - Product Versions
       security:
@@ -75491,9 +75786,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: against
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -76240,8 +76547,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -76657,7 +76970,7 @@ paths:
   /v1/rate-indexes/{id}/values:
     get:
       operationId: rateIndexesValues
-      summary: Published values (?from=&to=)
+      summary: Published values in a date range
       tags:
       - Rate Indexes
       security:
@@ -76670,6 +76983,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -77086,8 +77411,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -78901,8 +79232,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -79009,6 +79346,51 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductScriptsApproveRequest'
+      x-requirements:
+      - PRD-05
+      x-service: product-catalog-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("product:write")'
+      x-table: product_script
+  /v1/product-scripts/{id}/reject:
+    post:
+      operationId: productScriptsReject
+      summary: Reject a submitted script (checker)
+      tags:
+      - Product Scripts
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductScript'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductScriptsRejectRequest'
       x-requirements:
       - PRD-05
       x-service: product-catalog-service
@@ -79262,8 +79644,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -80496,7 +80882,9 @@ paths:
           enum:
           - DRAFT
           - PENDING_APPROVAL
+          - APPROVED
           - PUBLISHED
+          - REJECTED
           - RETIRED
       - name: custom_field_1
         in: query
@@ -80664,7 +81052,7 @@ paths:
   /v1/decision-table-versions/{id}/test:
     post:
       operationId: decisionTableVersionsTest
-      summary: Evaluate a draft version against test cases
+      summary: Evaluate a version against test cases (name, inputs, expected, expected_error)
       tags:
       - Decision Table Versions
       security:
@@ -80679,8 +81067,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -80752,7 +81146,7 @@ paths:
   /v1/decision-table-versions/{id}/approve:
     post:
       operationId: decisionTableVersionsApprove
-      summary: Approve and publish (checker)
+      summary: 'Approve (checker): published at once, or APPROVED until effective_from'
       tags:
       - Decision Table Versions
       security:
@@ -80858,8 +81252,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -122809,6 +123207,18 @@ components:
           format: date-time
           description: Copied from the journal entry for range queries
           readOnly: true
+        value_date:
+          type: string
+          format: date
+          description: Copied from the journal entry (reconciliation matches on value date)
+          readOnly: true
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Copied from the journal entry (reconciliation matches on reference)
+          readOnly: true
         account_version:
           type: integer
           format: int64
@@ -122868,6 +123278,7 @@ components:
       - currency
       - base_amount
       - effective_at
+      - value_date
       - account_version
       - balance_after
     LedgerEntryCreate:
@@ -141487,6 +141898,19 @@ components:
           maxLength: 255
       required:
       - reason
+    LedgerAccountsOverdraftLimitRequest:
+      type: object
+      properties:
+        limit:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - limit
     LedgerAccountsCloseRequest:
       type: object
       properties:
@@ -141526,8 +141950,8 @@ components:
       type: object
       properties:
         entries:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
       required:
       - entries
     HoldPage:
@@ -141679,6 +142103,9 @@ components:
     GlMappingRulesSimulateRequest:
       type: object
       properties:
+        legal_entity_id:
+          type: string
+          format: uuid
         product_id:
           type: string
           format: uuid
@@ -141711,6 +142138,12 @@ components:
         owner_type:
           type: string
           maxLength: 40
+        balance_sign:
+          type: string
+          maxLength: 10
+        as_of:
+          type: string
+          format: date
     AccountingPeriodPage:
       type: object
       description: One page of AccountingPeriod results (newest first)
@@ -141803,6 +142236,24 @@ components:
         comment:
           type: string
           maxLength: 500
+    GlJournalApprovalPage:
+      type: object
+      description: One page of GlJournalApproval results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournalApproval'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     PeriodCloseRunPage:
       type: object
       description: One page of PeriodCloseRun results (newest first)
@@ -141848,6 +142299,15 @@ components:
         reporting_date:
           type: string
           format: date
+        exposures:
+          type: array
+          items: {}
+        provision_expense_gl_account_id:
+          type: string
+          format: uuid
+        allowance_gl_account_id:
+          type: string
+          format: uuid
       required:
       - legal_entity_id
       - reporting_date
@@ -141905,6 +142365,36 @@ components:
       required:
       - data
       - has_more
+    ReconFilesImportRequest:
+      type: object
+      properties:
+        recon_source_id:
+          type: string
+          format: uuid
+        file_name:
+          type: string
+          maxLength: 255
+        content:
+          type: string
+        records:
+          type: array
+          items: {}
+        statement_date:
+          type: string
+          format: date
+        opening_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        closing_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - recon_source_id
+      - file_name
     ReconRecordPage:
       type: object
       description: One page of ReconRecord results (newest first)
@@ -142691,6 +143181,10 @@ components:
           - 'null'
           maxLength: 64
           description: Mapping code for the ERP
+        is_retained_earnings:
+          type: boolean
+          description: Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end
+            close transfers the net profit or loss here
         status:
           type: string
           enum:
@@ -142739,6 +143233,7 @@ components:
       - account_class
       - level
       - is_postable
+      - is_retained_earnings
       - status
     GlAccountCreate:
       type: object
@@ -142788,6 +143283,10 @@ components:
           type: string
           maxLength: 64
           description: Mapping code for the ERP
+        is_retained_earnings:
+          type: boolean
+          description: Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end
+            close transfers the net profit or loss here
         status:
           type: string
           enum:
@@ -142868,6 +143367,10 @@ components:
           type: string
           maxLength: 64
           description: Mapping code for the ERP
+        is_retained_earnings:
+          type: boolean
+          description: Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end
+            close transfers the net profit or loss here
         status:
           type: string
           enum:
@@ -143032,7 +143535,8 @@ components:
       - base_closing_balance
     GlJournal:
       type: object
-      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals
+        post to the GL balances only once a gl_journal_approval exists for them.
       properties:
         id:
           type: string
@@ -143062,7 +143566,8 @@ components:
         journal_type:
           type: string
           maxLength: 32
-          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE
+            and YEAR_END_CLOSE are system-only)
         source_journal_entry_id:
           type:
           - string
@@ -143079,12 +143584,146 @@ components:
           type: string
           format: date
           description: Value date
-        approved_by:
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournalLine'
+          readOnly: true
+          description: Debit and credit lines; must balance per currency
+      required:
+      - id
+      - created_at
+      - legal_entity_id
+      - accounting_period_id
+      - journal_type
+      - value_date
+    GlJournalCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+        accounting_period_id:
+          type: string
+          format: uuid
+          description: Period
+        journal_type:
+          type: string
+          maxLength: 32
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE
+            and YEAR_END_CLOSE are system-only)
+        source_journal_entry_id:
+          type: string
+          format: uuid
+          description: Ledger journal entry, when derived
+        description:
+          type: string
+          maxLength: 500
+          description: Narrative
+        value_date:
+          type: string
+          format: date
+          description: Value date
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournalLineCreate'
+          minItems: 1
+          description: Debit and credit lines; must balance per currency
+      required:
+      - legal_entity_id
+      - accounting_period_id
+      - journal_type
+      - value_date
+      - lines
+    GlJournalApproval:
+      type: object
+      description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Checker for manual journals
+          description: Principal that created the row
+          readOnly: true
+        gl_journal_id:
+          type: string
+          format: uuid
+          description: Approved GL journal (one approval per journal)
+          readOnly: true
+        approved_by:
+          type: string
+          maxLength: 64
+          description: Checker (system:<process> for system journals such as provisions)
+          readOnly: true
+        comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment
         custom_field_1:
           type:
           - string
@@ -143118,66 +143757,8 @@ components:
       required:
       - id
       - created_at
-      - legal_entity_id
-      - accounting_period_id
-      - journal_type
-      - value_date
-    GlJournalCreate:
-      type: object
-      properties:
-        legal_entity_id:
-          type: string
-          format: uuid
-          description: Legal entity
-        accounting_period_id:
-          type: string
-          format: uuid
-          description: Period
-        journal_type:
-          type: string
-          maxLength: 32
-          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
-        source_journal_entry_id:
-          type: string
-          format: uuid
-          description: Ledger journal entry, when derived
-        description:
-          type: string
-          maxLength: 500
-          description: Narrative
-        value_date:
-          type: string
-          format: date
-          description: Value date
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Checker for manual journals
-        custom_field_1:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-        custom_field_2:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-        custom_field_3:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-        custom_field_4:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-        custom_field_5:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-      required:
-      - legal_entity_id
-      - accounting_period_id
-      - journal_type
-      - value_date
+      - gl_journal_id
+      - approved_by
     GlJournalLine:
       type: object
       description: Debit or credit line of a GL journal. Append-only.
@@ -143203,6 +143784,7 @@ components:
           type: string
           format: uuid
           description: GL journal
+          readOnly: true
         gl_account_id:
           type: string
           format: uuid
@@ -143223,12 +143805,21 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        fx_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate to the entity base currency (default 1)
         base_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Amount in entity base currency
+          description: Amount in entity base currency (amount x fx_rate)
+          readOnly: true
         cost_center:
           type:
           - string
@@ -143286,6 +143877,72 @@ components:
       - amount
       - currency
       - base_amount
+    GlJournalLineCreate:
+      type: object
+      properties:
+        gl_account_id:
+          type: string
+          format: uuid
+          description: GL account
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fx_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate to the entity base currency (default 1)
+        cost_center:
+          type: string
+          maxLength: 32
+          description: Cost centre
+        branch_id:
+          type: string
+          format: uuid
+          description: Branch dimension
+        product_id:
+          type: string
+          format: uuid
+          description: Product dimension
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - gl_account_id
+      - direction
+      - amount
+      - currency
     GlMappingRule:
       type: object
       description: Maps ledger account types / products / transaction types to GL accounts
@@ -144020,6 +144677,13 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
         entry_count:
           type: integer
           format: int32
@@ -144149,6 +144813,11 @@ components:
           type: string
           maxLength: 128
           description: Trace / saga correlation id
+        reference:
+          type: string
+          maxLength: 128
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
         metadata:
           type: object
           additionalProperties: true
@@ -144507,7 +145176,8 @@ components:
           - FROZEN_CREDIT
           - FROZEN
           - CLOSED
-          description: Posting restrictions
+          description: Posting restrictions (changed by /freeze, /unfreeze, /close)
+          readOnly: true
         allow_negative:
           type: boolean
           description: Whether available balance may go below zero
@@ -144516,7 +145186,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
         min_balance:
           type: string
           format: decimal
@@ -144636,15 +145306,6 @@ components:
           type: string
           format: uuid
           description: Id of the owning business object in its service
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - FROZEN_DEBIT
-          - FROZEN_CREDIT
-          - FROZEN
-          - CLOSED
-          description: Posting restrictions
         allow_negative:
           type: boolean
           description: Whether available balance may go below zero
@@ -144653,7 +145314,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
         min_balance:
           type: string
           format: decimal
@@ -144750,15 +145411,6 @@ components:
           type: string
           format: uuid
           description: Id of the owning business object in its service
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - FROZEN_DEBIT
-          - FROZEN_CREDIT
-          - FROZEN
-          - CLOSED
-          description: Posting restrictions
         allow_negative:
           type: boolean
           description: Whether available balance may go below zero
@@ -144767,7 +145419,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
         min_balance:
           type: string
           format: decimal
@@ -145500,56 +146152,6 @@ components:
       - file_uri
       - checksum
       - status
-    ReconFileCreate:
-      type: object
-      properties:
-        recon_source_id:
-          type: string
-          format: uuid
-          description: Source
-        file_name:
-          type: string
-          maxLength: 255
-          description: Original file name
-        statement_date:
-          type: string
-          format: date
-          description: Statement / settlement date
-        opening_balance:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Opening balance stated in the file
-        closing_balance:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Closing balance stated in the file
-        custom_field_1:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-        custom_field_2:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-        custom_field_3:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-        custom_field_4:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-        custom_field_5:
-          type: string
-          maxLength: 500
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-      required:
-      - recon_source_id
-      - file_name
     ReconMatch:
       type: object
       description: A confirmed link between external records and internal ledger entries. Append-only.
@@ -145593,13 +146195,13 @@ components:
           - MANUAL
           description: Cardinality
         external_record_ids:
-          type: object
-          additionalProperties: true
-          description: recon_record ids
+          type: array
+          items: {}
+          description: recon_record ids (sorted)
         internal_entry_ids:
-          type: object
-          additionalProperties: true
-          description: ledger_entry ids
+          type: array
+          items: {}
+          description: ledger_entry ids (sorted)
         difference:
           type: string
           format: decimal
@@ -145684,13 +146286,13 @@ components:
           - MANUAL
           description: Cardinality
         external_record_ids:
-          type: object
-          additionalProperties: true
-          description: recon_record ids
+          type: array
+          items: {}
+          description: recon_record ids (sorted)
         internal_entry_ids:
-          type: object
-          additionalProperties: true
-          description: ledger_entry ids
+          type: array
+          items: {}
+          description: ledger_entry ids (sorted)
         difference:
           type: string
           format: decimal
@@ -145921,9 +146523,9 @@ components:
           - MANUAL
           description: Cardinality
         match_fields:
-          type: object
-          additionalProperties: true
-          description: Fields that must be equal, e.g. [end_to_end_id, amount]
+          type: array
+          items: {}
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
         amount_tolerance:
           type: string
           format: decimal
@@ -146008,9 +146610,9 @@ components:
           - MANUAL
           description: Cardinality
         match_fields:
-          type: object
-          additionalProperties: true
-          description: Fields that must be equal, e.g. [end_to_end_id, amount]
+          type: array
+          items: {}
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
         amount_tolerance:
           type: string
           format: decimal
@@ -146076,9 +146678,9 @@ components:
           - MANUAL
           description: Cardinality
         match_fields:
-          type: object
-          additionalProperties: true
-          description: Fields that must be equal, e.g. [end_to_end_id, amount]
+          type: array
+          items: {}
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
         amount_tolerance:
           type: string
           format: decimal
@@ -199964,6 +200566,9 @@ components:
           - API
           - CALL_CENTER
           - PARTNER
+        applicant:
+          type: object
+          additionalProperties: true
     ProductVersionsSubmitRequest:
       type: object
       properties:
@@ -200226,6 +200831,9 @@ components:
         customer_id:
           type: string
           format: uuid
+        context:
+          type: object
+          additionalProperties: true
       required:
       - base_amount
     TaxRulePage:
@@ -200320,6 +200928,14 @@ components:
         comment:
           type: string
           maxLength: 500
+    ProductScriptsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+      required:
+      - reason
     ProductScriptsDeprecateRequest:
       type: object
       properties:
@@ -200491,8 +201107,8 @@ components:
       type: object
       properties:
         test_cases:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
       required:
       - test_cases
     DecisionTableVersionsSubmitRequest:
@@ -200836,7 +201452,8 @@ components:
         version_no:
           type: integer
           format: int32
-          description: Version number
+          description: Version number (server-assigned per decision table)
+          readOnly: true
         hit_policy:
           type: string
           enum:
@@ -200848,18 +201465,27 @@ components:
           - RULE_ORDER
           - OUTPUT_ORDER
           description: DMN hit policy
+        aggregation:
+          type: string
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
         inputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Input columns: name, type, expression'
         outputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Output columns: name, type, default'
         rules:
-          type: object
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
+          type: array
+          items: {}
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
         dmn_xml:
           type:
           - string
@@ -200870,9 +201496,11 @@ components:
           enum:
           - DRAFT
           - PENDING_APPROVAL
+          - APPROVED
           - PUBLISHED
+          - REJECTED
           - RETIRED
-          description: Status
+          description: Status (APPROVED = approved, waiting for effective_from)
           readOnly: true
         effective_from:
           type:
@@ -200893,6 +201521,13 @@ components:
           maxLength: 64
           description: Maker
           readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
@@ -200906,6 +201541,20 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the version
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker rejected the version
           readOnly: true
         checksum:
           type:
@@ -200952,6 +201601,7 @@ components:
       - decision_table_id
       - version_no
       - hit_policy
+      - aggregation
       - inputs
       - outputs
       - rules
@@ -200963,10 +201613,6 @@ components:
           type: string
           format: uuid
           description: Decision table
-        version_no:
-          type: integer
-          format: int32
-          description: Version number
         hit_policy:
           type: string
           enum:
@@ -200978,18 +201624,27 @@ components:
           - RULE_ORDER
           - OUTPUT_ORDER
           description: DMN hit policy
+        aggregation:
+          type: string
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
         inputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Input columns: name, type, expression'
         outputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Output columns: name, type, default'
         rules:
-          type: object
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
+          type: array
+          items: {}
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
         dmn_xml:
           type: string
           description: Equivalent DMN 1.5 XML for import/export
@@ -201023,7 +201678,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - decision_table_id
-      - version_no
       - inputs
       - outputs
       - rules
@@ -201034,10 +201688,6 @@ components:
           type: string
           format: uuid
           description: Decision table
-        version_no:
-          type: integer
-          format: int32
-          description: Version number
         hit_policy:
           type: string
           enum:
@@ -201049,18 +201699,27 @@ components:
           - RULE_ORDER
           - OUTPUT_ORDER
           description: DMN hit policy
+        aggregation:
+          type: string
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
         inputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Input columns: name, type, expression'
         outputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Output columns: name, type, default'
         rules:
-          type: object
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
+          type: array
+          items: {}
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
         dmn_xml:
           type: string
           description: Equivalent DMN 1.5 XML for import/export
@@ -203454,15 +204113,15 @@ components:
           description: Full marketing description
         available_channels:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: ProductChannel values where it can be sold
         available_countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: ISO 3166 countries where it can be sold
         launch_date:
           type:
@@ -203610,12 +204269,12 @@ components:
           type: string
           description: Full marketing description
         available_channels:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: ProductChannel values where it can be sold
         available_countries:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: ISO 3166 countries where it can be sold
         launch_date:
           type: string
@@ -203738,12 +204397,12 @@ components:
           type: string
           description: Full marketing description
         available_channels:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: ProductChannel values where it can be sold
         available_countries:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: ISO 3166 countries where it can be sold
         launch_date:
           type: string
@@ -205111,9 +205770,9 @@ components:
           description: Upper bound for numeric values
         allowed_values:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Allowed values for ENUM type
         is_overridable:
           type: boolean
@@ -205204,8 +205863,8 @@ components:
           maxLength: 64
           description: Upper bound for numeric values
         allowed_values:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allowed values for ENUM type
         is_overridable:
           type: boolean
@@ -205279,8 +205938,8 @@ components:
           maxLength: 64
           description: Upper bound for numeric values
         allowed_values:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allowed values for ENUM type
         is_overridable:
           type: boolean
@@ -205649,14 +206308,18 @@ components:
           - 'null'
           description: Source code (kept for review and audit)
         wasm_module_uri:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 500
-          description: Location of the compiled module
+          description: Location of the compiled module (empty until compiled)
           readOnly: true
         wasm_sha256:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Hash of the compiled module
+          description: Hash of the compiled module (empty until compiled)
           readOnly: true
         entrypoint:
           type: string
@@ -205692,12 +206355,47 @@ components:
           additionalProperties: true
           description: Static checks and test results
           readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker rejected the script
+          readOnly: true
+        deprecation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the script was deprecated
           readOnly: true
         custom_field_1:
           type:
@@ -205738,8 +206436,6 @@ components:
       - name
       - hook
       - language
-      - wasm_module_uri
-      - wasm_sha256
       - entrypoint
       - max_fuel
       - max_memory_mb
@@ -205963,10 +206659,10 @@ components:
           readOnly: true
         results:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: 'Outputs: balances, interest, fees, tax, schedule per period'
+          items: {}
+          description: 'Outputs per period: balances, interest, fees, tax, schedule'
           readOnly: true
         summary:
           type:
@@ -206155,8 +206851,8 @@ components:
           additionalProperties: true
           description: Default parameter set (interest, fees, limits, rules)
         editable_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Paths of parameters a product manager may change
         is_system:
           type: boolean
@@ -206248,8 +206944,8 @@ components:
           additionalProperties: true
           description: Default parameter set (interest, fees, limits, rules)
         editable_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Paths of parameters a product manager may change
         is_system:
           type: boolean
@@ -206325,8 +207021,8 @@ components:
           additionalProperties: true
           description: Default parameter set (interest, fees, limits, rules)
         editable_fields:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Paths of parameters a product manager may change
         is_system:
           type: boolean
@@ -206399,7 +207095,8 @@ components:
         version_no:
           type: integer
           format: int32
-          description: Sequential version number
+          description: Sequential version number (server-assigned per product)
+          readOnly: true
         status:
           type: string
           enum:
@@ -206435,7 +207132,10 @@ components:
           description: What changed compared to the previous version
         migration_policy:
           type: string
-          maxLength: 32
+          enum:
+          - PIN
+          - MIGRATE_ON_RENEWAL
+          - FORCE_MIGRATE
           description: PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE
         submitted_by:
           type:
@@ -206464,6 +207164,27 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the version
+          readOnly: true
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rejection time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker rejected the version
           readOnly: true
         published_at:
           type:
@@ -206532,10 +207253,6 @@ components:
           type: string
           format: uuid
           description: Product
-        version_no:
-          type: integer
-          format: int32
-          description: Sequential version number
         effective_from:
           type: string
           format: date-time
@@ -206553,7 +207270,10 @@ components:
           description: What changed compared to the previous version
         migration_policy:
           type: string
-          maxLength: 32
+          enum:
+          - PIN
+          - MIGRATE_ON_RENEWAL
+          - FORCE_MIGRATE
           description: PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE
         approval_request_id:
           type: string
@@ -206581,7 +207301,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - product_id
-      - version_no
       - definition
     ProductVersionUpdate:
       type: object
@@ -206590,10 +207309,6 @@ components:
           type: string
           format: uuid
           description: Product
-        version_no:
-          type: integer
-          format: int32
-          description: Sequential version number
         effective_from:
           type: string
           format: date-time
@@ -206611,7 +207326,10 @@ components:
           description: What changed compared to the previous version
         migration_policy:
           type: string
-          maxLength: 32
+          enum:
+          - PIN
+          - MIGRATE_ON_RENEWAL
+          - FORCE_MIGRATE
           description: PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE
         approval_request_id:
           type: string

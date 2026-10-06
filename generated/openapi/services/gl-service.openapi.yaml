@@ -446,7 +446,16 @@ components:
       type: object
     EclProvisionsCalculateRequest:
       properties:
+        allowance_gl_account_id:
+          format: uuid
+          type: string
+        exposures:
+          items: {}
+          type: array
         legal_entity_id:
+          format: uuid
+          type: string
+        provision_expense_gl_account_id:
           format: uuid
           type: string
         reporting_date:
@@ -713,6 +722,10 @@ components:
         is_postable:
           description: Leaf accounts accept postings; headers do not
           type: boolean
+        is_retained_earnings:
+          description: Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end
+            close transfers the net profit or loss here
+          type: boolean
         legal_entity_id:
           description: Legal entity
           format: uuid
@@ -772,6 +785,7 @@ components:
       - account_class
       - level
       - is_postable
+      - is_retained_earnings
       - status
       type: object
     GlAccountCreate:
@@ -820,6 +834,10 @@ components:
           type: string
         is_postable:
           description: Leaf accounts accept postings; headers do not
+          type: boolean
+        is_retained_earnings:
+          description: Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end
+            close transfers the net profit or loss here
           type: boolean
         legal_entity_id:
           description: Legal entity
@@ -918,6 +936,10 @@ components:
           type: string
         is_postable:
           description: Leaf accounts accept postings; headers do not
+          type: boolean
+        is_retained_earnings:
+          description: Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end
+            close transfers the net profit or loss here
           type: boolean
         legal_entity_id:
           description: Legal entity
@@ -1101,18 +1123,13 @@ components:
       - has_more
       type: object
     GlJournal:
-      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals
+        post to the GL balances only once a gl_journal_approval exists for them.
       properties:
         accounting_period_id:
           description: Period
           format: uuid
           type: string
-        approved_by:
-          description: Checker for manual journals
-          maxLength: 64
-          type:
-          - string
-          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -1167,13 +1184,20 @@ components:
           readOnly: true
           type: string
         journal_type:
-          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE
+            and YEAR_END_CLOSE are system-only)
           maxLength: 32
           type: string
         legal_entity_id:
           description: Legal entity
           format: uuid
           type: string
+        lines:
+          description: Debit and credit lines; must balance per currency
+          items:
+            $ref: '#/components/schemas/GlJournalLine'
+          readOnly: true
+          type: array
         source_journal_entry_id:
           description: Ledger journal entry, when derived
           format: uuid
@@ -1192,15 +1216,101 @@ components:
       - journal_type
       - value_date
       type: object
+    GlJournalApproval:
+      description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+      properties:
+        approved_by:
+          description: Checker (system:<process> for system journals such as provisions)
+          maxLength: 64
+          readOnly: true
+          type: string
+        comment:
+          description: Checker comment
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        gl_journal_id:
+          description: Approved GL journal (one approval per journal)
+          format: uuid
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+      required:
+      - id
+      - created_at
+      - gl_journal_id
+      - approved_by
+      type: object
+    GlJournalApprovalPage:
+      description: One page of GlJournalApproval results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/GlJournalApproval'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
     GlJournalCreate:
       properties:
         accounting_period_id:
           description: Period
           format: uuid
-          type: string
-        approved_by:
-          description: Checker for manual journals
-          maxLength: 64
           type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
@@ -1227,13 +1337,20 @@ components:
           maxLength: 500
           type: string
         journal_type:
-          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE
+            and YEAR_END_CLOSE are system-only)
           maxLength: 32
           type: string
         legal_entity_id:
           description: Legal entity
           format: uuid
           type: string
+        lines:
+          description: Debit and credit lines; must balance per currency
+          items:
+            $ref: '#/components/schemas/GlJournalLineCreate'
+          minItems: 1
+          type: array
         source_journal_entry_id:
           description: Ledger journal entry, when derived
           format: uuid
@@ -1247,6 +1364,7 @@ components:
       - accounting_period_id
       - journal_type
       - value_date
+      - lines
       type: object
     GlJournalLine:
       description: Debit or credit line of a GL journal. Append-only.
@@ -1258,10 +1376,11 @@ components:
           format: decimal
           type: string
         base_amount:
-          description: Amount in entity base currency
+          description: Amount in entity base currency (amount x fx_rate)
           examples:
           - '125.50'
           format: decimal
+          readOnly: true
           type: string
         branch_id:
           description: Branch dimension
@@ -1327,6 +1446,14 @@ components:
           - DEBIT
           - CREDIT
           type: string
+        fx_rate:
+          description: Rate to the entity base currency (default 1)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
         gl_account_id:
           description: GL account
           format: uuid
@@ -1334,6 +1461,7 @@ components:
         gl_journal_id:
           description: GL journal
           format: uuid
+          readOnly: true
           type: string
         id:
           description: Unique id (UUIDv7, time-ordered)
@@ -1355,6 +1483,72 @@ components:
       - amount
       - currency
       - base_amount
+      type: object
+    GlJournalLineCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        branch_id:
+          description: Branch dimension
+          format: uuid
+          type: string
+        cost_center:
+          description: Cost centre
+          maxLength: 32
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        direction:
+          description: Debit or credit
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        fx_rate:
+          description: Rate to the entity base currency (default 1)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        gl_account_id:
+          description: GL account
+          format: uuid
+          type: string
+        product_id:
+          description: Product dimension
+          format: uuid
+          type: string
+      required:
+      - gl_account_id
+      - direction
+      - amount
+      - currency
       type: object
     GlJournalLinePage:
       description: One page of GlJournalLine results (newest first)
@@ -1737,6 +1931,12 @@ components:
       type: object
     GlMappingRulesSimulateRequest:
       properties:
+        as_of:
+          format: date
+          type: string
+        balance_sign:
+          maxLength: 10
+          type: string
         entry_type:
           enum:
           - STANDARD
@@ -1762,6 +1962,9 @@ components:
           - INCOME
           - EXPENSE
           - OFF_BALANCE
+          type: string
+        legal_entity_id:
+          format: uuid
           type: string
         owner_type:
           maxLength: 40
@@ -2400,7 +2603,7 @@ paths:
   /v1/gl/mapping-rules/simulate:
     post:
       operationId: glMappingRulesSimulate
-      summary: Show which GL account a posting would map to
+      summary: 'Show which GL account a posting would map to: returns {gl_account, mapping_rule, as_of}'
       tags:
       - Gl Mapping Rules
       security:
@@ -2414,7 +2617,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlAccount'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2594,7 +2799,7 @@ paths:
   /v1/gl/periods/{id}/close:
     post:
       operationId: accountingPeriodsClose
-      summary: Start the period close (maker)
+      summary: 'Start the period close (maker): checklist incl. year-end transfer of P&L to retained earnings'
       tags:
       - Accounting Periods
       security:
@@ -2723,7 +2928,8 @@ paths:
   /v1/gl/periods/{id}/trial-balance:
     get:
       operationId: accountingPeriodsTrialBalance
-      summary: Trial balance for the period
+      summary: 'Trial balance for the period: {accounting_period_id, balanced, currencies[{currency, debits, credits, balanced}],
+        lines[GL balance + account code, name, class]}'
       tags:
       - Accounting Periods
       security:
@@ -2736,15 +2942,15 @@ paths:
         schema:
           type: string
           format: uuid
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlBalancePage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3060,7 +3266,7 @@ paths:
   /v1/gl/journals/{id}/approve:
     post:
       operationId: glJournalsApprove
-      summary: Approve a manual GL journal (checker)
+      summary: Approve a manual GL journal (checker, four-eyes) and post it to the GL balances
       tags:
       - Gl Journals
       security:
@@ -3080,7 +3286,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GlJournal'
+                $ref: '#/components/schemas/GlJournalApproval'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3103,6 +3309,111 @@ paths:
       x-service: gl-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-table: gl_journal
+  /v1/gl/journal-approvals:
+    get:
+      operationId: glJournalApprovalsList
+      summary: List gl journal approvals
+      tags:
+      - Gl Journal Approvals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: gl_journal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: approved_by
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalApprovalPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-table: gl_journal_approval
+      x-crud: true
+      x-crud-list: true
+  /v1/gl/journal-approvals/{id}:
+    get:
+      operationId: glJournalApprovalsGet
+      summary: Retrieve gl journal approval
+      tags:
+      - Gl Journal Approvals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalApproval'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-table: gl_journal_approval
+      x-crud: true
+      x-crud-get: true
   /v1/gl/close-runs:
     get:
       operationId: periodCloseRunsList
@@ -3339,7 +3650,10 @@ paths:
   /v1/gl/ecl-provisions/calculate:
     post:
       operationId: eclProvisionsCalculate
-      summary: Run the ECL calculation for a reporting date
+      summary: Run the ECL calculation for a reporting date; exposures [{exposure_type, exposure_id, stage, ead, pd_12m, pd_lifetime
+        (or pd), lgd, currency}] (omitted = roll forward the latest provisions); with both GL accounts the ECL change is posted
+        as a PROVISION journal. Returns {legal_entity_id, reporting_date, model_version, exposures, total_ecl{ccy}, gl_journal_id,
+        period_close_run_id, provisions[]}
       tags:
       - Ecl Provisions
       security:
@@ -3353,7 +3667,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PeriodCloseRun'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3530,7 +3846,7 @@ paths:
   /v1/gl/erp-exports/{id}/download:
     get:
       operationId: erpExportsDownload
-      summary: Signed URL to download the export file
+      summary: Download the export file (CSV; checksum in X-Checksum-SHA256)
       tags:
       - Erp Exports
       security:
@@ -3544,8 +3860,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3573,8 +3893,11 @@ tags:
   name: Accounting Periods
 - description: GL balance per account, period and currency, aggregated in real time from ledger events
   name: Gl Balances
-- description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+- description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post
+    to the GL balances only once a gl_journal_approval exists for them.
   name: Gl Journals
+- description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+  name: Gl Journal Approvals
 - description: Execution of an EOD / EOM / EOY close with its checklist steps
   name: Period Close Runs
 - description: IFRS 9 expected credit loss provision per exposure and reporting date

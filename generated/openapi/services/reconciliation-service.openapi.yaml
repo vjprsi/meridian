@@ -524,56 +524,6 @@ components:
       - checksum
       - status
       type: object
-    ReconFileCreate:
-      properties:
-        closing_balance:
-          description: Closing balance stated in the file
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        custom_field_1:
-          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_2:
-          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_3:
-          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_4:
-          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        custom_field_5:
-          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
-          maxLength: 500
-          type: string
-        file_name:
-          description: Original file name
-          maxLength: 255
-          type: string
-        opening_balance:
-          description: Opening balance stated in the file
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
-        recon_source_id:
-          description: Source
-          format: uuid
-          type: string
-        statement_date:
-          description: Statement / settlement date
-          format: date
-          type: string
-      required:
-      - recon_source_id
-      - file_name
-      type: object
     ReconFilePage:
       description: One page of ReconFile results (newest first)
       properties:
@@ -591,6 +541,36 @@ components:
       required:
       - data
       - has_more
+      type: object
+    ReconFilesImportRequest:
+      properties:
+        closing_balance:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        content:
+          type: string
+        file_name:
+          maxLength: 255
+          type: string
+        opening_balance:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        recon_source_id:
+          format: uuid
+          type: string
+        records:
+          items: {}
+          type: array
+        statement_date:
+          format: date
+          type: string
+      required:
+      - recon_source_id
+      - file_name
       type: object
     ReconMatch:
       description: A confirmed link between external records and internal ledger entries. Append-only.
@@ -658,18 +638,18 @@ components:
           format: decimal
           type: string
         external_record_ids:
-          additionalProperties: true
-          description: recon_record ids
-          type: object
+          description: recon_record ids (sorted)
+          items: {}
+          type: array
         id:
           description: Unique id (UUIDv7, time-ordered)
           format: uuid
           readOnly: true
           type: string
         internal_entry_ids:
-          additionalProperties: true
-          description: ledger_entry ids
-          type: object
+          description: ledger_entry ids (sorted)
+          items: {}
+          type: array
         match_type:
           description: Cardinality
           enum:
@@ -744,13 +724,13 @@ components:
           format: decimal
           type: string
         external_record_ids:
-          additionalProperties: true
-          description: recon_record ids
-          type: object
+          description: recon_record ids (sorted)
+          items: {}
+          type: array
         internal_entry_ids:
-          additionalProperties: true
-          description: ledger_entry ids
-          type: object
+          description: ledger_entry ids (sorted)
+          items: {}
+          type: array
         match_type:
           description: Cardinality
           enum:
@@ -1012,9 +992,9 @@ components:
           description: Active
           type: boolean
         match_fields:
-          additionalProperties: true
-          description: Fields that must be equal, e.g. [end_to_end_id, amount]
-          type: object
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
+          items: {}
+          type: array
         match_type:
           description: Cardinality
           enum:
@@ -1108,9 +1088,9 @@ components:
           description: Active
           type: boolean
         match_fields:
-          additionalProperties: true
-          description: Fields that must be equal, e.g. [end_to_end_id, amount]
-          type: object
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
+          items: {}
+          type: array
         match_type:
           description: Cardinality
           enum:
@@ -1194,9 +1174,9 @@ components:
           description: Active
           type: boolean
         match_fields:
-          additionalProperties: true
-          description: Fields that must be equal, e.g. [end_to_end_id, amount]
-          type: object
+          description: 'Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference'
+          items: {}
+          type: array
         match_type:
           description: Cardinality
           enum:
@@ -2013,44 +1993,6 @@ paths:
       x-table: recon_file
       x-crud: true
       x-crud-list: true
-    post:
-      operationId: reconFilesCreate
-      summary: Create recon file
-      tags:
-      - Recon Files
-      security:
-      - oauth2:
-        - ledger:write
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconFile'
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReconFileCreate'
-      x-requirements:
-      - REC-01
-      x-service: reconciliation-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
-      x-table: recon_file
-      x-crud: true
-      x-crud-create: true
   /v1/reconciliation/files/{id}:
     get:
       operationId: reconFilesGet
@@ -2087,6 +2029,47 @@ paths:
       x-table: recon_file
       x-crud: true
       x-crud-get: true
+  /v1/reconciliation/files/import:
+    post:
+      operationId: reconFilesImport
+      summary: Import a statement or settlement file, sent as raw content (CSV, camt.053/054 XML, JSON per the source's file_format)
+        or as pre-parsed records [{value_date, direction, amount, currency, external_ref, end_to_end_id, booking_date, counterparty,
+        narrative}]; de-duplicated by SHA-256 and parsed synchronously (status PARSED or FAILED)
+      tags:
+      - Recon Files
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconFilesImportRequest'
+      x-requirements:
+      - REC-01
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-table: recon_file
   /v1/reconciliation/files/{id}/records:
     get:
       operationId: reconFilesRecords

@@ -86,6 +86,7 @@ class Table:
     indexes: list = field(default_factory=list)
     nested: list = field(default_factory=list)   # [(field, target_table, required, description)]
     response_only: list = field(default_factory=list)  # [Column]: returned by the API, never stored
+    request_only: list = field(default_factory=list)   # [Column]: accepted on create, never stored
 
     def col(self, name):
         for c in self.columns:
@@ -277,7 +278,8 @@ def load_domains() -> list:
                     immutable=imm, tenant=ten, std=std, fr=t.get("fr", []) or [],
                     columns=cols, unique=t.get("unique", []) or [], indexes=t.get("indexes", []) or [],
                     nested=[parse_nested(x, ctx) for x in (t.get("nested", []) or [])],
-                    response_only=[parse_column(x, ctx) for x in (t.get("response_only", []) or [])]))
+                    response_only=[parse_column(x, ctx) for x in (t.get("response_only", []) or [])],
+                    request_only=[parse_column(x, ctx) for x in (t.get("request_only", []) or [])]))
             for a in s.get("apis", []) or []:
                 ctx = f"{path.name}:{a['resource']}"
                 apis.append(Api(
@@ -648,6 +650,13 @@ def table_schemas(t: Table, enums) -> dict:
         create["required"] = creq
     update = {"type": "object", "properties": dict(
         (c.name, oa_type(c, enums)) for c in t.columns if c.writable and not t.immutable)}
+    for c in t.request_only:
+        sch = oa_type(c, enums)
+        sch["description"] = (c.description + " " if c.description else "") + "(write-only; not stored as a column)"
+        sch["writeOnly"] = True
+        create["properties"][c.name] = sch
+        if c.nn:
+            create.setdefault("required", []).append(c.name)
     for c in t.response_only:
         sch = oa_type(c, enums)
         sch["readOnly"] = True

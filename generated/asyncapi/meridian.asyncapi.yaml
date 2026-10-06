@@ -217,6 +217,8 @@ channels:
         $ref: '#/components/messages/LedgerLedgerAccountCreated'
       LedgerLedgerAccountStatusChanged:
         $ref: '#/components/messages/LedgerLedgerAccountStatusChanged'
+      LedgerLedgerAccountOverdraftLimitChanged:
+        $ref: '#/components/messages/LedgerLedgerAccountOverdraftLimitChanged'
       LedgerJournalEntryPosted:
         $ref: '#/components/messages/LedgerJournalEntryPosted'
       LedgerJournalEntryReversed:
@@ -231,6 +233,10 @@ channels:
         $ref: '#/components/messages/LedgerHoldReleased'
       LedgerGlJournalPosted:
         $ref: '#/components/messages/LedgerGlJournalPosted'
+      LedgerGlJournalApproved:
+        $ref: '#/components/messages/LedgerGlJournalApproved'
+      LedgerErpExportCompleted:
+        $ref: '#/components/messages/LedgerErpExportCompleted'
       LedgerAccountingPeriodClosed:
         $ref: '#/components/messages/LedgerAccountingPeriodClosed'
       LedgerAccountingPeriodReopened:
@@ -243,6 +249,10 @@ channels:
         $ref: '#/components/messages/LedgerReconFileParsed'
       LedgerReconRunCompleted:
         $ref: '#/components/messages/LedgerReconRunCompleted'
+      LedgerReconMatchCreated:
+        $ref: '#/components/messages/LedgerReconMatchCreated'
+      LedgerReconMatchUnmatched:
+        $ref: '#/components/messages/LedgerReconMatchUnmatched'
       LedgerReconExceptionRaised:
         $ref: '#/components/messages/LedgerReconExceptionRaised'
       LedgerReconExceptionResolved:
@@ -675,20 +685,28 @@ channels:
         $ref: '#/components/messages/ProductProductVersionRejected'
       ProductProductVersionPublished:
         $ref: '#/components/messages/ProductProductVersionPublished'
+      ProductProductVersionMigrationRequested:
+        $ref: '#/components/messages/ProductProductVersionMigrationRequested'
       ProductRateIndexValuePublished:
         $ref: '#/components/messages/ProductRateIndexValuePublished'
       ProductInterestRateConfigChanged:
         $ref: '#/components/messages/ProductInterestRateConfigChanged'
       ProductProductScriptActivated:
         $ref: '#/components/messages/ProductProductScriptActivated'
+      ProductProductScriptRejected:
+        $ref: '#/components/messages/ProductProductScriptRejected'
       ProductProductSimulationCompleted:
         $ref: '#/components/messages/ProductProductSimulationCompleted'
       ProductPromotionalRateStarted:
         $ref: '#/components/messages/ProductPromotionalRateStarted'
       ProductPromotionalRateEnded:
         $ref: '#/components/messages/ProductPromotionalRateEnded'
+      ProductDecisionTableVersionApproved:
+        $ref: '#/components/messages/ProductDecisionTableVersionApproved'
       ProductDecisionTableVersionPublished:
         $ref: '#/components/messages/ProductDecisionTableVersionPublished'
+      ProductDecisionTableVersionRejected:
+        $ref: '#/components/messages/ProductDecisionTableVersionRejected'
       ProductProductPriceQuoteCreated:
         $ref: '#/components/messages/ProductProductPriceQuoteCreated'
       ProductProductPriceQuoteAccepted:
@@ -3128,6 +3146,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/LedgerAccount'
+    LedgerLedgerAccountOverdraftLimitChanged:
+      name: ledger.ledger_account.overdraft_limit_changed
+      title: The arranged overdraft limit of an account changed
+      summary: The arranged overdraft limit of an account changed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.ledger_account.overdraft_limit_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LedgerAccount'
     LedgerJournalEntryPosted:
       name: ledger.journal_entry.posted
       title: A balanced journal entry was committed
@@ -3282,6 +3322,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/GlJournal'
+    LedgerGlJournalApproved:
+      name: ledger.gl_journal.approved
+      title: A manual GL journal was approved (four-eyes) and posted
+      summary: A manual GL journal was approved (four-eyes) and posted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.gl_journal.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/GlJournalApproval'
+    LedgerErpExportCompleted:
+      name: ledger.erp_export.completed
+      title: An ERP export file was generated
+      summary: An ERP export file was generated
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.erp_export.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ErpExport'
     LedgerAccountingPeriodClosed:
       name: ledger.accounting_period.closed
       title: An accounting period was closed
@@ -3414,6 +3498,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ReconRun'
+    LedgerReconMatchCreated:
+      name: ledger.recon_match.created
+      title: External records and ledger entries were matched (rule, accepted suggestion or manual)
+      summary: External records and ledger entries were matched (rule, accepted suggestion or manual)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_match.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconMatch'
+    LedgerReconMatchUnmatched:
+      name: ledger.recon_match.unmatched
+      title: A match was undone by a compensating record
+      summary: A match was undone by a compensating record
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_match.unmatched
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconMatch'
     LedgerReconExceptionRaised:
       name: ledger.recon_exception.raised
       title: A reconciliation break was raised
@@ -7858,6 +7986,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ProductVersion'
+    ProductProductVersionMigrationRequested:
+      name: product.product_version.migration_requested
+      title: Migration of accounts pinned to an older version onto this version was requested
+      summary: Migration of accounts pinned to an older version onto this version was requested
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: product.product_version.migration_requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ProductVersion'
     ProductRateIndexValuePublished:
       name: product.rate_index_value.published
       title: A new benchmark rate value was published (triggers repricing)
@@ -7912,6 +8062,28 @@ components:
           ce_type:
             type: string
             const: product.product_script.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ProductScript'
+    ProductProductScriptRejected:
+      name: product.product_script.rejected
+      title: A submitted script was rejected
+      summary: A submitted script was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: product.product_script.rejected
           ce_source:
             type: string
           ce_id:
@@ -7990,6 +8162,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/PromotionalRate'
+    ProductDecisionTableVersionApproved:
+      name: product.decision_table_version.approved
+      title: A decision table version was approved for a future effective date
+      summary: A decision table version was approved for a future effective date
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: product.decision_table_version.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DecisionTableVersion'
     ProductDecisionTableVersionPublished:
       name: product.decision_table_version.published
       title: A decision table version was published
@@ -8000,6 +8194,28 @@ components:
           ce_type:
             type: string
             const: product.decision_table_version.published
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DecisionTableVersion'
+    ProductDecisionTableVersionRejected:
+      name: product.decision_table_version.rejected
+      title: A submitted decision table version was rejected
+      summary: A submitted decision table version was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: product.decision_table_version.rejected
           ce_source:
             type: string
           ce_id:
@@ -19320,7 +19536,8 @@ components:
           - FROZEN_CREDIT
           - FROZEN
           - CLOSED
-          description: Posting restrictions
+          description: Posting restrictions (changed by /freeze, /unfreeze, /close)
+          readOnly: true
         allow_negative:
           type: boolean
           description: Whether available balance may go below zero
@@ -19329,7 +19546,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Arranged overdraft; available = balance + limit - holds
+          description: Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)
         min_balance:
           type: string
           format: decimal
@@ -19495,6 +19712,13 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied
+            to every ledger entry
         entry_count:
           type: integer
           format: int32
@@ -19884,7 +20108,8 @@ components:
       - idempotency_key
     GlJournal:
       type: object
-      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals
+        post to the GL balances only once a gl_journal_approval exists for them.
       properties:
         id:
           type: string
@@ -19914,7 +20139,8 @@ components:
         journal_type:
           type: string
           maxLength: 32
-          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE
+            and YEAR_END_CLOSE are system-only)
         source_journal_entry_id:
           type:
           - string
@@ -19931,12 +20157,86 @@ components:
           type: string
           format: date
           description: Value date
-        approved_by:
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournalLine'
+          readOnly: true
+          description: Debit and credit lines; must balance per currency
+      required:
+      - id
+      - created_at
+      - legal_entity_id
+      - accounting_period_id
+      - journal_type
+      - value_date
+    GlJournalApproval:
+      type: object
+      description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Checker for manual journals
+          description: Principal that created the row
+          readOnly: true
+        gl_journal_id:
+          type: string
+          format: uuid
+          description: Approved GL journal (one approval per journal)
+          readOnly: true
+        approved_by:
+          type: string
+          maxLength: 64
+          description: Checker (system:<process> for system journals such as provisions)
+          readOnly: true
+        comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment
         custom_field_1:
           type:
           - string
@@ -19970,10 +20270,129 @@ components:
       required:
       - id
       - created_at
+      - gl_journal_id
+      - approved_by
+    ErpExport:
+      type: object
+      description: GL export batch sent to an external ERP (SAP, Oracle, NetSuite)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity
+        accounting_period_id:
+          type: string
+          format: uuid
+          description: Period
+        target_system:
+          type: string
+          maxLength: 32
+          description: SAP, ORACLE, NETSUITE, DYNAMICS, CSV
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        file_uri:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Location of the generated file
+          readOnly: true
+        line_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Lines exported
+          readOnly: true
+        checksum:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: SHA-256 of the file
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
       - legal_entity_id
       - accounting_period_id
-      - journal_type
-      - value_date
+      - target_system
+      - status
     AccountingPeriod:
       type: object
       description: Accounting period per legal entity; closing is a logical cut-off with no downtime
@@ -20614,6 +21033,119 @@ components:
       - from_date
       - to_date
       - status
+    ReconMatch:
+      type: object
+      description: A confirmed link between external records and internal ledger entries. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        recon_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run that produced it (empty when manual)
+        recon_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Rule that matched
+        match_type:
+          type: string
+          enum:
+          - ONE_TO_ONE
+          - ONE_TO_MANY
+          - MANY_TO_ONE
+          - MANY_TO_MANY
+          - MANUAL
+          description: Cardinality
+        external_record_ids:
+          type: array
+          items: {}
+          description: recon_record ids (sorted)
+        internal_entry_ids:
+          type: array
+          items: {}
+          description: ledger_entry ids (sorted)
+        difference:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Residual difference within tolerance
+        confidence:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: AI / rule confidence 0..1
+        confirmed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who confirmed a manual or suggested match
+        unmatched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Set via a new compensating match record when undone
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - match_type
+      - external_record_ids
+      - internal_entry_ids
+      - difference
     ReconException:
       type: object
       description: A reconciliation break awaiting investigation
@@ -39988,15 +40520,15 @@ components:
           description: Full marketing description
         available_channels:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: ProductChannel values where it can be sold
         available_countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: ISO 3166 countries where it can be sold
         launch_date:
           type:
@@ -40113,7 +40645,8 @@ components:
         version_no:
           type: integer
           format: int32
-          description: Sequential version number
+          description: Sequential version number (server-assigned per product)
+          readOnly: true
         status:
           type: string
           enum:
@@ -40149,7 +40682,10 @@ components:
           description: What changed compared to the previous version
         migration_policy:
           type: string
-          maxLength: 32
+          enum:
+          - PIN
+          - MIGRATE_ON_RENEWAL
+          - FORCE_MIGRATE
           description: PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE
         submitted_by:
           type:
@@ -40178,6 +40714,27 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the version
+          readOnly: true
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rejection time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker rejected the version
           readOnly: true
         published_at:
           type:
@@ -40648,14 +41205,18 @@ components:
           - 'null'
           description: Source code (kept for review and audit)
         wasm_module_uri:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 500
-          description: Location of the compiled module
+          description: Location of the compiled module (empty until compiled)
           readOnly: true
         wasm_sha256:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Hash of the compiled module
+          description: Hash of the compiled module (empty until compiled)
           readOnly: true
         entrypoint:
           type: string
@@ -40691,12 +41252,47 @@ components:
           additionalProperties: true
           description: Static checks and test results
           readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker rejected the script
+          readOnly: true
+        deprecation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the script was deprecated
           readOnly: true
         custom_field_1:
           type:
@@ -40737,8 +41333,6 @@ components:
       - name
       - hook
       - language
-      - wasm_module_uri
-      - wasm_sha256
       - entrypoint
       - max_fuel
       - max_memory_mb
@@ -40813,10 +41407,10 @@ components:
           readOnly: true
         results:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: 'Outputs: balances, interest, fees, tax, schedule per period'
+          items: {}
+          description: 'Outputs per period: balances, interest, fees, tax, schedule'
           readOnly: true
         summary:
           type:
@@ -41093,7 +41687,8 @@ components:
         version_no:
           type: integer
           format: int32
-          description: Version number
+          description: Version number (server-assigned per decision table)
+          readOnly: true
         hit_policy:
           type: string
           enum:
@@ -41105,18 +41700,27 @@ components:
           - RULE_ORDER
           - OUTPUT_ORDER
           description: DMN hit policy
+        aggregation:
+          type: string
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
         inputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Input columns: name, type, expression'
         outputs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: 'Output columns: name, type, default'
         rules:
-          type: object
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
+          type: array
+          items: {}
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
         dmn_xml:
           type:
           - string
@@ -41127,9 +41731,11 @@ components:
           enum:
           - DRAFT
           - PENDING_APPROVAL
+          - APPROVED
           - PUBLISHED
+          - REJECTED
           - RETIRED
-          description: Status
+          description: Status (APPROVED = approved, waiting for effective_from)
           readOnly: true
         effective_from:
           type:
@@ -41150,6 +41756,13 @@ components:
           maxLength: 64
           description: Maker
           readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
@@ -41163,6 +41776,20 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who rejected the version
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the checker rejected the version
           readOnly: true
         checksum:
           type:
@@ -41209,6 +41836,7 @@ components:
       - decision_table_id
       - version_no
       - hit_policy
+      - aggregation
       - inputs
       - outputs
       - rules

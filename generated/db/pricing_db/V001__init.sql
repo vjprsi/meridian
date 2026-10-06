@@ -79,16 +79,20 @@ CREATE TABLE decision_table_version (
   decision_table_id            uuid NOT NULL REFERENCES decision_table(id),
   version_no                   integer NOT NULL,
   hit_policy                   varchar(40) NOT NULL DEFAULT 'FIRST' CHECK (hit_policy IN ('UNIQUE', 'FIRST', 'PRIORITY', 'ANY', 'COLLECT', 'RULE_ORDER', 'OUTPUT_ORDER')),
+  aggregation                  varchar(40) NOT NULL DEFAULT 'NONE' CHECK (aggregation IN ('NONE', 'SUM', 'MIN', 'MAX', 'COUNT')),
   inputs                       jsonb NOT NULL,
   outputs                      jsonb NOT NULL,
   rules                        jsonb NOT NULL,
   dmn_xml                      text,
-  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'PUBLISHED', 'RETIRED')),
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED', 'REJECTED', 'RETIRED')),
   effective_from               timestamptz,
   effective_to                 timestamptz,
   submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejection_reason             varchar(500),
   checksum                     varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -106,18 +110,22 @@ COMMENT ON COLUMN decision_table_version.updated_at IS 'Last update time';
 COMMENT ON COLUMN decision_table_version.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN decision_table_version.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN decision_table_version.decision_table_id IS 'Decision table';
-COMMENT ON COLUMN decision_table_version.version_no IS 'Version number';
+COMMENT ON COLUMN decision_table_version.version_no IS 'Version number (server-assigned per decision table)';
 COMMENT ON COLUMN decision_table_version.hit_policy IS 'DMN hit policy';
+COMMENT ON COLUMN decision_table_version.aggregation IS 'COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise';
 COMMENT ON COLUMN decision_table_version.inputs IS 'Input columns: name, type, expression';
 COMMENT ON COLUMN decision_table_version.outputs IS 'Output columns: name, type, default';
-COMMENT ON COLUMN decision_table_version.rules IS 'Rule rows: input entries, output entries, annotation';
+COMMENT ON COLUMN decision_table_version.rules IS 'Rule rows: inputs (entries), outputs (entries), annotation, priority';
 COMMENT ON COLUMN decision_table_version.dmn_xml IS 'Equivalent DMN 1.5 XML for import/export';
-COMMENT ON COLUMN decision_table_version.status IS 'Status';
+COMMENT ON COLUMN decision_table_version.status IS 'Status (APPROVED = approved, waiting for effective_from)';
 COMMENT ON COLUMN decision_table_version.effective_from IS 'Start';
 COMMENT ON COLUMN decision_table_version.effective_to IS 'End';
 COMMENT ON COLUMN decision_table_version.submitted_by IS 'Maker';
+COMMENT ON COLUMN decision_table_version.submitted_at IS 'Submission time';
 COMMENT ON COLUMN decision_table_version.approved_by IS 'Checker';
 COMMENT ON COLUMN decision_table_version.approved_at IS 'Approval time';
+COMMENT ON COLUMN decision_table_version.rejected_by IS 'Checker who rejected the version';
+COMMENT ON COLUMN decision_table_version.rejection_reason IS 'Why the checker rejected the version';
 COMMENT ON COLUMN decision_table_version.checksum IS 'SHA-256 of the content';
 COMMENT ON COLUMN decision_table_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN decision_table_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

@@ -2931,9 +2931,9 @@ API: /v1/ledger-accounts · Requirements: LED-01, LED-02, LED-03, LED-08
 | gl_account_id | uuid | yes | ref → gl_account | gl_account_id | GL control account this account rolls up to |
 | owner_type | varchar(40) | yes |  | owner_type | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN |
 | owner_id | uuid | yes |  | owner_id | Id of the owning business object in its service |
-| status | varchar(40) (LedgerAccountStatus) | no |  | status | Posting restrictions |
+| status | varchar(40) (LedgerAccountStatus) | no |  | status (read-only) | Posting restrictions (changed by /freeze, /unfreeze, /close) |
 | allow_negative | boolean | no |  | allow_negative | Whether available balance may go below zero |
-| overdraft_limit | numeric(28,8) | no |  | overdraft_limit | Arranged overdraft; available = balance + limit - holds |
+| overdraft_limit | numeric(28,8) | no |  | overdraft_limit | Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit) |
 | min_balance | numeric(28,8) | no |  | min_balance | Minimum balance that must remain |
 | opened_at | timestamptz | no |  | opened_at | Opening time |
 | closed_at | timestamptz | yes |  | closed_at | Closing time |
@@ -2968,6 +2968,7 @@ API: /v1/journal-entries · Requirements: LED-01, LED-05, LED-06, LED-07
 | source_type | varchar(64) | yes |  | source_type | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION |
 | source_id | uuid | yes |  | source_id | Business object id |
 | correlation_id | varchar(128) | yes |  | correlation_id | Trace / saga correlation id |
+| reference | varchar(128) | yes |  | reference | External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied to every ledger entry |
 | entry_count | integer | no |  | entry_count (read-only) | Number of ledger entries |
 | total_debits | numeric(28,8) | no |  | total_debits (read-only) | Sum of debits in base currency (equals credits) |
 | hash | varchar(64) | yes |  | hash (read-only) | SHA-256 over this entry and the previous hash (tamper evidence) |
@@ -3000,6 +3001,8 @@ API: /v1/ledger-entries · Requirements: LED-01, LED-02, LED-03
 | fx_rate | numeric(18,10) | yes |  | fx_rate | Rate to ledger base currency at posting time |
 | base_amount | numeric(28,8) | no |  | base_amount (read-only) | Amount in ledger base currency (amount x fx_rate) |
 | effective_at | timestamptz | no |  | effective_at (read-only) | Copied from the journal entry for range queries |
+| value_date | date | no |  | value_date (read-only) | Copied from the journal entry (reconciliation matches on value date) |
+| reference | varchar(128) | yes |  | reference (read-only) | Copied from the journal entry (reconciliation matches on reference) |
 | account_version | bigint | no |  | account_version (read-only) | Account balance version after this entry (gapless per account) |
 | balance_after | numeric(28,8) | no |  | balance_after (read-only) | Posted balance of the account after this entry |
 | description | varchar(500) | yes |  | description | Line narrative |
@@ -3209,6 +3212,7 @@ API: /v1/gl/accounts · Requirements: GL-01
 | currency | char(3) | yes |  | currency | Restrict to one currency; empty = multi-currency |
 | regulatory_code | varchar(64) | yes |  | regulatory_code | Mapping code for regulatory returns |
 | erp_code | varchar(64) | yes |  | erp_code | Mapping code for the ERP |
+| is_retained_earnings | boolean | no |  | is_retained_earnings | Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end close transfers the net profit or loss here |
 | status | varchar(40) (GlAccountStatus) | no |  | status | Status |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -3308,7 +3312,7 @@ API: /v1/gl/balances · Requirements: GL-02, GL-03
 
 #### `gl_journal` (append-only)
 
-GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them.
 
 API: /v1/gl/journals · Requirements: GL-02, GL-05
 
@@ -3320,11 +3324,10 @@ API: /v1/gl/journals · Requirements: GL-02, GL-05
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
 | accounting_period_id | uuid | no | FK → accounting_period | accounting_period_id | Period |
-| journal_type | varchar(32) | no |  | journal_type | AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION |
+| journal_type | varchar(32) | no |  | journal_type | AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE and YEAR_END_CLOSE are system-only) |
 | source_journal_entry_id | uuid | yes | ref → journal_entry | source_journal_entry_id | Ledger journal entry, when derived |
 | description | varchar(500) | yes |  | description | Narrative |
 | value_date | date | no |  | value_date | Value date |
-| approved_by | varchar(64) | yes |  | approved_by | Checker for manual journals |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -3343,15 +3346,37 @@ API: internal only · Requirements: GL-02
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
-| gl_journal_id | uuid | no | FK → gl_journal | gl_journal_id | GL journal |
+| gl_journal_id | uuid | no | FK → gl_journal | gl_journal_id (read-only) | GL journal |
 | gl_account_id | uuid | no | FK → gl_account | gl_account_id | GL account |
 | direction | varchar(40) (EntryDirection) | no |  | direction | Debit or credit |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
-| base_amount | numeric(28,8) | no |  | base_amount | Amount in entity base currency |
+| fx_rate | numeric(18,10) | yes |  | fx_rate | Rate to the entity base currency (default 1) |
+| base_amount | numeric(28,8) | no |  | base_amount (read-only) | Amount in entity base currency (amount x fx_rate) |
 | cost_center | varchar(32) | yes |  | cost_center | Cost centre |
 | branch_id | uuid | yes | ref → branch | branch_id | Branch dimension |
 | product_id | uuid | yes | ref → product | product_id | Product dimension |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `gl_journal_approval` (append-only)
+
+Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+
+API: /v1/gl/journal-approvals · Requirements: GL-02, GL-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| gl_journal_id | uuid | no | FK → gl_journal | gl_journal_id (read-only) | Approved GL journal (one approval per journal) |
+| approved_by | varchar(64) | no |  | approved_by (read-only) | Checker (system:<process> for system journals such as provisions) |
+| comment | varchar(500) | yes |  | comment | Checker comment |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -3558,7 +3583,7 @@ API: /v1/reconciliation/rules · Requirements: REC-02
 | name | varchar(120) | no |  | name | Rule name |
 | priority | integer | no |  | priority | Lower runs first |
 | match_type | varchar(40) (ReconMatchType) | no |  | match_type | Cardinality |
-| match_fields | jsonb | no |  | match_fields | Fields that must be equal, e.g. [end_to_end_id, amount] |
+| match_fields | jsonb | no |  | match_fields | Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference |
 | amount_tolerance | numeric(28,8) | no |  | amount_tolerance | Allowed absolute amount difference |
 | date_tolerance_days | integer | no |  | date_tolerance_days | Allowed value-date difference |
 | auto_confirm | boolean | no |  | auto_confirm | Confirm matches without review |
@@ -3613,8 +3638,8 @@ API: /v1/reconciliation/matches · Requirements: REC-02, REC-03
 | recon_run_id | uuid | yes | FK → recon_run | recon_run_id | Run that produced it (empty when manual) |
 | recon_rule_id | uuid | yes | FK → recon_rule | recon_rule_id | Rule that matched |
 | match_type | varchar(40) (ReconMatchType) | no |  | match_type | Cardinality |
-| external_record_ids | jsonb | no |  | external_record_ids | recon_record ids |
-| internal_entry_ids | jsonb | no |  | internal_entry_ids | ledger_entry ids |
+| external_record_ids | jsonb | no |  | external_record_ids | recon_record ids (sorted) |
+| internal_entry_ids | jsonb | no |  | internal_entry_ids | ledger_entry ids (sorted) |
 | difference | numeric(28,8) | no |  | difference | Residual difference within tolerance |
 | confidence | numeric(18,10) | yes |  | confidence | AI / rule confidence 0..1 |
 | confirmed_by | varchar(64) | yes |  | confirmed_by | Who confirmed a manual or suggested match |
@@ -10452,17 +10477,20 @@ API: /v1/product-versions · Requirements: PRD-01, PRD-03, LIM-02
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | product_id | uuid | no | FK → product | product_id | Product |
-| version_no | integer | no |  | version_no | Sequential version number |
+| version_no | integer | no |  | version_no (read-only) | Sequential version number (server-assigned per product) |
 | status | varchar(40) (ProductVersionStatus) | no |  | status (read-only) | Approval lifecycle |
 | effective_from | timestamptz | yes |  | effective_from | When new sales start using this version |
 | effective_to | timestamptz | yes |  | effective_to | When it stops applying to new sales |
 | definition | jsonb | no |  | definition | Full resolved snapshot of all parameters at publish time |
 | change_summary | text | yes |  | change_summary | What changed compared to the previous version |
-| migration_policy | varchar(32) | no |  | migration_policy | PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE |
+| migration_policy | varchar(40) (MigrationPolicy) | no |  | migration_policy | PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE |
 | submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the version |
+| rejected_at | timestamptz | yes |  | rejected_at (read-only) | Rejection time |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the checker rejected the version |
 | published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Workflow approval request |
 | checksum | varchar(64) | yes |  | checksum (read-only) | SHA-256 of the definition, for tamper evidence |
@@ -10892,15 +10920,20 @@ API: /v1/product-scripts · Requirements: PRD-05
 | hook | varchar(40) (ScriptHook) | no |  | hook | Lifecycle hook it runs at |
 | language | varchar(40) (ScriptLanguage) | no |  | language | Source language compiled to WASM |
 | source_code | text | yes |  | source_code | Source code (kept for review and audit) |
-| wasm_module_uri | varchar(500) | no |  | wasm_module_uri (read-only) | Location of the compiled module |
-| wasm_sha256 | varchar(64) | no |  | wasm_sha256 (read-only) | Hash of the compiled module |
+| wasm_module_uri | varchar(500) | yes |  | wasm_module_uri (read-only) | Location of the compiled module (empty until compiled) |
+| wasm_sha256 | varchar(64) | yes |  | wasm_sha256 (read-only) | Hash of the compiled module (empty until compiled) |
 | entrypoint | varchar(64) | no |  | entrypoint | Exported function name |
 | max_fuel | bigint | no |  | max_fuel | Instruction budget per call |
 | max_memory_mb | integer | no |  | max_memory_mb | Memory limit |
 | timeout_ms | integer | no |  | timeout_ms | Wall-clock limit per call |
 | status | varchar(40) (ScriptStatus) | no |  | status (read-only) | Status |
 | validation_report | jsonb | yes |  | validation_report (read-only) | Static checks and test results |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the checker rejected the script |
+| deprecation_reason | varchar(255) | yes |  | deprecation_reason (read-only) | Why the script was deprecated |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -10927,7 +10960,7 @@ API: /v1/product-simulations · Requirements: PRD-06
 | horizon_months | integer | no |  | horizon_months | Simulated period |
 | scenario | jsonb | no |  | scenario | Inputs: opening balance, deposits, spend pattern, rate path, events |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
-| results | jsonb | yes |  | results (read-only) | Outputs: balances, interest, fees, tax, schedule per period |
+| results | jsonb | yes |  | results (read-only) | Outputs per period: balances, interest, fees, tax, schedule |
 | summary | jsonb | yes |  | summary (read-only) | Totals: interest earned/paid, fees, APR/AER/EIR |
 | started_at | timestamptz | yes |  | started_at (read-only) | Start |
 | finished_at | timestamptz | yes |  | finished_at (read-only) | End |
@@ -11110,18 +11143,22 @@ API: /v1/decision-table-versions · Requirements: PRD-04, LIM-02
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | decision_table_id | uuid | no | FK → decision_table | decision_table_id | Decision table |
-| version_no | integer | no |  | version_no | Version number |
+| version_no | integer | no |  | version_no (read-only) | Version number (server-assigned per decision table) |
 | hit_policy | varchar(40) (DecisionHitPolicy) | no |  | hit_policy | DMN hit policy |
+| aggregation | varchar(40) (DecisionAggregation) | no |  | aggregation | COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise |
 | inputs | jsonb | no |  | inputs | Input columns: name, type, expression |
 | outputs | jsonb | no |  | outputs | Output columns: name, type, default |
-| rules | jsonb | no |  | rules | Rule rows: input entries, output entries, annotation |
+| rules | jsonb | no |  | rules | Rule rows: inputs (entries), outputs (entries), annotation, priority |
 | dmn_xml | text | yes |  | dmn_xml | Equivalent DMN 1.5 XML for import/export |
-| status | varchar(40) (DecisionTableStatus) | no |  | status (read-only) | Status |
+| status | varchar(40) (DecisionTableVersionStatus) | no |  | status (read-only) | Status (APPROVED = approved, waiting for effective_from) |
 | effective_from | timestamptz | yes |  | effective_from | Start |
 | effective_to | timestamptz | yes |  | effective_to | End |
 | submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejected_by | varchar(64) | yes |  | rejected_by (read-only) | Checker who rejected the version |
+| rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why the checker rejected the version |
 | checksum | varchar(64) | yes |  | checksum (read-only) | SHA-256 of the content |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |

@@ -118,9 +118,9 @@ COMMENT ON COLUMN ledger_account.parent_id IS 'Parent for hierarchies, sub-ledge
 COMMENT ON COLUMN ledger_account.gl_account_id IS 'GL control account this account rolls up to';
 COMMENT ON COLUMN ledger_account.owner_type IS 'Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN';
 COMMENT ON COLUMN ledger_account.owner_id IS 'Id of the owning business object in its service';
-COMMENT ON COLUMN ledger_account.status IS 'Posting restrictions';
+COMMENT ON COLUMN ledger_account.status IS 'Posting restrictions (changed by /freeze, /unfreeze, /close)';
 COMMENT ON COLUMN ledger_account.allow_negative IS 'Whether available balance may go below zero';
-COMMENT ON COLUMN ledger_account.overdraft_limit IS 'Arranged overdraft; available = balance + limit - holds';
+COMMENT ON COLUMN ledger_account.overdraft_limit IS 'Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)';
 COMMENT ON COLUMN ledger_account.min_balance IS 'Minimum balance that must remain';
 COMMENT ON COLUMN ledger_account.opened_at IS 'Opening time';
 COMMENT ON COLUMN ledger_account.closed_at IS 'Closing time';
@@ -158,6 +158,7 @@ CREATE TABLE journal_entry (
   source_type                  varchar(64),
   source_id                    uuid,
   correlation_id               varchar(128),
+  reference                    varchar(128),
   entry_count                  integer NOT NULL,
   total_debits                 numeric(28,8) NOT NULL,
   hash                         varchar(64),
@@ -187,6 +188,7 @@ COMMENT ON COLUMN journal_entry.source_service IS 'Service or client that reques
 COMMENT ON COLUMN journal_entry.source_type IS 'Business object type, e.g. PAYMENT, CARD_AUTHORIZATION';
 COMMENT ON COLUMN journal_entry.source_id IS 'Business object id';
 COMMENT ON COLUMN journal_entry.correlation_id IS 'Trace / saga correlation id';
+COMMENT ON COLUMN journal_entry.reference IS 'External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied to every ledger entry';
 COMMENT ON COLUMN journal_entry.entry_count IS 'Number of ledger entries';
 COMMENT ON COLUMN journal_entry.total_debits IS 'Sum of debits in base currency (equals credits)';
 COMMENT ON COLUMN journal_entry.hash IS 'SHA-256 over this entry and the previous hash (tamper evidence)';
@@ -202,6 +204,7 @@ CREATE INDEX ix_journal_entry_ledger_id ON journal_entry (ledger_id);
 CREATE INDEX ix_journal_entry_reversal_of_id ON journal_entry (reversal_of_id);
 CREATE INDEX ix_journal_entry_source_id ON journal_entry (source_id);
 CREATE INDEX ix_journal_entry_correlation_id ON journal_entry (correlation_id);
+CREATE INDEX ix_journal_entry_reference ON journal_entry (reference);
 CREATE INDEX ix_journal_entry_c1 ON journal_entry (ledger_id, effective_at);
 CREATE INDEX ix_journal_entry_c2 ON journal_entry (source_type, source_id);
 ALTER TABLE journal_entry ENABLE ROW LEVEL SECURITY;
@@ -223,6 +226,8 @@ CREATE TABLE ledger_entry (
   fx_rate                      numeric(18,10),
   base_amount                  numeric(28,8) NOT NULL,
   effective_at                 timestamptz NOT NULL,
+  value_date                   date NOT NULL,
+  reference                    varchar(128),
   account_version              bigint NOT NULL,
   balance_after                numeric(28,8) NOT NULL,
   description                  varchar(500),
@@ -247,6 +252,8 @@ COMMENT ON COLUMN ledger_entry.currency IS 'Account currency';
 COMMENT ON COLUMN ledger_entry.fx_rate IS 'Rate to ledger base currency at posting time';
 COMMENT ON COLUMN ledger_entry.base_amount IS 'Amount in ledger base currency (amount x fx_rate)';
 COMMENT ON COLUMN ledger_entry.effective_at IS 'Copied from the journal entry for range queries';
+COMMENT ON COLUMN ledger_entry.value_date IS 'Copied from the journal entry (reconciliation matches on value date)';
+COMMENT ON COLUMN ledger_entry.reference IS 'Copied from the journal entry (reconciliation matches on reference)';
 COMMENT ON COLUMN ledger_entry.account_version IS 'Account balance version after this entry (gapless per account)';
 COMMENT ON COLUMN ledger_entry.balance_after IS 'Posted balance of the account after this entry';
 COMMENT ON COLUMN ledger_entry.description IS 'Line narrative';

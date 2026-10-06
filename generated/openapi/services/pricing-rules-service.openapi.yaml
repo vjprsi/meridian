@@ -345,6 +345,15 @@ components:
     DecisionTableVersion:
       description: Versioned content of a decision table (inputs, outputs, rules) in DMN form
       properties:
+        aggregation:
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          type: string
         approved_at:
           description: Approval time
           format: date-time
@@ -446,31 +455,54 @@ components:
           readOnly: true
           type: string
         inputs:
-          additionalProperties: true
           description: 'Input columns: name, type, expression'
-          type: object
+          items: {}
+          type: array
         outputs:
-          additionalProperties: true
           description: 'Output columns: name, type, default'
-          type: object
+          items: {}
+          type: array
+        rejected_by:
+          description: Checker who rejected the version
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        rejection_reason:
+          description: Why the checker rejected the version
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
         rules:
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
-          type: object
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
+          items: {}
+          type: array
         status:
-          description: Status
+          description: Status (APPROVED = approved, waiting for effective_from)
           enum:
           - DRAFT
           - PENDING_APPROVAL
+          - APPROVED
           - PUBLISHED
+          - REJECTED
           - RETIRED
           readOnly: true
           type: string
+        submitted_at:
+          description: Submission time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         submitted_by:
           description: Maker
           maxLength: 64
@@ -491,8 +523,9 @@ components:
           - string
           - 'null'
         version_no:
-          description: Version number
+          description: Version number (server-assigned per decision table)
           format: int32
+          readOnly: true
           type: integer
       required:
       - id
@@ -502,6 +535,7 @@ components:
       - decision_table_id
       - version_no
       - hit_policy
+      - aggregation
       - inputs
       - outputs
       - rules
@@ -509,6 +543,15 @@ components:
       type: object
     DecisionTableVersionCreate:
       properties:
+        aggregation:
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -556,24 +599,19 @@ components:
           - OUTPUT_ORDER
           type: string
         inputs:
-          additionalProperties: true
           description: 'Input columns: name, type, expression'
-          type: object
+          items: {}
+          type: array
         outputs:
-          additionalProperties: true
           description: 'Output columns: name, type, default'
-          type: object
+          items: {}
+          type: array
         rules:
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
-          type: object
-        version_no:
-          description: Version number
-          format: int32
-          type: integer
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
+          items: {}
+          type: array
       required:
       - decision_table_id
-      - version_no
       - inputs
       - outputs
       - rules
@@ -598,6 +636,15 @@ components:
       type: object
     DecisionTableVersionUpdate:
       properties:
+        aggregation:
+          description: COLLECT aggregation (SUM, MIN, MAX, COUNT); NONE otherwise
+          enum:
+          - NONE
+          - SUM
+          - MIN
+          - MAX
+          - COUNT
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -645,21 +692,17 @@ components:
           - OUTPUT_ORDER
           type: string
         inputs:
-          additionalProperties: true
           description: 'Input columns: name, type, expression'
-          type: object
+          items: {}
+          type: array
         outputs:
-          additionalProperties: true
           description: 'Output columns: name, type, default'
-          type: object
+          items: {}
+          type: array
         rules:
-          additionalProperties: true
-          description: 'Rule rows: input entries, output entries, annotation'
-          type: object
-        version_no:
-          description: Version number
-          format: int32
-          type: integer
+          description: 'Rule rows: inputs (entries), outputs (entries), annotation, priority'
+          items: {}
+          type: array
       type: object
     DecisionTableVersionsApproveRequest:
       properties:
@@ -684,8 +727,8 @@ components:
     DecisionTableVersionsTestRequest:
       properties:
         test_cases:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
       required:
       - test_cases
       type: object
@@ -1536,7 +1579,9 @@ paths:
           enum:
           - DRAFT
           - PENDING_APPROVAL
+          - APPROVED
           - PUBLISHED
+          - REJECTED
           - RETIRED
       - name: custom_field_1
         in: query
@@ -1704,7 +1749,7 @@ paths:
   /v1/decision-table-versions/{id}/test:
     post:
       operationId: decisionTableVersionsTest
-      summary: Evaluate a draft version against test cases
+      summary: Evaluate a version against test cases (name, inputs, expected, expected_error)
       tags:
       - Decision Table Versions
       security:
@@ -1719,8 +1764,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1792,7 +1843,7 @@ paths:
   /v1/decision-table-versions/{id}/approve:
     post:
       operationId: decisionTableVersionsApprove
-      summary: Approve and publish (checker)
+      summary: 'Approve (checker): published at once, or APPROVED until effective_from'
       tags:
       - Decision Table Versions
       security:
@@ -1898,8 +1949,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003

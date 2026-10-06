@@ -157,11 +157,14 @@ CREATE TABLE product_version (
   effective_to                 timestamptz,
   definition                   jsonb NOT NULL,
   change_summary               text,
-  migration_policy             varchar(32) NOT NULL DEFAULT 'PIN',
+  migration_policy             varchar(40) NOT NULL DEFAULT 'PIN' CHECK (migration_policy IN ('PIN', 'MIGRATE_ON_RENEWAL', 'FORCE_MIGRATE')),
   submitted_by                 varchar(64),
   submitted_at                 timestamptz,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejected_by                  varchar(64),
+  rejected_at                  timestamptz,
+  rejection_reason             varchar(500),
   published_at                 timestamptz,
   approval_request_id          uuid,
   checksum                     varchar(64),
@@ -181,7 +184,7 @@ COMMENT ON COLUMN product_version.updated_at IS 'Last update time';
 COMMENT ON COLUMN product_version.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN product_version.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN product_version.product_id IS 'Product';
-COMMENT ON COLUMN product_version.version_no IS 'Sequential version number';
+COMMENT ON COLUMN product_version.version_no IS 'Sequential version number (server-assigned per product)';
 COMMENT ON COLUMN product_version.status IS 'Approval lifecycle';
 COMMENT ON COLUMN product_version.effective_from IS 'When new sales start using this version';
 COMMENT ON COLUMN product_version.effective_to IS 'When it stops applying to new sales';
@@ -192,6 +195,9 @@ COMMENT ON COLUMN product_version.submitted_by IS 'Maker';
 COMMENT ON COLUMN product_version.submitted_at IS 'Submission time';
 COMMENT ON COLUMN product_version.approved_by IS 'Checker';
 COMMENT ON COLUMN product_version.approved_at IS 'Approval time';
+COMMENT ON COLUMN product_version.rejected_by IS 'Checker who rejected the version';
+COMMENT ON COLUMN product_version.rejected_at IS 'Rejection time';
+COMMENT ON COLUMN product_version.rejection_reason IS 'Why the checker rejected the version';
 COMMENT ON COLUMN product_version.published_at IS 'Publication time';
 COMMENT ON COLUMN product_version.approval_request_id IS 'Workflow approval request';
 COMMENT ON COLUMN product_version.checksum IS 'SHA-256 of the definition, for tamper evidence';
@@ -527,15 +533,20 @@ CREATE TABLE product_script (
   hook                         varchar(40) NOT NULL CHECK (hook IN ('PRE_POSTING', 'POST_POSTING', 'ACCRUAL', 'FEE_CALCULATION', 'SCHEDULE_GENERATION', 'ELIGIBILITY', 'END_OF_DAY', 'END_OF_MONTH', 'ON_MATURITY', 'ON_EVENT')),
   language                     varchar(40) NOT NULL CHECK (language IN ('RUST', 'ASSEMBLYSCRIPT', 'TYPESCRIPT', 'TINYGO')),
   source_code                  text,
-  wasm_module_uri              varchar(500) NOT NULL,
-  wasm_sha256                  varchar(64) NOT NULL,
+  wasm_module_uri              varchar(500),
+  wasm_sha256                  varchar(64),
   entrypoint                   varchar(64) NOT NULL DEFAULT 'run',
   max_fuel                     bigint NOT NULL DEFAULT 10000000,
   max_memory_mb                integer NOT NULL DEFAULT 16,
   timeout_ms                   integer NOT NULL DEFAULT 50,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'VALIDATED', 'PENDING_APPROVAL', 'ACTIVE', 'DEPRECATED', 'REJECTED')),
   validation_report            jsonb,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejection_reason             varchar(500),
+  deprecation_reason           varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -556,15 +567,20 @@ COMMENT ON COLUMN product_script.name IS 'Script name';
 COMMENT ON COLUMN product_script.hook IS 'Lifecycle hook it runs at';
 COMMENT ON COLUMN product_script.language IS 'Source language compiled to WASM';
 COMMENT ON COLUMN product_script.source_code IS 'Source code (kept for review and audit)';
-COMMENT ON COLUMN product_script.wasm_module_uri IS 'Location of the compiled module';
-COMMENT ON COLUMN product_script.wasm_sha256 IS 'Hash of the compiled module';
+COMMENT ON COLUMN product_script.wasm_module_uri IS 'Location of the compiled module (empty until compiled)';
+COMMENT ON COLUMN product_script.wasm_sha256 IS 'Hash of the compiled module (empty until compiled)';
 COMMENT ON COLUMN product_script.entrypoint IS 'Exported function name';
 COMMENT ON COLUMN product_script.max_fuel IS 'Instruction budget per call';
 COMMENT ON COLUMN product_script.max_memory_mb IS 'Memory limit';
 COMMENT ON COLUMN product_script.timeout_ms IS 'Wall-clock limit per call';
 COMMENT ON COLUMN product_script.status IS 'Status';
 COMMENT ON COLUMN product_script.validation_report IS 'Static checks and test results';
+COMMENT ON COLUMN product_script.submitted_by IS 'Maker';
+COMMENT ON COLUMN product_script.submitted_at IS 'Submission time';
 COMMENT ON COLUMN product_script.approved_by IS 'Checker';
+COMMENT ON COLUMN product_script.approved_at IS 'Approval time';
+COMMENT ON COLUMN product_script.rejection_reason IS 'Why the checker rejected the script';
+COMMENT ON COLUMN product_script.deprecation_reason IS 'Why the script was deprecated';
 COMMENT ON COLUMN product_script.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN product_script.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN product_script.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -614,7 +630,7 @@ COMMENT ON COLUMN product_simulation.name IS 'Scenario name';
 COMMENT ON COLUMN product_simulation.horizon_months IS 'Simulated period';
 COMMENT ON COLUMN product_simulation.scenario IS 'Inputs: opening balance, deposits, spend pattern, rate path, events';
 COMMENT ON COLUMN product_simulation.status IS 'Run status';
-COMMENT ON COLUMN product_simulation.results IS 'Outputs: balances, interest, fees, tax, schedule per period';
+COMMENT ON COLUMN product_simulation.results IS 'Outputs per period: balances, interest, fees, tax, schedule';
 COMMENT ON COLUMN product_simulation.summary IS 'Totals: interest earned/paid, fees, APR/AER/EIR';
 COMMENT ON COLUMN product_simulation.started_at IS 'Start';
 COMMENT ON COLUMN product_simulation.finished_at IS 'End';

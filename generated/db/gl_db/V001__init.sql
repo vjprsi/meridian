@@ -37,6 +37,7 @@ CREATE TABLE gl_account (
   currency                     char(3),
   regulatory_code              varchar(64),
   erp_code                     varchar(64),
+  is_retained_earnings         boolean NOT NULL DEFAULT false,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'CLOSED')),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -63,6 +64,7 @@ COMMENT ON COLUMN gl_account.is_postable IS 'Leaf accounts accept postings; head
 COMMENT ON COLUMN gl_account.currency IS 'Restrict to one currency; empty = multi-currency';
 COMMENT ON COLUMN gl_account.regulatory_code IS 'Mapping code for regulatory returns';
 COMMENT ON COLUMN gl_account.erp_code IS 'Mapping code for the ERP';
+COMMENT ON COLUMN gl_account.is_retained_earnings IS 'Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end close transfers the net profit or loss here';
 COMMENT ON COLUMN gl_account.status IS 'Status';
 COMMENT ON COLUMN gl_account.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN gl_account.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -237,7 +239,7 @@ ALTER TABLE gl_balance ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON gl_balance USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_gl_balance_touch BEFORE UPDATE ON gl_balance FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- gl_journal: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+-- gl_journal: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them.
 CREATE TABLE gl_journal (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -249,25 +251,23 @@ CREATE TABLE gl_journal (
   source_journal_entry_id      uuid,
   description                  varchar(500),
   value_date                   date NOT NULL,
-  approved_by                  varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE gl_journal IS 'GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.';
+COMMENT ON TABLE gl_journal IS 'GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals post to the GL balances only once a gl_journal_approval exists for them.';
 COMMENT ON COLUMN gl_journal.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN gl_journal.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN gl_journal.created_at IS 'Creation time';
 COMMENT ON COLUMN gl_journal.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN gl_journal.legal_entity_id IS 'Legal entity';
 COMMENT ON COLUMN gl_journal.accounting_period_id IS 'Period';
-COMMENT ON COLUMN gl_journal.journal_type IS 'AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION';
+COMMENT ON COLUMN gl_journal.journal_type IS 'AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE and YEAR_END_CLOSE are system-only)';
 COMMENT ON COLUMN gl_journal.source_journal_entry_id IS 'Ledger journal entry, when derived';
 COMMENT ON COLUMN gl_journal.description IS 'Narrative';
 COMMENT ON COLUMN gl_journal.value_date IS 'Value date';
-COMMENT ON COLUMN gl_journal.approved_by IS 'Checker for manual journals';
 COMMENT ON COLUMN gl_journal.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN gl_journal.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN gl_journal.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -292,6 +292,7 @@ CREATE TABLE gl_journal_line (
   direction                    varchar(40) NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
+  fx_rate                      numeric(18,10),
   base_amount                  numeric(28,8) NOT NULL,
   cost_center                  varchar(32),
   branch_id                    uuid,
@@ -312,7 +313,8 @@ COMMENT ON COLUMN gl_journal_line.gl_account_id IS 'GL account';
 COMMENT ON COLUMN gl_journal_line.direction IS 'Debit or credit';
 COMMENT ON COLUMN gl_journal_line.amount IS 'Amount';
 COMMENT ON COLUMN gl_journal_line.currency IS 'Currency';
-COMMENT ON COLUMN gl_journal_line.base_amount IS 'Amount in entity base currency';
+COMMENT ON COLUMN gl_journal_line.fx_rate IS 'Rate to the entity base currency (default 1)';
+COMMENT ON COLUMN gl_journal_line.base_amount IS 'Amount in entity base currency (amount x fx_rate)';
 COMMENT ON COLUMN gl_journal_line.cost_center IS 'Cost centre';
 COMMENT ON COLUMN gl_journal_line.branch_id IS 'Branch dimension';
 COMMENT ON COLUMN gl_journal_line.product_id IS 'Product dimension';
@@ -329,6 +331,40 @@ CREATE INDEX ix_gl_journal_line_product_id ON gl_journal_line (product_id);
 ALTER TABLE gl_journal_line ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON gl_journal_line USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_gl_journal_line_append_only BEFORE UPDATE OR DELETE ON gl_journal_line FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- gl_journal_approval: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+CREATE TABLE gl_journal_approval (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  gl_journal_id                uuid NOT NULL REFERENCES gl_journal(id),
+  approved_by                  varchar(64) NOT NULL,
+  comment                      varchar(500),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_gl_journal_approval_gl_journal_id UNIQUE (tenant_id, gl_journal_id)
+);
+COMMENT ON TABLE gl_journal_approval IS 'Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.';
+COMMENT ON COLUMN gl_journal_approval.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN gl_journal_approval.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN gl_journal_approval.created_at IS 'Creation time';
+COMMENT ON COLUMN gl_journal_approval.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN gl_journal_approval.gl_journal_id IS 'Approved GL journal (one approval per journal)';
+COMMENT ON COLUMN gl_journal_approval.approved_by IS 'Checker (system:<process> for system journals such as provisions)';
+COMMENT ON COLUMN gl_journal_approval.comment IS 'Checker comment';
+COMMENT ON COLUMN gl_journal_approval.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_approval.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_approval.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_approval.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN gl_journal_approval.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_gl_journal_approval_tenant ON gl_journal_approval (tenant_id, created_at);
+ALTER TABLE gl_journal_approval ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON gl_journal_approval USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_gl_journal_approval_append_only BEFORE UPDATE OR DELETE ON gl_journal_approval FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- period_close_run: Execution of an EOD / EOM / EOY close with its checklist steps
 CREATE TABLE period_close_run (
