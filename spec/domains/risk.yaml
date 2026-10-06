@@ -48,7 +48,9 @@ enums:
   RiskLimitStatus: [DRAFT, ACTIVE, INACTIVE]
   LimitBreachAction: [REJECT, REVIEW, STEP_UP, ALLOW_AND_ALERT]
   LimitOverrideStatus: [PENDING_APPROVAL, ACTIVE, REJECTED, EXPIRED, REVOKED]
-  LimitCheckStatus: [RESERVED, COMMITTED, RELEASED, REJECTED, DRY_RUN]
+  LimitCheckStatus: [RESERVED, COMMITTED, RELEASED, REJECTED, DRY_RUN, EXPIRED]
+  RatingOverrideStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
+  DispositionApprovalStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
   RiskAppetiteStatus: [GREEN, AMBER, RED]
 
 services:
@@ -84,12 +86,16 @@ services:
           - "model_id uuid ref=ml_model | Model used"
           - "model_version string(32) | Model version used"
           - "decision enum:FraudDecision nn | Decision returned to the caller"
-          - "reason_codes json nn | Ordered reason codes explaining the decision"
-          - "features json | Feature values used (for audit and explainability)"
+          - "reason_codes json[] nn | Ordered reason codes explaining the decision"
+          - "features json | Feature values used (for audit, explainability and rule backtesting)"
           - "shadow_decision enum:FraudDecision | Decision of the shadow / challenger model"
           - "latency_ms int nn | Evaluation time in milliseconds"
           - "correlation_id string(128) idx | Trace / saga correlation id"
-        indexes: [[subject_type, subject_id], [customer_id, created_at]]
+          - "session_id string(128) | App session (links behavioural signals)"
+          - "fraud_alert_id uuid ro | Alert raised for REVIEW / BLOCK decisions"
+          - "idempotency_key string(128) ro | Client key; a replay returns the original evaluation"
+        unique: [[tenant_id, idempotency_key]]
+        indexes: [[subject_type, subject_id], [customer_id, created_at], [device_fingerprint_id, created_at]]
 
       - name: fraud_rule
         prefix: frl
@@ -104,13 +110,14 @@ services:
           - "action enum:FraudRuleAction nn | Action when the rule fires"
           - "score_adjustment int nn default=0 | Points added to the score when it fires"
           - "priority int nn default=100 | Lower runs first; BLOCK rules short-circuit"
-          - "status enum:FraudRuleStatus nn default=DRAFT | Lifecycle; SHADOW logs hits without acting"
+          - "status enum:FraudRuleStatus nn default=DRAFT ro | Lifecycle (changed only by activate/deactivate); SHADOW logs hits without acting"
           - "rule_version int nn default=1 ro | Incremented on every change"
-          - "tags json | Free tags, e.g. typology"
+          - "tags json[] | Free tags, e.g. typology"
           - "valid_from ts | Effective from"
           - "valid_to ts | Effective to"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
           - "approved_by string(64) ro | Checker"
+          - "deactivation_reason string(255) ro | Why the rule was disabled"
 
       - name: fraud_rule_hit
         prefix: frh
@@ -124,7 +131,7 @@ services:
           - "action enum:FraudRuleAction nn | Action taken"
           - "score_adjustment int nn default=0 | Points applied"
           - "shadow bool nn default=false | Rule was in shadow mode"
-          - "matched_values json | Values that made the expression true"
+          - "matched_values json | Values of the identifiers the expression referenced"
 
       - name: fraud_decision_policy
         prefix: fdp
@@ -151,16 +158,19 @@ services:
           - "subject_type enum:FraudSubjectType nn | Event type"
           - "subject_id uuid nn | Event id"
           - "severity enum:RiskAlertSeverity nn | Severity"
-          - "status enum:FraudAlertStatus nn default=OPEN | Status"
+          - "status enum:FraudAlertStatus nn default=OPEN ro | Status (changed only by actions)"
+          - "reason_codes json[] | Reason codes of the evaluation that raised the alert"
           - "typology enum:FraudTypology | Suspected or confirmed typology"
           - "amount amount | Amount at risk"
           - "currency currency | Currency"
           - "assigned_to string(64) idx | Analyst"
           - "sla_due_at ts | Review deadline"
-          - "customer_contacted bool nn default=false | Customer confirmation obtained"
+          - "customer_contacted bool nn default=false ro | Customer confirm-or-deny message sent"
+          - "notification_id uuid ref=notification ro | Confirm-or-deny notification"
           - "resolution text | Resolution notes"
+          - "resolved_by string(64) ro | Analyst who resolved"
           - "resolved_at ts ro | Resolution time"
-          - "aml_case_id uuid ref=aml_case | Case opened from this alert"
+          - "aml_case_id uuid ref=aml_case ro | Case opened from this alert"
 
       - name: device_fingerprint
         prefix: dfp
@@ -181,8 +191,9 @@ services:
           - "last_country country | Last seen country (IP geolocation)"
           - "customers_seen int nn default=1 ro | Distinct customers seen on this device"
           - "risk_score int nn default=0 ro | Device reputation 0-1000"
-          - "trusted bool nn default=false | Marked trusted after strong authentication"
-          - "blocked bool nn default=false | Blocked device"
+          - "trusted bool nn default=false ro | Marked trusted after strong authentication (use /trust)"
+          - "blocked bool nn default=false ro | Blocked device (use /block and /unblock)"
+          - "status_reason string(255) ro | Reason for the last trust / block / unblock"
           - "first_seen_at ts nn default=now ro | First seen"
           - "last_seen_at ts nn default=now ro | Last seen"
 
@@ -250,9 +261,9 @@ services:
         ops: [list, get]
         filters: [subject_type, subject_id, customer_id, decision, channel, device_fingerprint_id]
         actions:
-          - "POST /evaluate | Score an event synchronously (50 ms budget); returns the decision | subject_type enum:FraudSubjectType nn, subject_id uuid nn, customer_id uuid, account_id uuid, card_id uuid, amount amount, currency currency, channel enum:RiskChannel, device_fingerprint string(128), ip_address inet, session_id string(128), context json | fraud_score"
+          - "POST /evaluate | Score an event synchronously (50 ms budget); returns decision, score, reason codes, rule hits and alert | subject_type enum:FraudSubjectType nn, subject_id uuid nn, customer_id uuid, account_id uuid, card_id uuid, amount amount, currency currency, channel enum:RiskChannel, merchant_category_code string(4), counterparty_country country, device_fingerprint string(128), device json, ip_address inet, ip_country country, session_id string(128), correlation_id string(128), context json | object"
           - "GET /{id}/rule-hits | Rules that fired for this evaluation | | fraud_rule_hit[]"
-          - "GET /{id}/explanation | Feature contributions and reason codes in plain language | | none"
+          - "GET /{id}/explanation | Feature contributions and reason codes in plain language | | object"
           - "POST /{id}/feedback | Label the outcome for model training | label enum:FraudLabel nn, typology enum:FraudTypology, source string(32) nn, loss_amount amount, currency currency | fraud_feedback"
 
       - resource: fraud-rules
@@ -263,8 +274,8 @@ services:
         actions:
           - "POST /{id}/activate | Activate a rule (maker-checker) | mode enum:FraudRuleStatus nn"
           - "POST /{id}/deactivate | Disable a rule | reason string(255) nn"
-          - "POST /{id}/backtest | Replay the rule over historical evaluations | from_ts ts nn, to_ts ts nn | none"
-          - "POST /test-expression | Evaluate a CEL expression against a sample event | expression text nn, sample_event json nn | none"
+          - "POST /{id}/backtest | Replay the rule over historical evaluations (hit rate and precision against labels) | from_ts ts nn, to_ts ts nn, max_events int | object"
+          - "POST /test-expression | Evaluate a rule expression against a sample event | expression text nn, sample_event json nn | object"
           - "GET /{id}/hits | Recent hits of this rule | | fraud_rule_hit[]"
 
       - resource: fraud-decision-policies
@@ -309,7 +320,7 @@ services:
         actions:
           - "GET /{id}/entries | Entries on the list | | fraud_list_entry[]"
           - "POST /{id}/entries | Add a value to the list | value string(255) nn, reason string(255), source string(40), expires_at ts | fraud_list_entry"
-          - "POST /{id}/lookup | Check whether a value is on the list | value string(255) nn | none"
+          - "POST /{id}/lookup | Check whether a value is on the list | value string(255) nn | object"
 
       - resource: fraud-list-entries
         path: /v1/risk/fraud/list-entries
@@ -327,9 +338,17 @@ services:
       - "risk.fraud_score.evaluated | fraud_score | An event was scored"
       - "risk.fraud_score.blocked | fraud_score | An event was blocked by fraud controls"
       - "risk.fraud_rule.activated | fraud_rule | A fraud rule was activated or put into shadow"
+      - "risk.fraud_rule.deactivated | fraud_rule | A fraud rule was disabled"
+      - "risk.fraud_rule.changed | fraud_rule | A fraud rule definition changed (new rule_version)"
       - "risk.fraud_alert.raised | fraud_alert | A fraud alert was raised"
+      - "risk.fraud_alert.assigned | fraud_alert | A fraud alert was assigned to an analyst"
+      - "risk.fraud_alert.customer_contacted | fraud_alert | A confirm-or-deny message was sent to the customer"
+      - "risk.fraud_alert.escalated | fraud_alert | A fraud alert was escalated to a case"
       - "risk.fraud_alert.resolved | fraud_alert | A fraud alert was resolved"
       - "risk.device.blocked | device_fingerprint | A device was blocked"
+      - "risk.device.unblocked | device_fingerprint | A device was unblocked"
+      - "risk.device.trusted | device_fingerprint | A device was marked trusted"
+      - "risk.fraud_list_entry.added | fraud_list_entry | A value was added to a fraud list"
       - "risk.fraud_feedback.recorded | fraud_feedback | An outcome label was recorded"
 
   # ------------------------------------------------------------------ transaction-monitoring-service
@@ -348,11 +367,12 @@ services:
           - "name string(160) nn | Scenario name"
           - "scenario_type enum:TmScenarioType nn | Typology"
           - "description text | Logic description for auditors"
-          - "status enum:TmScenarioStatus nn default=DRAFT | Lifecycle"
+          - "status enum:TmScenarioStatus nn default=DRAFT ro | Lifecycle (changed only by activate / retire)"
           - "customer_segment string(64) | Segment it applies to (empty = all)"
-          - "run_mode enum:TmRunMode nn default=STREAMING | Streaming or batch"
+          - "run_mode enum:TmRunMode nn default=STREAMING | Streaming (evaluated on ingest) or batch (evaluated by runs)"
           - "active_version int ro | Version currently in force"
           - "owner string(64) | Accountable owner (MLRO team)"
+          - "retired_reason text ro | Why the scenario was retired"
 
       - name: tm_scenario_version
         prefix: tsv
@@ -366,8 +386,8 @@ services:
           - "min_amount amount | Minimum aggregate amount"
           - "min_count int | Minimum transaction count"
           - "risk_weight rate nn default=1 | Weight in alert scoring"
-          - "status enum:TmScenarioStatus nn default=DRAFT | Lifecycle"
-          - "effective_from ts | Effective from"
+          - "status enum:TmScenarioStatus nn default=DRAFT ro | Lifecycle"
+          - "effective_from ts ro | Effective from (set on activation)"
           - "tuning_rationale text | Why thresholds were set or changed (below/above-the-line testing)"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
           - "approved_by string(64) ro | Approver"
@@ -380,6 +400,9 @@ services:
         columns:
           - "mode enum:TmRunMode nn | Batch, backtest or streaming window"
           - "tm_scenario_version_id uuid fk=tm_scenario_version | Single scenario version (empty = all active)"
+          - "customers_evaluated int ro | Customers evaluated"
+          - "results json ro | Per-scenario figures (alerts, would-be alerts for backtests)"
+          - "cancel_reason string(255) ro | Why the run was cancelled"
           - "from_ts ts nn | Window start"
           - "to_ts ts nn | Window end"
           - "status enum:RunStatus nn default=QUEUED ro | Status"
@@ -401,7 +424,8 @@ services:
           - "account_id uuid ref=ledger_account idx | Account"
           - "score int nn | Alert risk score 0-1000"
           - "severity enum:RiskAlertSeverity nn | Severity"
-          - "status enum:TmAlertStatus nn default=OPEN | Status"
+          - "status enum:TmAlertStatus nn default=OPEN ro | Status (changed only by actions)"
+          - "reason json | Scenario figures that triggered the alert (thresholds vs observed)"
           - "total_amount amount nn | Aggregate amount of contributing transactions"
           - "currency currency nn | Currency"
           - "transaction_count int nn | Number of contributing transactions"
@@ -409,8 +433,8 @@ services:
           - "period_end ts nn | Activity window end"
           - "assigned_to string(64) idx | Analyst"
           - "triage_note text | Level-1 triage note"
-          - "aml_case_id uuid ref=aml_case | Case opened from the alert"
-          - "closed_reason string(255) | Reason when closed without a case"
+          - "aml_case_id uuid ref=aml_case ro | Case opened from the alert"
+          - "closed_reason string(255) ro | Reason when closed without a case"
           - "closed_at ts ro | Close time"
 
       - name: tm_alert_transaction
@@ -431,19 +455,46 @@ services:
           - "counterparty_country country | Counterparty country"
           - "contribution rate | Contribution to the alert score 0..1"
 
+      - name: tm_transaction
+        prefix: tmx
+        description: Monitored transaction feed (one row per customer leg), ingested from payments, cards, wallets and the ledger. Append-only.
+        immutable: true
+        fr: [FRM-02]
+        columns:
+          - "transaction_id uuid nn | Business transaction id"
+          - "transaction_type string(40) nn | PAYMENT, CARD, WALLET, CASH, TRANSFER"
+          - "customer_id uuid nn ref=customer | Customer the leg belongs to"
+          - "account_id uuid ref=ledger_account idx | Customer account"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "direction enum:EntryDirection nn | DEBIT = money out of the customer, CREDIT = money in"
+          - "amount amount nn | Amount (positive)"
+          - "currency currency nn | Currency"
+          - "is_cash bool nn default=false | Cash deposit / withdrawal"
+          - "channel enum:RiskChannel | Channel"
+          - "counterparty_name string(255) | Counterparty"
+          - "counterparty_account string(64) | Counterparty account / IBAN / wallet reference"
+          - "counterparty_country country | Counterparty country"
+          - "occurred_at ts nn | Transaction time"
+        unique: [[tenant_id, transaction_id, customer_id, direction]]
+        indexes: [[customer_id, occurred_at], [occurred_at]]
+
       - name: customer_risk_rating
         prefix: crr
         description: Customer AML risk rating (CRR) with contributing factors and next review date
         fr: [FRM-02, CIF-03]
         columns:
           - "customer_id uuid nn ref=customer uq | Customer"
-          - "rating enum:AmlRiskLevel nn | AML risk level"
-          - "score int nn | Risk score 0-1000"
-          - "factors json nn | Weighted factors: geography, product, channel, occupation, PEP, behaviour"
+          - "rating enum:AmlRiskLevel nn ro | AML risk level (calculated)"
+          - "score int nn ro | Risk score 0-1000 (calculated)"
+          - "factors json nn | Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the calculation adds weights, contributions and behaviour"
           - "model_version string(32) | Rating model version"
-          - "next_review_date date nn | Periodic review due date (EDD for high risk)"
-          - "override_rating enum:AmlRiskLevel | Manual override"
-          - "override_reason text | Override justification"
+          - "next_review_date date nn ro | Periodic review due date (EDD for high risk)"
+          - "override_rating enum:AmlRiskLevel ro | Manual override (in force once approved)"
+          - "override_reason text ro | Override justification"
+          - "override_status enum:RatingOverrideStatus ro | Maker-checker status of the latest override"
+          - "override_requested_by string(64) ro | Maker of the override"
+          - "override_approved_by string(64) ro | Checker of the override"
+          - "effective_rating enum:AmlRiskLevel ro | Rating in force: approved override, else the calculated rating"
           - "rated_at ts nn default=now ro | Last rating time"
           - "rated_by string(64) | SYSTEM or analyst"
 
@@ -485,7 +536,7 @@ services:
         actions:
           - "GET /{id}/versions | Threshold versions of the scenario | | tm_scenario_version[]"
           - "POST /{id}/versions | Create a new threshold version | parameters json nn, lookback_days int nn, min_amount amount, min_count int, risk_weight rate, tuning_rationale text nn | tm_scenario_version"
-          - "POST /{id}/activate | Activate a version (maker-checker) | scenario_version int nn"
+          - "POST /{id}/activate | Activate a version (maker-checker: activator differs from the version author) | scenario_version int nn"
           - "POST /{id}/retire | Retire the scenario | reason text nn"
           - "POST /{id}/backtest | Backtest a version over a period | scenario_version int nn, from_ts ts nn, to_ts ts nn | tm_run"
 
@@ -514,6 +565,15 @@ services:
           - "POST /{id}/close | Close without a case | closed_reason string(255) nn, triage_note text nn"
           - "POST /{id}/escalate | Open or attach to an AML case | aml_case_id uuid, case_type enum:AmlCaseType, reason text nn | aml_case"
 
+      - resource: tm-transactions
+        path: /v1/risk/monitoring/transactions
+        table: tm_transaction
+        description: Transaction feed. Each ingested leg updates the risk graph and runs the active streaming scenarios for the customer.
+        ops: [list, get, create]
+        filters: [customer_id, account_id, transaction_id, transaction_type, direction]
+        actions:
+          - "POST /ingest | Ingest up to 1000 transaction legs and evaluate streaming scenarios | transactions json[] nn | object"
+
       - resource: customer-risk-ratings
         path: /v1/risk/monitoring/customer-risk-ratings
         table: customer_risk_rating
@@ -521,7 +581,9 @@ services:
         filters: [customer_id, rating, next_review_date]
         actions:
           - "POST /{id}/recalculate | Recalculate the rating from current factors"
-          - "POST /{id}/override | Override the rating with justification (maker-checker) | override_rating enum:AmlRiskLevel nn, override_reason text nn"
+          - "POST /{id}/override | Request an override of the rating with justification (maker) | override_rating enum:AmlRiskLevel nn, override_reason text nn"
+          - "POST /{id}/approve-override | Approve the pending override (checker, not the maker) | comment text"
+          - "POST /{id}/reject-override | Reject the pending override | reason text nn"
 
       - resource: risk-graph-entities
         path: /v1/risk/graph/entities
@@ -530,21 +592,28 @@ services:
         filters: [entity_type, entity_ref, customer_id, community_id, is_mule_suspect]
         actions:
           - "GET /{id}/links | Edges of a node | | risk_graph_link[]"
-          - "GET /{id}/network | Subgraph around the node (?depth=1..3) for visual investigation | | none"
+          - "GET /{id}/network?depth:int&max_nodes:int | Subgraph around the node (breadth-first, depth 1..3) for visual investigation | | object"
 
       - resource: risk-graph-links
         path: /v1/risk/graph/links
         table: risk_graph_link
         ops: [list, get]
         filters: [from_entity_id, to_entity_id, link_type]
+        actions:
+          - "POST /observe | Record an observed link (shared device, phone, address, transfer) creating both nodes if needed | from_type enum:GraphEntityType nn, from_ref string(128) nn, from_customer_id uuid, to_type enum:GraphEntityType nn, to_ref string(128) nn, to_customer_id uuid, link_type string(40) nn, amount amount | risk_graph_link"
 
     events:
       - "risk.tm_scenario.version_activated | tm_scenario_version | A scenario version was activated"
+      - "risk.tm_scenario.retired | tm_scenario | A scenario was retired"
       - "risk.tm_run.completed | tm_run | A monitoring run finished"
+      - "risk.tm_run.cancelled | tm_run | A monitoring run was cancelled"
       - "risk.tm_alert.raised | tm_alert | A transaction monitoring alert was raised"
+      - "risk.tm_alert.assigned | tm_alert | A TM alert was assigned to an analyst"
       - "risk.tm_alert.closed | tm_alert | A TM alert was closed"
       - "risk.tm_alert.escalated | tm_alert | A TM alert was escalated to a case"
       - "risk.customer_risk_rating.changed | customer_risk_rating | A customer's AML risk rating changed"
+      - "risk.customer_risk_rating.override_requested | customer_risk_rating | A rating override awaits approval"
+      - "risk.customer_risk_rating.override_rejected | customer_risk_rating | A rating override was rejected"
       - "risk.graph_entity.mule_suspected | risk_graph_entity | Mule detection flagged a node"
 
   # ------------------------------------------------------------------ sanctions-service
@@ -560,7 +629,7 @@ services:
         tenant: false
         fr: [FRM-03, ONB-03]
         columns:
-          - "owner_tenant_id uuid idx | Tenant for INTERNAL lists; empty for global lists"
+          - "owner_tenant_id uuid idx ro | Owning tenant (lists created through the API); empty for platform-managed global lists"
           - "source enum:SanctionsListSource nn | Publisher"
           - "code string(64) nn | List code, e.g. OFAC_SDN"
           - "name string(160) nn | List name"
@@ -568,6 +637,7 @@ services:
           - "published_at ts | Publication time"
           - "loaded_at ts ro | Time loaded into Meridian"
           - "entry_count int ro | Active entries"
+          - "content_sha256 string(64) ro | Hash of the last loaded file (unchanged files are skipped)"
           - "source_url string(500) | Download location"
           - "is_active bool nn default=true | Used for screening"
         unique: [[owner_tenant_id, code]]
@@ -582,18 +652,34 @@ services:
           - "external_id string(64) nn | Publisher's entry id"
           - "entry_type enum:SanctionsEntryType nn | Kind of entry"
           - "primary_name string(500) nn idx | Primary name"
-          - "aliases json | Aliases, AKAs and transliterations"
+          - "aliases json[] | Aliases, AKAs and transliterations"
           - "date_of_birth string(32) | Date of birth (may be partial, e.g. 1970 or 1970-05)"
           - "place_of_birth string(255) | Place of birth"
           - "nationality country | Nationality"
-          - "countries json | Associated countries"
-          - "identifiers json | Passports, national ids, IMO numbers, registration numbers"
-          - "programs json | Sanctions programmes, e.g. SDGT, UKRAINE-EO13662"
+          - "countries json[] | Associated countries (ISO 3166-1 alpha-2)"
+          - "identifiers json[] | Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)"
+          - "programs json[] | Sanctions programmes, e.g. SDGT, UKRAINE-EO13662"
           - "pep_level string(16) | PEP class for PEP lists"
           - "remarks text | Publisher remarks"
           - "listed_on date | Date listed"
           - "delisted_on date | Date removed"
         unique: [[sanctions_list_id, external_id]]
+
+      - name: screening_batch
+        prefix: sbt
+        description: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+        fr: [FRM-03]
+        columns:
+          - "trigger enum:ScreeningTrigger nn | Why the batch ran"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "total int nn default=0 ro | Subjects submitted"
+          - "processed int nn default=0 ro | Subjects screened"
+          - "potential_matches int nn default=0 ro | Subjects with potential matches"
+          - "errors int nn default=0 ro | Subjects that failed"
+          - "subjects json[] hide | Submitted subjects (processed asynchronously)"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Error details"
 
       - name: screening_request
         prefix: srq
@@ -607,12 +693,15 @@ services:
           - "date_of_birth date pii | Date of birth"
           - "country country | Country of residence / registration"
           - "nationality country | Nationality"
-          - "identifiers json pii | Identity document numbers"
+          - "identifiers json[] pii | Identity document numbers"
           - "payload json | Payment fields screened (parties, agents, free text)"
-          - "list_codes json | Lists to screen against (empty = tenant default)"
+          - "list_codes json[] | Lists to screen against (empty = all active lists visible to the tenant)"
           - "threshold rate nn default=0.85 | Minimum match score that raises a hit"
           - "requested_by_service string(64) nn | Calling service"
           - "correlation_id string(128) idx | Trace / saga correlation id"
+          - "screening_batch_id uuid fk=screening_batch idx | Batch the request belongs to"
+          - "status enum:SanctionsScreeningStatus ro | Outcome of the screening"
+          - "screening_result_id uuid ro | Result produced by the screening"
 
       - name: screening_result
         prefix: srs
@@ -622,15 +711,16 @@ services:
           - "screening_request_id uuid nn fk=screening_request uq | Request"
           - "subject_type enum:ScreeningSubjectType nn | What was screened"
           - "subject_id uuid nn idx | Business id of the subject"
-          - "status enum:SanctionsScreeningStatus nn | Outcome"
+          - "status enum:SanctionsScreeningStatus nn ro | Outcome (changed only by /review)"
           - "highest_score rate nn default=0 ro | Best match score 0..1"
           - "match_count int nn default=0 ro | Number of hits"
           - "is_pep bool nn default=false ro | PEP hit confirmed"
           - "has_adverse_media bool nn default=false ro | Adverse media found"
-          - "reviewed_by string(64) | Compliance reviewer"
-          - "reviewed_at ts | Review time"
-          - "decision_reason text | Reviewer rationale"
-          - "aml_case_id uuid ref=aml_case | Case opened for a confirmed match"
+          - "suppressed_count int nn default=0 ro | Candidate matches suppressed by the good-guy whitelist"
+          - "reviewed_by string(64) ro | Compliance reviewer"
+          - "reviewed_at ts ro | Review time"
+          - "decision_reason text ro | Reviewer rationale"
+          - "aml_case_id uuid ref=aml_case ro | Case opened for a confirmed match"
           - "rescreen_due_at ts | Next periodic rescreen"
           - "latency_ms int ro | Screening time"
 
@@ -645,8 +735,9 @@ services:
           - "match_score rate nn | Match score 0..1"
           - "match_algorithm string(40) nn | JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID"
           - "matched_fields json | Fields compared and their individual scores"
-          - "disposition enum:ScreeningMatchDisposition nn default=PENDING | Reviewer decision"
+          - "disposition enum:ScreeningMatchDisposition nn default=PENDING | Reviewer decision (clearing a TRUE_MATCH needs a second reviewer)"
           - "disposition_reason text | Rationale"
+          - "dispositioned_by string(64) ro | Reviewer who set the disposition"
 
       - name: screening_whitelist
         prefix: swl
@@ -657,7 +748,7 @@ services:
           - "subject_id uuid nn idx | Subject"
           - "sanctions_list_entry_id uuid nn fk=sanctions_list_entry | Entry that is suppressed"
           - "reason text nn | Why this is a false positive"
-          - "approved_by string(64) | Approver"
+          - "approved_by string(64) ro | Approver"
           - "expires_at ts | Review / expiry date"
         unique: [[tenant_id, subject_id, sanctions_list_entry_id]]
 
@@ -668,9 +759,9 @@ services:
         ops: [list, get, create, update]
         filters: [source, code, is_active]
         actions:
-          - "POST /{id}/sync | Download and load the latest list version"
+          - "POST /{id}/sync | Download (source_url) or load the given content as the latest list version; entries missing from the file are delisted | content text, format string(8), list_version string(64), published_at ts"
           - "GET /{id}/entries | Entries of the list | | sanctions_list_entry[]"
-          - "POST /{id}/import | Import an internal list file | document_id uuid nn | none"
+          - "POST /{id}/import | Import an internal list file (CSV or JSON) from document-service or inline content, adding / updating entries | document_id uuid, content text, format string(8) | object"
 
       - resource: sanctions-list-entries
         path: /v1/risk/sanctions/list-entries
@@ -684,8 +775,8 @@ services:
         ops: [list, get, create]
         filters: [subject_type, subject_id, trigger, requested_by_service]
         actions:
-          - "POST /screen-payment | Synchronously screen an ISO 20022 payment's parties and free text | payment_id uuid nn, payload json nn | screening_result"
-          - "POST /batch | Screen up to 10,000 subjects asynchronously | subjects json nn, trigger enum:ScreeningTrigger nn | none"
+          - "POST /screen-payment | Synchronously screen an ISO 20022 payment's parties (debtor, creditor, agents) and free text | payment_id uuid nn, payload json nn, threshold rate, correlation_id string(128) | screening_result"
+          - "POST /batch | Screen up to 10,000 subjects asynchronously | subjects json[] nn, trigger enum:ScreeningTrigger nn, threshold rate | screening_batch"
 
       - resource: screening-results
         path: /v1/risk/sanctions/results
@@ -694,7 +785,7 @@ services:
         filters: [status, subject_type, subject_id, is_pep, reviewed_by]
         actions:
           - "GET /{id}/matches | Candidate matches | | screening_match[]"
-          - "POST /{id}/review | Record the compliance decision | status enum:SanctionsScreeningStatus nn, decision_reason text nn"
+          - "POST /{id}/review | Record the compliance decision (CONFIRMED_MATCH or FALSE_POSITIVE; four-eyes against the match reviewer for confirmations) | status enum:SanctionsScreeningStatus nn, decision_reason text nn, whitelist_false_positives bool"
           - "POST /{id}/rescreen | Screen the subject again now | | screening_result"
 
       - resource: screening-matches
@@ -709,12 +800,20 @@ services:
         ops: [list, get, create, delete]
         filters: [subject_type, subject_id, sanctions_list_entry_id]
 
+      - resource: screening-batches
+        path: /v1/risk/sanctions/batches
+        table: screening_batch
+        ops: [list, get]
+        filters: [status, trigger]
+
     events:
       - "risk.sanctions_list.updated | sanctions_list | A new list version was loaded"
       - "risk.screening.completed | screening_result | A screening finished"
       - "risk.screening.potential_match | screening_result | A screening produced potential matches needing review"
       - "risk.screening.confirmed_match | screening_result | A sanctions or PEP match was confirmed"
       - "risk.screening.cleared | screening_result | A potential match was cleared as false positive"
+      - "risk.screening_whitelist.added | screening_whitelist | A good-guy whitelist entry was added"
+      - "risk.screening_batch.completed | screening_batch | A batch screening finished"
 
   # ------------------------------------------------------------------ case-management-service
   - name: case-management-service
@@ -730,7 +829,7 @@ services:
         columns:
           - "case_number string(32) nn uq ro | Human-readable case number"
           - "case_type enum:AmlCaseType nn | Case type"
-          - "status enum:AmlCaseStatus nn default=OPEN | Status"
+          - "status enum:AmlCaseStatus nn default=OPEN ro | Status (changed only by actions)"
           - "priority enum:RiskAlertSeverity nn default=MEDIUM | Priority"
           - "customer_id uuid ref=customer idx | Primary subject"
           - "title string(255) nn | Short summary"
@@ -742,10 +841,11 @@ services:
           - "team string(64) | Team / queue"
           - "opened_at ts nn default=now ro | Opened"
           - "due_at ts | Regulatory / internal deadline"
-          - "escalated_to string(64) | MLRO or senior reviewer"
+          - "escalated_to string(64) ro | MLRO or senior reviewer (use /escalate)"
+          - "escalation_reason text ro | Why the case was escalated"
           - "closed_at ts ro | Closed"
           - "ai_summary text ro | AI-generated case summary with citations"
-          - "tags json | Free tags"
+          - "tags json[] | Free tags"
 
       - name: aml_case_alert
         prefix: aca
@@ -769,7 +869,7 @@ services:
           - "author string(64) nn | Author"
           - "body text nn | Note text"
           - "visibility string(16) nn default=INTERNAL | INTERNAL or RESTRICTED (tipping-off protection)"
-          - "attachments json | Document ids"
+          - "attachments json[] | Document ids"
 
       - name: aml_case_task
         prefix: act
@@ -780,9 +880,10 @@ services:
           - "title string(255) nn | Task"
           - "description text | Details"
           - "assigned_to string(64) idx | Assignee"
-          - "status enum:AmlCaseTaskStatus nn default=OPEN | Status"
+          - "status enum:AmlCaseTaskStatus nn default=OPEN | Status (OPEN, IN_PROGRESS or CANCELLED via PATCH; DONE only via /complete)"
           - "due_at ts | Due"
           - "completed_at ts ro | Completed"
+          - "completed_by string(64) ro | Who completed the task"
 
       - name: aml_case_evidence
         prefix: ace
@@ -797,17 +898,19 @@ services:
 
       - name: aml_case_disposition
         prefix: acd
-        description: Final decision on a case with rationale and approval. Append-only.
-        immutable: true
+        description: Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
         fr: [FRM-02, FRM-04]
         columns:
           - "aml_case_id uuid nn fk=aml_case idx | Case"
           - "disposition enum:CaseDispositionType nn | Decision"
           - "rationale text nn | Rationale"
-          - "decided_by string(64) nn | Investigator (maker)"
-          - "approved_by string(64) | MLRO (checker)"
-          - "decided_at ts nn | Decision time"
-          - "actions_taken json | Restrictions applied, relationship exit, monitoring changes"
+          - "decided_by string(64) nn ro | Investigator (maker)"
+          - "approved_by string(64) ro | MLRO (checker)"
+          - "decided_at ts nn ro | Decision time"
+          - "actions_taken json[] | Restrictions applied, relationship exit, monitoring changes"
+          - "approval_status enum:DispositionApprovalStatus nn default=PENDING_APPROVAL ro | Maker-checker status"
+          - "approval_comment text ro | Checker comment or rejection reason"
+          - "approved_at ts ro | Approval / rejection time"
 
       - name: sar_report
         prefix: sar
@@ -818,23 +921,24 @@ services:
           - "report_type enum:SarReportType nn | Report type"
           - "jurisdiction country nn | Filing jurisdiction"
           - "regulator string(64) nn | FIU, e.g. FinCEN, NCA, FIC"
-          - "status enum:SarStatus nn default=DRAFT | Status"
+          - "status enum:SarStatus nn default=DRAFT ro | Status (changed only by actions)"
           - "narrative text | Final narrative"
           - "ai_draft_narrative text ro | AI-drafted narrative for the investigator to edit"
           - "suspicious_amount amount | Amount involved"
           - "currency currency | Currency"
           - "activity_start date | Suspicious activity start"
           - "activity_end date | Suspicious activity end"
-          - "subjects json | Persons and entities reported"
-          - "transactions json | Transactions reported"
+          - "subjects json[] | Persons and entities reported ({name, type, id_number, country, role})"
+          - "transactions json[] | Transactions reported ({transaction_id, date, amount, currency, from, to, description})"
           - "filing_deadline date | Regulatory deadline"
+          - "filing_channel string(16) ro | API, EXPORT or PORTAL"
           - "export_document_id uuid ref=document ro | goAML XML / FinCEN BSA XML file"
-          - "regulator_reference string(128) | FIU reference number"
-          - "prepared_by string(64) | Preparer"
-          - "approved_by string(64) | MLRO approval"
+          - "prepared_by string(64) ro | Preparer (submitter for approval)"
+          - "approved_by string(64) ro | MLRO approval"
           - "submitted_at ts ro | Submission time"
           - "acknowledged_at ts ro | FIU acknowledgement time"
-          - "rejection_reason text | FIU rejection reason"
+          - "regulator_reference string(128) ro | FIU reference number"
+          - "rejection_reason text ro | FIU rejection reason"
 
     apis:
       - resource: aml-cases
@@ -845,14 +949,14 @@ services:
         actions:
           - "POST /{id}/assign | Assign to an investigator | assigned_to string(64) nn, team string(64)"
           - "POST /{id}/escalate | Escalate to the MLRO | escalated_to string(64) nn, reason text nn"
-          - "POST /{id}/close | Record the disposition and close (maker-checker) | disposition enum:CaseDispositionType nn, rationale text nn, actions_taken json | aml_case_disposition"
+          - "POST /{id}/close | Propose the disposition; the case closes when a different user approves it (maker-checker) | disposition enum:CaseDispositionType nn, rationale text nn, actions_taken json[] | aml_case_disposition"
           - "POST /{id}/reopen | Reopen a closed case | reason text nn"
           - "GET /{id}/alerts | Alerts linked to the case | | aml_case_alert[]"
           - "POST /{id}/alerts | Link an alert or referral | source enum:CaseAlertSource nn, alert_id uuid, summary string(500), added_reason string(255) | aml_case_alert"
           - "GET /{id}/notes | Notes on the case | | aml_case_note[]"
-          - "POST /{id}/notes | Add a note | body text nn, visibility string(16), attachments json | aml_case_note"
-          - "GET /{id}/timeline | Merged timeline of alerts, transactions, notes and actions | | none"
-          - "POST /{id}/ai-summary | Generate an AI case summary with citations | | aml_case"
+          - "POST /{id}/notes | Add a note | body text nn, visibility string(16), attachments json[] | aml_case_note"
+          - "GET /{id}/timeline?include_restricted:bool | Merged timeline of alerts, notes, tasks, evidence, dispositions and reports | | object"
+          - "POST /{id}/ai-summary | Generate a case summary with citations (deterministic template over case facts) | | object"
 
       - resource: aml-case-tasks
         path: /v1/risk/case-tasks
@@ -874,7 +978,8 @@ services:
         ops: [list, get]
         filters: [aml_case_id, disposition]
         actions:
-          - "POST /{id}/approve | Approve the disposition (checker) | comment text"
+          - "POST /{id}/approve | Approve the disposition (checker, not the maker); closes the case | comment text"
+          - "POST /{id}/reject | Reject the disposition (checker); the case returns to investigation | reason text nn"
 
       - resource: sar-reports
         path: /v1/risk/sar-reports
@@ -882,22 +987,29 @@ services:
         ops: [list, get, create, update]
         filters: [status, report_type, aml_case_id, jurisdiction, regulator]
         actions:
-          - "POST /{id}/draft-narrative | Draft the narrative with the AML copilot | | sar_report"
+          - "POST /{id}/draft-narrative | Draft the narrative from case facts (deterministic template) | | object"
           - "POST /{id}/submit-for-approval | Send to the MLRO for approval | comment text"
           - "POST /{id}/approve | Approve the report (MLRO) | comment text"
-          - "POST /{id}/file | File with the FIU (API or export) | channel string(16) nn"
+          - "POST /{id}/file | File with the FIU (API, EXPORT or PORTAL) | channel string(16) nn"
           - "POST /{id}/acknowledge | Record the FIU acknowledgement | regulator_reference string(128) nn"
           - "POST /{id}/record-rejection | Record an FIU rejection | rejection_reason text nn"
-          - "GET /{id}/export | Download goAML / BSA XML | | none"
+          - "GET /{id}/export | Download the goAML XML report | | application/xml"
 
     events:
       - "risk.aml_case.opened | aml_case | An investigation case was opened"
+      - "risk.aml_case.assigned | aml_case | A case was assigned to an investigator"
       - "risk.aml_case.escalated | aml_case | A case was escalated"
+      - "risk.aml_case.alert_linked | aml_case_alert | An alert or referral was linked to a case"
       - "risk.aml_case.closed | aml_case | A case was closed with a disposition"
-      - "risk.aml_case_disposition.recorded | aml_case_disposition | A case disposition was recorded"
+      - "risk.aml_case.reopened | aml_case | A closed case was reopened"
+      - "risk.aml_case_disposition.recorded | aml_case_disposition | A case disposition was proposed"
+      - "risk.aml_case_disposition.approved | aml_case_disposition | A case disposition was approved"
+      - "risk.aml_case_disposition.rejected | aml_case_disposition | A case disposition was rejected"
+      - "risk.sar_report.submitted_for_approval | sar_report | A SAR/STR was sent to the MLRO"
       - "risk.sar_report.approved | sar_report | A SAR/STR was approved"
       - "risk.sar_report.filed | sar_report | A SAR/STR was filed with the FIU"
       - "risk.sar_report.acknowledged | sar_report | The FIU acknowledged a report"
+      - "risk.sar_report.rejected | sar_report | The FIU rejected a report"
 
   # ------------------------------------------------------------------ limits-service
   - name: limits-service
@@ -925,11 +1037,13 @@ services:
           - "max_count int | Maximum transactions per period"
           - "breach_action enum:LimitBreachAction nn default=REJECT | Action on breach"
           - "priority int nn default=100 | Tie-breaker between equally specific rules"
-          - "status enum:RiskLimitStatus nn default=DRAFT | Status"
-          - "is_regulatory bool nn default=false | Regulatory limit (cannot be overridden)"
+          - "status enum:RiskLimitStatus nn default=DRAFT ro | Status (changed only by activate / deactivate)"
+          - "is_regulatory bool nn default=false | Regulatory limit (cannot be overridden or superseded)"
           - "valid_from ts | Effective from"
           - "valid_to ts | Effective to"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "approved_by string(64) ro | Checker who activated the rule"
+          - "deactivation_reason text ro | Why the rule was deactivated"
         indexes: [[scope, scope_ref]]
 
       - name: limit_usage
@@ -947,6 +1061,7 @@ services:
           - "reserved_amount amount nn default=0 ro | Reserved, not yet committed"
           - "reserved_count int nn default=0 ro | Reserved count"
           - "currency currency | Currency"
+          - "last_reset_reason text ro | Reason of the last operational reset"
         unique: [[limit_rule_id, subject_id, period_start]]
 
       - name: limit_override
@@ -961,6 +1076,7 @@ services:
           - "max_count int | Overridden count"
           - "reason text nn | Justification"
           - "status enum:LimitOverrideStatus nn default=PENDING_APPROVAL ro | Status"
+          - "decision_reason text ro | Approval comment, rejection or revocation reason"
           - "valid_from ts nn | Effective from"
           - "valid_to ts nn | Effective to (overrides are always temporary)"
           - "requested_by string(64) ro | Maker"
@@ -970,26 +1086,33 @@ services:
       - name: limit_check
         prefix: lmc
         description: Result of a limit check; a reservation is committed or released when the transaction completes
-        immutable: true
         fr: [LIM-01]
         columns:
-          - "subject_type string(32) nn | Primary subject type"
+          - "subject_type string(32) nn | Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT"
           - "subject_id uuid nn idx | Primary subject"
-          - "customer_id uuid ref=customer idx | Customer"
+          - "customer_id uuid ref=customer idx | Customer (customer-level limits are counted per customer)"
+          - "kyc_tier string(32) | Customer KYC tier code (matches KYC_TIER limits)"
+          - "customer_segment string(64) | Customer segment (matches CUSTOMER_SEGMENT limits)"
+          - "product_id uuid ref=product | Product (matches PRODUCT limits)"
           - "transaction_type string(40) nn | Transaction type"
           - "channel enum:RiskChannel | Channel"
           - "amount amount nn | Amount"
           - "currency currency nn | Currency"
-          - "allowed bool nn | Whether the transaction is within limits"
-          - "status enum:LimitCheckStatus nn | Reservation status at creation"
-          - "action enum:LimitBreachAction | Action when a limit was breached"
-          - "evaluated_rule_ids json nn | Rules evaluated"
-          - "breached_rule_ids json | Rules breached"
-          - "remaining json | Remaining amount/count per rule and period"
+          - "current_balance amount | Balance before the transaction (BALANCE limits)"
+          - "allowed bool nn ro | Whether the transaction is within limits"
+          - "status enum:LimitCheckStatus nn ro | Reservation status (RESERVED until committed, released or expired)"
+          - "action enum:LimitBreachAction ro | Strictest action of the breached limits"
+          - "evaluated_rule_ids json[] nn ro | Rules evaluated"
+          - "breached_rule_ids json[] ro | Rules breached"
+          - "remaining json[] ro | Per rule: limit, used, reserved, remaining amount / count for the period"
+          - "reservations json[] hide | Usage counters reserved: limit_usage_id, amount, count"
+          - "committed_amount amount ro | Amount committed"
+          - "settled_at ts ro | Commit / release time"
+          - "release_reason string(255) ro | Why the reservation was released"
           - "idempotency_key string(128) nn ro | Client key"
           - "correlation_id string(128) idx | Business transaction / saga id"
-          - "expires_at ts | Reservation expiry (auto-release)"
-          - "latency_ms int | Evaluation time"
+          - "expires_at ts | Reservation expiry (default 15 minutes; released by /expire-reservations)"
+          - "latency_ms int ro | Evaluation time"
         unique: [[tenant_id, idempotency_key]]
 
       - name: risk_appetite_metric
@@ -1009,6 +1132,18 @@ services:
           - "owner string(64) | Accountable owner"
         unique: [[tenant_id, legal_entity_id, metric_code]]
 
+      - name: risk_appetite_measurement
+        prefix: rmm
+        description: One measurement of a risk appetite metric with the status it implied. Append-only.
+        immutable: true
+        fr: [LIM-01]
+        columns:
+          - "risk_appetite_metric_id uuid nn fk=risk_appetite_metric idx | Metric"
+          - "value rate nn | Measured value"
+          - "status enum:RiskAppetiteStatus nn | Traffic-light status implied by the thresholds at the time"
+          - "measured_at ts nn | Measurement time"
+          - "source string(64) | Producer of the measurement"
+
     apis:
       - resource: limit-rules
         path: /v1/risk/limits/rules
@@ -1018,7 +1153,7 @@ services:
         actions:
           - "POST /{id}/activate | Activate (maker-checker) | comment text"
           - "POST /{id}/deactivate | Deactivate | reason text nn"
-          - "POST /simulate | Show which limits would apply to a subject and transaction | subject_type string(32) nn, subject_id uuid nn, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn | none"
+          - "POST /simulate | Show which limits would apply to a subject and transaction (including superseded rules) | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount | object"
 
       - resource: limit-usages
         path: /v1/risk/limits/usages
@@ -1026,7 +1161,7 @@ services:
         ops: [list, get]
         filters: [limit_rule_id, subject_type, subject_id]
         actions:
-          - "POST /{id}/reset | Reset a counter (operations correction, audited) | reason text nn"
+          - "POST /{id}/reset | Reset the committed usage of a counter (operations correction, audited) | reason text nn"
 
       - resource: limit-overrides
         path: /v1/risk/limits/overrides
@@ -1045,9 +1180,10 @@ services:
         ops: [list, get, create]
         filters: [subject_type, subject_id, customer_id, allowed, status, correlation_id]
         actions:
-          - "POST /{id}/commit | Commit the reserved usage after the transaction succeeds | amount amount"
+          - "POST /{id}/commit | Commit the reserved usage after the transaction succeeds (amount at most the reserved amount; the rest is released) | amount amount"
           - "POST /{id}/release | Release the reservation after the transaction fails | reason string(255)"
-          - "POST /evaluate | Dry-run evaluation without reservation | subject_type string(32) nn, subject_id uuid nn, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn | limit_check"
+          - "POST /evaluate | Dry-run evaluation without reservation or persistence | subject_type string(32) nn, subject_id uuid nn, customer_id uuid, kyc_tier string(32), customer_segment string(64), product_id uuid, transaction_type string(40) nn, channel enum:RiskChannel, amount amount nn, currency currency nn, current_balance amount | object"
+          - "POST /expire-reservations | Release reservations past expires_at (called by the scheduler) | max_checks int | object"
 
       - resource: risk-appetite-metrics
         path: /v1/risk/appetite-metrics
@@ -1055,12 +1191,17 @@ services:
         ops: [list, get, create, update]
         filters: [legal_entity_id, metric_code, status]
         actions:
-          - "POST /{id}/measurements | Record a new measurement | current_value rate nn, measured_at ts nn"
+          - "POST /{id}/measurements | Record a new measurement | current_value rate nn, measured_at ts nn, source string(64)"
+          - "GET /{id}/measurements | Measurement history | | risk_appetite_measurement[]"
 
     events:
       - "risk.limit_rule.activated | limit_rule | A limit rule was activated"
       - "risk.limit_rule.changed | limit_rule | A limit rule was changed"
       - "risk.limit.breached | limit_check | A transaction breached a limit"
+      - "risk.limit_rule.deactivated | limit_rule | A limit rule was deactivated"
+      - "risk.limit_usage.reset | limit_usage | A usage counter was reset by operations"
+      - "risk.limit_override.requested | limit_override | A limit override awaits approval"
       - "risk.limit_override.approved | limit_override | A limit override was approved"
+      - "risk.limit_override.rejected | limit_override | A limit override was rejected"
       - "risk.limit_override.expired | limit_override | A limit override expired or was revoked"
       - "risk.appetite_metric.breached | risk_appetite_metric | A risk appetite metric turned amber or red"
