@@ -1,0 +1,816 @@
+domain: party
+title: Customer and Onboarding
+phase: 1
+description: >
+  Single customer view for individuals and businesses (CIF), relationships and UBOs, tiered KYC,
+  devices and credentials, consent and privacy, configurable onboarding journeys, and KYC/KYB checks
+  through pluggable providers.
+
+enums:
+  CustomerType: [INDIVIDUAL, SOLE_TRADER, COMPANY, PARTNERSHIP, TRUST, NON_PROFIT, GOVERNMENT, GROUP]
+  CustomerStatus: [PROSPECT, PENDING_KYC, ACTIVE, DORMANT, SUSPENDED, BLOCKED, DECEASED, CLOSED]
+  CustomerKycTier: [TIER_0, TIER_1, TIER_2, TIER_3]
+  CustomerGender: [MALE, FEMALE, OTHER, UNDISCLOSED]
+  CustomerMaritalStatus: [SINGLE, MARRIED, DIVORCED, WIDOWED, SEPARATED, CIVIL_PARTNERSHIP, UNDISCLOSED]
+  CustomerEmploymentStatus: [EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, STUDENT, RETIRED, HOMEMAKER, OTHER]
+  CustomerAddressType: [RESIDENTIAL, MAILING, REGISTERED, BUSINESS, TRADING, PREVIOUS]
+  CustomerContactType: [MOBILE, LANDLINE, EMAIL, WHATSAPP, FAX]
+  CustomerIdentifierType: [NATIONAL_ID, PASSPORT, DRIVING_LICENCE, RESIDENCE_PERMIT, VOTER_ID, TAX_ID, SOCIAL_SECURITY,
+                           COMPANY_REGISTRATION, VAT_NUMBER, LEI, BIRTH_CERTIFICATE, OTHER]
+  CustomerRelationshipType: [DIRECTOR, SHAREHOLDER, ULTIMATE_BENEFICIAL_OWNER, AUTHORISED_SIGNATORY, GUARDIAN, MINOR,
+                             JOINT_HOLDER, POWER_OF_ATTORNEY, SPOUSE, PARENT_COMPANY, SUBSIDIARY, PARTNER, TRUSTEE,
+                             SETTLOR, BENEFICIARY, EMPLOYER, EMPLOYEE]
+  CustomerGroupType: [HOUSEHOLD, CORPORATE_GROUP, RELATIONSHIP_PORTFOLIO, CONNECTED_EXPOSURE]
+  CustomerDeviceStatus: [PENDING, TRUSTED, REVOKED, LOST]
+  CustomerDevicePlatform: [IOS, ANDROID, WEB, USSD, POS]
+  CustomerCredentialType: [PASSKEY, PASSWORD, PIN, TOTP, SMS_OTP, BIOMETRIC_BINDING, SECURITY_QUESTION]
+  CustomerCredentialStatus: [ACTIVE, LOCKED, EXPIRED, REVOKED]
+  ConsentPurpose: [MARKETING, PROFILING, DATA_SHARING_THIRD_PARTY, OPEN_BANKING_AIS, OPEN_BANKING_PIS, CREDIT_BUREAU,
+                   BIOMETRIC_PROCESSING, TERMS_AND_CONDITIONS, PRIVACY_POLICY, LOCATION, ANALYTICS]
+  ConsentStatus: [GIVEN, WITHDRAWN, EXPIRED, REJECTED]
+  PrivacyRequestType: [ACCESS, EXPORT, RECTIFICATION, ERASURE, RESTRICTION, OBJECTION]
+  PrivacyRequestStatus: [RECEIVED, VERIFYING_IDENTITY, IN_PROGRESS, COMPLETED, PARTIALLY_COMPLETED, REJECTED]
+  OnboardingJourneyStatus: [DRAFT, PUBLISHED, RETIRED]
+  OnboardingChannel: [MOBILE_APP, WEB, USSD, AGENT, BRANCH, API]
+  OnboardingApplicationStatus: [STARTED, IN_PROGRESS, SUBMITTED, UNDER_REVIEW, REFERRED, APPROVED, REJECTED, ABANDONED,
+                                EXPIRED]
+  OnboardingDecision: [AUTO_APPROVE, REFER, REJECT]
+  OnboardingStepType: [PHONE_VERIFICATION, EMAIL_VERIFICATION, PERSONAL_DETAILS, BUSINESS_DETAILS, ADDRESS,
+                       DOCUMENT_CAPTURE, SELFIE_LIVENESS, SCREENING, RISK_ASSESSMENT, UBO_DECLARATION, TAX_DECLARATION,
+                       PRODUCT_SELECTION, TERMS_ACCEPTANCE, SIGNATURE, CREDENTIAL_SETUP, MANUAL_REVIEW, CUSTOM]
+  OnboardingStepStatus: [PENDING, IN_PROGRESS, COMPLETED, FAILED, SKIPPED, WAITING_REVIEW]
+  OfflineSyncStatus: [RECEIVED, VALIDATING, APPLIED, CONFLICT, REJECTED]
+  KycProfileStatus: [NOT_STARTED, IN_PROGRESS, VERIFIED, REFER, REJECTED, EXPIRED, REVIEW_DUE]
+  KycCheckType: [DOCUMENT_OCR, DOCUMENT_AUTHENTICITY, LIVENESS, FACE_MATCH, DATABASE_VERIFICATION, ADDRESS_VERIFICATION,
+                 PHONE_VERIFICATION, EMAIL_VERIFICATION, REGISTRY_LOOKUP, UBO_DISCOVERY, TAX_ID_VERIFICATION,
+                 BANK_ACCOUNT_VERIFICATION]
+  KycCheckStatus: [PENDING, IN_PROGRESS, PASSED, FAILED, INCONCLUSIVE, ERROR, EXPIRED]
+  KycDocumentType: [NATIONAL_ID, PASSPORT, DRIVING_LICENCE, RESIDENCE_PERMIT, UTILITY_BILL, BANK_STATEMENT,
+                    PROOF_OF_INCOME, CERTIFICATE_OF_INCORPORATION, ARTICLES_OF_ASSOCIATION, SHAREHOLDER_REGISTER,
+                    BOARD_RESOLUTION, TAX_CERTIFICATE, SELFIE, OTHER]
+  KycDocumentStatus: [UPLOADED, PROCESSING, ACCEPTED, REJECTED, EXPIRED]
+  KycScreeningType: [SANCTIONS, PEP, ADVERSE_MEDIA, WATCHLIST, INTERNAL_BLACKLIST]
+  KycScreeningStatus: [CLEAR, POTENTIAL_MATCH, CONFIRMED_MATCH, FALSE_POSITIVE, ERROR]
+  KycRiskLevel: [LOW, MEDIUM, HIGH, PROHIBITED]
+  KycReviewStatus: [SCHEDULED, DUE, IN_PROGRESS, COMPLETED, OVERDUE, CANCELLED]
+  KycReviewTrigger: [PERIODIC, DOCUMENT_EXPIRY, RISK_CHANGE, SCREENING_HIT, CUSTOMER_CHANGE, REGULATOR_REQUEST, MANUAL]
+  KycProviderCapability: [DOCUMENT, LIVENESS, FACE_MATCH, DATABASE, ADDRESS, REGISTRY, SCREENING, PHONE, EMAIL]
+
+services:
+  # ------------------------------------------------------------------ customer-service
+  - name: customer-service
+    database: customer_db
+    description: >
+      Customer information file (CIF): individuals and businesses, identifiers, addresses, contacts,
+      relationships and UBOs, groups and households, segments, KYC tier, devices, credentials,
+      consent and privacy requests. Provides the single customer view across all products.
+    tables:
+      - name: customer
+        prefix: cus
+        description: A party that holds or applies for products; an individual or a legal entity
+        fr: [CIF-01, CIF-02, CIF-03]
+        columns:
+          - "customer_number string(32) nn uq | Human-readable customer number (CIF number)"
+          - "customer_type enum:CustomerType nn | Individual or kind of organisation"
+          - "status enum:CustomerStatus nn default=PROSPECT | Lifecycle status"
+          - "kyc_tier enum:CustomerKycTier nn default=TIER_0 ro | Current KYC tier; drives limits and product eligibility"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Bank entity that holds the customer relationship"
+          - "home_branch_id uuid ref=branch idx | Home branch"
+          - "relationship_manager_id uuid ref=app_user idx | Assigned relationship manager"
+          - "display_name string(200) nn pii | Name shown in channels and consoles"
+          - "title string(20) pii | Salutation, e.g. Mr, Ms, Dr"
+          - "first_name string(100) pii | Given name (individuals)"
+          - "middle_name string(100) pii | Middle name(s)"
+          - "last_name string(100) pii | Family name"
+          - "name_local_script string(200) pii | Full name in local script (e.g. Arabic, Cyrillic)"
+          - "date_of_birth date pii | Date of birth"
+          - "place_of_birth string(120) pii | City of birth"
+          - "country_of_birth country | Country of birth"
+          - "gender enum:CustomerGender | Gender"
+          - "marital_status enum:CustomerMaritalStatus | Marital status"
+          - "nationality country | Primary nationality"
+          - "second_nationality country | Second nationality"
+          - "residence_country country | Country of residence (tax and regulatory)"
+          - "tax_residence_country country | Primary tax residence (CRS/FATCA)"
+          - "us_person bool nn default=false | FATCA US person indicator"
+          - "occupation string(120) | Occupation"
+          - "employment_status enum:CustomerEmploymentStatus | Employment status"
+          - "employer_name string(200) | Employer"
+          - "annual_income amount | Declared annual income"
+          - "income_currency currency | Currency of declared income"
+          - "source_of_funds string(255) | Declared source of funds"
+          - "source_of_wealth string(255) | Declared source of wealth (high-risk and private customers)"
+          - "preferred_language string(10) default=en | BCP 47 language tag for communications"
+          - "legal_name string(255) pii | Registered legal name (organisations)"
+          - "trading_name string(255) | Trading / doing-business-as name"
+          - "registration_number string(64) idx | Company registration number"
+          - "registration_country country | Country of incorporation"
+          - "incorporation_date date | Date of incorporation"
+          - "legal_form string(64) | Legal form, e.g. LLC, PLC, GmbH"
+          - "industry_code string(16) | Industry classification code (ISIC / NACE / NAICS)"
+          - "lei string(20) | Legal Entity Identifier"
+          - "website string(255) | Website"
+          - "number_of_employees int | Headcount band midpoint"
+          - "annual_turnover amount | Declared annual turnover"
+          - "is_pep bool nn default=false ro | Politically exposed person (set by screening)"
+          - "is_staff bool nn default=false | Employee of the bank (staff pricing and monitoring)"
+          - "is_minor bool nn default=false ro | Under age of majority (derived from date of birth)"
+          - "risk_level enum:KycRiskLevel ro | Latest customer risk rating (from kyc-service)"
+          - "onboarded_at ts ro | Time the customer became ACTIVE"
+          - "onboarding_channel enum:OnboardingChannel | Channel used to onboard"
+          - "referral_code string(32) | Referral or campaign code used at onboarding"
+          - "dormant_since date ro | Date the customer became dormant"
+          - "closed_at ts ro | Closure time"
+          - "closure_reason string(255) | Reason for closure"
+          - "deceased_on date pii | Date of death when notified"
+          - "external_ref string(64) idx | Client system reference (core migration, partner id)"
+          - "metadata json | Client-defined key/value metadata"
+        indexes: [[last_name, date_of_birth], [legal_name]]
+
+      - name: customer_identifier
+        prefix: cid
+        description: Government or registry identifiers of a customer (national id, passport, tax id, company number)
+        fr: [CIF-01, ONB-02]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "identifier_type enum:CustomerIdentifierType nn | Identifier type"
+          - "identifier_value string(64) nn pii | Identifier value (encrypted; searchable via hash)"
+          - "value_hash string(64) nn hide idx | Keyed hash of the value for duplicate detection"
+          - "issuing_country country nn | Issuing country"
+          - "issuing_authority string(120) | Issuing authority"
+          - "issue_date date | Issue date"
+          - "expiry_date date idx | Expiry date; drives refresh workflows"
+          - "is_primary bool nn default=false | Primary identifier for this type"
+          - "verified bool nn default=false ro | Verified by a KYC check"
+          - "verified_at ts ro | Verification time"
+          - "kyc_document_id uuid ref=kyc_document | Supporting document"
+        unique: [[tenant_id, identifier_type, issuing_country, value_hash]]
+
+      - name: customer_address
+        prefix: cad
+        description: Postal addresses of a customer with history
+        fr: [CIF-01]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "address_type enum:CustomerAddressType nn | Address type"
+          - "line1 string(200) nn pii | Address line 1"
+          - "line2 string(200) pii | Address line 2"
+          - "line3 string(200) pii | Address line 3"
+          - "city string(120) nn pii | City / town"
+          - "district string(120) pii | District / county"
+          - "state string(120) | State / province / region"
+          - "postal_code string(20) pii | Postal code"
+          - "country country nn | Country"
+          - "latitude rate | Geocoded latitude"
+          - "longitude rate | Geocoded longitude"
+          - "is_primary bool nn default=false | Primary address of this type"
+          - "valid_from date nn | Living / registered here since"
+          - "valid_to date | Moved out on"
+          - "verified bool nn default=false ro | Verified by proof of address or database check"
+          - "verified_at ts ro | Verification time"
+
+      - name: customer_contact
+        prefix: cct
+        description: Phone numbers, emails and messaging handles of a customer
+        fr: [CIF-01, NOT-02]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "contact_type enum:CustomerContactType nn | Contact type"
+          - "phone phone pii idx | Phone number (E.164) for phone-type contacts"
+          - "email email pii idx | Email address for email-type contacts"
+          - "label string(40) | Free label, e.g. Work"
+          - "is_primary bool nn default=false | Primary contact of this type"
+          - "is_verified bool nn default=false ro | Verified by OTP or link"
+          - "verified_at ts ro | Verification time"
+          - "can_receive_otp bool nn default=true | May be used for one-time passwords"
+          - "can_receive_marketing bool nn default=false | Marketing allowed on this contact (subject to consent)"
+          - "valid_from date | Valid from"
+          - "valid_to date | Valid to"
+
+      - name: customer_relationship
+        prefix: crl
+        description: Relationship between two customers (director, UBO, guardian, joint holder, signatory, spouse)
+        fr: [CIF-01, ONB-04]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Subject customer (e.g. the company or the minor)"
+          - "related_customer_id uuid nn fk=customer idx | Related customer (e.g. the director or guardian)"
+          - "relationship_type enum:CustomerRelationshipType nn | Relationship type"
+          - "ownership_percentage rate | Direct ownership share 0..100 (shareholders and UBOs)"
+          - "indirect_ownership_percentage rate | Indirect ownership share through chains"
+          - "control_type string(64) | Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT"
+          - "position_title string(120) | Title, e.g. CEO, Company Secretary"
+          - "signing_authority string(32) | SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE"
+          - "signing_limit amount | Maximum amount this signatory may approve alone"
+          - "limit_currency currency | Currency of the signing limit"
+          - "valid_from date nn | Start date"
+          - "valid_to date | End date"
+          - "verified bool nn default=false ro | Verified by registry or documents"
+          - "source string(32) | DECLARED, REGISTRY, KYC_PROVIDER"
+        unique: [[tenant_id, customer_id, related_customer_id, relationship_type]]
+
+      - name: customer_group
+        prefix: cgr
+        description: Household, corporate group or connected-exposure group of customers
+        fr: [CIF-05]
+        columns:
+          - "group_type enum:CustomerGroupType nn | Group type"
+          - "name string(200) nn | Group name"
+          - "lead_customer_id uuid fk=customer | Head of household / parent company"
+          - "relationship_manager_id uuid ref=app_user | Relationship manager for the group"
+          - "exposure_limit amount | Group credit exposure limit (connected-exposure groups)"
+          - "exposure_currency currency | Currency of the limit"
+          - "description text | Notes"
+
+      - name: customer_group_member
+        prefix: cgm
+        description: Membership of a customer in a group
+        fr: [CIF-05]
+        columns:
+          - "customer_group_id uuid nn fk=customer_group idx | Group"
+          - "customer_id uuid nn fk=customer idx | Member customer"
+          - "member_role string(64) | Role in the group, e.g. HEAD, DEPENDANT, SUBSIDIARY"
+          - "joined_on date nn | Joined on"
+          - "left_on date | Left on"
+        unique: [[customer_group_id, customer_id]]
+
+      - name: customer_segment
+        prefix: csg
+        description: Segment definitions used for pricing, servicing and reporting (e.g. Mass, Affluent, SME)
+        fr: [CIF-02, PRC-04]
+        columns:
+          - "code string(32) nn uq | Segment code"
+          - "name string(120) nn | Segment name"
+          - "description text | Description"
+          - "criteria json | Rule expression evaluated for automatic assignment"
+          - "is_automatic bool nn default=false | Assigned by rules rather than manually"
+          - "priority int nn default=100 | Lower wins when several automatic segments match"
+          - "is_active bool nn default=true | Active"
+
+      - name: customer_segment_assignment
+        prefix: csa
+        description: Segment assigned to a customer, with history
+        fr: [CIF-02]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "customer_segment_id uuid nn fk=customer_segment idx | Segment"
+          - "assigned_by_rule bool nn default=false | Assigned automatically"
+          - "valid_from date nn | From"
+          - "valid_to date | To"
+
+      - name: customer_kyc_tier_history
+        prefix: ckt
+        description: History of KYC tier changes and the limits they unlocked. Append-only.
+        immutable: true
+        fr: [CIF-03]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "from_tier enum:CustomerKycTier | Previous tier"
+          - "to_tier enum:CustomerKycTier nn | New tier"
+          - "reason string(255) nn | Reason, e.g. ID verified, review downgrade"
+          - "kyc_profile_id uuid ref=kyc_profile | KYC profile evaluation that triggered it"
+          - "effective_at ts nn | Effective time"
+
+      - name: customer_device
+        prefix: dev
+        description: Devices bound to a customer for authentication, push notifications and fraud signals
+        fr: [CIF-01, FRM-05]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "device_fingerprint string(128) nn idx | Stable device fingerprint"
+          - "platform enum:CustomerDevicePlatform nn | Platform"
+          - "os_version string(40) | OS version"
+          - "app_version string(40) | App version"
+          - "model string(80) | Device model"
+          - "name string(80) | User-given device name"
+          - "status enum:CustomerDeviceStatus nn default=PENDING | Binding status"
+          - "public_key text | Device-bound public key for request signing"
+          - "push_token string(500) secret | Push notification token (APNs / FCM)"
+          - "attestation_verdict string(32) ro | Latest App Attest / Play Integrity verdict"
+          - "is_rooted bool nn default=false ro | Jailbreak / root detected"
+          - "last_ip inet ro | Last seen IP"
+          - "last_seen_at ts ro | Last activity"
+          - "bound_at ts ro | Time the device became trusted"
+          - "revoked_at ts ro | Revocation time"
+          - "revocation_reason string(255) | Reason for revocation"
+        unique: [[tenant_id, customer_id, device_fingerprint]]
+
+      - name: customer_credential
+        prefix: crd
+        description: Authentication credentials of a customer (passkeys, PIN, password, TOTP); secrets stored as hashes only
+        fr: [CIF-01]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "credential_type enum:CustomerCredentialType nn | Credential type"
+          - "status enum:CustomerCredentialStatus nn default=ACTIVE | Status"
+          - "customer_device_id uuid fk=customer_device | Device the credential is bound to"
+          - "webauthn_credential_id string(512) | WebAuthn credential id (passkeys)"
+          - "public_key text | WebAuthn public key (COSE)"
+          - "sign_count bigint | WebAuthn signature counter"
+          - "secret_hash string(255) secret | Argon2id hash of PIN / password / TOTP seed reference"
+          - "failed_attempts int nn default=0 ro | Consecutive failures"
+          - "locked_until ts ro | Lockout end"
+          - "last_used_at ts ro | Last successful use"
+          - "expires_at ts | Expiry (password rotation policy)"
+
+      - name: consent
+        prefix: cns
+        description: Consent given or withdrawn by a customer for a purpose and scope (GDPR, LGPD, DPDP, POPIA, open banking)
+        fr: [CIF-04, OBK-01]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "purpose enum:ConsentPurpose nn | Purpose"
+          - "status enum:ConsentStatus nn default=GIVEN | Status"
+          - "scope json | Data categories, accounts or permissions covered"
+          - "recipient string(200) | Third party receiving data (open banking TPP, bureau)"
+          - "policy_version string(32) nn | Version of the policy / terms consented to"
+          - "lawful_basis string(40) | CONSENT, CONTRACT, LEGAL_OBLIGATION, LEGITIMATE_INTEREST"
+          - "channel enum:OnboardingChannel | Channel where consent was captured"
+          - "given_at ts nn | Time consent was given"
+          - "expires_at ts | Expiry"
+          - "withdrawn_at ts ro | Withdrawal time"
+          - "evidence json | Capture evidence: IP, device, screen version, text hash"
+
+      - name: privacy_request
+        prefix: prq
+        description: Data subject request (access, export, rectification, erasure) with statutory deadline
+        fr: [CIF-04]
+        columns:
+          - "customer_id uuid nn fk=customer idx | Customer"
+          - "request_type enum:PrivacyRequestType nn | Request type"
+          - "status enum:PrivacyRequestStatus nn default=RECEIVED | Status"
+          - "received_at ts nn default=now | Time received"
+          - "due_at ts nn | Statutory deadline (e.g. 30 days)"
+          - "channel enum:OnboardingChannel | Channel"
+          - "details text | Customer's request text"
+          - "assigned_to uuid ref=app_user | Handler"
+          - "result_document_id uuid ref=document | Export package or response letter"
+          - "retention_blockers json ro | Records that must be retained by law (not erased)"
+          - "completed_at ts ro | Completion time"
+          - "rejection_reason string(255) | Reason if rejected"
+
+    apis:
+      - resource: customers
+        path: /v1/customers
+        table: customer
+        ops: [list, get, create, update]
+        filters: [customer_type, status, kyc_tier, legal_entity_id, home_branch_id, relationship_manager_id, registration_number, external_ref, risk_level]
+        actions:
+          - "GET /search | Fuzzy search by name, phone, email, identifier or customer number (?q=) | | customer[]"
+          - "GET /{id}/view | Single customer view: profile, products, balances, cases, KYC summary | | none"
+          - "POST /{id}/activate | Activate a customer once KYC requirements are met | | customer"
+          - "POST /{id}/suspend | Suspend all channels and activity | reason string(255) nn | customer"
+          - "POST /{id}/reactivate | Reactivate a suspended or dormant customer | reason string(255) nn | customer"
+          - "POST /{id}/close | Close the customer (all products must be closed) | reason string(255) nn | customer"
+          - "POST /{id}/mark-deceased | Record death notification and freeze products | deceased_on date nn, document_id uuid nn | customer"
+          - "POST /{id}/merge | Merge a duplicate customer into this one | duplicate_customer_id uuid nn, reason string(255) nn | customer"
+          - "POST /{id}/change-tier | Change KYC tier (maker-checker) | to_tier enum:CustomerKycTier nn, reason string(255) nn | customer"
+          - "GET /{id}/tier-history | KYC tier history | | customer_kyc_tier_history[]"
+          - "GET /{id}/relationships | Relationships where this customer is subject or related | | customer_relationship[]"
+          - "GET /{id}/ownership-tree | Ownership and control structure with computed UBOs | | none"
+          - "POST /duplicates-check | Check for potential duplicates before creating | first_name string(100), last_name string(100), date_of_birth date, phone phone, email email, identifier_value string(64), registration_number string(64) | customer[]"
+      - resource: customer-identifiers
+        path: /v1/customers/{customer_id}/identifiers
+        table: customer_identifier
+        ops: [list, get, create, update, delete]
+        filters: [identifier_type, issuing_country]
+      - resource: customer-addresses
+        path: /v1/customers/{customer_id}/addresses
+        table: customer_address
+        ops: [list, get, create, update, delete]
+        filters: [address_type, country]
+      - resource: customer-contacts
+        path: /v1/customers/{customer_id}/contacts
+        table: customer_contact
+        ops: [list, get, create, update, delete]
+        filters: [contact_type]
+        actions:
+          - "POST /{id}/send-verification | Send an OTP or verification link | | none"
+          - "POST /{id}/verify | Verify with the OTP | code string(10) nn | customer_contact"
+      - resource: customer-relationships
+        path: /v1/customer-relationships
+        table: customer_relationship
+        ops: [list, get, create, update, delete]
+        filters: [customer_id, related_customer_id, relationship_type]
+      - resource: customer-groups
+        path: /v1/customer-groups
+        table: customer_group
+        ops: [list, get, create, update, delete]
+        filters: [group_type, lead_customer_id, relationship_manager_id]
+        actions:
+          - "GET /{id}/members | Members of the group | | customer_group_member[]"
+          - "POST /{id}/members | Add a member | customer_id uuid nn, member_role string(64), joined_on date nn | customer_group_member"
+          - "DELETE /{id}/members/{member_id} | Remove a member | | none"
+          - "GET /{id}/exposure | Aggregated balances and credit exposure of the group | | none"
+      - resource: customer-segments
+        path: /v1/customer-segments
+        table: customer_segment
+        ops: [list, get, create, update, delete]
+        filters: [is_active, is_automatic]
+        actions:
+          - "POST /{id}/evaluate | Re-evaluate automatic assignment for all customers | | none"
+      - resource: customer-segment-assignments
+        path: /v1/customers/{customer_id}/segments
+        table: customer_segment_assignment
+        ops: [list, create, delete]
+        filters: [customer_segment_id]
+      - resource: customer-devices
+        path: /v1/customers/{customer_id}/devices
+        table: customer_device
+        ops: [list, get, create, update]
+        filters: [status, platform]
+        actions:
+          - "POST /{id}/trust | Bind the device after step-up authentication | challenge_response string(512) nn | customer_device"
+          - "POST /{id}/revoke | Revoke a device (lost, stolen, replaced) | reason string(255) nn | customer_device"
+      - resource: customer-credentials
+        path: /v1/customers/{customer_id}/credentials
+        table: customer_credential
+        ops: [list, get]
+        filters: [credential_type, status]
+        actions:
+          - "POST /passkeys/registration-options | Start WebAuthn passkey registration | customer_device_id uuid | none"
+          - "POST /passkeys | Complete passkey registration with the attestation | attestation json nn, customer_device_id uuid | customer_credential"
+          - "POST /pin | Set or change the PIN | new_pin_block string(64) nn, old_pin_block string(64) | none"
+          - "POST /{id}/unlock | Unlock a locked credential | reason string(255) nn | customer_credential"
+          - "POST /{id}/revoke | Revoke a credential | reason string(255) nn | customer_credential"
+      - resource: consents
+        path: /v1/consents
+        table: consent
+        ops: [list, get, create]
+        filters: [customer_id, purpose, status, recipient]
+        actions:
+          - "POST /{id}/withdraw | Withdraw a consent | reason string(255) | consent"
+          - "POST /{id}/renew | Renew an expiring consent | expires_at ts nn, evidence json | consent"
+      - resource: privacy-requests
+        path: /v1/privacy-requests
+        table: privacy_request
+        ops: [list, get, create, update]
+        filters: [customer_id, request_type, status, assigned_to]
+        actions:
+          - "POST /{id}/verify-identity | Mark the requester's identity as verified | method string(64) nn | privacy_request"
+          - "POST /{id}/execute | Execute export or erasure (respecting retention blockers) | | privacy_request"
+          - "POST /{id}/reject | Reject the request | reason string(255) nn | privacy_request"
+
+    events:
+      - "party.customer.created | customer | A customer record was created"
+      - "party.customer.updated | customer | Customer details changed"
+      - "party.customer.status_changed | customer | Customer was activated, suspended, reactivated or closed"
+      - "party.customer.tier_changed | customer_kyc_tier_history | KYC tier changed"
+      - "party.customer.merged | customer | A duplicate customer was merged"
+      - "party.customer_relationship.changed | customer_relationship | A relationship was added, changed or ended"
+      - "party.customer_device.trusted | customer_device | A device was bound"
+      - "party.customer_device.revoked | customer_device | A device was revoked"
+      - "party.customer_credential.locked | customer_credential | A credential was locked after failed attempts"
+      - "party.consent.given | consent | Consent was given"
+      - "party.consent.withdrawn | consent | Consent was withdrawn or expired"
+      - "party.privacy_request.completed | privacy_request | A data subject request was completed"
+
+  # ------------------------------------------------------------------ onboarding-service
+  - name: onboarding-service
+    database: onboarding_db
+    description: >
+      No-code onboarding journeys per product, segment and country; runs applications step by step
+      across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and
+      syncs offline agent-assisted applications.
+    tables:
+      - name: onboarding_journey
+        prefix: ojn
+        description: Versioned onboarding journey definition built in the no-code flow builder
+        fr: [ONB-01]
+        columns:
+          - "code string(64) nn | Journey code, e.g. RETAIL_WALLET_KE"
+          - "version int nn default=1 | Version number"
+          - "name string(160) nn | Journey name"
+          - "status enum:OnboardingJourneyStatus nn default=DRAFT | Status"
+          - "customer_type enum:CustomerType nn | Individual or business journey"
+          - "country country | Country the journey applies to"
+          - "channels json nn | Allowed channels"
+          - "product_ids json | Products that can be opened at the end of the journey"
+          - "target_tier enum:CustomerKycTier nn | KYC tier granted on approval"
+          - "definition json nn | Steps, branching conditions and screens (server-driven UI)"
+          - "decision_rules json | Auto-approve / refer / reject rules"
+          - "expiry_days int nn default=30 | Days before an idle application expires"
+          - "published_at ts ro | Publication time"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval for publication"
+        unique: [[tenant_id, code, version]]
+
+      - name: onboarding_application
+        prefix: app
+        description: One customer's run through an onboarding journey
+        fr: [ONB-01, ONB-05]
+        columns:
+          - "application_number string(32) nn uq | Human-readable reference"
+          - "onboarding_journey_id uuid nn fk=onboarding_journey idx | Journey version"
+          - "customer_id uuid ref=customer idx | Customer created or matched"
+          - "status enum:OnboardingApplicationStatus nn default=STARTED | Status"
+          - "channel enum:OnboardingChannel nn | Channel"
+          - "agent_id uuid ref=agent | Agent assisting (agent channel)"
+          - "branch_id uuid ref=branch | Branch (branch channel)"
+          - "staff_user_id uuid ref=app_user | Staff member assisting"
+          - "phone phone pii idx | Phone used to start the application"
+          - "email email pii | Email used to start the application"
+          - "current_step string(64) | Code of the current step"
+          - "progress_percent int nn default=0 ro | Completion percentage"
+          - "collected_data json pii | Data captured so far (encrypted)"
+          - "risk_score int ro | Onboarding risk score 0..1000"
+          - "risk_level enum:KycRiskLevel ro | Risk level"
+          - "decision enum:OnboardingDecision ro | Automated decision"
+          - "decision_reasons json ro | Rule outcomes and reason codes"
+          - "reviewer_id uuid ref=app_user | Manual reviewer"
+          - "reviewed_at ts ro | Review time"
+          - "product_ids json | Products requested"
+          - "created_product_refs json ro | Accounts / wallets / cards opened on approval"
+          - "device_fingerprint string(128) | Device used"
+          - "ip_address inet | IP address at start"
+          - "geo_location json | Coarse location at start"
+          - "utm json | Marketing attribution"
+          - "submitted_at ts ro | Submission time"
+          - "completed_at ts ro | Completion time"
+          - "expires_at ts | Expiry of an idle application"
+          - "rejection_reason string(255) ro | Reason when rejected"
+
+      - name: onboarding_step
+        prefix: ost
+        description: Execution state of one step of an application
+        fr: [ONB-01]
+        columns:
+          - "onboarding_application_id uuid nn fk=onboarding_application idx | Application"
+          - "step_code string(64) nn | Step code from the journey definition"
+          - "step_type enum:OnboardingStepType nn | Step type"
+          - "sequence int nn | Order"
+          - "status enum:OnboardingStepStatus nn default=PENDING | Status"
+          - "input json pii | Data submitted for the step"
+          - "output json | Results, e.g. check ids and outcomes"
+          - "attempts int nn default=0 | Attempts"
+          - "started_at ts | Start"
+          - "completed_at ts | Completion"
+          - "error string(500) | Last error"
+        unique: [[onboarding_application_id, step_code]]
+
+      - name: onboarding_offline_batch
+        prefix: oob
+        description: Batch of applications captured offline by an agent device and synced later
+        fr: [ONB-07]
+        columns:
+          - "agent_id uuid nn ref=agent idx | Agent"
+          - "device_fingerprint string(128) nn | Agent device"
+          - "captured_from ts nn | Earliest capture time in the batch"
+          - "captured_to ts nn | Latest capture time in the batch"
+          - "application_count int nn | Applications in the batch"
+          - "payload_uri string(500) nn | Encrypted payload location"
+          - "payload_signature string(512) nn | Device signature of the payload"
+          - "status enum:OfflineSyncStatus nn default=RECEIVED ro | Sync status"
+          - "result json ro | Per-application outcome and conflicts"
+          - "processed_at ts ro | Processing time"
+
+    apis:
+      - resource: onboarding-journeys
+        path: /v1/onboarding/journeys
+        table: onboarding_journey
+        ops: [list, get, create, update]
+        filters: [code, status, customer_type, country]
+        actions:
+          - "POST /{id}/publish | Submit the journey for approval and publish | | onboarding_journey"
+          - "POST /{id}/retire | Retire a journey version | reason string(255) | onboarding_journey"
+          - "POST /{id}/new-version | Create a draft copy as the next version | | onboarding_journey"
+          - "POST /{id}/simulate | Dry-run the journey with sample data | sample_data json nn | none"
+      - resource: onboarding-applications
+        path: /v1/onboarding/applications
+        table: onboarding_application
+        ops: [list, get, create, update]
+        filters: [onboarding_journey_id, customer_id, status, channel, agent_id, branch_id, decision, risk_level]
+        actions:
+          - "GET /{id}/next-step | The next step to render (server-driven UI) | | onboarding_step"
+          - "POST /{id}/steps/{step_code} | Submit data for a step | input json nn | onboarding_step"
+          - "GET /{id}/steps | All steps and their states | | onboarding_step[]"
+          - "POST /{id}/submit | Submit the application for decision | | onboarding_application"
+          - "POST /{id}/approve | Approve a referred application (checker) | comment string(500) | onboarding_application"
+          - "POST /{id}/reject | Reject the application | reason string(255) nn | onboarding_application"
+          - "POST /{id}/request-info | Ask the applicant for more information | message string(1000) nn, step_codes json | onboarding_application"
+          - "POST /{id}/abandon | Mark as abandoned | | onboarding_application"
+          - "POST /{id}/resume | Send a resume link to the applicant | | none"
+      - resource: onboarding-offline-batches
+        path: /v1/onboarding/offline-batches
+        table: onboarding_offline_batch
+        ops: [list, get, create]
+        filters: [agent_id, status]
+        actions:
+          - "POST /{id}/reprocess | Reprocess a batch after resolving conflicts | | onboarding_offline_batch"
+
+    events:
+      - "party.onboarding_journey.published | onboarding_journey | A journey version was published"
+      - "party.onboarding_application.started | onboarding_application | An application was started"
+      - "party.onboarding_application.submitted | onboarding_application | An application was submitted"
+      - "party.onboarding_application.referred | onboarding_application | An application needs manual review"
+      - "party.onboarding_application.approved | onboarding_application | An application was approved and products opened"
+      - "party.onboarding_application.rejected | onboarding_application | An application was rejected"
+      - "party.onboarding_application.abandoned | onboarding_application | An application was abandoned or expired"
+      - "party.onboarding_offline_batch.processed | onboarding_offline_batch | An offline batch was synced"
+
+  # ------------------------------------------------------------------ kyc-service
+  - name: kyc-service
+    database: kyc_db
+    description: >
+      KYC/KYB orchestration: document capture and OCR, liveness and face match, database and registry
+      checks, UBO discovery, PEP/sanctions/adverse-media screening at onboarding, risk rating with
+      factors, periodic review and document-expiry refresh, all through pluggable providers.
+    tables:
+      - name: kyc_provider
+        prefix: kpv
+        description: Configured external KYC/KYB provider (e.g. Onfido, Jumio, Sumsub, Smile ID, registry APIs)
+        fr: [ONB-02, ONB-04]
+        columns:
+          - "code string(40) nn uq | Provider code"
+          - "name string(120) nn | Provider name"
+          - "capabilities json nn | Supported capabilities (KycProviderCapability values)"
+          - "countries json | Countries supported"
+          - "priority int nn default=100 | Routing priority (lower first)"
+          - "base_url string(500) | API base URL"
+          - "credentials_ref string(255) nn secret | Vault path of the API credentials"
+          - "webhook_secret_ref string(255) secret | Vault path of the webhook signing secret"
+          - "timeout_ms int nn default=10000 | Request timeout"
+          - "is_active bool nn default=true | Active"
+          - "is_fallback bool nn default=false | Used only when the primary provider fails"
+
+      - name: kyc_profile
+        prefix: kyc
+        description: The KYC state of a customer: verification status, risk level and next review date
+        fr: [CIF-03, ONB-05, ONB-06]
+        columns:
+          - "customer_id uuid nn ref=customer uq | Customer"
+          - "status enum:KycProfileStatus nn default=NOT_STARTED | Status"
+          - "achieved_tier enum:CustomerKycTier nn default=TIER_0 ro | Highest tier the evidence supports"
+          - "risk_level enum:KycRiskLevel ro | Current risk level"
+          - "risk_score int ro | Current risk score 0..1000"
+          - "identity_verified bool nn default=false ro | Identity verified"
+          - "address_verified bool nn default=false ro | Address verified"
+          - "screening_clear bool nn default=false ro | No open screening matches"
+          - "edd_required bool nn default=false ro | Enhanced due diligence required"
+          - "edd_completed_at ts ro | EDD completion"
+          - "verified_at ts ro | Last full verification"
+          - "next_review_date date idx ro | Next periodic review"
+          - "expires_at ts ro | Earliest expiry of supporting documents"
+          - "last_reviewed_by uuid ref=app_user | Last reviewer"
+          - "notes text | Analyst notes"
+
+      - name: kyc_document
+        prefix: kdc
+        description: Identity, address or corporate document captured for KYC/KYB
+        fr: [ONB-02, ONB-04, ONB-06]
+        columns:
+          - "kyc_profile_id uuid nn fk=kyc_profile idx | KYC profile"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "document_type enum:KycDocumentType nn | Document type"
+          - "document_id uuid nn ref=document | Stored file (front)"
+          - "back_document_id uuid ref=document | Stored file (back side)"
+          - "issuing_country country | Issuing country"
+          - "document_number string(64) pii | Document number from OCR or entry"
+          - "issue_date date | Issue date"
+          - "expiry_date date idx | Expiry date"
+          - "extracted_data json pii | OCR / MRZ extracted fields"
+          - "status enum:KycDocumentStatus nn default=UPLOADED | Status"
+          - "rejection_reason string(255) | Reason when rejected"
+          - "captured_channel enum:OnboardingChannel | Capture channel"
+
+      - name: kyc_check
+        prefix: kch
+        description: One verification call to a provider (OCR, liveness, face match, database, registry, address)
+        fr: [ONB-02, ONB-04]
+        columns:
+          - "kyc_profile_id uuid nn fk=kyc_profile idx | KYC profile"
+          - "onboarding_application_id uuid ref=onboarding_application idx | Application that requested it"
+          - "check_type enum:KycCheckType nn | Check type"
+          - "kyc_provider_id uuid nn fk=kyc_provider | Provider"
+          - "kyc_document_id uuid fk=kyc_document | Document checked"
+          - "status enum:KycCheckStatus nn default=PENDING | Status"
+          - "score rate | Provider score / confidence 0..1"
+          - "result_summary string(500) | Human-readable outcome"
+          - "reason_codes json | Provider reason codes"
+          - "provider_reference string(128) idx | Provider's check id"
+          - "request_payload json hide | Request sent (redacted)"
+          - "response_payload json hide | Raw provider response (encrypted)"
+          - "requested_at ts nn default=now | Request time"
+          - "completed_at ts | Completion time"
+          - "cost amount | Provider cost of the check"
+          - "cost_currency currency | Currency of the cost"
+
+      - name: kyc_screening
+        prefix: ksc
+        description: PEP, sanctions, adverse-media and watchlist screening of a customer at onboarding and on change
+        fr: [ONB-03, FRM-03]
+        columns:
+          - "kyc_profile_id uuid nn fk=kyc_profile idx | KYC profile"
+          - "customer_id uuid nn ref=customer idx | Customer screened"
+          - "screening_type enum:KycScreeningType nn | Screening type"
+          - "kyc_provider_id uuid fk=kyc_provider | Provider (empty = internal engine)"
+          - "trigger string(40) nn | ONBOARDING, DATA_CHANGE, LIST_UPDATE, PERIODIC, MANUAL"
+          - "screened_name string(255) nn pii | Name as screened"
+          - "status enum:KycScreeningStatus nn | Outcome"
+          - "match_count int nn default=0 | Potential matches"
+          - "matches json | Candidate matches with list, score and reasons"
+          - "list_versions json | Versions of the lists screened against"
+          - "reviewed_by uuid ref=app_user | Reviewer"
+          - "reviewed_at ts | Review time"
+          - "review_comment text | Disposition rationale"
+          - "ongoing_monitoring bool nn default=true | Enrolled in continuous monitoring"
+
+      - name: kyc_risk_assessment
+        prefix: kra
+        description: Customer risk rating with its factors (country, product, channel, occupation, PEP, behaviour). Append-only.
+        immutable: true
+        fr: [ONB-05, ONB-06]
+        columns:
+          - "kyc_profile_id uuid nn fk=kyc_profile idx | KYC profile"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "model_version string(32) nn | Risk model version"
+          - "score int nn | Score 0..1000"
+          - "risk_level enum:KycRiskLevel nn | Resulting level"
+          - "factors json nn | Factor contributions and inputs"
+          - "override_level enum:KycRiskLevel | Manual override"
+          - "override_reason string(255) | Reason for override"
+          - "assessed_by uuid ref=app_user | Analyst for manual assessments"
+          - "trigger enum:KycReviewTrigger nn | Why the assessment ran"
+
+      - name: kyc_review
+        prefix: krv
+        description: Periodic or event-driven KYC review (refresh) of a customer
+        fr: [ONB-06]
+        columns:
+          - "kyc_profile_id uuid nn fk=kyc_profile idx | KYC profile"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "trigger enum:KycReviewTrigger nn | Trigger"
+          - "status enum:KycReviewStatus nn default=SCHEDULED | Status"
+          - "due_date date nn idx | Due date"
+          - "assigned_to uuid ref=app_user idx | Analyst"
+          - "customer_outreach_at ts | Time the customer was asked to update information"
+          - "outcome string(40) | NO_CHANGE, UPDATED, EDD_REQUIRED, EXIT_RELATIONSHIP"
+          - "outcome_notes text | Notes"
+          - "completed_at ts ro | Completion"
+          - "restrictions_applied json | Restrictions applied when overdue (e.g. debit block)"
+
+    apis:
+      - resource: kyc-providers
+        path: /v1/kyc/providers
+        table: kyc_provider
+        ops: [list, get, create, update]
+        filters: [is_active, code]
+        actions:
+          - "POST /{id}/test-connection | Test provider credentials and connectivity | | none"
+      - resource: kyc-profiles
+        path: /v1/kyc/profiles
+        table: kyc_profile
+        ops: [list, get]
+        filters: [customer_id, status, risk_level, edd_required, next_review_date]
+        actions:
+          - "POST /{id}/evaluate | Re-evaluate tier, risk and status from current evidence | | kyc_profile"
+          - "POST /{id}/require-edd | Flag enhanced due diligence | reason string(255) nn | kyc_profile"
+          - "POST /{id}/complete-edd | Record EDD completion | notes text nn | kyc_profile"
+          - "GET /{id}/checks | Checks run for this profile | | kyc_check[]"
+          - "GET /{id}/risk-assessments | Risk assessment history | | kyc_risk_assessment[]"
+      - resource: kyc-documents
+        path: /v1/kyc/documents
+        table: kyc_document
+        ops: [list, get, create]
+        filters: [kyc_profile_id, customer_id, document_type, status, expiry_date]
+        actions:
+          - "POST /{id}/accept | Accept a document after manual review | comment string(500) | kyc_document"
+          - "POST /{id}/reject | Reject a document | reason string(255) nn | kyc_document"
+      - resource: kyc-checks
+        path: /v1/kyc/checks
+        table: kyc_check
+        ops: [list, get, create]
+        filters: [kyc_profile_id, onboarding_application_id, check_type, status, kyc_provider_id]
+        actions:
+          - "POST /{id}/retry | Retry a failed or errored check, optionally with the fallback provider | use_fallback bool | kyc_check"
+          - "POST /provider-callbacks/{provider_code}/events | Provider webhook for asynchronous results | payload json nn | none"
+      - resource: kyc-screenings
+        path: /v1/kyc/screenings
+        table: kyc_screening
+        ops: [list, get, create]
+        filters: [kyc_profile_id, customer_id, screening_type, status]
+        actions:
+          - "POST /{id}/disposition | Mark a potential match as false positive or confirmed | status enum:KycScreeningStatus nn, review_comment text nn | kyc_screening"
+      - resource: kyc-risk-assessments
+        path: /v1/kyc/risk-assessments
+        table: kyc_risk_assessment
+        ops: [list, get, create]
+        filters: [kyc_profile_id, customer_id, risk_level]
+      - resource: kyc-reviews
+        path: /v1/kyc/reviews
+        table: kyc_review
+        ops: [list, get, create, update]
+        filters: [kyc_profile_id, customer_id, status, assigned_to, due_date, trigger]
+        actions:
+          - "POST /{id}/assign | Assign to an analyst | assigned_to uuid nn | kyc_review"
+          - "POST /{id}/request-update | Ask the customer to refresh documents or data | message string(1000) | kyc_review"
+          - "POST /{id}/complete | Complete the review with an outcome | outcome string(40) nn, outcome_notes text | kyc_review"
+
+    events:
+      - "party.kyc_profile.verified | kyc_profile | A customer's identity was verified"
+      - "party.kyc_profile.status_changed | kyc_profile | KYC status changed"
+      - "party.kyc_profile.risk_changed | kyc_risk_assessment | Customer risk level changed"
+      - "party.kyc_check.completed | kyc_check | A provider check completed"
+      - "party.kyc_document.expiring | kyc_document | A KYC document expires within the notice period"
+      - "party.kyc_screening.match_found | kyc_screening | Screening found a potential match"
+      - "party.kyc_screening.disposed | kyc_screening | A screening match was dispositioned"
+      - "party.kyc_review.due | kyc_review | A KYC review is due"
+      - "party.kyc_review.completed | kyc_review | A KYC review was completed"

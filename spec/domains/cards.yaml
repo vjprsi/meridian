@@ -1,0 +1,924 @@
+domain: cards
+title: Card Issuing and Processing
+phase: 3
+description: >
+  Card issuing processor: card programs and products, virtual and physical cards, card controls,
+  PCI card data vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in,
+  network tokenisation, 3-D Secure, clearing and settlement, interchange and fees, and scheme disputes.
+
+enums:
+  CardScheme: [VISA, MASTERCARD, AMEX, UNIONPAY, JCB, DISCOVER, RUPAY, ELO, LOCAL]
+  CardFundingModel: [DEBIT, PREPAID, CREDIT, JIT]
+  CardProgramStatus: [DRAFT, CERTIFICATION, ACTIVE, SUSPENDED, RETIRED]
+  CardProgramType: [CONSUMER, BUSINESS, CORPORATE, EXPENSE, GIFT, PAYROLL, GOVERNMENT]
+  CardProductStatus: [DRAFT, ACTIVE, RETIRED]
+  CardPinPolicy: [REQUIRED, OPTIONAL, NONE]
+  CardStatus: [CREATED, ACTIVE, FROZEN, BLOCKED, LOST, STOLEN, EXPIRED, CLOSED, REPLACED]
+  CardFormFactor: [VIRTUAL, PHYSICAL]
+  CardLinkedAccountType: [DEPOSIT_ACCOUNT, WALLET, CREDIT_LINE, PREPAID_LEDGER, JIT_PROGRAM]
+  CardOrderStatus: [PENDING, SENT_TO_BUREAU, IN_PRODUCTION, SHIPPED, DELIVERED, RETURNED, FAILED, CANCELLED]
+  CardShippingMethod: [STANDARD, EXPRESS, COURIER, BRANCH_PICKUP]
+  CardBureauProtocol: [SFTP_FILE, API]
+  CardControlType: [MCC_ALLOW, MCC_DENY, MERCHANT_ALLOW, MERCHANT_DENY, COUNTRY_ALLOW, COUNTRY_DENY,
+                    CHANNEL_ALLOW, CHANNEL_DENY, AMOUNT_MAX, TIME_WINDOW, CURRENCY_ALLOW]
+  CardChannel: [ECOM, POS, ATM, CONTACTLESS, MOTO, RECURRING, ANY]
+  CardLimitPeriod: [PER_TRANSACTION, DAILY, WEEKLY, MONTHLY, YEARLY, LIFETIME]
+  CardPinEventType: [SET, CHANGE, RESET, VERIFY_SUCCESS, VERIFY_FAILURE, UNBLOCK, VIEW]
+  CardReplacementReason: [LOST, STOLEN, DAMAGED, EXPIRING, FRAUD, NAME_CHANGE, OTHER]
+  CardVaultKeyType: [PAN_DEK, CVV_KEY, PIN_KEY, ZPK, CVK, MDK]
+  CardAuthMessageType: [AUTHORIZATION, FINANCIAL, INCREMENTAL, REVERSAL, PARTIAL_REVERSAL, ADVICE, BALANCE_INQUIRY,
+                        ACCOUNT_VERIFICATION, REFUND_AUTH]
+  CardAuthDecision: [APPROVED, DECLINED, PARTIAL]
+  CardAuthStatus: [PENDING, APPROVED, DECLINED, REVERSED, PARTIALLY_REVERSED, EXPIRED, CLEARED, PARTIALLY_CLEARED]
+  CardPosEntryMode: [CHIP, CONTACTLESS, MAGSTRIPE, MANUAL, ECOMMERCE, CREDENTIAL_ON_FILE, TOKEN, FALLBACK, UNKNOWN]
+  CardDeclineReason: [INSUFFICIENT_FUNDS, CARD_INACTIVE, CARD_FROZEN, CARD_EXPIRED, INVALID_PIN, PIN_TRIES_EXCEEDED,
+                      CONTROL_MCC, CONTROL_MERCHANT, CONTROL_COUNTRY, CONTROL_CHANNEL, LIMIT_EXCEEDED, VELOCITY_EXCEEDED,
+                      FRAUD_SUSPECTED, JIT_DECLINED, JIT_TIMEOUT, INVALID_CVV, INVALID_EXPIRY, THREEDS_FAILED,
+                      SYSTEM_ERROR, OTHER]
+  CardJitResult: [APPROVED, DECLINED, TIMEOUT, ERROR]
+  CardAuthRuleAction: [APPROVE, DECLINE, REVIEW, STEP_UP]
+  CardTokenRequestor: [APPLE_PAY, GOOGLE_PAY, SAMSUNG_PAY, MERCHANT_COF, CLICK_TO_PAY, OTHER]
+  CardTokenStatus: [REQUESTED, PENDING_VERIFICATION, ACTIVE, SUSPENDED, DEACTIVATED, DECLINED]
+  CardTokenEventType: [PROVISIONING_REQUESTED, PROVISIONING_APPROVED, PROVISIONING_DECLINED, STEP_UP_SENT,
+                       ACTIVATED, SUSPENDED, RESUMED, DEACTIVATED, PAN_UPDATED]
+  ThreeDsChallengeType: [FRICTIONLESS, OTP_SMS, OTP_EMAIL, APP_PUSH, BIOMETRIC, DECOUPLED]
+  ThreeDsResult: [AUTHENTICATED, ATTEMPTED, FAILED, REJECTED, UNAVAILABLE, CHALLENGE_PENDING]
+  ClearingFileStatus: [RECEIVED, PARSING, PARSED, POSTED, FAILED]
+  ClearingRecordType: [PRESENTMENT, REFUND, REVERSAL, CHARGEBACK, REPRESENTMENT, FEE_COLLECTION, FUNDS_DISBURSEMENT]
+  ClearingMatchStatus: [MATCHED, FORCE_POST, UNMATCHED, EXCEPTION]
+  CardSettlementStatus: [PENDING, CONFIRMED, PAID, DISPUTED]
+  CardFeeType: [ISSUANCE, REPLACEMENT, MONTHLY, ANNUAL, ATM_WITHDRAWAL, FX_MARKUP, CROSS_BORDER, EXPRESS_SHIPPING,
+                INACTIVITY, LATE_PAYMENT, CASH_ADVANCE, INTERCHANGE_INCOME, SCHEME_FEE]
+  CardDisputeStage: [INQUIRY, RETRIEVAL, FIRST_CHARGEBACK, REPRESENTMENT, PRE_ARBITRATION, ARBITRATION, CLOSED]
+  CardDisputeStatus: [OPEN, AWAITING_CUSTOMER, AWAITING_MERCHANT, SUBMITTED, WON, LOST, WITHDRAWN, EXPIRED]
+  CardDisputeCategory: [FRAUD, AUTHORIZATION, PROCESSING_ERROR, CONSUMER_DISPUTE, NOT_RECEIVED, NOT_AS_DESCRIBED,
+                        DUPLICATE, CANCELLED_RECURRING, CREDIT_NOT_PROCESSED, ATM_DISPUTE]
+  CardDisputeEvidenceType: [CUSTOMER_STATEMENT, RECEIPT, CORRESPONDENCE, POLICE_REPORT, DELIVERY_PROOF, SCREENSHOT,
+                            SCHEME_DOCUMENT, OTHER]
+  CardStatementCycleStatus: [OPEN, CLOSED, BILLED, PAID, OVERDUE]
+
+services:
+  # ------------------------------------------------------------------ card-service
+  - name: card-service
+    database: card_db
+    description: >
+      Card programs, card products, card lifecycle (issue, activate, freeze, replace, close), physical card
+      orders through bureaus, card controls and spend limits, PIN events and credit card statement cycles.
+    tables:
+      - name: card_program
+        prefix: cpg
+        description: A card program on a BIN range with a scheme, funding model and sponsor
+        fr: [CRD-01]
+        columns:
+          - "code string(32) nn uq | Short program code"
+          - "name string(120) nn | Program name"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Issuing legal entity"
+          - "scheme enum:CardScheme nn | Card scheme"
+          - "program_type enum:CardProgramType nn default=CONSUMER | Program segment"
+          - "funding_model enum:CardFundingModel nn | How authorisations are funded"
+          - "bin string(11) nn | Issuer BIN (6 or 8 digits)"
+          - "bin_range_start string(19) nn | First PAN prefix in the range"
+          - "bin_range_end string(19) nn | Last PAN prefix in the range"
+          - "pan_length int nn default=16 | PAN length"
+          - "currency currency nn | Billing currency"
+          - "sponsor_bank string(120) | Sponsor / BIN sponsor bank"
+          - "processor_member_id string(32) | Scheme member / ICA / BID"
+          - "ledger_account_id uuid ref=ledger_account | Program settlement / funding account"
+          - "jit_webhook_url string(500) | JIT funding endpoint of the client"
+          - "jit_timeout_ms int nn default=1500 | JIT response budget in milliseconds"
+          - "stand_in_enabled bool nn default=true | Approve under stand-in rules when the core is unavailable"
+          - "stand_in_max_amount amount | Maximum amount approved in stand-in"
+          - "default_controls json | Controls applied to every new card"
+          - "status enum:CardProgramStatus nn default=DRAFT | Lifecycle status"
+          - "launched_at ts ro | Go-live time"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: card_product
+        prefix: cpr
+        description: A card product inside a program (design, plastic, validity, PIN and fee settings)
+        fr: [CRD-01, CRD-02]
+        columns:
+          - "card_program_id uuid nn fk=card_program idx | Program"
+          - "product_id uuid ref=product | Product catalogue entry (pricing, fees)"
+          - "code string(32) nn uq | Product code"
+          - "name string(120) nn | Display name"
+          - "form_factors json nn | Allowed form factors, e.g. [VIRTUAL, PHYSICAL]"
+          - "card_design_id string(64) | Artwork / design reference"
+          - "plastic_type string(32) | PVC, RECYCLED_PVC, METAL"
+          - "card_bureau_id uuid fk=card_bureau | Default bureau for physical cards"
+          - "expiry_years int nn default=4 | Validity in years"
+          - "pin_policy enum:CardPinPolicy nn default=REQUIRED | PIN requirement"
+          - "contactless_enabled bool nn default=true | Contactless allowed"
+          - "atm_enabled bool nn default=true | ATM withdrawals allowed"
+          - "ecom_enabled bool nn default=true | E-commerce allowed"
+          - "international_enabled bool nn default=true | Cross-border allowed"
+          - "max_cards_per_customer int nn default=5 | Active card cap per customer"
+          - "status enum:CardProductStatus nn default=DRAFT | Status"
+
+      - name: card_bureau
+        prefix: cbu
+        description: Card manufacturing / personalisation bureau configuration
+        fr: [CRD-02]
+        columns:
+          - "name string(120) nn | Bureau name"
+          - "protocol enum:CardBureauProtocol nn | Integration method"
+          - "endpoint string(500) | SFTP host or API base URL"
+          - "credentials_ref string(255) secret | Vault path for credentials"
+          - "file_format string(32) | Personalisation file format"
+          - "supported_countries json | Countries it ships to"
+          - "cutoff_time string(5) | Daily file cut-off HH:MM"
+          - "is_active bool nn default=true | Active"
+
+      - name: card
+        prefix: crd
+        description: A payment card. Holds only tokens and masked data; PAN and CVV live in the vault.
+        fr: [CRD-02, CRD-07]
+        columns:
+          - "card_program_id uuid nn fk=card_program idx | Program"
+          - "card_product_id uuid nn fk=card_product idx | Product"
+          - "customer_id uuid nn ref=customer idx | Cardholder customer"
+          - "business_customer_id uuid ref=customer | Company for business / corporate cards"
+          - "pan_token string(64) nn uq ro | Vault token of the PAN"
+          - "pan_fingerprint string(64) ro idx | Keyed hash of the PAN for de-duplication and lookup"
+          - "bin string(11) nn ro | BIN"
+          - "last4 string(4) nn ro | Last four digits"
+          - "expiry_month int nn ro | Expiry month 1-12"
+          - "expiry_year int nn ro | Expiry year (4 digits)"
+          - "sequence_number int nn default=0 ro | PAN sequence number (PSN)"
+          - "cardholder_name string(26) nn pii | Name as embossed"
+          - "form_factor enum:CardFormFactor nn | Virtual or physical"
+          - "status enum:CardStatus nn default=CREATED | Lifecycle status"
+          - "status_reason string(255) | Reason for the current status"
+          - "linked_account_type enum:CardLinkedAccountType nn | Kind of funding account"
+          - "ledger_account_id uuid nn ref=ledger_account idx | Ledger account authorisations hold and post against"
+          - "deposit_account_id uuid ref=deposit_account | Linked deposit account (debit cards)"
+          - "wallet_id uuid ref=wallet | Linked wallet (prepaid / wallet cards)"
+          - "credit_line_id uuid ref=credit_line | Linked credit line (credit cards)"
+          - "replaces_card_id uuid fk=card | Card this one replaced"
+          - "pin_set bool nn default=false ro | Whether a PIN has been set"
+          - "pin_try_count int nn default=0 ro | Consecutive wrong PIN attempts"
+          - "activated_at ts ro | Activation time"
+          - "frozen_at ts ro | Last freeze time"
+          - "closed_at ts ro | Closure time"
+          - "nickname string(64) | Cardholder nickname"
+          - "metadata json | Client-defined key/value metadata"
+        indexes: [[customer_id, status]]
+
+      - name: card_status_history
+        prefix: csh
+        description: Immutable history of card status changes
+        immutable: true
+        fr: [CRD-07]
+        columns:
+          - "card_id uuid nn fk=card idx | Card"
+          - "from_status enum:CardStatus | Previous status"
+          - "to_status enum:CardStatus nn | New status"
+          - "reason string(255) | Reason"
+          - "channel string(32) | API, CONSOLE, APP, IVR, SYSTEM"
+          - "actor_id string(64) | User, customer or system that made the change"
+
+      - name: card_order
+        prefix: cor
+        description: A physical card production and shipping order
+        fr: [CRD-02]
+        columns:
+          - "card_id uuid nn fk=card idx | Card being produced"
+          - "card_bureau_id uuid nn fk=card_bureau | Bureau"
+          - "status enum:CardOrderStatus nn default=PENDING | Order status"
+          - "shipping_method enum:CardShippingMethod nn default=STANDARD | Shipping method"
+          - "recipient_name string(120) nn pii | Recipient"
+          - "address_line1 string(255) nn pii | Address line 1"
+          - "address_line2 string(255) pii | Address line 2"
+          - "city string(120) nn pii | City"
+          - "region string(120) pii | State / region"
+          - "postal_code string(20) pii | Postal code"
+          - "country country nn | Country"
+          - "phone phone pii | Contact phone for courier"
+          - "bureau_reference string(64) ro | Bureau batch / job reference"
+          - "tracking_number string(64) ro | Courier tracking number"
+          - "carrier string(64) ro | Courier"
+          - "sent_to_bureau_at ts ro | File / API submission time"
+          - "shipped_at ts ro | Shipped time"
+          - "delivered_at ts ro | Delivered time"
+          - "failure_reason string(255) ro | Failure reason"
+
+      - name: card_control
+        prefix: cct
+        description: A spending control on a card or on all cards of a program
+        fr: [CRD-04]
+        columns:
+          - "card_id uuid fk=card idx | Card (empty = program-wide)"
+          - "card_program_id uuid fk=card_program idx | Program for program-wide controls"
+          - "control_type enum:CardControlType nn | Control type"
+          - "channel enum:CardChannel nn default=ANY | Channel the control applies to"
+          - "values json | MCCs, merchant ids, countries, currencies or channels"
+          - "max_amount amount | Maximum transaction amount for AMOUNT_MAX"
+          - "currency currency | Currency of max_amount"
+          - "time_window json | Allowed days and hours for TIME_WINDOW"
+          - "timezone string(64) | IANA timezone for time windows"
+          - "is_active bool nn default=true | Active"
+          - "valid_from ts | Start"
+          - "valid_to ts | End"
+
+      - name: card_spend_limit
+        prefix: csl
+        description: Amount and velocity limits per period on a card or program
+        fr: [CRD-04, LIM-01]
+        columns:
+          - "card_id uuid fk=card idx | Card (empty = program-wide)"
+          - "card_program_id uuid fk=card_program idx | Program for program-wide limits"
+          - "period enum:CardLimitPeriod nn | Limit period"
+          - "channel enum:CardChannel nn default=ANY | Channel"
+          - "max_amount amount | Maximum cumulative amount in the period"
+          - "max_count int | Maximum number of transactions in the period"
+          - "currency currency nn | Currency"
+          - "used_amount amount nn default=0 ro | Amount used in the current period"
+          - "used_count int nn default=0 ro | Transactions in the current period"
+          - "period_start ts ro | Start of the current period"
+          - "is_active bool nn default=true | Active"
+
+      - name: card_pin_event
+        prefix: cpe
+        description: Immutable log of PIN set, change, reset and verification events (no PIN data)
+        immutable: true
+        fr: [CRD-07]
+        columns:
+          - "card_id uuid nn fk=card idx | Card"
+          - "event_type enum:CardPinEventType nn | Event type"
+          - "channel string(32) | APP, ATM, POS, IVR, CONSOLE"
+          - "success bool nn | Outcome"
+          - "ip_address inet | Client IP"
+          - "device_id uuid ref=customer_device | Customer device"
+
+      - name: card_replacement
+        prefix: crp
+        description: A request to replace a card (lost, stolen, damaged, expiring)
+        fr: [CRD-07]
+        columns:
+          - "old_card_id uuid nn fk=card idx | Card being replaced"
+          - "new_card_id uuid fk=card | Replacement card"
+          - "reason enum:CardReplacementReason nn | Reason"
+          - "keep_pan bool nn default=false | Reissue with the same PAN (new expiry)"
+          - "fee_charged bool nn default=false | Whether a replacement fee was charged"
+          - "requested_by string(64) | Requester"
+
+      - name: card_statement_cycle
+        prefix: cst
+        description: Billing cycle of a credit card, linked to the credit line in lending
+        fr: [LND-03, CRD-01]
+        columns:
+          - "card_id uuid nn fk=card idx | Card"
+          - "credit_line_id uuid nn ref=credit_line idx | Credit line"
+          - "cycle_start date nn | Cycle start"
+          - "cycle_end date nn | Cycle end"
+          - "due_date date nn | Payment due date"
+          - "opening_balance amount nn default=0 | Opening balance"
+          - "purchases amount nn default=0 ro | Purchases in the cycle"
+          - "cash_advances amount nn default=0 ro | Cash advances in the cycle"
+          - "fees amount nn default=0 ro | Fees in the cycle"
+          - "interest amount nn default=0 ro | Interest charged"
+          - "payments amount nn default=0 ro | Payments received"
+          - "closing_balance amount nn default=0 ro | Statement balance"
+          - "minimum_due amount nn default=0 ro | Minimum payment due"
+          - "currency currency nn | Currency"
+          - "status enum:CardStatementCycleStatus nn default=OPEN | Status"
+          - "statement_document_id uuid ref=document | Generated statement PDF"
+        unique: [[card_id, cycle_start]]
+
+    apis:
+      - resource: card-programs
+        path: /v1/card-programs
+        table: card_program
+        ops: [list, get, create, update]
+        filters: [scheme, funding_model, program_type, status, legal_entity_id]
+        actions:
+          - "POST /{id}/activate | Activate a certified program"
+          - "POST /{id}/suspend | Suspend all authorisations on a program | reason string(255) nn"
+          - "GET /{id}/cards | Cards issued on the program | | card[]"
+      - resource: card-products
+        path: /v1/card-products
+        table: card_product
+        ops: [list, get, create, update]
+        filters: [card_program_id, status]
+      - resource: card-bureaus
+        path: /v1/card-bureaus
+        table: card_bureau
+        ops: [list, get, create, update]
+        filters: [is_active]
+      - resource: cards
+        path: /v1/cards
+        table: card
+        description: Issue and manage cards. Sensitive card data is shown only through the vault reveal endpoint.
+        ops: [list, get, create, update]
+        filters: [customer_id, card_program_id, card_product_id, status, form_factor, last4, ledger_account_id, linked_account_type]
+        actions:
+          - "POST /{id}/activate | Activate a card (physical cards may require last4 / activation code) | activation_code string(16)"
+          - "POST /{id}/freeze | Temporarily freeze the card | reason string(255)"
+          - "POST /{id}/unfreeze | Unfreeze the card"
+          - "POST /{id}/block | Permanently block (lost, stolen, fraud) | status enum:CardStatus nn, reason string(255) nn"
+          - "POST /{id}/close | Close the card | reason string(255)"
+          - "POST /{id}/replace | Replace a card | reason enum:CardReplacementReason nn, keep_pan bool, form_factor enum:CardFormFactor | card_replacement"
+          - "POST /{id}/renew | Renew an expiring card with a new expiry date | | card"
+          - "POST /{id}/order-physical | Order a physical card for a virtual card | shipping_method enum:CardShippingMethod, address json nn | card_order"
+          - "POST /{id}/pin | Set or change the PIN (PIN block encrypted under the session key) | encrypted_pin_block string(128) nn, key_id string(64) nn | none"
+          - "POST /{id}/pin/unblock | Reset PIN try counter | reason string(255) | none"
+          - "GET /{id}/status-history | Status history | | card_status_history[]"
+          - "GET /{id}/pin-events | PIN event log | | card_pin_event[]"
+          - "GET /{id}/authorizations | Authorisations on the card | | card_authorization[]"
+          - "GET /{id}/controls | Controls on the card | | card_control[]"
+          - "GET /{id}/limits | Spend limits and usage | | card_spend_limit[]"
+      - resource: card-orders
+        path: /v1/card-orders
+        table: card_order
+        ops: [list, get, update]
+        filters: [card_id, card_bureau_id, status]
+        actions:
+          - "POST /{id}/cancel | Cancel an order not yet sent to the bureau | reason string(255)"
+          - "POST /{id}/reship | Reship a returned card | shipping_method enum:CardShippingMethod, address json | card_order"
+      - resource: card-controls
+        path: /v1/card-controls
+        table: card_control
+        ops: [list, get, create, update, delete]
+        filters: [card_id, card_program_id, control_type, channel, is_active]
+      - resource: card-spend-limits
+        path: /v1/card-spend-limits
+        table: card_spend_limit
+        ops: [list, get, create, update, delete]
+        filters: [card_id, card_program_id, period, channel]
+      - resource: card-replacements
+        path: /v1/card-replacements
+        table: card_replacement
+        ops: [list, get]
+        filters: [old_card_id, new_card_id, reason]
+      - resource: card-statement-cycles
+        path: /v1/card-statement-cycles
+        table: card_statement_cycle
+        ops: [list, get]
+        filters: [card_id, credit_line_id, status]
+        actions:
+          - "POST /{id}/close | Close the cycle and produce the statement"
+
+    events:
+      - "cards.card_program.activated | card_program | A card program went live"
+      - "cards.card.created | card | A card was issued"
+      - "cards.card.activated | card | A card was activated"
+      - "cards.card.status_changed | card | A card was frozen, unfrozen, blocked or closed"
+      - "cards.card.replaced | card_replacement | A card was replaced"
+      - "cards.card.expiring | card | A card expires within the renewal window"
+      - "cards.card_order.shipped | card_order | A physical card was shipped"
+      - "cards.card_order.delivered | card_order | A physical card was delivered"
+      - "cards.card_control.changed | card_control | A card control was created, updated or removed"
+      - "cards.card_pin.changed | card_pin_event | A PIN was set, changed or reset"
+      - "cards.card_statement_cycle.closed | card_statement_cycle | A credit card statement was produced"
+
+  # ------------------------------------------------------------------ vault-service
+  - name: card-vault-service
+    database: card_vault_db
+    description: >
+      PCI DSS scoped card data vault. Stores PAN, CVV2 and expiry encrypted with envelope encryption under
+      HSM-managed keys and returns tokens. Isolated network segment; only authorisation, tokenisation and
+      reveal flows may detokenise.
+    tables:
+      - name: card_data_vault
+        prefix: cdv
+        description: Encrypted sensitive card data keyed by PAN token
+        fr: [CRD-07]
+        columns:
+          - "pan_token string(64) nn uq | Token of the PAN"
+          - "pan_fingerprint string(64) nn idx | Keyed HMAC of the PAN for lookup"
+          - "pan_encrypted bytes nn secret | PAN encrypted with the data encryption key"
+          - "cvv_encrypted bytes secret | CVV2 encrypted (dynamic CVV cards may leave empty)"
+          - "expiry_encrypted bytes nn secret | Expiry encrypted"
+          - "dek_key_id uuid nn fk=card_vault_key | Data encryption key used"
+          - "card_id uuid ref=card | Card"
+          - "last_detokenized_at ts ro | Last detokenisation time"
+
+      - name: card_vault_key
+        prefix: cvk
+        description: Key metadata for HSM-held keys (no key material stored)
+        fr: [CRD-07]
+        columns:
+          - "key_type enum:CardVaultKeyType nn | Key purpose"
+          - "hsm_key_label string(128) nn | Label of the key inside the HSM"
+          - "kcv string(6) nn | Key check value"
+          - "algorithm string(32) nn | AES-256, TDES, etc."
+          - "version int nn default=1 | Key version"
+          - "active_from ts nn | Activation"
+          - "retire_after ts | Scheduled rotation"
+          - "is_active bool nn default=true | Active"
+
+      - name: card_vault_access_log
+        prefix: cva
+        description: Immutable log of every detokenisation and reveal request
+        immutable: true
+        fr: [CRD-07, ADM-03]
+        columns:
+          - "pan_token string(64) nn idx | Token accessed"
+          - "purpose string(32) nn | AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE"
+          - "caller_service string(64) nn | Calling workload identity"
+          - "actor_id string(64) | User or customer for reveal requests"
+          - "success bool nn | Outcome"
+          - "ip_address inet | Caller IP"
+
+    apis:
+      - resource: card-vault
+        path: /v1/card-vault
+        table: card_data_vault
+        description: Internal PCI APIs plus a reveal endpoint that returns PAN/CVV inside an encrypted, single-use response for the cardholder app.
+        ops: [get]
+        actions:
+          - "POST /tokenize | Store a PAN and return its token (internal) | pan string(19) nn, cvv string(4), expiry_month int nn, expiry_year int nn | card_data_vault"
+          - "POST /reveal | Return PAN, CVV and expiry encrypted to the cardholder app's public key (step-up required) | card_id uuid nn, public_key text nn | none"
+          - "POST /rotate-keys | Re-encrypt records under a new DEK (operator only) | key_type enum:CardVaultKeyType nn | none"
+      - resource: card-vault-keys
+        path: /v1/card-vault/keys
+        table: card_vault_key
+        ops: [list, get, create]
+        filters: [key_type, is_active]
+      - resource: card-vault-access-logs
+        path: /v1/card-vault/access-logs
+        table: card_vault_access_log
+        ops: [list, get]
+        filters: [pan_token, purpose, caller_service]
+
+    events:
+      - "cards.card_vault.revealed | card_vault_access_log | Sensitive card data was revealed to a cardholder"
+
+  # ------------------------------------------------------------------ authorization-service
+  - name: card-authorization-service
+    database: card_auth_db
+    description: >
+      Real-time authorisation: receives ISO 8583 from the card gateway, applies card status, controls, limits,
+      fraud score and 3DS outcome, places or increments the ledger hold (or calls JIT funding), and responds
+      within the scheme budget. Runs stand-in when the ledger is unavailable.
+    tables:
+      - name: card_authorization
+        prefix: cau
+        description: One authorisation message and its decision (auth, incremental, reversal, advice)
+        fr: [CRD-03, CRD-09, LED-04, FRM-01]
+        columns:
+          - "card_id uuid nn ref=card idx | Card"
+          - "card_program_id uuid nn ref=card_program idx | Program"
+          - "customer_id uuid ref=customer idx | Cardholder"
+          - "message_type enum:CardAuthMessageType nn | Message type"
+          - "mti string(4) nn | ISO 8583 message type indicator"
+          - "processing_code string(6) | ISO 8583 DE3"
+          - "stan string(12) | System trace audit number (DE11)"
+          - "rrn string(12) idx | Retrieval reference number (DE37)"
+          - "auth_code string(6) ro | Approval code (DE38)"
+          - "response_code string(3) ro | ISO response code (DE39)"
+          - "network_transaction_id string(64) idx | Scheme transaction id (trace id / banknet ref)"
+          - "parent_authorization_id uuid fk=card_authorization idx | Original auth for incremental, reversal or advice"
+          - "pos_entry_mode enum:CardPosEntryMode nn default=UNKNOWN | POS entry mode"
+          - "channel enum:CardChannel nn | Channel"
+          - "card_present bool nn default=false | Card present"
+          - "cardholder_present bool nn default=false | Cardholder present"
+          - "merchant_id string(32) idx | Card acceptor id (DE42)"
+          - "merchant_name string(64) | Card acceptor name"
+          - "merchant_city string(64) | Merchant city"
+          - "merchant_country country | Merchant country"
+          - "mcc string(4) idx | Merchant category code"
+          - "acquirer_id string(16) | Acquiring institution id (DE32)"
+          - "terminal_id string(16) | Terminal id (DE41)"
+          - "transaction_amount amount nn | Amount in transaction currency (DE4)"
+          - "transaction_currency currency nn | Transaction currency"
+          - "billing_amount amount nn | Amount in card billing currency (DE6)"
+          - "billing_currency currency nn | Billing currency"
+          - "settlement_amount amount | Settlement amount (DE5)"
+          - "settlement_currency currency | Settlement currency"
+          - "conversion_rate rate | Billing conversion rate"
+          - "fx_markup amount | Issuer FX markup"
+          - "approved_amount amount ro | Approved amount (partial approvals)"
+          - "decision enum:CardAuthDecision ro | Decision"
+          - "decline_reason enum:CardDeclineReason ro | Internal decline reason"
+          - "status enum:CardAuthStatus nn default=PENDING ro | Lifecycle status"
+          - "fraud_score int ro | Fraud score 0-1000"
+          - "fraud_alert_id uuid ref=fraud_alert | Fraud alert raised"
+          - "hold_id uuid ref=hold idx | Ledger hold placed"
+          - "jit_used bool nn default=false ro | JIT funding was called"
+          - "jit_result enum:CardJitResult ro | JIT outcome"
+          - "jit_latency_ms int ro | JIT round-trip latency"
+          - "stand_in bool nn default=false ro | Decided in stand-in"
+          - "card_token_id uuid ref=card_token | Network token used, if any"
+          - "threeds_authentication_id uuid ref=threeds_authentication | 3DS authentication"
+          - "eci string(2) | Electronic commerce indicator"
+          - "cvv_result string(1) | CVV2 verification result"
+          - "avs_result string(1) | Address verification result"
+          - "pin_verified bool | PIN verification outcome"
+          - "is_recurring bool nn default=false | Recurring / credential on file"
+          - "is_international bool nn default=false | Cross-border"
+          - "processing_time_ms int ro | End-to-end decision time inside Meridian"
+          - "expires_at ts | Time the hold auto-releases"
+          - "cleared_amount amount nn default=0 ro | Amount cleared so far"
+          - "raw_message json | Parsed ISO 8583 fields (sensitive fields removed)"
+        indexes: [[card_id, created_at], [rrn, stan]]
+
+      - name: card_jit_funding_request
+        prefix: cjf
+        description: Immutable log of JIT funding calls to the client's endpoint
+        immutable: true
+        fr: [CRD-03]
+        columns:
+          - "card_authorization_id uuid nn fk=card_authorization idx | Authorisation"
+          - "endpoint string(500) nn | Endpoint called"
+          - "request_amount amount nn | Amount requested"
+          - "currency currency nn | Currency"
+          - "result enum:CardJitResult nn | Outcome"
+          - "approved_amount amount | Amount approved by the client"
+          - "http_status int | HTTP status"
+          - "latency_ms int nn | Latency"
+          - "response_body json | Response (truncated)"
+
+      - name: card_stand_in_record
+        prefix: csi
+        description: Authorisation approved in stand-in, awaiting replay against the ledger
+        fr: [CRD-09]
+        columns:
+          - "card_authorization_id uuid nn fk=card_authorization uq | Authorisation"
+          - "amount amount nn | Amount approved in stand-in"
+          - "currency currency nn | Currency"
+          - "replayed bool nn default=false ro | Replayed to the ledger"
+          - "replayed_at ts ro | Replay time"
+          - "replay_result string(32) ro | POSTED, OVERDRAWN, FAILED"
+          - "hold_id uuid ref=hold | Hold created on replay"
+
+      - name: card_authorization_rule
+        prefix: car
+        description: Program or tenant level authorisation rule (beyond card controls), e.g. velocity or risky MCC step-up
+        fr: [CRD-03, CRD-04, FRM-01]
+        columns:
+          - "card_program_id uuid ref=card_program idx | Program (empty = all programs)"
+          - "name string(120) nn | Rule name"
+          - "priority int nn default=100 | Lower evaluates first"
+          - "condition_expression text nn | CEL expression over the authorisation context"
+          - "action enum:CardAuthRuleAction nn | Action when the condition is true"
+          - "decline_reason enum:CardDeclineReason | Decline reason when action is DECLINE"
+          - "is_active bool nn default=true | Active"
+          - "valid_from ts | Start"
+          - "valid_to ts | End"
+
+    apis:
+      - resource: card-authorizations
+        path: /v1/card-authorizations
+        table: card_authorization
+        description: Read authorisations; simulate them in sandbox. Live authorisations arrive through the ISO 8583 gateway.
+        ops: [list, get]
+        filters: [card_id, card_program_id, customer_id, status, decision, message_type, mcc, merchant_id, rrn, network_transaction_id]
+        actions:
+          - "POST /simulate | Sandbox: simulate an authorisation from a merchant | card_id uuid nn, amount amount nn, currency currency nn, mcc string(4), merchant_name string(64), merchant_country country, channel enum:CardChannel | card_authorization"
+          - "POST /{id}/simulate-reversal | Sandbox: simulate a reversal | amount amount | card_authorization"
+          - "POST /{id}/simulate-incremental | Sandbox: simulate an incremental authorisation | amount amount nn | card_authorization"
+          - "POST /{id}/simulate-clearing | Sandbox: simulate a presentment | amount amount nn | clearing_record"
+          - "POST /{id}/expire | Release the hold of a stale authorisation | reason string(255)"
+          - "GET /{id}/jit-requests | JIT funding calls for the authorisation | | card_jit_funding_request[]"
+          - "GET /{id}/related | Incrementals, reversals and advices linked to the authorisation | | card_authorization[]"
+      - resource: card-stand-in-records
+        path: /v1/card-stand-in-records
+        table: card_stand_in_record
+        ops: [list, get]
+        filters: [replayed, card_authorization_id]
+        actions:
+          - "POST /replay | Replay pending stand-in approvals to the ledger | | none"
+      - resource: card-authorization-rules
+        path: /v1/card-authorization-rules
+        table: card_authorization_rule
+        ops: [list, get, create, update, delete]
+        filters: [card_program_id, action, is_active]
+        actions:
+          - "POST /test | Evaluate rules against a sample authorisation | sample json nn | none"
+
+    events:
+      - "cards.card_authorization.approved | card_authorization | An authorisation was approved"
+      - "cards.card_authorization.declined | card_authorization | An authorisation was declined"
+      - "cards.card_authorization.reversed | card_authorization | An authorisation was reversed"
+      - "cards.card_authorization.expired | card_authorization | An authorisation hold expired"
+      - "cards.card_authorization.stand_in_approved | card_stand_in_record | An authorisation was approved in stand-in"
+      - "cards.card_jit_funding.requested | card_jit_funding_request | A JIT funding call was made"
+
+  # ------------------------------------------------------------------ tokenization-service
+  - name: card-tokenization-service
+    database: card_token_db
+    description: >
+      Network tokenisation through scheme token services (VTS, MDES) for Apple Pay, Google Pay, Samsung Pay
+      and merchant card-on-file, including provisioning decisions, step-up (OTP / app) and lifecycle sync.
+    tables:
+      - name: card_token
+        prefix: ctk
+        description: A network token (DPAN) linked to a card
+        fr: [CRD-05]
+        columns:
+          - "card_id uuid nn ref=card idx | Card"
+          - "token_requestor enum:CardTokenRequestor nn | Wallet or token requestor"
+          - "token_requestor_id string(16) | Scheme token requestor id"
+          - "network_token_ref string(64) nn uq | Scheme token reference (TUR / token id)"
+          - "dpan_last4 string(4) ro | Last four of the device PAN"
+          - "dpan_expiry_month int ro | Token expiry month"
+          - "dpan_expiry_year int ro | Token expiry year"
+          - "status enum:CardTokenStatus nn default=REQUESTED | Status"
+          - "device_type string(32) | PHONE, WATCH, TABLET, BROWSER"
+          - "device_name string(120) | Device name"
+          - "device_id_hash string(64) | Hash of the device id"
+          - "wallet_account_score int | Wallet provider risk score"
+          - "device_score int | Device risk score"
+          - "provisioning_decision string(16) ro | GREEN, YELLOW, RED"
+          - "step_up_method string(32) | OTP_SMS, OTP_EMAIL, APP, CALL_CENTER"
+          - "merchant_name string(120) | Merchant for card-on-file tokens"
+          - "activated_at ts ro | Activation time"
+          - "deactivated_at ts ro | Deactivation time"
+
+      - name: card_token_event
+        prefix: cte
+        description: Immutable lifecycle events received from or sent to the token service
+        immutable: true
+        fr: [CRD-05]
+        columns:
+          - "card_token_id uuid nn fk=card_token idx | Token"
+          - "event_type enum:CardTokenEventType nn | Event"
+          - "source string(16) nn | SCHEME or ISSUER"
+          - "reason string(255) | Reason"
+          - "payload json | Message received or sent"
+
+    apis:
+      - resource: card-tokens
+        path: /v1/card-tokens
+        table: card_token
+        ops: [list, get]
+        filters: [card_id, token_requestor, status]
+        actions:
+          - "POST /push-provision | Push-provision a card to a wallet from the issuer app | card_id uuid nn, token_requestor enum:CardTokenRequestor nn, device_info json nn | none"
+          - "POST /{id}/suspend | Suspend a token | reason string(255)"
+          - "POST /{id}/resume | Resume a suspended token"
+          - "POST /{id}/deactivate | Permanently deactivate a token | reason string(255)"
+          - "POST /{id}/verify-step-up | Verify OTP / step-up for a yellow-path provisioning | otp string(10) nn"
+          - "GET /{id}/events | Token lifecycle events | | card_token_event[]"
+
+    events:
+      - "cards.card_token.provisioned | card_token | A network token was activated"
+      - "cards.card_token.status_changed | card_token | A token was suspended, resumed or deactivated"
+
+  # ------------------------------------------------------------------ threeds-service
+  - name: card-threeds-service
+    database: card_3ds_db
+    description: >
+      3-D Secure 2.x access control server (ACS) integration: risk-based frictionless decisions, challenges
+      via OTP, app push or biometrics, and decoupled authentication.
+    tables:
+      - name: threeds_authentication
+        prefix: tds
+        description: One 3DS authentication request and its outcome
+        fr: [CRD-05]
+        columns:
+          - "card_id uuid nn ref=card idx | Card"
+          - "acs_transaction_id string(64) nn uq | ACS transaction id"
+          - "ds_transaction_id string(64) idx | Directory server transaction id"
+          - "threeds_server_transaction_id string(64) | 3DS server transaction id"
+          - "protocol_version string(8) nn | 2.1.0, 2.2.0, 2.3.1"
+          - "merchant_name string(64) | Merchant"
+          - "merchant_country country | Merchant country"
+          - "mcc string(4) | MCC"
+          - "amount amount | Purchase amount"
+          - "currency currency | Currency"
+          - "risk_score int ro | Issuer risk score"
+          - "challenge_type enum:ThreeDsChallengeType ro | Challenge method used"
+          - "result enum:ThreeDsResult nn default=CHALLENGE_PENDING ro | Outcome"
+          - "eci string(2) ro | ECI returned"
+          - "authentication_value string(64) secret | CAVV / AAV"
+          - "attempts int nn default=0 ro | Challenge attempts"
+          - "completed_at ts ro | Completion time"
+          - "device_channel string(16) | APP, BROWSER, 3RI"
+
+    apis:
+      - resource: threeds-authentications
+        path: /v1/threeds-authentications
+        table: threeds_authentication
+        ops: [list, get]
+        filters: [card_id, result, challenge_type]
+        actions:
+          - "POST /{id}/approve | Cardholder approves an app-push / decoupled challenge | biometric_assertion text"
+          - "POST /{id}/decline | Cardholder declines the challenge | reason string(255)"
+          - "POST /{id}/verify-otp | Verify an OTP challenge | otp string(10) nn"
+
+    events:
+      - "cards.threeds_authentication.challenge_required | threeds_authentication | A cardholder challenge was started"
+      - "cards.threeds_authentication.completed | threeds_authentication | A 3DS authentication completed"
+
+  # ------------------------------------------------------------------ clearing-service
+  - name: card-clearing-service
+    database: card_clearing_db
+    description: >
+      Imports scheme clearing files (Visa BASE II, Mastercard IPM/T112), matches presentments to authorisations,
+      posts final amounts to the ledger, computes interchange and fees, and tracks scheme settlement positions.
+    tables:
+      - name: clearing_file
+        prefix: clf
+        description: An incoming or outgoing scheme clearing file
+        fr: [CRD-06]
+        columns:
+          - "scheme enum:CardScheme nn | Scheme"
+          - "direction string(8) nn | INCOMING or OUTGOING"
+          - "file_name string(255) nn | File name"
+          - "file_uri string(500) nn ro | Storage location"
+          - "checksum string(64) nn ro | SHA-256, rejects duplicates"
+          - "processing_date date nn | Scheme processing date"
+          - "record_count int ro | Records parsed"
+          - "total_amount amount ro | Total amount"
+          - "currency currency | Currency"
+          - "status enum:ClearingFileStatus nn default=RECEIVED ro | Status"
+          - "error text ro | Error details"
+        unique: [[tenant_id, checksum]]
+
+      - name: clearing_record
+        prefix: clr
+        description: One clearing record (presentment, refund, chargeback, fee). Append-only.
+        immutable: true
+        fr: [CRD-06]
+        columns:
+          - "clearing_file_id uuid nn fk=clearing_file idx | File"
+          - "record_type enum:ClearingRecordType nn | Record type"
+          - "card_id uuid ref=card idx | Card"
+          - "card_authorization_id uuid ref=card_authorization idx | Matched authorisation"
+          - "match_status enum:ClearingMatchStatus nn | Match result"
+          - "network_transaction_id string(64) idx | Scheme transaction id"
+          - "arn string(23) idx | Acquirer reference number"
+          - "auth_code string(6) | Approval code"
+          - "merchant_id string(32) | Merchant id"
+          - "merchant_name string(64) | Merchant name"
+          - "mcc string(4) | MCC"
+          - "transaction_date date nn | Transaction date"
+          - "transaction_amount amount nn | Amount in transaction currency"
+          - "transaction_currency currency nn | Transaction currency"
+          - "billing_amount amount nn | Amount in billing currency"
+          - "billing_currency currency nn | Billing currency"
+          - "settlement_amount amount nn | Amount in settlement currency"
+          - "settlement_currency currency nn | Settlement currency"
+          - "interchange_amount amount | Interchange (issuer income or cost)"
+          - "interchange_rate_code string(16) | Interchange program / rate designator"
+          - "scheme_fee_amount amount | Scheme fees"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "raw json | Parsed record (sensitive fields removed)"
+
+      - name: card_settlement_record
+        prefix: cse
+        description: Scheme settlement position per settlement date and currency (net amount due to / from scheme)
+        fr: [CRD-06]
+        columns:
+          - "scheme enum:CardScheme nn | Scheme"
+          - "card_program_id uuid ref=card_program idx | Program (empty = all)"
+          - "settlement_date date nn | Settlement date"
+          - "currency currency nn | Settlement currency"
+          - "gross_purchases amount nn default=0 | Purchases"
+          - "gross_refunds amount nn default=0 | Refunds"
+          - "chargebacks amount nn default=0 | Chargebacks"
+          - "interchange amount nn default=0 | Net interchange"
+          - "scheme_fees amount nn default=0 | Scheme fees"
+          - "net_amount amount nn default=0 | Net position (positive = issuer pays scheme)"
+          - "status enum:CardSettlementStatus nn default=PENDING | Status"
+          - "journal_entry_id uuid ref=journal_entry | Settlement posting"
+          - "recon_reference string(64) | Bank statement reference"
+        unique: [[tenant_id, scheme, card_program_id, settlement_date, currency]]
+
+      - name: card_fee
+        prefix: cfe
+        description: Fee charged to a cardholder or interchange earned, linked to the posting
+        immutable: true
+        fr: [CRD-06, PRC-02]
+        columns:
+          - "card_id uuid nn ref=card idx | Card"
+          - "fee_type enum:CardFeeType nn | Fee type"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "tax_amount amount nn default=0 | Tax on the fee"
+          - "card_authorization_id uuid ref=card_authorization | Related authorisation"
+          - "clearing_record_id uuid fk=clearing_record | Related clearing record"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "waived bool nn default=false | Waived"
+          - "description string(255) | Narrative"
+
+    apis:
+      - resource: clearing-files
+        path: /v1/card-clearing/files
+        table: clearing_file
+        ops: [list, get, create]
+        filters: [scheme, direction, status, processing_date]
+        actions:
+          - "POST /{id}/reprocess | Re-parse and re-post a failed file"
+          - "GET /{id}/records | Records in the file | | clearing_record[]"
+      - resource: clearing-records
+        path: /v1/card-clearing/records
+        table: clearing_record
+        ops: [list, get]
+        filters: [clearing_file_id, card_id, card_authorization_id, record_type, match_status, arn, network_transaction_id]
+        actions:
+          - "POST /{id}/force-match | Manually match an unmatched record to an authorisation | card_authorization_id uuid nn, reason string(255) nn | clearing_record"
+      - resource: card-settlements
+        path: /v1/card-clearing/settlements
+        table: card_settlement_record
+        ops: [list, get]
+        filters: [scheme, card_program_id, settlement_date, status, currency]
+        actions:
+          - "POST /{id}/confirm | Confirm settlement after bank statement match | recon_reference string(64) nn"
+      - resource: card-fees
+        path: /v1/card-fees
+        table: card_fee
+        ops: [list, get, create]
+        filters: [card_id, fee_type, waived]
+        actions:
+          - "POST /{id}/waive | Waive a fee with a compensating posting | reason string(255) nn | card_fee"
+
+    events:
+      - "cards.clearing_file.processed | clearing_file | A clearing file was parsed and posted"
+      - "cards.clearing_record.posted | clearing_record | A presentment was posted to the ledger"
+      - "cards.clearing_record.unmatched | clearing_record | A presentment could not be matched"
+      - "cards.card_settlement.calculated | card_settlement_record | A scheme settlement position was calculated"
+      - "cards.card_fee.charged | card_fee | A card fee was charged"
+
+  # ------------------------------------------------------------------ disputes-service
+  - name: card-dispute-service
+    database: card_dispute_db
+    description: >
+      Cardholder disputes and scheme chargebacks (Visa Resolve Online, Mastercom): intake, provisional credit,
+      evidence, deadlines per stage, representment handling and final outcome postings.
+    tables:
+      - name: card_dispute
+        prefix: cdp
+        description: A cardholder dispute and its scheme chargeback lifecycle
+        fr: [CRD-08]
+        columns:
+          - "card_id uuid nn ref=card idx | Card"
+          - "customer_id uuid nn ref=customer idx | Cardholder"
+          - "card_authorization_id uuid ref=card_authorization | Disputed authorisation"
+          - "clearing_record_id uuid ref=clearing_record idx | Disputed presentment"
+          - "category enum:CardDisputeCategory nn | Dispute category"
+          - "scheme enum:CardScheme nn | Scheme"
+          - "reason_code string(8) | Scheme reason code, e.g. 10.4, 4837"
+          - "stage enum:CardDisputeStage nn default=INQUIRY | Scheme stage"
+          - "status enum:CardDisputeStatus nn default=OPEN | Status"
+          - "disputed_amount amount nn | Amount disputed"
+          - "currency currency nn | Currency"
+          - "provisional_credit_amount amount nn default=0 ro | Provisional credit given"
+          - "provisional_credit_entry_id uuid ref=journal_entry | Provisional credit posting"
+          - "scheme_case_id string(64) idx | Scheme case number"
+          - "customer_description text pii | Cardholder statement"
+          - "assigned_to string(64) idx | Analyst"
+          - "stage_deadline date | Deadline for the current stage"
+          - "regulatory_deadline date | Regulation E / Z or local deadline"
+          - "outcome string(32) ro | WON, LOST, SPLIT, WITHDRAWN"
+          - "recovered_amount amount nn default=0 ro | Amount recovered from the merchant"
+          - "written_off_amount amount nn default=0 ro | Amount written off"
+          - "closed_at ts ro | Closure time"
+          - "ai_summary text ro | Copilot summary and suggested reason code"
+
+      - name: card_dispute_evidence
+        prefix: cde
+        description: Evidence attached to a dispute
+        fr: [CRD-08]
+        columns:
+          - "card_dispute_id uuid nn fk=card_dispute idx | Dispute"
+          - "evidence_type enum:CardDisputeEvidenceType nn | Evidence type"
+          - "document_id uuid nn ref=document | Stored file"
+          - "description string(500) | Description"
+          - "submitted_to_scheme bool nn default=false | Submitted to the scheme"
+          - "submitted_at ts ro | Submission time"
+
+      - name: card_dispute_event
+        prefix: cdv
+        description: Immutable timeline of a dispute (stage changes, scheme messages, postings)
+        immutable: true
+        fr: [CRD-08]
+        columns:
+          - "card_dispute_id uuid nn fk=card_dispute idx | Dispute"
+          - "event_type string(40) nn | CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST, NOTE"
+          - "from_stage enum:CardDisputeStage | Previous stage"
+          - "to_stage enum:CardDisputeStage | New stage"
+          - "amount amount | Amount involved"
+          - "journal_entry_id uuid ref=journal_entry | Posting created"
+          - "note text | Note"
+          - "actor_id string(64) | Actor"
+
+    apis:
+      - resource: card-disputes
+        path: /v1/card-disputes
+        table: card_dispute
+        ops: [list, get, create, update]
+        filters: [card_id, customer_id, status, stage, category, scheme, assigned_to, scheme_case_id]
+        actions:
+          - "POST /{id}/provisional-credit | Give provisional credit to the cardholder | amount amount nn | card_dispute"
+          - "POST /{id}/reverse-provisional-credit | Reverse provisional credit after a lost case | reason string(255) nn | card_dispute"
+          - "POST /{id}/submit-chargeback | Submit the chargeback to the scheme | reason_code string(8) nn, amount amount nn | card_dispute"
+          - "POST /{id}/accept-representment | Accept the merchant's representment | note text | card_dispute"
+          - "POST /{id}/escalate | Escalate to pre-arbitration or arbitration | stage enum:CardDisputeStage nn, note text | card_dispute"
+          - "POST /{id}/close | Close with an outcome | outcome string(32) nn, note text | card_dispute"
+          - "POST /{id}/assign | Assign to an analyst | assigned_to string(64) nn | card_dispute"
+          - "GET /{id}/events | Dispute timeline | | card_dispute_event[]"
+          - "POST /{id}/ai-summary | Generate a copilot summary and suggested reason code | | card_dispute"
+      - resource: card-dispute-evidence
+        path: /v1/card-dispute-evidence
+        table: card_dispute_evidence
+        ops: [list, get, create, delete]
+        filters: [card_dispute_id, evidence_type, submitted_to_scheme]
+
+    events:
+      - "cards.card_dispute.opened | card_dispute | A dispute was opened"
+      - "cards.card_dispute.stage_changed | card_dispute | A dispute moved to another scheme stage"
+      - "cards.card_dispute.deadline_approaching | card_dispute | A stage deadline is within 3 days"
+      - "cards.card_dispute.closed | card_dispute | A dispute was closed with an outcome"

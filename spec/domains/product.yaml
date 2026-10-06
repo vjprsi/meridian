@@ -1,0 +1,715 @@
+domain: product
+title: Product Studio and Pricing
+phase: 1
+description: >
+  Versioned, configuration-driven product catalogue for every product family (deposits, wallets, cards,
+  loans, lines, BNPL, overdrafts), with interest, fees, tax, limits, eligibility, bundles, sandboxed WASM
+  scripts and simulation; plus a DMN-compatible pricing and decision engine.
+
+enums:
+  ProductFamily: [CURRENT_ACCOUNT, SAVINGS, TERM_DEPOSIT, CALL_DEPOSIT, NOTICE_DEPOSIT, WALLET, PREPAID_CARD,
+                  DEBIT_CARD, CREDIT_CARD, CORPORATE_CARD, INSTALMENT_LOAN, CREDIT_LINE, BNPL, OVERDRAFT,
+                  MORTGAGE, NANO_LOAN, MERCHANT_FINANCING, ESCROW, VIRTUAL_ACCOUNT]
+  ProductSegment: [RETAIL, SME, CORPORATE, PRIVATE, YOUTH, STUDENT, SENIOR, STAFF, GOVERNMENT, NON_PROFIT]
+  ProductStatus: [DRAFT, ACTIVE, SUSPENDED, RETIRED]
+  ProductVersionStatus: [DRAFT, PENDING_APPROVAL, APPROVED, PUBLISHED, SUPERSEDED, REJECTED, RETIRED]
+  ProductParameterType: [STRING, INTEGER, DECIMAL, AMOUNT, RATE, BOOLEAN, DATE, DURATION, ENUM, JSON]
+  ProductChannel: [MOBILE, WEB, BRANCH, AGENT, USSD, API, CALL_CENTER, PARTNER]
+  InterestRateKind: [CREDIT_INTEREST, DEBIT_INTEREST, OVERDRAFT_INTEREST, UNARRANGED_OVERDRAFT_INTEREST,
+                     PENALTY_INTEREST, BONUS_INTEREST, PURCHASE_APR, CASH_ADVANCE_APR, BALANCE_TRANSFER_APR]
+  RateStructureType: [FIXED, TIERED, BANDED, FLOATING, STEPPED, ZERO]
+  DayCountBasis: [ACT_360, ACT_365, ACT_365L, ACT_ACT_ISDA, THIRTY_360, THIRTY_E_360]
+  InterestFrequency: [DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, AT_MATURITY, NONE]
+  BalanceBasis: [END_OF_DAY, AVERAGE_DAILY, MINIMUM_DAILY, MINIMUM_MONTHLY]
+  RoundingRule: [HALF_EVEN, HALF_UP, HALF_DOWN, UP, DOWN]
+  FeeCalculationMethod: [FLAT, PERCENTAGE, FLAT_PLUS_PERCENTAGE, TIERED_FLAT, TIERED_PERCENTAGE, PER_UNIT]
+  FeeTrigger: [ACCOUNT_OPENING, MONTHLY_MAINTENANCE, ANNUAL, TRANSACTION, ATM_WITHDRAWAL, CARD_ISSUANCE,
+               CARD_REPLACEMENT, FX_CONVERSION, STATEMENT_COPY, LATE_PAYMENT, OVERDRAFT_USAGE,
+               UNARRANGED_OVERDRAFT, DORMANCY, EARLY_CLOSURE, PREMATURE_WITHDRAWAL, CASH_IN, CASH_OUT,
+               TRANSFER_OUT, INTERNATIONAL_TRANSFER, BELOW_MIN_BALANCE, CHEQUE_BOOK, LOAN_ORIGINATION,
+               LOAN_PREPAYMENT, CUSTOM]
+  FeeWaiverCondition: [MIN_BALANCE, AVERAGE_BALANCE, SALARY_CREDIT, TRANSACTION_COUNT, BUNDLE_MEMBER,
+                       SEGMENT, PROMOTION, MANUAL, FIRST_N_FREE]
+  TaxType: [WITHHOLDING_TAX, VAT, GST, STAMP_DUTY, EXCISE, FINANCIAL_TRANSACTION_TAX, SALES_TAX]
+  TaxBase: [INTEREST_EARNED, FEE_AMOUNT, TRANSACTION_AMOUNT, PRINCIPAL]
+  ProductLimitPeriod: [PER_TRANSACTION, DAILY, WEEKLY, MONTHLY, YEARLY, LIFETIME]
+  ProductLimitMetric: [AMOUNT, COUNT, BALANCE]
+  EligibilityRuleType: [AGE, RESIDENCY, NATIONALITY, KYC_TIER, SEGMENT, INCOME, CREDIT_SCORE, EXISTING_PRODUCT,
+                        CUSTOMER_TYPE, CUSTOM_EXPRESSION]
+  ScriptLanguage: [RUST, ASSEMBLYSCRIPT, TYPESCRIPT, TINYGO]
+  ScriptStatus: [DRAFT, VALIDATED, PENDING_APPROVAL, ACTIVE, DEPRECATED, REJECTED]
+  ScriptHook: [PRE_POSTING, POST_POSTING, ACCRUAL, FEE_CALCULATION, SCHEDULE_GENERATION, ELIGIBILITY,
+               END_OF_DAY, END_OF_MONTH, ON_MATURITY, ON_EVENT]
+  PromotionStatus: [SCHEDULED, ACTIVE, EXPIRED, CANCELLED]
+  DisclosureType: [TERMS_AND_CONDITIONS, KEY_FACTS, FEE_SCHEDULE, RATE_SHEET, PRIVACY_NOTICE, PRE_CONTRACT, OTHER]
+  DecisionHitPolicy: [UNIQUE, FIRST, PRIORITY, ANY, COLLECT, RULE_ORDER, OUTPUT_ORDER]
+  DecisionTableStatus: [DRAFT, PENDING_APPROVAL, PUBLISHED, RETIRED]
+  DecisionTablePurpose: [PRICING, ELIGIBILITY, FEE, LIMIT, ROUTING, RISK, CUSTOM]
+
+services:
+  # ------------------------------------------------------------------ product-catalog-service
+  - name: product-catalog-service
+    database: product_db
+    description: >
+      Product Studio back end. Holds templates, products and immutable published versions with all
+      parameters (interest, fees, tax, limits, eligibility, scripts). Accounts pin a version; publishing
+      goes through maker-checker; simulations run a product against synthetic customers.
+    tables:
+      - name: product_template
+        prefix: ptm
+        description: Starter template for a product family with default parameters and allowed overrides
+        fr: [PRD-02]
+        columns:
+          - "code string(64) nn uq | Template code, e.g. TPL_SAVINGS_TIERED"
+          - "name string(160) nn | Display name"
+          - "family enum:ProductFamily nn | Product family the template creates"
+          - "description text | What the template is for"
+          - "default_definition json nn | Default parameter set (interest, fees, limits, rules)"
+          - "editable_fields json nn | Paths of parameters a product manager may change"
+          - "is_system bool nn default=false | Shipped by the platform (read-only to tenants)"
+          - "is_active bool nn default=true | Available in Product Studio"
+
+      - name: product
+        prefix: prd
+        description: A sellable product (catalogue entry); its behaviour lives in versions
+        fr: [PRD-01, PRD-02]
+        columns:
+          - "code string(64) nn uq | Product code, e.g. SAV-GOLD-USD"
+          - "name string(160) nn | Marketing name"
+          - "family enum:ProductFamily nn | Product family"
+          - "segment enum:ProductSegment nn default=RETAIL | Target segment"
+          - "template_id uuid fk=product_template | Template it was created from"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Issuing legal entity"
+          - "currency currency nn | Product currency"
+          - "status enum:ProductStatus nn default=DRAFT | Catalogue status"
+          - "current_version_id uuid ro | Currently published version"
+          - "short_description string(500) | One-line description for channels"
+          - "long_description text | Full marketing description"
+          - "available_channels json | ProductChannel values where it can be sold"
+          - "available_countries json | ISO 3166 countries where it can be sold"
+          - "launch_date date | Planned launch"
+          - "retire_date date | Date it stops being sold"
+          - "is_sellable bool nn default=false | New sales allowed"
+          - "owner_user_id uuid ref=app_user | Product manager owning it"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: product_version
+        prefix: prv
+        description: Immutable-once-published definition of a product; existing accounts stay on their version
+        fr: [PRD-01, PRD-03, LIM-02]
+        columns:
+          - "product_id uuid nn fk=product idx | Product"
+          - "version_no int nn | Sequential version number"
+          - "status enum:ProductVersionStatus nn default=DRAFT ro | Approval lifecycle"
+          - "effective_from ts | When new sales start using this version"
+          - "effective_to ts | When it stops applying to new sales"
+          - "definition json nn | Full resolved snapshot of all parameters at publish time"
+          - "change_summary text | What changed compared to the previous version"
+          - "migration_policy string(32) nn default=PIN | PIN (accounts stay), MIGRATE_ON_RENEWAL, FORCE_MIGRATE"
+          - "submitted_by string(64) ro | Maker"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "published_at ts ro | Publication time"
+          - "approval_request_id uuid ref=approval_request | Workflow approval request"
+          - "checksum string(64) ro | SHA-256 of the definition, for tamper evidence"
+        unique: [[product_id, version_no]]
+
+      - name: product_parameter
+        prefix: ppm
+        description: Typed parameter of a product version (key/value with validation)
+        fr: [PRD-03]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "param_key string(128) nn | Parameter path, e.g. dormancy.inactive_days"
+          - "param_type enum:ProductParameterType nn | Data type"
+          - "value_text text | Value serialised as text"
+          - "value_json json | Structured value"
+          - "min_value string(64) | Lower bound for numeric values"
+          - "max_value string(64) | Upper bound for numeric values"
+          - "allowed_values json | Allowed values for ENUM type"
+          - "is_overridable bool nn default=false | Can be overridden per account (with approval)"
+          - "description string(500) | Meaning of the parameter"
+        unique: [[product_version_id, param_key]]
+
+      - name: interest_rate_config
+        prefix: irc
+        description: Interest configuration of a product version (credit, debit, overdraft, penalty, APRs)
+        fr: [PRD-03, PRC-01]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "rate_kind enum:InterestRateKind nn | What the rate applies to"
+          - "rate_type enum:RateStructureType nn | Fixed, tiered, banded, floating, stepped or zero"
+          - "fixed_rate rate | Annual nominal rate as a fraction (0.045 = 4.5%) for FIXED"
+          - "rate_index_id uuid fk=rate_index | Benchmark index for FLOATING"
+          - "spread rate | Margin added to the index"
+          - "floor_rate rate | Minimum resulting rate"
+          - "cap_rate rate | Maximum resulting rate"
+          - "day_count enum:DayCountBasis nn default=ACT_365 | Day-count convention"
+          - "balance_basis enum:BalanceBasis nn default=END_OF_DAY | Balance used for accrual"
+          - "accrual_frequency enum:InterestFrequency nn default=DAILY | How often interest accrues"
+          - "compounding_frequency enum:InterestFrequency nn default=NONE | How often accrued interest compounds"
+          - "capitalisation_frequency enum:InterestFrequency nn default=MONTHLY | How often interest is posted"
+          - "capitalisation_day int | Day of month for posting (1-31, 31 = month end)"
+          - "reprice_frequency enum:InterestFrequency | How often a floating rate resets"
+          - "min_balance_for_interest amount nn default=0 | No interest below this balance"
+          - "rounding enum:RoundingRule nn default=HALF_EVEN | Rounding of accrued amounts"
+          - "rounding_scale int nn default=2 | Decimal places after rounding"
+          - "currency currency nn | Currency"
+          - "effective_from date nn | Start date of this rate"
+          - "effective_to date | End date of this rate"
+
+      - name: interest_rate_tier
+        prefix: irt
+        description: Balance tier or band of a tiered/banded/stepped rate
+        fr: [PRC-01]
+        columns:
+          - "interest_rate_config_id uuid nn fk=interest_rate_config idx | Rate configuration"
+          - "tier_no int nn | Order of the tier"
+          - "from_amount amount nn default=0 | Lower bound (inclusive)"
+          - "to_amount amount | Upper bound (exclusive); empty = unlimited"
+          - "from_day int | For STEPPED rates: first day (term-based steps)"
+          - "to_day int | For STEPPED rates: last day"
+          - "rate rate nn | Annual rate for the tier"
+          - "spread rate | Spread over the index for floating tiers"
+        unique: [[interest_rate_config_id, tier_no]]
+
+      - name: rate_index
+        prefix: rix
+        description: Benchmark rate index (SOFR, EURIBOR 3M, central-bank policy rate, internal base rate)
+        fr: [PRC-01]
+        columns:
+          - "code string(32) nn uq | Index code, e.g. SOFR, EURIBOR_3M, BASE_RATE"
+          - "name string(120) nn | Display name"
+          - "currency currency nn | Currency"
+          - "tenor string(16) | Tenor, e.g. ON, 1M, 3M, 12M"
+          - "source string(64) nn | Publisher, e.g. FED, ECB, EMMI, INTERNAL"
+          - "publication_lag_days int nn default=0 | Lag between fixing and use"
+          - "is_active bool nn default=true | Active"
+
+      - name: rate_index_value
+        prefix: riv
+        description: Published value of a rate index for a date. Append-only.
+        immutable: true
+        fr: [PRC-01]
+        columns:
+          - "rate_index_id uuid nn fk=rate_index | Index"
+          - "value_date date nn | Fixing date"
+          - "rate rate nn | Annual rate as a fraction"
+          - "source_ref string(128) | External publication reference"
+        unique: [[rate_index_id, value_date]]
+
+      - name: fee_definition
+        prefix: fee
+        description: A fee charged by a product version (event-based or periodic)
+        fr: [PRD-03, PRC-02, PRC-03]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "code string(64) nn | Fee code, e.g. MONTHLY_MAINTENANCE"
+          - "name string(160) nn | Fee name on statements"
+          - "trigger enum:FeeTrigger nn | Event or schedule that charges it"
+          - "frequency enum:InterestFrequency | For periodic fees"
+          - "calculation_method enum:FeeCalculationMethod nn | How the amount is computed"
+          - "flat_amount amount | Flat amount"
+          - "percentage rate | Percentage of the base amount as a fraction"
+          - "min_amount amount | Minimum charge"
+          - "max_amount amount | Maximum charge (cap per occurrence)"
+          - "cap_per_period amount | Maximum total per period"
+          - "cap_period enum:ProductLimitPeriod | Period for the cap"
+          - "free_count int nn default=0 | Number of free occurrences per period"
+          - "currency currency nn | Currency"
+          - "tax_rule_id uuid fk=tax_rule | Tax applied to the fee (VAT/GST)"
+          - "income_gl_code string(32) | GL income code override"
+          - "allow_negative_balance bool nn default=false | Fee may overdraw the account"
+          - "is_refundable bool nn default=true | Can be refunded"
+          - "effective_from date | Start date"
+          - "effective_to date | End date"
+        unique: [[product_version_id, code]]
+
+      - name: fee_tier
+        prefix: fet
+        description: Tier of a tiered fee (by amount, count or balance)
+        fr: [PRC-02]
+        columns:
+          - "fee_definition_id uuid nn fk=fee_definition idx | Fee"
+          - "tier_no int nn | Order of the tier"
+          - "from_value amount nn default=0 | Lower bound (amount or count)"
+          - "to_value amount | Upper bound; empty = unlimited"
+          - "flat_amount amount | Flat amount for the tier"
+          - "percentage rate | Percentage for the tier"
+        unique: [[fee_definition_id, tier_no]]
+
+      - name: fee_waiver_rule
+        prefix: fwr
+        description: Condition under which a fee is waived or discounted
+        fr: [PRC-02, PRC-04]
+        columns:
+          - "fee_definition_id uuid nn fk=fee_definition idx | Fee"
+          - "condition enum:FeeWaiverCondition nn | Waiver condition"
+          - "threshold_amount amount | Threshold for balance/credit conditions"
+          - "threshold_count int | Threshold for count conditions"
+          - "segment enum:ProductSegment | Segment for SEGMENT condition"
+          - "discount_percentage rate nn default=1 | Share waived (1 = fully waived)"
+          - "expression text | Custom expression (CEL) when condition is complex"
+          - "valid_from date | Start date"
+          - "valid_to date | End date"
+
+      - name: tax_rule
+        prefix: tax
+        description: Tax applied to interest or fees in a jurisdiction (WHT, VAT, GST, stamp duty)
+        fr: [PRC-03]
+        columns:
+          - "code string(64) nn uq | Tax code, e.g. NG_WHT_10"
+          - "name string(160) nn | Name"
+          - "tax_type enum:TaxType nn | Tax type"
+          - "tax_base enum:TaxBase nn | What the tax is computed on"
+          - "country country nn | Jurisdiction"
+          - "region string(64) | State / province when applicable"
+          - "rate rate nn | Tax rate as a fraction"
+          - "exemption_rules json | Exemptions (residency, customer type, certificate)"
+          - "tax_authority string(160) | Authority the tax is remitted to"
+          - "liability_gl_code string(32) | GL code for tax payable"
+          - "valid_from date nn | Start date"
+          - "valid_to date | End date"
+
+      - name: product_limit_template
+        prefix: plt
+        description: Default limit a product imposes (applied to accounts; overridable per customer by risk)
+        fr: [PRD-03, LIM-01]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "limit_code string(64) nn | Limit code, e.g. ATM_WITHDRAWAL_DAILY"
+          - "transaction_type string(64) | Transaction type the limit applies to (empty = all)"
+          - "channel enum:ProductChannel | Channel (empty = all)"
+          - "period enum:ProductLimitPeriod nn | Period"
+          - "metric enum:ProductLimitMetric nn default=AMOUNT | Amount, count or balance"
+          - "kyc_tier int | KYC tier this value applies to (empty = all tiers)"
+          - "max_value amount nn | Maximum value"
+          - "currency currency | Currency for amount limits"
+          - "customer_adjustable bool nn default=false | Customer may lower it in the app"
+        unique: [[product_version_id, limit_code, kyc_tier]]
+
+      - name: eligibility_rule
+        prefix: elg
+        description: Who may buy the product (age, residency, KYC tier, score, existing products)
+        fr: [PRD-03, PRD-04]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "rule_type enum:EligibilityRuleType nn | Rule type"
+          - "operator string(16) nn | EQ, NE, GT, GTE, LT, LTE, IN, NOT_IN, BETWEEN"
+          - "value json nn | Comparison value(s)"
+          - "expression text | CEL expression for CUSTOM_EXPRESSION"
+          - "decision_table_id uuid ref=decision_table | Decision table evaluated instead of a single rule"
+          - "rejection_code string(64) | Code returned when the rule fails"
+          - "rejection_message string(255) | Customer-facing message"
+          - "is_hard bool nn default=true | Hard stop (true) or refer to manual review (false)"
+
+      - name: product_bundle
+        prefix: pbn
+        description: Package of products sold together with shared pricing (e.g. account + card + overdraft)
+        fr: [PRD-07]
+        columns:
+          - "code string(64) nn uq | Bundle code"
+          - "name string(160) nn | Marketing name"
+          - "description text | Description"
+          - "monthly_fee amount nn default=0 | Package fee"
+          - "currency currency nn | Currency"
+          - "fee_definition_id uuid fk=fee_definition | Package fee definition"
+          - "status enum:ProductStatus nn default=DRAFT | Status"
+          - "valid_from date | Start date"
+          - "valid_to date | End date"
+
+      - name: product_bundle_item
+        prefix: pbi
+        description: Product included in a bundle, with bundle-specific overrides
+        fr: [PRD-07]
+        columns:
+          - "product_bundle_id uuid nn fk=product_bundle idx | Bundle"
+          - "product_id uuid nn fk=product | Included product"
+          - "is_mandatory bool nn default=true | Must be held to keep bundle pricing"
+          - "parameter_overrides json | Overrides (e.g. waived fees, better rate)"
+          - "sort_order int nn default=0 | Display order"
+        unique: [[product_bundle_id, product_id]]
+
+      - name: product_script
+        prefix: psc
+        description: Sandboxed WASM module implementing custom product behaviour at a lifecycle hook
+        fr: [PRD-05]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "name string(120) nn | Script name"
+          - "hook enum:ScriptHook nn | Lifecycle hook it runs at"
+          - "language enum:ScriptLanguage nn | Source language compiled to WASM"
+          - "source_code text | Source code (kept for review and audit)"
+          - "wasm_module_uri string(500) nn ro | Location of the compiled module"
+          - "wasm_sha256 string(64) nn ro | Hash of the compiled module"
+          - "entrypoint string(64) nn default=run | Exported function name"
+          - "max_fuel bigint nn default=10000000 | Instruction budget per call"
+          - "max_memory_mb int nn default=16 | Memory limit"
+          - "timeout_ms int nn default=50 | Wall-clock limit per call"
+          - "status enum:ScriptStatus nn default=DRAFT ro | Status"
+          - "validation_report json ro | Static checks and test results"
+          - "approved_by string(64) ro | Checker"
+        unique: [[product_version_id, hook, name]]
+
+      - name: product_simulation
+        prefix: psm
+        description: Simulation of a product version against a synthetic customer over a time horizon
+        fr: [PRD-06]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version simulated"
+          - "name string(160) | Scenario name"
+          - "horizon_months int nn default=60 | Simulated period"
+          - "scenario json nn | Inputs: opening balance, deposits, spend pattern, rate path, events"
+          - "status enum:RunStatus nn default=QUEUED ro | Run status"
+          - "results json ro | Outputs: balances, interest, fees, tax, schedule per period"
+          - "summary json ro | Totals: interest earned/paid, fees, APR/AER/EIR"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Error"
+
+      - name: promotional_rate
+        prefix: prm
+        description: Time-limited promotional interest rate or fee discount on a product
+        fr: [PRC-04]
+        columns:
+          - "product_id uuid nn fk=product idx | Product"
+          - "code string(64) nn uq | Promotion code"
+          - "name string(160) nn | Name"
+          - "rate_kind enum:InterestRateKind | Rate affected"
+          - "bonus_rate rate | Rate added to the standard rate"
+          - "override_rate rate | Rate replacing the standard rate"
+          - "fee_discount_percentage rate | Fee discount as a fraction"
+          - "applies_for_days int | Days the promotion lasts per account"
+          - "new_customers_only bool nn default=false | Only for new-to-bank customers"
+          - "max_balance amount | Balance cap that earns the promotional rate"
+          - "starts_at ts nn | Campaign start"
+          - "ends_at ts nn | Campaign end"
+          - "status enum:PromotionStatus nn default=SCHEDULED | Status"
+
+      - name: relationship_pricing
+        prefix: rlp
+        description: Pricing adjustment based on the customer's total relationship (balances, products, segment)
+        fr: [PRC-04]
+        columns:
+          - "product_id uuid nn fk=product idx | Product"
+          - "name string(160) nn | Rule name"
+          - "segment enum:ProductSegment | Segment condition"
+          - "min_relationship_balance amount | Minimum total relationship balance"
+          - "min_products int | Minimum number of products held"
+          - "rate_kind enum:InterestRateKind | Rate affected"
+          - "rate_adjustment rate | Added to the rate (negative for loans)"
+          - "fee_discount_percentage rate | Fee discount as a fraction"
+          - "priority int nn default=100 | Lower wins"
+          - "valid_from date | Start date"
+          - "valid_to date | End date"
+
+      - name: product_availability
+        prefix: pav
+        description: Where and to whom a product is available (channel, country, branch, partner)
+        fr: [PRD-01]
+        columns:
+          - "product_id uuid nn fk=product idx | Product"
+          - "channel enum:ProductChannel nn | Channel"
+          - "country country | Country"
+          - "branch_id uuid ref=branch | Branch restriction"
+          - "partner_code string(64) | Partner / embedded-finance distributor"
+          - "is_available bool nn default=true | Available"
+          - "available_from ts | From"
+          - "available_to ts | To"
+
+      - name: product_disclosure
+        prefix: pds
+        description: Customer-facing legal document of a product version (T&Cs, key facts, fee schedule)
+        fr: [PRD-01]
+        columns:
+          - "product_version_id uuid nn fk=product_version idx | Version"
+          - "disclosure_type enum:DisclosureType nn | Type"
+          - "language string(10) nn default=en | IETF language tag"
+          - "title string(255) nn | Title"
+          - "document_id uuid nn ref=document | Stored document"
+          - "version_label string(32) | Document version shown to customers"
+          - "requires_acceptance bool nn default=true | Customer must accept at onboarding"
+        unique: [[product_version_id, disclosure_type, language]]
+
+    apis:
+      - resource: product-templates
+        path: /v1/product-templates
+        table: product_template
+        ops: [list, get, create, update]
+        filters: [family, is_active, is_system]
+      - resource: products
+        path: /v1/products
+        table: product
+        ops: [list, get, create, update]
+        filters: [family, segment, status, currency, legal_entity_id, is_sellable]
+        actions:
+          - "POST /from-template | Create a product from a template | template_id uuid nn, code string(64) nn, name string(160) nn, currency currency nn, legal_entity_id uuid nn"
+          - "GET /{id}/versions | Versions of a product | | product_version[]"
+          - "POST /{id}/clone | Clone a product with its current definition | code string(64) nn, name string(160) nn"
+          - "POST /{id}/suspend | Stop new sales temporarily | reason string(255) nn"
+          - "POST /{id}/retire | Retire a product (no new sales; existing accounts continue) | retire_date date nn, reason string(255)"
+          - "GET /{id}/eligibility-check | Check whether a customer is eligible (?customer_id=) | | none"
+          - "POST /{id}/quote | Price the product for a customer and amount/term | customer_id uuid, amount amount, term_months int, channel enum:ProductChannel | none"
+      - resource: product-versions
+        path: /v1/product-versions
+        table: product_version
+        ops: [list, get, create, update]
+        filters: [product_id, status]
+        actions:
+          - "POST /{id}/submit | Submit a draft version for approval (maker) | comment string(500)"
+          - "POST /{id}/approve | Approve a submitted version (checker) | comment string(500)"
+          - "POST /{id}/reject | Reject a submitted version | reason string(500) nn"
+          - "POST /{id}/publish | Publish an approved version | effective_from ts"
+          - "POST /{id}/new-draft | Start a new draft version from this one | | product_version"
+          - "GET /{id}/diff | Differences against another version (?against=) | | none"
+          - "POST /{id}/migrate-accounts | Migrate accounts pinned to an older version to this one | from_version_id uuid nn, effective_date date nn"
+          - "GET /{id}/parameters | Parameters of the version | | product_parameter[]"
+          - "GET /{id}/interest-rates | Interest configurations of the version | | interest_rate_config[]"
+          - "GET /{id}/fees | Fees of the version | | fee_definition[]"
+          - "GET /{id}/limits | Limit templates of the version | | product_limit_template[]"
+          - "GET /{id}/eligibility-rules | Eligibility rules of the version | | eligibility_rule[]"
+      - resource: product-parameters
+        path: /v1/product-parameters
+        table: product_parameter
+        ops: [list, get, create, update, delete]
+        filters: [product_version_id, param_key]
+      - resource: interest-rate-configs
+        path: /v1/interest-rate-configs
+        table: interest_rate_config
+        ops: [list, get, create, update, delete]
+        filters: [product_version_id, rate_kind, rate_type]
+        actions:
+          - "GET /{id}/tiers | Tiers of a rate configuration | | interest_rate_tier[]"
+          - "POST /{id}/effective-rate | Compute the effective rate for a balance and date | balance amount nn, as_of date | none"
+      - resource: interest-rate-tiers
+        path: /v1/interest-rate-tiers
+        table: interest_rate_tier
+        ops: [list, get, create, update, delete]
+        filters: [interest_rate_config_id]
+      - resource: rate-indexes
+        path: /v1/rate-indexes
+        table: rate_index
+        ops: [list, get, create, update]
+        filters: [currency, source, is_active]
+        actions:
+          - "GET /{id}/values | Published values (?from=&to=) | | rate_index_value[]"
+          - "POST /{id}/values | Publish a new index value | value_date date nn, rate rate nn, source_ref string(128) | rate_index_value"
+      - resource: fee-definitions
+        path: /v1/fee-definitions
+        table: fee_definition
+        ops: [list, get, create, update, delete]
+        filters: [product_version_id, trigger, calculation_method, code]
+        actions:
+          - "GET /{id}/tiers | Tiers of a fee | | fee_tier[]"
+          - "GET /{id}/waiver-rules | Waiver rules of a fee | | fee_waiver_rule[]"
+          - "POST /{id}/calculate | Calculate the fee for an amount (dry run) | base_amount amount nn, occurrence_no int, customer_id uuid | none"
+      - resource: fee-tiers
+        path: /v1/fee-tiers
+        table: fee_tier
+        ops: [list, get, create, update, delete]
+        filters: [fee_definition_id]
+      - resource: fee-waiver-rules
+        path: /v1/fee-waiver-rules
+        table: fee_waiver_rule
+        ops: [list, get, create, update, delete]
+        filters: [fee_definition_id, condition]
+      - resource: tax-rules
+        path: /v1/tax-rules
+        table: tax_rule
+        ops: [list, get, create, update]
+        filters: [tax_type, tax_base, country, code]
+      - resource: product-limit-templates
+        path: /v1/product-limit-templates
+        table: product_limit_template
+        ops: [list, get, create, update, delete]
+        filters: [product_version_id, limit_code, period, channel]
+      - resource: eligibility-rules
+        path: /v1/eligibility-rules
+        table: eligibility_rule
+        ops: [list, get, create, update, delete]
+        filters: [product_version_id, rule_type]
+      - resource: product-bundles
+        path: /v1/product-bundles
+        table: product_bundle
+        ops: [list, get, create, update]
+        filters: [status, code]
+        actions:
+          - "GET /{id}/items | Products in the bundle | | product_bundle_item[]"
+      - resource: product-bundle-items
+        path: /v1/product-bundle-items
+        table: product_bundle_item
+        ops: [list, get, create, update, delete]
+        filters: [product_bundle_id, product_id]
+      - resource: product-scripts
+        path: /v1/product-scripts
+        table: product_script
+        ops: [list, get, create, update]
+        filters: [product_version_id, hook, status, language]
+        actions:
+          - "POST /{id}/compile | Compile the source to WASM and run static checks"
+          - "POST /{id}/test | Run the script against test inputs in the sandbox | inputs json nn | none"
+          - "POST /{id}/submit | Submit for approval (maker) | comment string(500)"
+          - "POST /{id}/approve | Approve and activate (checker) | comment string(500)"
+          - "POST /{id}/deprecate | Deprecate a script | reason string(255) nn"
+      - resource: product-simulations
+        path: /v1/product-simulations
+        table: product_simulation
+        ops: [list, get, create]
+        filters: [product_version_id, status]
+        actions:
+          - "POST /{id}/cancel | Cancel a running simulation"
+          - "GET /{id}/export | Download simulation results as CSV | | none"
+      - resource: promotional-rates
+        path: /v1/promotional-rates
+        table: promotional_rate
+        ops: [list, get, create, update]
+        filters: [product_id, status, code]
+        actions:
+          - "POST /{id}/cancel | Cancel a promotion | reason string(255) nn"
+      - resource: relationship-pricing-rules
+        path: /v1/relationship-pricing-rules
+        table: relationship_pricing
+        ops: [list, get, create, update, delete]
+        filters: [product_id, segment]
+      - resource: product-availability
+        path: /v1/product-availability
+        table: product_availability
+        ops: [list, get, create, update, delete]
+        filters: [product_id, channel, country, partner_code]
+      - resource: product-disclosures
+        path: /v1/product-disclosures
+        table: product_disclosure
+        ops: [list, get, create, update]
+        filters: [product_version_id, disclosure_type, language]
+
+    events:
+      - "product.product.created | product | A product was created"
+      - "product.product.status_changed | product | A product was suspended, activated or retired"
+      - "product.product_version.submitted | product_version | A version was submitted for approval"
+      - "product.product_version.approved | product_version | A version was approved"
+      - "product.product_version.rejected | product_version | A version was rejected"
+      - "product.product_version.published | product_version | A version was published and is used for new sales"
+      - "product.rate_index_value.published | rate_index_value | A new benchmark rate value was published (triggers repricing)"
+      - "product.interest_rate_config.changed | interest_rate_config | An interest rate changed (triggers customer notices)"
+      - "product.product_script.activated | product_script | A script was approved and activated"
+      - "product.product_simulation.completed | product_simulation | A simulation finished"
+      - "product.promotional_rate.started | promotional_rate | A promotion started"
+      - "product.promotional_rate.ended | promotional_rate | A promotion ended or was cancelled"
+
+  # ------------------------------------------------------------------ pricing-rules-service
+  - name: pricing-rules-service
+    database: pricing_db
+    description: >
+      DMN-compatible decision engine used for pricing, eligibility, fees, limits and routing decisions.
+      Decision tables are versioned with maker-checker; every evaluation is logged for explainability.
+    tables:
+      - name: decision_table
+        prefix: dtb
+        description: A named decision (pricing, eligibility, fee, limit, routing) with versions
+        fr: [PRD-04]
+        columns:
+          - "code string(64) nn uq | Decision code, e.g. LOAN_PRICING_GRID"
+          - "name string(160) nn | Name"
+          - "purpose enum:DecisionTablePurpose nn | What the decision is used for"
+          - "description text | Description"
+          - "current_version_id uuid ro | Published version in use"
+          - "status enum:DecisionTableStatus nn default=DRAFT | Status"
+          - "owner_user_id uuid ref=app_user | Owner"
+
+      - name: decision_table_version
+        prefix: dtv
+        description: Versioned content of a decision table (inputs, outputs, rules) in DMN form
+        fr: [PRD-04, LIM-02]
+        columns:
+          - "decision_table_id uuid nn fk=decision_table idx | Decision table"
+          - "version_no int nn | Version number"
+          - "hit_policy enum:DecisionHitPolicy nn default=FIRST | DMN hit policy"
+          - "inputs json nn | Input columns: name, type, expression"
+          - "outputs json nn | Output columns: name, type, default"
+          - "rules json nn | Rule rows: input entries, output entries, annotation"
+          - "dmn_xml text | Equivalent DMN 1.5 XML for import/export"
+          - "status enum:DecisionTableStatus nn default=DRAFT ro | Status"
+          - "effective_from ts | Start"
+          - "effective_to ts | End"
+          - "submitted_by string(64) ro | Maker"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "checksum string(64) ro | SHA-256 of the content"
+        unique: [[decision_table_id, version_no]]
+
+      - name: rule_evaluation_log
+        prefix: rel
+        description: Every decision evaluation with inputs, matched rules and outputs (explainability). Append-only.
+        immutable: true
+        fr: [PRD-04]
+        columns:
+          - "decision_table_id uuid nn fk=decision_table idx | Decision table"
+          - "decision_table_version_id uuid nn fk=decision_table_version | Version evaluated"
+          - "caller_service string(64) nn | Service that asked"
+          - "subject_type string(64) | Business object type, e.g. LOAN_APPLICATION"
+          - "subject_id uuid idx | Business object id"
+          - "inputs json nn | Input values"
+          - "matched_rules json nn | Indexes of matched rules"
+          - "outputs json nn | Output values"
+          - "duration_micros int nn | Evaluation time"
+          - "correlation_id string(128) idx | Trace id"
+
+      - name: product_price_quote
+        prefix: pqt
+        description: Price quote given to a customer (rate, fees, APR) valid until expiry
+        fr: [PRC-04, PRD-04]
+        columns:
+          - "product_id uuid nn ref=product idx | Product"
+          - "product_version_id uuid nn ref=product_version | Version priced"
+          - "customer_id uuid ref=customer idx | Customer (empty for anonymous quotes)"
+          - "amount amount | Requested amount"
+          - "currency currency nn | Currency"
+          - "term_months int | Requested term"
+          - "channel enum:ProductChannel | Channel"
+          - "interest_rate rate nn | Quoted annual rate"
+          - "apr rate | Annual percentage rate / AER including fees"
+          - "fees json | Quoted fees"
+          - "total_cost amount | Total cost of credit or total interest earned"
+          - "decision_log_id uuid fk=rule_evaluation_log | Evaluation that produced the quote"
+          - "expires_at ts nn | Validity"
+          - "accepted_at ts ro | Time accepted"
+
+    apis:
+      - resource: decision-tables
+        path: /v1/decision-tables
+        table: decision_table
+        ops: [list, get, create, update]
+        filters: [purpose, status, code]
+        actions:
+          - "POST /{id}/evaluate | Evaluate the published version with inputs | inputs json nn, subject_type string(64), subject_id uuid | rule_evaluation_log"
+          - "GET /{id}/versions | Versions of the decision table | | decision_table_version[]"
+          - "POST /import-dmn | Import a DMN 1.5 XML file as a new draft | dmn_xml text nn, code string(64) nn | decision_table"
+      - resource: decision-table-versions
+        path: /v1/decision-table-versions
+        table: decision_table_version
+        ops: [list, get, create, update]
+        filters: [decision_table_id, status]
+        actions:
+          - "POST /{id}/test | Evaluate a draft version against test cases | test_cases json nn | none"
+          - "POST /{id}/submit | Submit for approval (maker) | comment string(500)"
+          - "POST /{id}/approve | Approve and publish (checker) | comment string(500)"
+          - "POST /{id}/reject | Reject | reason string(500) nn"
+          - "GET /{id}/export-dmn | Export as DMN 1.5 XML | | none"
+      - resource: rule-evaluations
+        path: /v1/rule-evaluations
+        table: rule_evaluation_log
+        ops: [list, get]
+        filters: [decision_table_id, subject_type, subject_id, correlation_id]
+      - resource: price-quotes
+        path: /v1/price-quotes
+        table: product_price_quote
+        ops: [list, get, create]
+        filters: [product_id, customer_id]
+        actions:
+          - "POST /{id}/accept | Accept a quote (locks the price for origination)"
+
+    events:
+      - "product.decision_table_version.published | decision_table_version | A decision table version was published"
+      - "product.product_price_quote.created | product_price_quote | A price quote was issued"
+      - "product.product_price_quote.accepted | product_price_quote | A price quote was accepted"

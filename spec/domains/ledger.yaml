@@ -1,0 +1,634 @@
+domain: ledger
+title: Ledger and Accounting
+phase: 1
+description: >
+  The single source of truth for money. A real-time, append-only double-entry ledger that every
+  other service posts through, the general ledger and period close, and automated reconciliation.
+
+enums:
+  NormalBalance: [DEBIT, CREDIT]
+  EntryDirection: [DEBIT, CREDIT]
+  LedgerStatus: [ACTIVE, LOCKED, ARCHIVED]
+  LedgerAccountType: [ASSET, LIABILITY, EQUITY, INCOME, EXPENSE, OFF_BALANCE]
+  LedgerAccountStatus: [ACTIVE, FROZEN_DEBIT, FROZEN_CREDIT, FROZEN, CLOSED]
+  JournalEntryType: [STANDARD, REVERSAL, ADJUSTMENT, ACCRUAL, FEE, INTEREST, FX, TRANSFER, CARD_SETTLEMENT,
+                     PAYMENT, LOAN, OPENING_BALANCE, MIGRATION, CORRECTION]
+  HoldType: [CARD_AUTHORIZATION, PAYMENT, MANUAL, LEGAL, CHEQUE, RESERVATION]
+  HoldStatus: [ACTIVE, PARTIALLY_CAPTURED, CAPTURED, RELEASED, EXPIRED]
+  GlAccountClass: [ASSET, LIABILITY, EQUITY, INCOME, EXPENSE, CONTINGENT]
+  GlAccountStatus: [ACTIVE, INACTIVE, CLOSED]
+  PeriodType: [DAY, MONTH, QUARTER, YEAR]
+  PeriodStatus: [OPEN, SOFT_CLOSED, CLOSED, REOPENED]
+  RunStatus: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, PARTIALLY_SUCCEEDED]
+  EclStage: [STAGE_1, STAGE_2, STAGE_3, POCI]
+  ReconSourceType: [BANK_STATEMENT, CARD_SCHEME, PAYMENT_RAIL, PARTNER_REPORT, INTERNAL_LEDGER, WALLET_OPERATOR]
+  ReconFileFormat: [CAMT_053, CAMT_054, MT940, MT942, BAI2, CSV, VISA_BASE2, MASTERCARD_T112, JSON, CUSTOM]
+  ReconFileStatus: [RECEIVED, PARSING, PARSED, FAILED, MATCHED]
+  ReconMatchType: [ONE_TO_ONE, ONE_TO_MANY, MANY_TO_ONE, MANY_TO_MANY, MANUAL]
+  ReconExceptionStatus: [OPEN, INVESTIGATING, RESOLVED, WRITTEN_OFF, IGNORED]
+  ReconExceptionReason: [MISSING_INTERNAL, MISSING_EXTERNAL, AMOUNT_MISMATCH, DATE_MISMATCH, DUPLICATE,
+                         CURRENCY_MISMATCH, OTHER]
+
+services:
+  # ------------------------------------------------------------------ ledger-service
+  - name: ledger-service
+    database: ledger_db
+    description: >
+      Posting engine and balance service. The only component allowed to change balances. Enforces
+      double-entry, idempotency, holds and available-balance rules; publishes every posting.
+    tables:
+      - name: ledger
+        prefix: ldg
+        description: A book of accounts for one legal entity (a tenant may run several ledgers)
+        fr: [LED-01, GL-05]
+        columns:
+          - "code string(32) nn uq | Short unique code, e.g. MAIN-USD"
+          - "name string(120) nn | Display name"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity that owns this book"
+          - "base_currency currency nn | Reporting currency for base-amount conversion"
+          - "status enum:LedgerStatus nn default=ACTIVE | Lifecycle status"
+          - "description text | Free-text description"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: ledger_account
+        prefix: lac
+        description: An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts
+        fr: [LED-01, LED-02, LED-03, LED-08]
+        columns:
+          - "ledger_id uuid nn fk=ledger idx | Ledger book"
+          - "code string(64) nn uq | Account code / number inside the ledger"
+          - "name string(160) nn | Display name"
+          - "account_type enum:LedgerAccountType nn | Accounting class"
+          - "normal_balance enum:NormalBalance nn | Side that increases the balance"
+          - "currency currency nn | Account currency (single-currency accounts)"
+          - "parent_id uuid fk=ledger_account idx | Parent for hierarchies, sub-ledgers and virtual accounts"
+          - "gl_account_id uuid ref=gl_account idx | GL control account this account rolls up to"
+          - "owner_type string(40) | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN"
+          - "owner_id uuid idx | Id of the owning business object in its service"
+          - "status enum:LedgerAccountStatus nn default=ACTIVE | Posting restrictions"
+          - "allow_negative bool nn default=false | Whether available balance may go below zero"
+          - "overdraft_limit amount nn default=0 | Arranged overdraft; available = balance + limit - holds"
+          - "min_balance amount nn default=0 | Minimum balance that must remain"
+          - "opened_at ts nn default=now | Opening time"
+          - "closed_at ts | Closing time"
+          - "metadata json | Client-defined key/value metadata"
+        indexes: [[owner_type, owner_id]]
+
+      - name: journal_entry
+        prefix: je
+        description: One balanced, atomic set of ledger entries (a ledger transaction). Append-only.
+        immutable: true
+        fr: [LED-01, LED-05, LED-06, LED-07]
+        columns:
+          - "ledger_id uuid nn fk=ledger idx | Ledger book"
+          - "idempotency_key string(128) nn | Client key; a replay returns the original entry"
+          - "entry_type enum:JournalEntryType nn default=STANDARD | Business classification"
+          - "description string(500) | Narrative shown on statements"
+          - "effective_at ts nn | Economic time of the transaction"
+          - "value_date date nn | Date interest starts or stops counting"
+          - "booked_at ts nn default=now ro | Time the ledger committed the entry"
+          - "reversal_of_id uuid fk=journal_entry idx | Entry this one reverses"
+          - "source_service string(64) nn | Service that requested the posting"
+          - "source_type string(64) | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION"
+          - "source_id uuid idx | Business object id"
+          - "correlation_id string(128) idx | Trace / saga correlation id"
+          - "entry_count int nn ro | Number of ledger entries"
+          - "total_debits amount nn ro | Sum of debits in base currency (equals credits)"
+          - "hash string(64) ro | SHA-256 over this entry and the previous hash (tamper evidence)"
+          - "prev_hash string(64) ro | Hash of the previous journal entry in the ledger"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, ledger_id, idempotency_key]]
+        indexes: [[ledger_id, effective_at], [source_type, source_id]]
+
+      - name: ledger_entry
+        prefix: le
+        description: One debit or credit line of a journal entry against one ledger account. Append-only.
+        immutable: true
+        fr: [LED-01, LED-02, LED-03]
+        columns:
+          - "journal_entry_id uuid nn fk=journal_entry idx | Parent journal entry"
+          - "ledger_account_id uuid nn fk=ledger_account | Account posted to"
+          - "line_no int nn | Line number within the journal entry"
+          - "direction enum:EntryDirection nn | Debit or credit"
+          - "amount amount nn | Positive amount in the account currency"
+          - "currency currency nn | Account currency"
+          - "fx_rate rate | Rate to ledger base currency at posting time"
+          - "base_amount amount nn | Amount in ledger base currency"
+          - "effective_at ts nn | Copied from the journal entry for range queries"
+          - "account_version bigint nn ro | Account balance version after this entry (gapless per account)"
+          - "balance_after amount nn ro | Posted balance of the account after this entry"
+          - "description string(500) | Line narrative"
+        unique: [[ledger_account_id, account_version]]
+        indexes: [[ledger_account_id, effective_at]]
+
+      - name: account_balance
+        prefix: bal
+        description: Current balances per ledger account, updated in the same transaction as each posting
+        fr: [LED-02, LED-04]
+        columns:
+          - "ledger_account_id uuid nn fk=ledger_account uq | Account"
+          - "currency currency nn | Account currency"
+          - "posted_debits amount nn default=0 ro | Lifetime posted debits"
+          - "posted_credits amount nn default=0 ro | Lifetime posted credits"
+          - "posted_balance amount nn default=0 ro | Posted (ledger) balance in normal-balance terms"
+          - "pending_debits amount nn default=0 ro | Active holds and pending debits"
+          - "pending_credits amount nn default=0 ro | Pending credits not yet available"
+          - "available_balance amount nn default=0 ro | Posted - pending debits + overdraft limit"
+          - "account_version bigint nn default=0 ro | Last applied ledger entry version"
+          - "last_entry_at ts ro | Time of the last posting"
+
+      - name: hold
+        prefix: hld
+        description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
+        fr: [LED-04]
+        columns:
+          - "ledger_account_id uuid nn fk=ledger_account idx | Account the funds are reserved on"
+          - "hold_type enum:HoldType nn | Reason for the hold"
+          - "amount amount nn | Held amount (can be incremented)"
+          - "currency currency nn | Currency"
+          - "captured_amount amount nn default=0 ro | Amount converted into postings"
+          - "status enum:HoldStatus nn default=ACTIVE ro | Lifecycle status"
+          - "source_type string(64) | Business object type, e.g. CARD_AUTHORIZATION"
+          - "source_id uuid idx | Business object id"
+          - "idempotency_key string(128) nn | Client key"
+          - "description string(500) | Narrative"
+          - "expires_at ts | Automatic release time"
+          - "released_at ts ro | Time released or expired"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, idempotency_key]]
+
+      - name: hold_event
+        prefix: hle
+        description: Immutable history of a hold (placed, incremented, captured, released, expired)
+        immutable: true
+        fr: [LED-04]
+        columns:
+          - "hold_id uuid nn fk=hold idx | Hold"
+          - "event_type string(32) nn | PLACED, INCREMENTED, CAPTURED, PARTIALLY_CAPTURED, RELEASED, EXPIRED"
+          - "amount amount nn | Amount affected by this event"
+          - "journal_entry_id uuid fk=journal_entry | Posting created on capture"
+          - "reason string(255) | Reason supplied by the caller"
+
+      - name: balance_snapshot
+        prefix: bsn
+        description: End-of-day balance per account; used for statements, interest and point-in-time queries
+        immutable: true
+        fr: [LED-09, GL-03]
+        columns:
+          - "ledger_account_id uuid nn fk=ledger_account | Account"
+          - "as_of_date date nn | Business date of the snapshot"
+          - "currency currency nn | Currency"
+          - "opening_balance amount nn | Balance at start of day"
+          - "total_debits amount nn | Debits during the day"
+          - "total_credits amount nn | Credits during the day"
+          - "closing_balance amount nn | Balance at end of day"
+          - "available_balance amount nn | Available balance at end of day"
+          - "account_version bigint nn | Last entry version included"
+        unique: [[ledger_account_id, as_of_date]]
+
+    apis:
+      - resource: ledgers
+        path: /v1/ledgers
+        table: ledger
+        ops: [list, get, create, update]
+        filters: [status, legal_entity_id, base_currency]
+        actions:
+          - "POST /{id}/lock | Lock a ledger against new postings | reason string(255) nn"
+          - "GET /{id}/verify | Verify the ledger: re-sum balances and check the hash chain | | none"
+
+      - resource: ledger-accounts
+        path: /v1/ledger-accounts
+        table: ledger_account
+        ops: [list, get, create, update]
+        filters: [ledger_id, account_type, currency, status, owner_type, owner_id, parent_id, gl_account_id]
+        actions:
+          - "GET /{id}/balance | Current balances (ledger, available, pending) | | account_balance"
+          - "GET /{id}/balance-at | Point-in-time balance at a timestamp (?at=) | | account_balance"
+          - "GET /{id}/balance-history | Daily balance snapshots (?from=&to=) | | balance_snapshot[]"
+          - "GET /{id}/entries | Ledger entries for this account, newest first | | ledger_entry[]"
+          - "POST /{id}/freeze | Restrict debits, credits or both | status enum:LedgerAccountStatus nn, reason string(255) nn"
+          - "POST /{id}/unfreeze | Remove posting restrictions | reason string(255) nn"
+          - "POST /{id}/close | Close an account with zero balance | reason string(255)"
+
+      - resource: journal-entries
+        path: /v1/journal-entries
+        table: journal_entry
+        description: Post balanced transactions. Body carries the entries array (see LedgerEntry).
+        ops: [list, get, create]
+        filters: [ledger_id, entry_type, source_type, source_id, correlation_id]
+        actions:
+          - "POST /{id}/reverse | Reverse a journal entry with a compensating entry | reason string(255) nn, effective_at ts"
+          - "GET /{id}/entries | Lines of a journal entry | | ledger_entry[]"
+          - "POST /batch | Post up to 1,000 journal entries atomically per entry | entries json nn | none"
+
+      - resource: ledger-entries
+        path: /v1/ledger-entries
+        table: ledger_entry
+        ops: [list, get]
+        filters: [ledger_account_id, journal_entry_id, direction, currency]
+
+      - resource: holds
+        path: /v1/holds
+        table: hold
+        ops: [list, get, create]
+        filters: [ledger_account_id, hold_type, status, source_type, source_id]
+        actions:
+          - "POST /{id}/increment | Increase a hold (e.g. incremental card authorisation) | amount amount nn, reason string(255)"
+          - "POST /{id}/capture | Capture all or part of a hold into postings | amount amount nn, journal_entry json nn"
+          - "POST /{id}/release | Release the remaining held amount | reason string(255)"
+          - "GET /{id}/events | History of the hold | | hold_event[]"
+
+      - resource: balance-snapshots
+        path: /v1/balance-snapshots
+        table: balance_snapshot
+        ops: [list, get]
+        filters: [ledger_account_id, as_of_date]
+
+    events:
+      - "ledger.ledger.created | ledger | A ledger book was created"
+      - "ledger.ledger_account.created | ledger_account | A ledger account was opened"
+      - "ledger.ledger_account.status_changed | ledger_account | An account was frozen, unfrozen or closed"
+      - "ledger.journal_entry.posted | journal_entry | A balanced journal entry was committed"
+      - "ledger.journal_entry.reversed | journal_entry | A journal entry was reversed"
+      - "ledger.balance.changed | account_balance | Posted or available balance changed"
+      - "ledger.hold.placed | hold | Funds were reserved"
+      - "ledger.hold.captured | hold | A hold was captured into postings"
+      - "ledger.hold.released | hold | A hold was released or expired"
+
+  # ------------------------------------------------------------------ gl-service
+  - name: gl-service
+    database: gl_db
+    description: >
+      Chart of accounts per legal entity, product-to-GL mapping, real-time GL aggregation from ledger events,
+      accounting periods and continuous close, trial balance, IFRS 9 provisions and ERP export.
+    tables:
+      - name: gl_account
+        prefix: gla
+        description: General ledger account in a legal entity's chart of accounts
+        fr: [GL-01]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "code string(32) nn | GL code, e.g. 2100-010"
+          - "name string(160) nn | GL account name"
+          - "account_class enum:GlAccountClass nn | Accounting class"
+          - "parent_id uuid fk=gl_account idx | Parent node in the chart"
+          - "level int nn default=1 | Depth in the hierarchy"
+          - "is_postable bool nn default=true | Leaf accounts accept postings; headers do not"
+          - "currency currency | Restrict to one currency; empty = multi-currency"
+          - "regulatory_code string(64) | Mapping code for regulatory returns"
+          - "erp_code string(64) | Mapping code for the ERP"
+          - "status enum:GlAccountStatus nn default=ACTIVE | Status"
+        unique: [[tenant_id, legal_entity_id, code]]
+
+      - name: gl_mapping_rule
+        prefix: glm
+        description: Maps ledger account types / products / transaction types to GL accounts
+        fr: [GL-01, GL-02]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Legal entity"
+          - "priority int nn default=100 | Lower wins when several rules match"
+          - "product_id uuid ref=product idx | Product (empty = any)"
+          - "ledger_account_type enum:LedgerAccountType | Ledger account class (empty = any)"
+          - "owner_type string(40) | Owning business object type (empty = any)"
+          - "entry_type enum:JournalEntryType | Journal entry type (empty = any)"
+          - "balance_sign string(10) | POSITIVE or NEGATIVE: route overdrawn balances to an asset GL"
+          - "gl_account_id uuid nn fk=gl_account | Target GL account"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+
+      - name: accounting_period
+        prefix: per
+        description: Accounting period per legal entity; closing is a logical cut-off with no downtime
+        fr: [GL-03]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "period_type enum:PeriodType nn | Day, month, quarter or year"
+          - "start_date date nn | First business date"
+          - "end_date date nn | Last business date"
+          - "status enum:PeriodStatus nn default=OPEN | Status"
+          - "closed_at ts ro | Time the period was closed"
+          - "closed_by string(64) ro | Who closed it (maker)"
+          - "approved_by string(64) ro | Who approved the close (checker)"
+        unique: [[tenant_id, legal_entity_id, period_type, start_date]]
+
+      - name: gl_balance
+        prefix: glb
+        description: GL balance per account, period and currency, aggregated in real time from ledger events
+        fr: [GL-02, GL-03]
+        columns:
+          - "gl_account_id uuid nn fk=gl_account | GL account"
+          - "accounting_period_id uuid nn fk=accounting_period | Period"
+          - "currency currency nn | Currency"
+          - "opening_balance amount nn default=0 ro | Opening balance"
+          - "debits amount nn default=0 ro | Period debits"
+          - "credits amount nn default=0 ro | Period credits"
+          - "closing_balance amount nn default=0 ro | Closing balance"
+          - "base_closing_balance amount nn default=0 ro | Closing balance in entity base currency"
+          - "last_event_at ts ro | Last ledger event applied"
+        unique: [[gl_account_id, accounting_period_id, currency]]
+
+      - name: gl_journal
+        prefix: glj
+        description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+        immutable: true
+        fr: [GL-02, GL-05]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "accounting_period_id uuid nn fk=accounting_period | Period"
+          - "journal_type string(32) nn | AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION"
+          - "source_journal_entry_id uuid ref=journal_entry idx | Ledger journal entry, when derived"
+          - "description string(500) | Narrative"
+          - "value_date date nn | Value date"
+          - "approved_by string(64) | Checker for manual journals"
+
+      - name: gl_journal_line
+        prefix: gjl
+        description: Debit or credit line of a GL journal. Append-only.
+        immutable: true
+        fr: [GL-02]
+        columns:
+          - "gl_journal_id uuid nn fk=gl_journal idx | GL journal"
+          - "gl_account_id uuid nn fk=gl_account idx | GL account"
+          - "direction enum:EntryDirection nn | Debit or credit"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "base_amount amount nn | Amount in entity base currency"
+          - "cost_center string(32) | Cost centre"
+          - "branch_id uuid ref=branch | Branch dimension"
+          - "product_id uuid ref=product | Product dimension"
+
+      - name: period_close_run
+        prefix: pcr
+        description: Execution of an EOD / EOM / EOY close with its checklist steps
+        fr: [GL-03, GL-04]
+        columns:
+          - "accounting_period_id uuid nn fk=accounting_period idx | Period being closed"
+          - "status enum:RunStatus nn default=QUEUED ro | Run status"
+          - "started_at ts ro | Start time"
+          - "finished_at ts ro | End time"
+          - "steps json ro | Checklist: accruals, revaluation, provisions, recon checks, trial balance"
+          - "error text ro | Error details"
+
+      - name: ecl_provision
+        prefix: ecl
+        description: IFRS 9 expected credit loss provision per exposure and reporting date
+        immutable: true
+        fr: [GL-04]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Legal entity"
+          - "reporting_date date nn | Reporting date"
+          - "exposure_type string(32) nn | LOAN, CREDIT_LINE, CARD, OVERDRAFT"
+          - "exposure_id uuid nn idx | Loan / account id"
+          - "stage enum:EclStage nn | IFRS 9 stage"
+          - "ead amount nn | Exposure at default"
+          - "pd rate nn | Probability of default (12-month or lifetime)"
+          - "lgd rate nn | Loss given default"
+          - "ecl_amount amount nn | Expected credit loss"
+          - "currency currency nn | Currency"
+          - "model_version string(32) nn | Model version used"
+          - "gl_journal_id uuid fk=gl_journal | Provision posting"
+        unique: [[tenant_id, exposure_id, reporting_date]]
+
+      - name: erp_export
+        prefix: erp
+        description: GL export batch sent to an external ERP (SAP, Oracle, NetSuite)
+        fr: [GL-06]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Legal entity"
+          - "accounting_period_id uuid nn fk=accounting_period | Period"
+          - "target_system string(32) nn | SAP, ORACLE, NETSUITE, DYNAMICS, CSV"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "file_uri string(500) ro | Location of the generated file"
+          - "line_count int ro | Lines exported"
+          - "checksum string(64) ro | SHA-256 of the file"
+
+    apis:
+      - resource: gl-accounts
+        path: /v1/gl/accounts
+        table: gl_account
+        ops: [list, get, create, update]
+        filters: [legal_entity_id, account_class, parent_id, status, code]
+      - resource: gl-mapping-rules
+        path: /v1/gl/mapping-rules
+        table: gl_mapping_rule
+        ops: [list, get, create, update, delete]
+        filters: [legal_entity_id, product_id, gl_account_id]
+        actions:
+          - "POST /simulate | Show which GL account a posting would map to | product_id uuid, ledger_account_type enum:LedgerAccountType, entry_type enum:JournalEntryType, owner_type string(40) | gl_account"
+      - resource: accounting-periods
+        path: /v1/gl/periods
+        table: accounting_period
+        ops: [list, get, create]
+        filters: [legal_entity_id, period_type, status]
+        actions:
+          - "POST /{id}/close | Start the period close (maker) | | period_close_run"
+          - "POST /{id}/approve-close | Approve the close (checker) | comment string(500)"
+          - "POST /{id}/reopen | Reopen a closed period (requires approval) | reason string(500) nn"
+          - "GET /{id}/trial-balance | Trial balance for the period | | gl_balance[]"
+      - resource: gl-balances
+        path: /v1/gl/balances
+        table: gl_balance
+        ops: [list, get]
+        filters: [gl_account_id, accounting_period_id, currency]
+      - resource: gl-journals
+        path: /v1/gl/journals
+        table: gl_journal
+        ops: [list, get, create]
+        filters: [legal_entity_id, accounting_period_id, journal_type, source_journal_entry_id]
+        actions:
+          - "GET /{id}/lines | Lines of a GL journal | | gl_journal_line[]"
+          - "POST /{id}/approve | Approve a manual GL journal (checker) | comment string(500)"
+      - resource: period-close-runs
+        path: /v1/gl/close-runs
+        table: period_close_run
+        ops: [list, get]
+        filters: [accounting_period_id, status]
+      - resource: ecl-provisions
+        path: /v1/gl/ecl-provisions
+        table: ecl_provision
+        ops: [list, get]
+        filters: [legal_entity_id, reporting_date, stage, exposure_type, exposure_id]
+        actions:
+          - "POST /calculate | Run the ECL calculation for a reporting date | legal_entity_id uuid nn, reporting_date date nn | period_close_run"
+      - resource: erp-exports
+        path: /v1/gl/erp-exports
+        table: erp_export
+        ops: [list, get, create]
+        filters: [legal_entity_id, accounting_period_id, status]
+        actions:
+          - "GET /{id}/download | Signed URL to download the export file | | none"
+
+    events:
+      - "ledger.gl_journal.posted | gl_journal | A GL journal was posted"
+      - "ledger.accounting_period.closed | accounting_period | An accounting period was closed"
+      - "ledger.accounting_period.reopened | accounting_period | A closed period was reopened"
+      - "ledger.period_close_run.completed | period_close_run | A close run finished"
+      - "ledger.ecl_provision.calculated | ecl_provision | ECL provisions were calculated"
+
+  # ------------------------------------------------------------------ reconciliation-service
+  - name: reconciliation-service
+    database: recon_db
+    description: >
+      Imports external statements and settlement files, matches them against internal ledger records with
+      configurable rules (and AI suggestions), and manages breaks in ageing exception queues.
+    tables:
+      - name: recon_source
+        prefix: rsr
+        description: A configured external source to reconcile (bank account, scheme, rail, partner)
+        fr: [REC-01]
+        columns:
+          - "name string(120) nn | Display name"
+          - "source_type enum:ReconSourceType nn | Kind of source"
+          - "file_format enum:ReconFileFormat nn | Expected file format"
+          - "ledger_account_id uuid ref=ledger_account idx | Internal account it reconciles against"
+          - "currency currency | Currency"
+          - "delivery_channel string(32) | SFTP, API, EMAIL, MANUAL_UPLOAD"
+          - "schedule_cron string(64) | When files are expected"
+          - "parser_config json | Column mapping and parsing options"
+          - "is_active bool nn default=true | Active"
+
+      - name: recon_file
+        prefix: rfl
+        description: An imported statement or settlement file
+        fr: [REC-01]
+        columns:
+          - "recon_source_id uuid nn fk=recon_source idx | Source"
+          - "file_name string(255) nn | Original file name"
+          - "file_uri string(500) nn ro | Storage location"
+          - "checksum string(64) nn ro | SHA-256, used to reject duplicates"
+          - "statement_date date | Statement / settlement date"
+          - "opening_balance amount | Opening balance stated in the file"
+          - "closing_balance amount | Closing balance stated in the file"
+          - "record_count int ro | Lines parsed"
+          - "status enum:ReconFileStatus nn default=RECEIVED ro | Processing status"
+          - "error text ro | Parsing error"
+        unique: [[tenant_id, checksum]]
+
+      - name: recon_record
+        prefix: rrc
+        description: One external line (statement line, settlement record). Append-only.
+        immutable: true
+        fr: [REC-01]
+        columns:
+          - "recon_file_id uuid nn fk=recon_file idx | File"
+          - "recon_source_id uuid nn fk=recon_source idx | Source"
+          - "external_ref string(128) | Bank / scheme reference"
+          - "end_to_end_id string(64) idx | ISO 20022 end-to-end id when present"
+          - "value_date date nn | Value date"
+          - "booking_date date | Booking date"
+          - "direction enum:EntryDirection nn | Debit or credit from the source's view"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "counterparty string(255) | Counterparty name / account"
+          - "narrative string(500) | Description"
+          - "raw json | Original parsed line"
+
+      - name: recon_rule
+        prefix: rrl
+        description: Matching rule, evaluated in priority order
+        fr: [REC-02]
+        columns:
+          - "recon_source_id uuid fk=recon_source idx | Source (empty = all sources)"
+          - "name string(120) nn | Rule name"
+          - "priority int nn default=100 | Lower runs first"
+          - "match_type enum:ReconMatchType nn | Cardinality"
+          - "match_fields json nn | Fields that must be equal, e.g. [end_to_end_id, amount]"
+          - "amount_tolerance amount nn default=0 | Allowed absolute amount difference"
+          - "date_tolerance_days int nn default=0 | Allowed value-date difference"
+          - "auto_confirm bool nn default=true | Confirm matches without review"
+          - "is_active bool nn default=true | Active"
+
+      - name: recon_run
+        prefix: rrn
+        description: A matching run over a source and date range
+        fr: [REC-01, REC-02]
+        columns:
+          - "recon_source_id uuid nn fk=recon_source idx | Source"
+          - "from_date date nn | Range start"
+          - "to_date date nn | Range end"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "matched_count int ro | Records matched"
+          - "exception_count int ro | Breaks raised"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+
+      - name: recon_match
+        prefix: rmt
+        description: A confirmed link between external records and internal ledger entries. Append-only.
+        immutable: true
+        fr: [REC-02, REC-03]
+        columns:
+          - "recon_run_id uuid fk=recon_run idx | Run that produced it (empty when manual)"
+          - "recon_rule_id uuid fk=recon_rule | Rule that matched"
+          - "match_type enum:ReconMatchType nn | Cardinality"
+          - "external_record_ids json nn | recon_record ids"
+          - "internal_entry_ids json nn | ledger_entry ids"
+          - "difference amount nn default=0 | Residual difference within tolerance"
+          - "confidence rate | AI / rule confidence 0..1"
+          - "confirmed_by string(64) | Who confirmed a manual or suggested match"
+          - "unmatched_at ts | Set via a new compensating match record when undone"
+
+      - name: recon_exception
+        prefix: rex
+        description: A reconciliation break awaiting investigation
+        fr: [REC-02, REC-03]
+        columns:
+          - "recon_run_id uuid nn fk=recon_run idx | Run"
+          - "reason enum:ReconExceptionReason nn | Break reason"
+          - "status enum:ReconExceptionStatus nn default=OPEN | Status"
+          - "external_record_id uuid fk=recon_record | External record, if any"
+          - "internal_entry_id uuid ref=ledger_entry | Internal entry, if any"
+          - "amount amount nn | Break amount"
+          - "currency currency nn | Currency"
+          - "age_days int nn default=0 ro | Days open"
+          - "assigned_to string(64) idx | Assignee"
+          - "suggested_match json ro | AI-suggested counterpart records with confidence"
+          - "resolution_note text | How it was resolved"
+          - "resolved_at ts ro | Resolution time"
+
+    apis:
+      - resource: recon-sources
+        path: /v1/reconciliation/sources
+        table: recon_source
+        ops: [list, get, create, update]
+        filters: [source_type, ledger_account_id, is_active]
+      - resource: recon-files
+        path: /v1/reconciliation/files
+        table: recon_file
+        ops: [list, get, create]
+        filters: [recon_source_id, status, statement_date]
+        actions:
+          - "GET /{id}/records | Parsed records of a file | | recon_record[]"
+          - "POST /{id}/reprocess | Parse a failed file again"
+      - resource: recon-rules
+        path: /v1/reconciliation/rules
+        table: recon_rule
+        ops: [list, get, create, update, delete]
+        filters: [recon_source_id, is_active]
+      - resource: recon-runs
+        path: /v1/reconciliation/runs
+        table: recon_run
+        ops: [list, get, create]
+        filters: [recon_source_id, status]
+      - resource: recon-matches
+        path: /v1/reconciliation/matches
+        table: recon_match
+        ops: [list, get, create]
+        filters: [recon_run_id, match_type]
+        actions:
+          - "POST /{id}/unmatch | Undo a match (records return to the queue) | reason string(255) nn"
+      - resource: recon-exceptions
+        path: /v1/reconciliation/exceptions
+        table: recon_exception
+        ops: [list, get, update]
+        filters: [recon_run_id, reason, status, assigned_to]
+        actions:
+          - "POST /{id}/assign | Assign to an investigator | assigned_to string(64) nn"
+          - "POST /{id}/resolve | Resolve with a note, optionally posting an adjustment | resolution_note text nn, adjustment json"
+          - "POST /{id}/accept-suggestion | Confirm the AI-suggested match | | recon_match"
+
+    events:
+      - "ledger.recon_file.parsed | recon_file | A statement file was parsed"
+      - "ledger.recon_run.completed | recon_run | A reconciliation run finished"
+      - "ledger.recon_exception.raised | recon_exception | A reconciliation break was raised"
+      - "ledger.recon_exception.resolved | recon_exception | A break was resolved"

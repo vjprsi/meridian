@@ -1,0 +1,807 @@
+domain: accounts
+title: Deposits and Accounts
+phase: 1
+description: >
+  Deposit account servicing on top of the ledger: current, savings, call and notice accounts, term deposits,
+  savings pots, sweeps, standing orders, overdrafts, holders and mandates, blocks, dormancy, closure, cheques,
+  virtual accounts, daily interest accrual and capitalisation, fee charging, statements and tax certificates.
+
+enums:
+  DepositAccountType: [CURRENT, SAVINGS, CALL, NOTICE, MONEY_MARKET, ESCROW, BASIC, STUDENT, MINOR, PAYROLL,
+                       NOSTRO, VOSTRO, SUSPENSE, SETTLEMENT]
+  DepositAccountStatus: [PENDING_APPROVAL, PENDING_FUNDING, ACTIVE, DORMANT, INACTIVE, FROZEN, BLOCKED_DEBIT,
+                         BLOCKED_CREDIT, BLOCKED, CLOSING, CLOSED, REJECTED]
+  AccountHolderRole: [PRIMARY, JOINT, MINOR, GUARDIAN, SIGNATORY, POWER_OF_ATTORNEY, BENEFICIARY, TRUSTEE,
+                      AUTHORISED_USER]
+  AccountHolderStatus: [ACTIVE, PENDING_CONSENT, SUSPENDED, REMOVED]
+  MandateRule: [ANY_ONE, ANY_TWO, ALL, PRIMARY_ONLY, PRIMARY_PLUS_ONE, CUSTOM]
+  AccountBlockType: [LEGAL, GARNISHMENT, COURT_ORDER, TAX_LIEN, AML, FRAUD, DECEASED, CUSTOMER_REQUEST,
+                     REGULATORY, KYC_EXPIRED, LIEN]
+  AccountBlockScope: [DEBIT, CREDIT, BOTH, AMOUNT]
+  AccountBlockStatus: [ACTIVE, LIFTED, EXPIRED]
+  OverdraftType: [ARRANGED, UNARRANGED, TEMPORARY, SALARY_ADVANCE]
+  OverdraftFacilityStatus: [PENDING_APPROVAL, ACTIVE, SUSPENDED, EXPIRED, CANCELLED]
+  InterestAccrualKind: [CREDIT, DEBIT, OVERDRAFT, UNARRANGED_OVERDRAFT, PENALTY, BONUS]
+  TermDepositStatus: [PENDING_FUNDING, ACTIVE, MATURED, ROLLED_OVER, BROKEN, CLOSED, CANCELLED]
+  RolloverInstruction: [ROLL_PRINCIPAL_AND_INTEREST, ROLL_PRINCIPAL_PAY_INTEREST, PAY_OUT_ALL]
+  InterestPayoutMode: [AT_MATURITY, MONTHLY_TO_ACCOUNT, QUARTERLY_TO_ACCOUNT, ANNUALLY_TO_ACCOUNT, UPFRONT]
+  TermDepositEventType: [PLACED, FUNDED, INTEREST_PAID, TOPPED_UP, PARTIALLY_WITHDRAWN, BROKEN, MATURED,
+                         ROLLED_OVER, PAID_OUT, LIEN_MARKED, LIEN_RELEASED]
+  SavingsPotStatus: [ACTIVE, LOCKED, GOAL_REACHED, CLOSED]
+  SavingsPotRuleType: [ROUND_UP, PERCENT_OF_INCOME, FIXED_SCHEDULE, ROUND_UP_MULTIPLIER, SALARY_SPLIT]
+  SweepType: [TARGET_BALANCE, THRESHOLD_OUT, THRESHOLD_IN, ZERO_BALANCE, CONCENTRATION]
+  ScheduleFrequency: [ONCE, DAILY, WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL]
+  StandingOrderStatus: [ACTIVE, PAUSED, COMPLETED, CANCELLED, FAILED_SUSPENDED]
+  ScheduledExecutionStatus: [SCHEDULED, SUCCEEDED, FAILED, RETRYING, SKIPPED, CANCELLED]
+  DormancyEventType: [WARNING_SENT, MARKED_INACTIVE, MARKED_DORMANT, REACTIVATED, ESCHEATED]
+  AccountClosureStatus: [REQUESTED, PENDING_APPROVAL, SETTLING, COMPLETED, REJECTED, CANCELLED]
+  ChequeBookStatus: [REQUESTED, PRINTED, DISPATCHED, ACTIVE, EXHAUSTED, CANCELLED]
+  ChequeStatus: [ISSUED, PRESENTED, CLEARED, RETURNED, STOPPED, CANCELLED]
+  VirtualAccountStatus: [ACTIVE, SUSPENDED, CLOSED]
+  VirtualAccountPurpose: [COLLECTION, SUB_LEDGER, MARKETPLACE_SELLER, ESCROW, INVOICE, PAYROLL, CLIENT_MONEY]
+  StatementFormat: [PDF, CSV, CAMT_053, MT940, OFX, JSON]
+  StatementStatus: [PENDING, GENERATING, READY, DELIVERED, FAILED]
+  StatementDeliveryChannel: [EMAIL, IN_APP, POST, SFTP, API]
+  TaxCertificateType: [INTEREST_CERTIFICATE, WITHHOLDING_TAX_CERTIFICATE, FORM_1099_INT, ANNUAL_SUMMARY,
+                       BALANCE_CONFIRMATION]
+
+services:
+  # ------------------------------------------------------------------ deposit-service
+  - name: deposit-service
+    database: accounts_db
+    description: >
+      Owns deposit accounts and everything around them. Opens a ledger account per deposit account, drives
+      daily interest accrual and capitalisation, fee charging, overdrafts, term deposits, pots, sweeps,
+      standing orders, dormancy and closure. Never changes balances itself; it posts through the ledger.
+    tables:
+      - name: deposit_account
+        prefix: acc
+        description: A customer or internal deposit account (current, savings, call, notice, escrow, settlement)
+        fr: [DEP-01, DEP-04, PRD-01, CIF-02]
+        columns:
+          - "account_number string(34) nn uq | Bank account number"
+          - "iban string(34) uq | IBAN where applicable"
+          - "bban string(34) | Basic bank account number"
+          - "routing_code string(20) | Sort code / routing number / IFSC / CLABE prefix"
+          - "account_type enum:DepositAccountType nn | Account type"
+          - "nickname string(80) | Customer-chosen name"
+          - "customer_id uuid nn ref=customer idx | Primary customer"
+          - "product_id uuid nn ref=product idx | Product"
+          - "product_version_id uuid nn ref=product_version | Product version pinned at opening"
+          - "legal_entity_id uuid nn ref=legal_entity | Booking legal entity"
+          - "branch_id uuid ref=branch idx | Home branch"
+          - "currency currency nn | Account currency"
+          - "ledger_account_id uuid ref=ledger_account uq ro | Ledger account holding the balance"
+          - "status enum:DepositAccountStatus nn default=PENDING_APPROVAL ro | Lifecycle status"
+          - "status_reason string(255) ro | Reason for the current status"
+          - "mandate_rule enum:MandateRule nn default=ANY_ONE | Signing rule for joint/business accounts"
+          - "opened_at ts ro | Time the account became active"
+          - "closed_at ts ro | Closing time"
+          - "last_customer_activity_at ts ro | Last customer-initiated transaction (dormancy clock)"
+          - "dormant_since date ro | Date the account became dormant"
+          - "overdraft_limit amount nn default=0 ro | Active arranged overdraft limit"
+          - "minimum_balance amount nn default=0 | Minimum balance to keep"
+          - "notice_period_days int | Notice period for NOTICE accounts"
+          - "accrued_credit_interest amount nn default=0 ro | Accrued, not yet capitalised credit interest"
+          - "accrued_debit_interest amount nn default=0 ro | Accrued, not yet charged debit interest"
+          - "interest_paid_ytd amount nn default=0 ro | Interest paid this tax year"
+          - "tax_withheld_ytd amount nn default=0 ro | Tax withheld this tax year"
+          - "next_capitalisation_date date ro | Next interest posting date"
+          - "statement_frequency enum:ScheduleFrequency nn default=MONTHLY | Statement frequency"
+          - "statement_cycle_day int nn default=1 | Day of month the statement cycle ends"
+          - "bundle_id uuid ref=product_bundle | Product bundle membership"
+          - "opening_channel string(32) | Channel used to open"
+          - "purpose string(255) | Declared account purpose"
+          - "source_of_funds string(255) | Declared source of funds"
+          - "expected_monthly_volume amount | Declared expected monthly turnover (AML profile)"
+          - "external_ref string(128) idx | Client or migration reference"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: account_holder
+        prefix: ahl
+        description: Customer linked to an account in a role (joint holder, minor, guardian, signatory, POA)
+        fr: [DEP-02, CIF-01]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "role enum:AccountHolderRole nn | Role"
+          - "status enum:AccountHolderStatus nn default=ACTIVE | Status"
+          - "can_view bool nn default=true | May see the account"
+          - "can_transact bool nn default=true | May initiate transactions"
+          - "transaction_limit amount | Per-transaction limit for this holder"
+          - "signing_group string(16) | Group label for CUSTOM mandates (A, B, ...)"
+          - "valid_from date | Start date (e.g. POA validity)"
+          - "valid_to date | End date (e.g. minor turns adult)"
+          - "document_id uuid ref=document | Supporting document (POA, court order, guardianship)"
+        unique: [[deposit_account_id, customer_id, role]]
+
+      - name: account_mandate
+        prefix: amd
+        description: Signing mandate for an account (who must approve which operations above which amount)
+        fr: [DEP-02, LIM-02]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "name string(120) nn | Mandate name"
+          - "operation_type string(64) nn | Operation covered, e.g. PAYMENT, CLOSURE, ADD_HOLDER (ALL = any)"
+          - "min_amount amount nn default=0 | Applies from this amount"
+          - "max_amount amount | Applies up to this amount"
+          - "rule enum:MandateRule nn | Approval rule"
+          - "required_approvals int nn default=1 | Number of approvals for CUSTOM"
+          - "approver_groups json | Signing groups required, e.g. [[A],[A,B]]"
+          - "valid_from date nn | Start date"
+          - "valid_to date | End date"
+          - "document_id uuid ref=document | Board resolution or signed mandate"
+
+      - name: account_status_history
+        prefix: ash
+        description: Every status change of an account with reason and actor. Append-only.
+        immutable: true
+        fr: [DEP-01, ADM-03]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "from_status enum:DepositAccountStatus | Previous status"
+          - "to_status enum:DepositAccountStatus nn | New status"
+          - "reason_code string(64) | Reason code"
+          - "reason string(500) | Reason text"
+          - "approval_request_id uuid ref=approval_request | Approval when maker-checker applied"
+
+      - name: account_block
+        prefix: blk
+        description: Restriction on an account (legal order, garnishment, AML, fraud, deceased, lien)
+        fr: [DEP-01, LED-04]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "block_type enum:AccountBlockType nn | Block type"
+          - "scope enum:AccountBlockScope nn | What is blocked"
+          - "amount amount | Amount blocked for AMOUNT scope (placed as a ledger hold)"
+          - "currency currency | Currency"
+          - "hold_id uuid ref=hold | Ledger hold for amount blocks"
+          - "status enum:AccountBlockStatus nn default=ACTIVE ro | Status"
+          - "reference string(128) | Court / authority / case reference"
+          - "authority string(255) | Issuing authority"
+          - "reason string(500) nn | Reason"
+          - "starts_at ts nn default=now | Start"
+          - "expires_at ts | Automatic expiry"
+          - "lifted_at ts ro | Time lifted"
+          - "lifted_reason string(500) ro | Why lifted"
+          - "document_id uuid ref=document | Order document"
+
+      - name: overdraft_facility
+        prefix: odf
+        description: Overdraft facility on an account (arranged, temporary, salary advance)
+        fr: [DEP-04, PRC-01]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "overdraft_type enum:OverdraftType nn | Type"
+          - "limit_amount amount nn | Approved limit"
+          - "currency currency nn | Currency"
+          - "interest_rate rate | Annual debit interest (empty = product rate)"
+          - "arrangement_fee amount | One-off fee"
+          - "status enum:OverdraftFacilityStatus nn default=PENDING_APPROVAL ro | Status"
+          - "approved_by string(64) ro | Credit approver"
+          - "credit_decision_ref string(128) | Credit decision / scoring reference"
+          - "starts_on date nn | Start date"
+          - "expires_on date | Expiry / review date"
+          - "utilised_amount amount nn default=0 ro | Current utilisation"
+          - "days_in_excess int nn default=0 ro | Consecutive days over limit"
+
+      - name: account_rate_override
+        prefix: aro
+        description: Negotiated or relationship rate on a single account overriding the product rate
+        fr: [PRC-04, PRD-03]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "rate_kind string(40) nn | Rate kind overridden (InterestRateKind value)"
+          - "override_rate rate | Absolute rate"
+          - "rate_adjustment rate | Adjustment to the product rate"
+          - "reason string(500) nn | Justification"
+          - "valid_from date nn | Start"
+          - "valid_to date | End"
+          - "approval_request_id uuid ref=approval_request | Approval"
+
+      - name: interest_accrual
+        prefix: iac
+        description: Daily interest accrual per account and rate kind. Append-only.
+        immutable: true
+        fr: [PRC-01, DEP-01, LED-05]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account | Account"
+          - "accrual_date date nn | Business date accrued"
+          - "kind enum:InterestAccrualKind nn | Credit, debit, overdraft, penalty or bonus"
+          - "balance_basis amount nn | Balance used for the calculation"
+          - "annual_rate rate nn | Applied annual rate"
+          - "day_count string(16) nn | Day-count convention used"
+          - "days int nn default=1 | Days accrued"
+          - "amount amount nn | Accrued amount (unrounded scale 8)"
+          - "cumulative_amount amount nn | Accrued since last capitalisation"
+          - "currency currency nn | Currency"
+          - "is_backdated_recalc bool nn default=false | Produced by a value-date recalculation"
+          - "supersedes_id uuid fk=interest_accrual | Accrual this one corrects"
+          - "journal_entry_id uuid ref=journal_entry | Accrual posting (when accrual is booked to GL daily)"
+        indexes: [[deposit_account_id, accrual_date]]
+
+      - name: interest_capitalisation
+        prefix: icp
+        description: Posting of accrued interest to the account (and tax withheld). Append-only.
+        immutable: true
+        fr: [PRC-01, PRC-03]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "kind enum:InterestAccrualKind nn | Credit or debit interest"
+          - "period_start date nn | First accrual date included"
+          - "period_end date nn | Last accrual date included"
+          - "gross_amount amount nn | Interest before tax"
+          - "tax_amount amount nn default=0 | Tax withheld"
+          - "net_amount amount nn | Amount posted"
+          - "currency currency nn | Currency"
+          - "tax_rule_code string(64) | Tax rule applied"
+          - "journal_entry_id uuid nn ref=journal_entry | Ledger posting"
+
+      - name: fee_charge
+        prefix: fch
+        description: A fee charged (or refunded) on an account. Append-only; refunds are new rows.
+        immutable: true
+        fr: [PRC-02, PRC-03]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "fee_code string(64) nn | Fee code from the product"
+          - "fee_definition_id uuid ref=fee_definition | Fee definition"
+          - "trigger_type string(64) nn | Triggering event"
+          - "trigger_ref_id uuid | Triggering object id (payment, card txn)"
+          - "base_amount amount | Amount the fee was computed on"
+          - "amount amount nn | Fee amount (negative for refunds)"
+          - "tax_amount amount nn default=0 | VAT/GST on the fee"
+          - "currency currency nn | Currency"
+          - "waived bool nn default=false | Fee computed but waived"
+          - "waiver_reason string(255) | Why waived"
+          - "refund_of_id uuid fk=fee_charge | Charge this row refunds"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "charged_on date nn | Business date"
+
+      - name: term_deposit
+        prefix: tdp
+        description: Fixed-term deposit (placement, maturity, rollover, premature withdrawal)
+        fr: [DEP-03, PRC-01]
+        columns:
+          - "deposit_number string(34) nn uq | Deposit reference number"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "product_id uuid nn ref=product | Product"
+          - "product_version_id uuid nn ref=product_version | Version pinned"
+          - "funding_account_id uuid fk=deposit_account | Account funded from"
+          - "payout_account_id uuid fk=deposit_account | Account receiving interest and principal"
+          - "ledger_account_id uuid ref=ledger_account uq ro | Ledger account"
+          - "principal_amount amount nn | Placed amount"
+          - "currency currency nn | Currency"
+          - "interest_rate rate nn | Contracted annual rate"
+          - "day_count string(16) nn default=ACT_365 | Day-count convention"
+          - "term_days int nn | Term in days"
+          - "start_date date nn | Value date of placement"
+          - "maturity_date date nn | Maturity date (holiday-adjusted)"
+          - "interest_payout_mode enum:InterestPayoutMode nn default=AT_MATURITY | Interest payout"
+          - "rollover_instruction enum:RolloverInstruction nn default=PAY_OUT_ALL | What happens at maturity"
+          - "auto_rollover_count int nn default=0 ro | Times rolled over"
+          - "expected_interest amount ro | Interest at maturity if held to term"
+          - "accrued_interest amount nn default=0 ro | Interest accrued so far"
+          - "premature_penalty_rate rate | Rate reduction or penalty for breaking"
+          - "allow_partial_withdrawal bool nn default=false | Partial withdrawal allowed"
+          - "has_lien bool nn default=false ro | Pledged as collateral"
+          - "status enum:TermDepositStatus nn default=PENDING_FUNDING ro | Status"
+          - "certificate_document_id uuid ref=document | Deposit certificate"
+          - "previous_deposit_id uuid fk=term_deposit | Deposit it rolled over from"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: term_deposit_event
+        prefix: tde
+        description: Lifecycle history of a term deposit. Append-only.
+        immutable: true
+        fr: [DEP-03]
+        columns:
+          - "term_deposit_id uuid nn fk=term_deposit idx | Deposit"
+          - "event_type enum:TermDepositEventType nn | Event"
+          - "amount amount | Amount involved"
+          - "interest_amount amount | Interest involved"
+          - "penalty_amount amount | Penalty applied"
+          - "tax_amount amount | Tax withheld"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "note string(500) | Note"
+
+      - name: savings_pot
+        prefix: pot
+        description: Savings goal inside an account (ring-fenced balance as a ledger sub-account)
+        fr: [DEP-05, LED-08]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Parent account"
+          - "name string(80) nn | Pot name"
+          - "ledger_account_id uuid ref=ledger_account uq ro | Ledger sub-account"
+          - "goal_amount amount | Target amount"
+          - "goal_date date | Target date"
+          - "currency currency nn | Currency"
+          - "image_url string(500) | Cover image"
+          - "is_locked bool nn default=false | Withdrawals blocked until goal date"
+          - "status enum:SavingsPotStatus nn default=ACTIVE ro | Status"
+          - "balance amount nn default=0 ro | Cached balance (ledger is the source of truth)"
+          - "closed_at ts ro | Closing time"
+
+      - name: savings_pot_rule
+        prefix: psr
+        description: Automatic saving rule feeding a pot (round-ups, % of income, fixed schedule)
+        fr: [DEP-05]
+        columns:
+          - "savings_pot_id uuid nn fk=savings_pot idx | Pot"
+          - "rule_type enum:SavingsPotRuleType nn | Rule type"
+          - "amount amount | Fixed amount"
+          - "percentage rate | Percentage of income"
+          - "multiplier int | Round-up multiplier"
+          - "frequency enum:ScheduleFrequency | For FIXED_SCHEDULE"
+          - "next_run_date date ro | Next scheduled run"
+          - "is_active bool nn default=true | Active"
+
+      - name: sweep_rule
+        prefix: swp
+        description: Automatic sweep between accounts (target balance, thresholds, zero-balance, concentration)
+        fr: [DEP-05]
+        columns:
+          - "source_account_id uuid nn fk=deposit_account idx | Account swept from"
+          - "target_account_id uuid nn fk=deposit_account idx | Account swept to"
+          - "sweep_type enum:SweepType nn | Sweep type"
+          - "threshold_amount amount | Trigger threshold"
+          - "target_balance amount | Balance to keep"
+          - "min_sweep_amount amount nn default=0 | Ignore sweeps below this"
+          - "frequency enum:ScheduleFrequency nn default=DAILY | When evaluated"
+          - "run_time string(5) | Local time HH:MM"
+          - "is_active bool nn default=true | Active"
+          - "next_run_at ts ro | Next evaluation"
+
+      - name: sweep_execution
+        prefix: swx
+        description: One evaluation of a sweep rule. Append-only.
+        immutable: true
+        fr: [DEP-05]
+        columns:
+          - "sweep_rule_id uuid nn fk=sweep_rule idx | Rule"
+          - "executed_at ts nn | Time"
+          - "status enum:ScheduledExecutionStatus nn | Outcome"
+          - "amount amount | Amount moved"
+          - "currency currency | Currency"
+          - "journal_entry_id uuid ref=journal_entry | Posting"
+          - "failure_reason string(500) | Why it failed"
+
+      - name: standing_order
+        prefix: sto
+        description: Recurring or future-dated payment instruction from an account
+        fr: [DEP-05, PAY-01]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Debit account"
+          - "payee_id uuid ref=payee idx | Saved payee"
+          - "beneficiary_account_id uuid fk=deposit_account | Internal beneficiary account"
+          - "amount amount nn | Amount per execution"
+          - "currency currency nn | Currency"
+          - "reference string(140) | Payment reference"
+          - "frequency enum:ScheduleFrequency nn | Frequency"
+          - "day_of_period int | Day of week/month"
+          - "start_date date nn | First execution date"
+          - "end_date date | Last execution date"
+          - "max_executions int | Stop after this many"
+          - "executions_done int nn default=0 ro | Executions so far"
+          - "next_execution_date date ro | Next execution (holiday-adjusted)"
+          - "holiday_rule string(16) nn default=NEXT | NEXT, PREVIOUS or SKIP when on a holiday"
+          - "retry_policy json | Retry attempts and spacing on insufficient funds"
+          - "status enum:StandingOrderStatus nn default=ACTIVE ro | Status"
+          - "consecutive_failures int nn default=0 ro | Failures in a row"
+
+      - name: scheduled_payment_execution
+        prefix: spx
+        description: One execution attempt of a standing order. Append-only.
+        immutable: true
+        fr: [DEP-05]
+        columns:
+          - "standing_order_id uuid nn fk=standing_order idx | Standing order"
+          - "scheduled_date date nn | Date it was due"
+          - "attempt_no int nn default=1 | Attempt number"
+          - "status enum:ScheduledExecutionStatus nn | Outcome"
+          - "payment_id uuid ref=payment | Payment created"
+          - "failure_code string(64) | Failure code (e.g. INSUFFICIENT_FUNDS)"
+          - "failure_reason string(500) | Failure detail"
+
+      - name: account_dormancy_event
+        prefix: dor
+        description: Dormancy lifecycle events (warnings, dormant, reactivated, escheated to the state). Append-only.
+        immutable: true
+        fr: [DEP-01, PRD-03]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "event_type enum:DormancyEventType nn | Event"
+          - "inactive_days int nn | Days since last customer activity"
+          - "balance amount | Balance at the event"
+          - "notification_id uuid ref=notification | Notice sent"
+          - "note string(500) | Note"
+
+      - name: account_closure
+        prefix: acl
+        description: Request to close an account, settle interest/fees and transfer the remaining balance
+        fr: [DEP-01]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "requested_by_customer_id uuid ref=customer | Customer requesting"
+          - "reason_code string(64) nn | CUSTOMER_REQUEST, BANK_DECISION, DECEASED, KYC_FAILURE, FRAUD, DORMANCY"
+          - "reason string(500) | Reason detail"
+          - "transfer_to_account_id uuid fk=deposit_account | Internal account for the balance"
+          - "transfer_to_payee_id uuid ref=payee | External payee for the balance"
+          - "final_interest amount ro | Interest capitalised at closure"
+          - "final_fees amount ro | Fees charged at closure"
+          - "final_balance amount ro | Balance transferred"
+          - "status enum:AccountClosureStatus nn default=REQUESTED ro | Status"
+          - "approval_request_id uuid ref=approval_request | Approval"
+          - "completed_at ts ro | Completion time"
+
+      - name: cheque_book
+        prefix: chb
+        description: Cheque book issued on an account
+        fr: [DEP-07]
+        columns:
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "leaves int nn | Number of leaves"
+          - "first_cheque_no string(16) nn | First serial"
+          - "last_cheque_no string(16) nn | Last serial"
+          - "delivery_branch_id uuid ref=branch | Collection branch"
+          - "status enum:ChequeBookStatus nn default=REQUESTED ro | Status"
+          - "dispatched_at ts ro | Dispatch time"
+
+      - name: cheque
+        prefix: chq
+        description: Individual cheque leaf (issued, presented, cleared, returned, stopped)
+        fr: [DEP-07]
+        columns:
+          - "cheque_book_id uuid nn fk=cheque_book idx | Cheque book"
+          - "deposit_account_id uuid nn fk=deposit_account idx | Account"
+          - "cheque_no string(16) nn | Serial number"
+          - "amount amount | Amount when presented"
+          - "currency currency | Currency"
+          - "payee_name string(140) pii | Payee on the cheque"
+          - "issue_date date | Date written"
+          - "presented_at ts ro | Presentment time"
+          - "status enum:ChequeStatus nn default=ISSUED ro | Status"
+          - "return_reason string(64) ro | Return reason code"
+          - "stop_reason string(255) | Stop-payment reason"
+          - "image_document_id uuid ref=document | Cheque image (truncation)"
+          - "journal_entry_id uuid ref=journal_entry | Clearing posting"
+        unique: [[deposit_account_id, cheque_no]]
+
+      - name: virtual_account
+        prefix: van
+        description: Virtual account number routing incoming funds to a master account / sub-ledger
+        fr: [LED-08, DEP-01]
+        columns:
+          - "master_account_id uuid nn fk=deposit_account idx | Real account receiving the funds"
+          - "virtual_account_number string(34) nn uq | Virtual account number"
+          - "iban string(34) uq | Virtual IBAN"
+          - "purpose enum:VirtualAccountPurpose nn | Purpose"
+          - "owner_customer_id uuid ref=customer idx | End customer (e.g. marketplace seller)"
+          - "owner_reference string(128) idx | Client's reference for the owner (invoice id, seller id)"
+          - "ledger_account_id uuid ref=ledger_account uq ro | Ledger sub-account"
+          - "currency currency nn | Currency"
+          - "expected_amount amount | Expected amount (single-use invoice accounts)"
+          - "single_use bool nn default=false | Closes after first matching credit"
+          - "expires_at ts | Expiry"
+          - "status enum:VirtualAccountStatus nn default=ACTIVE | Status"
+          - "metadata json | Client-defined key/value metadata"
+
+    apis:
+      - resource: deposit-accounts
+        path: /v1/deposit-accounts
+        table: deposit_account
+        ops: [list, get, create, update]
+        filters: [customer_id, product_id, account_type, status, currency, branch_id, account_number, iban, external_ref]
+        actions:
+          - "POST /{id}/approve | Approve a pending account (checker) | comment string(500)"
+          - "POST /{id}/activate | Activate a funded or approved account"
+          - "POST /{id}/freeze | Freeze an account | reason string(500) nn"
+          - "POST /{id}/unfreeze | Remove a freeze | reason string(500) nn"
+          - "POST /{id}/reactivate | Reactivate a dormant account after customer verification | reason string(500) nn"
+          - "POST /{id}/change-product | Move the account to another product or version | product_id uuid nn, product_version_id uuid nn, effective_date date nn | deposit_account"
+          - "GET /{id}/balance | Balances from the ledger (ledger, available, pending) | | account_balance"
+          - "GET /{id}/transactions | Ledger entries of the account (?from=&to=) | | ledger_entry[]"
+          - "GET /{id}/holders | Holders of the account | | account_holder[]"
+          - "GET /{id}/mandates | Mandates of the account | | account_mandate[]"
+          - "GET /{id}/status-history | Status changes | | account_status_history[]"
+          - "GET /{id}/blocks | Blocks on the account | | account_block[]"
+          - "GET /{id}/accruals | Daily interest accruals (?from=&to=) | | interest_accrual[]"
+          - "GET /{id}/capitalisations | Interest postings | | interest_capitalisation[]"
+          - "GET /{id}/fees | Fees charged | | fee_charge[]"
+          - "POST /{id}/charge-fee | Charge a manual fee | fee_code string(64) nn, amount amount, reason string(255) nn | fee_charge"
+          - "POST /{id}/capitalise-interest | Capitalise accrued interest now (e.g. before closure)"
+          - "POST /{id}/recalculate-interest | Recalculate accruals from a back value date | from_date date nn, reason string(255) nn"
+          - "GET /{id}/interest-projection | Projected interest for the next N days (?days=) | | none"
+          - "GET /{id}/confirmation-letter | Generate an account confirmation letter | | none"
+      - resource: account-holders
+        path: /v1/account-holders
+        table: account_holder
+        ops: [list, get, create, update, delete]
+        filters: [deposit_account_id, customer_id, role, status]
+      - resource: account-mandates
+        path: /v1/account-mandates
+        table: account_mandate
+        ops: [list, get, create, update, delete]
+        filters: [deposit_account_id, operation_type]
+        actions:
+          - "POST /evaluate | Check which approvals an operation needs | deposit_account_id uuid nn, operation_type string(64) nn, amount amount | none"
+      - resource: account-status-history
+        path: /v1/account-status-history
+        table: account_status_history
+        ops: [list, get]
+        filters: [deposit_account_id, to_status]
+      - resource: account-blocks
+        path: /v1/account-blocks
+        table: account_block
+        ops: [list, get, create, update]
+        filters: [deposit_account_id, block_type, scope, status]
+        actions:
+          - "POST /{id}/lift | Lift a block | reason string(500) nn"
+      - resource: overdraft-facilities
+        path: /v1/overdraft-facilities
+        table: overdraft_facility
+        ops: [list, get, create, update]
+        filters: [deposit_account_id, overdraft_type, status]
+        actions:
+          - "POST /{id}/approve | Approve the facility (credit checker) | comment string(500)"
+          - "POST /{id}/suspend | Suspend the facility | reason string(500) nn"
+          - "POST /{id}/cancel | Cancel the facility | reason string(500) nn"
+          - "POST /{id}/change-limit | Increase or decrease the limit | limit_amount amount nn, reason string(500) nn"
+      - resource: account-rate-overrides
+        path: /v1/account-rate-overrides
+        table: account_rate_override
+        ops: [list, get, create, update, delete]
+        filters: [deposit_account_id, rate_kind]
+      - resource: interest-accruals
+        path: /v1/interest-accruals
+        table: interest_accrual
+        ops: [list, get]
+        filters: [deposit_account_id, accrual_date, kind]
+      - resource: interest-capitalisations
+        path: /v1/interest-capitalisations
+        table: interest_capitalisation
+        ops: [list, get]
+        filters: [deposit_account_id, kind]
+      - resource: fee-charges
+        path: /v1/fee-charges
+        table: fee_charge
+        ops: [list, get]
+        filters: [deposit_account_id, fee_code, charged_on, waived]
+        actions:
+          - "POST /{id}/refund | Refund a fee (creates a refund row and posting) | amount amount, reason string(500) nn | fee_charge"
+      - resource: term-deposits
+        path: /v1/term-deposits
+        table: term_deposit
+        ops: [list, get, create, update]
+        filters: [customer_id, product_id, status, maturity_date, currency]
+        actions:
+          - "POST /{id}/fund | Fund the deposit from the funding account"
+          - "POST /{id}/top-up | Add funds (if the product allows) | amount amount nn"
+          - "POST /{id}/withdraw | Partial withdrawal | amount amount nn, reason string(255)"
+          - "POST /{id}/break | Premature withdrawal with penalty | reason string(500) nn"
+          - "GET /{id}/break-quote | Payout if broken today (penalty, interest, tax) | | none"
+          - "POST /{id}/change-rollover | Change the maturity instruction | rollover_instruction enum:RolloverInstruction nn, payout_account_id uuid"
+          - "POST /{id}/mark-lien | Pledge as collateral | reference string(128) nn, amount amount nn"
+          - "POST /{id}/release-lien | Release the pledge | reference string(128) nn"
+          - "GET /{id}/events | Lifecycle events | | term_deposit_event[]"
+          - "GET /{id}/certificate | Download the deposit certificate | | none"
+      - resource: savings-pots
+        path: /v1/savings-pots
+        table: savings_pot
+        ops: [list, get, create, update]
+        filters: [deposit_account_id, status]
+        actions:
+          - "POST /{id}/deposit | Move money from the parent account into the pot | amount amount nn"
+          - "POST /{id}/withdraw | Move money back to the parent account | amount amount nn"
+          - "POST /{id}/close | Close the pot and return the balance"
+          - "GET /{id}/rules | Automatic saving rules | | savings_pot_rule[]"
+      - resource: savings-pot-rules
+        path: /v1/savings-pot-rules
+        table: savings_pot_rule
+        ops: [list, get, create, update, delete]
+        filters: [savings_pot_id, rule_type, is_active]
+      - resource: sweep-rules
+        path: /v1/sweep-rules
+        table: sweep_rule
+        ops: [list, get, create, update, delete]
+        filters: [source_account_id, target_account_id, sweep_type, is_active]
+        actions:
+          - "POST /{id}/run-now | Evaluate the sweep immediately | | sweep_execution"
+          - "GET /{id}/executions | Execution history | | sweep_execution[]"
+      - resource: standing-orders
+        path: /v1/standing-orders
+        table: standing_order
+        ops: [list, get, create, update]
+        filters: [deposit_account_id, payee_id, status, next_execution_date]
+        actions:
+          - "POST /{id}/pause | Pause | reason string(255)"
+          - "POST /{id}/resume | Resume"
+          - "POST /{id}/cancel | Cancel | reason string(255)"
+          - "POST /{id}/skip-next | Skip the next execution"
+          - "GET /{id}/executions | Execution history | | scheduled_payment_execution[]"
+      - resource: dormancy-events
+        path: /v1/dormancy-events
+        table: account_dormancy_event
+        ops: [list, get]
+        filters: [deposit_account_id, event_type]
+      - resource: account-closures
+        path: /v1/account-closures
+        table: account_closure
+        ops: [list, get, create]
+        filters: [deposit_account_id, status, reason_code]
+        actions:
+          - "GET /quote | Closure quote for an account (?deposit_account_id=) | | none"
+          - "POST /{id}/approve | Approve the closure (checker) | comment string(500)"
+          - "POST /{id}/reject | Reject the closure | reason string(500) nn"
+          - "POST /{id}/cancel | Cancel the request | reason string(255)"
+      - resource: cheque-books
+        path: /v1/cheque-books
+        table: cheque_book
+        ops: [list, get, create]
+        filters: [deposit_account_id, status]
+        actions:
+          - "POST /{id}/cancel | Cancel the cheque book | reason string(255) nn"
+          - "GET /{id}/cheques | Cheques in the book | | cheque[]"
+      - resource: cheques
+        path: /v1/cheques
+        table: cheque
+        ops: [list, get]
+        filters: [deposit_account_id, cheque_book_id, cheque_no, status]
+        actions:
+          - "POST /{id}/stop | Stop payment of a cheque | reason string(255) nn"
+          - "POST /{id}/present | Present a cheque for clearing | amount amount nn, currency currency nn, payee_name string(140), image_document_id uuid"
+          - "POST /{id}/return | Return an unpaid cheque | return_reason string(64) nn"
+      - resource: virtual-accounts
+        path: /v1/virtual-accounts
+        table: virtual_account
+        ops: [list, get, create, update]
+        filters: [master_account_id, purpose, status, owner_customer_id, owner_reference, virtual_account_number]
+        actions:
+          - "POST /bulk | Create up to 10,000 virtual accounts | items json nn | none"
+          - "POST /{id}/close | Close a virtual account | reason string(255)"
+          - "GET /{id}/balance | Sub-ledger balance | | account_balance"
+          - "GET /{id}/transactions | Credits routed through the virtual account | | ledger_entry[]"
+
+    events:
+      - "accounts.deposit_account.opened | deposit_account | An account was opened"
+      - "accounts.deposit_account.activated | deposit_account | An account became active"
+      - "accounts.deposit_account.status_changed | deposit_account | Account status changed (frozen, dormant, blocked, reactivated)"
+      - "accounts.deposit_account.product_changed | deposit_account | An account moved to another product/version"
+      - "accounts.deposit_account.closed | deposit_account | An account was closed"
+      - "accounts.account_holder.added | account_holder | A holder was added"
+      - "accounts.account_holder.removed | account_holder | A holder was removed"
+      - "accounts.account_block.placed | account_block | A block was placed"
+      - "accounts.account_block.lifted | account_block | A block was lifted"
+      - "accounts.overdraft_facility.approved | overdraft_facility | An overdraft facility was approved"
+      - "accounts.overdraft_facility.limit_exceeded | overdraft_facility | Utilisation exceeded the limit"
+      - "accounts.interest.capitalised | interest_capitalisation | Interest was posted to an account"
+      - "accounts.fee.charged | fee_charge | A fee was charged"
+      - "accounts.fee.refunded | fee_charge | A fee was refunded"
+      - "accounts.term_deposit.placed | term_deposit | A term deposit was placed"
+      - "accounts.term_deposit.maturing | term_deposit | A term deposit matures soon (notice period)"
+      - "accounts.term_deposit.matured | term_deposit | A term deposit matured"
+      - "accounts.term_deposit.broken | term_deposit | A term deposit was broken early"
+      - "accounts.savings_pot.goal_reached | savings_pot | A savings goal was reached"
+      - "accounts.standing_order.executed | scheduled_payment_execution | A standing order execution succeeded"
+      - "accounts.standing_order.failed | scheduled_payment_execution | A standing order execution failed"
+      - "accounts.dormancy.marked_dormant | account_dormancy_event | An account became dormant"
+      - "accounts.cheque.returned | cheque | A cheque was returned unpaid"
+      - "accounts.virtual_account.created | virtual_account | A virtual account was created"
+
+  # ------------------------------------------------------------------ statement-service
+  - name: statement-service
+    database: statement_db
+    description: >
+      Generates account statements (PDF, CSV, camt.053, MT940, OFX) per cycle or on demand from ledger data,
+      delivers them by email, in-app, post or SFTP, and produces interest and tax certificates.
+    tables:
+      - name: statement
+        prefix: stm
+        description: Account statement for a period
+        fr: [DEP-06]
+        columns:
+          - "deposit_account_id uuid nn ref=deposit_account idx | Account"
+          - "statement_no int nn | Sequential statement number per account"
+          - "period_start date nn | First day"
+          - "period_end date nn | Last day"
+          - "format enum:StatementFormat nn default=PDF | Format"
+          - "language string(10) nn default=en | Language"
+          - "currency currency nn | Currency"
+          - "opening_balance amount ro | Opening balance"
+          - "total_credits amount ro | Credits in period"
+          - "total_debits amount ro | Debits in period"
+          - "closing_balance amount ro | Closing balance"
+          - "interest_earned amount ro | Interest credited in period"
+          - "fees_charged amount ro | Fees in period"
+          - "line_count int ro | Number of lines"
+          - "is_on_demand bool nn default=false | Requested outside the cycle"
+          - "status enum:StatementStatus nn default=PENDING ro | Generation status"
+          - "document_id uuid ref=document ro | Generated file"
+          - "checksum string(64) ro | SHA-256 of the file"
+          - "generated_at ts ro | Generation time"
+          - "delivered_at ts ro | Delivery time"
+        unique: [[deposit_account_id, statement_no, format]]
+
+      - name: statement_line
+        prefix: stl
+        description: Line of a statement, frozen at generation time. Append-only.
+        immutable: true
+        fr: [DEP-06]
+        columns:
+          - "statement_id uuid nn fk=statement idx | Statement"
+          - "line_no int nn | Line number"
+          - "booking_date date nn | Booking date"
+          - "value_date date nn | Value date"
+          - "description string(500) nn | Narrative"
+          - "reference string(140) | Payment reference"
+          - "counterparty string(255) | Counterparty"
+          - "direction enum:EntryDirection nn | Debit or credit"
+          - "amount amount nn | Amount"
+          - "running_balance amount nn | Balance after the line"
+          - "ledger_entry_id uuid ref=ledger_entry | Source ledger entry"
+          - "transaction_code string(32) | ISO 20022 bank transaction code"
+        unique: [[statement_id, line_no]]
+
+      - name: statement_schedule
+        prefix: sts
+        description: Statement delivery preferences per account
+        fr: [DEP-06, NOT-02]
+        columns:
+          - "deposit_account_id uuid nn ref=deposit_account uq | Account"
+          - "frequency enum:ScheduleFrequency nn default=MONTHLY | Cycle"
+          - "cycle_day int nn default=1 | Cycle end day"
+          - "formats json nn | StatementFormat values to generate"
+          - "delivery_channel enum:StatementDeliveryChannel nn default=IN_APP | Channel"
+          - "email email pii | Override delivery email"
+          - "postal_address_id uuid ref=customer_address | Postal address for POST"
+          - "sftp_endpoint string(255) | SFTP destination for business clients"
+          - "password_protect bool nn default=true | Encrypt PDFs"
+          - "is_active bool nn default=true | Active"
+
+      - name: tax_certificate
+        prefix: txc
+        description: Interest / withholding tax certificate or annual summary for a customer
+        fr: [DEP-06, PRC-03]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "deposit_account_id uuid ref=deposit_account idx | Account (empty = all accounts)"
+          - "certificate_type enum:TaxCertificateType nn | Type"
+          - "tax_year int nn | Tax year"
+          - "period_start date nn | Period start"
+          - "period_end date nn | Period end"
+          - "gross_interest amount ro | Gross interest"
+          - "tax_withheld amount ro | Tax withheld"
+          - "currency currency nn | Currency"
+          - "status enum:StatementStatus nn default=PENDING ro | Status"
+          - "document_id uuid ref=document ro | Generated document"
+          - "submitted_to_authority_at ts ro | Time reported to the tax authority"
+
+    apis:
+      - resource: statements
+        path: /v1/statements
+        table: statement
+        ops: [list, get, create]
+        filters: [deposit_account_id, period_end, format, status]
+        actions:
+          - "GET /{id}/lines | Lines of the statement | | statement_line[]"
+          - "GET /{id}/download | Signed URL to download the statement file | | none"
+          - "POST /{id}/resend | Deliver the statement again | delivery_channel enum:StatementDeliveryChannel, email email"
+          - "POST /{id}/regenerate | Regenerate a failed statement"
+      - resource: statement-schedules
+        path: /v1/statement-schedules
+        table: statement_schedule
+        ops: [list, get, create, update]
+        filters: [deposit_account_id, delivery_channel, is_active]
+      - resource: tax-certificates
+        path: /v1/tax-certificates
+        table: tax_certificate
+        ops: [list, get, create]
+        filters: [customer_id, deposit_account_id, certificate_type, tax_year]
+        actions:
+          - "GET /{id}/download | Signed URL to download the certificate | | none"
+
+    events:
+      - "accounts.statement.generated | statement | A statement was generated"
+      - "accounts.statement.delivered | statement | A statement was delivered"
+      - "accounts.statement.failed | statement | Statement generation or delivery failed"
+      - "accounts.tax_certificate.generated | tax_certificate | A tax certificate was generated"

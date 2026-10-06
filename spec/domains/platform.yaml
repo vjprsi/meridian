@@ -1,0 +1,1902 @@
+domain: platform
+title: Platform and Administration
+phase: 1
+description: >
+  Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+  and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs,
+  reference data, documents and e-signature, maker-checker approvals and workflows, notifications,
+  webhooks, the tamper-evident audit log, and SaaS usage metering and billing.
+
+enums:
+  TenantStatus: [PROVISIONING, ACTIVE, SUSPENDED, OFFBOARDING, TERMINATED]
+  TenantType: [BANK, FINTECH, TELCO, ENTERPRISE, CENTRAL_BANK, PLATFORM_OPERATOR]
+  DeploymentModel: [SAAS_MULTI_TENANT, DEDICATED_CLOUD, SELF_HOSTED]
+  CloudProvider: [AWS, GCP, AZURE, ON_PREMISES]
+  CellStatus: [PROVISIONING, ACTIVE, DRAINING, READ_ONLY, DECOMMISSIONED]
+  PlacementStatus: [ACTIVE, MIGRATING, COMPLETED, ROLLED_BACK]
+  LegalEntityStatus: [ACTIVE, INACTIVE, DISSOLVED]
+  BranchType: [HEAD_OFFICE, BRANCH, SERVICE_CENTER, VIRTUAL, AGENT_HUB, BACK_OFFICE]
+  BranchStatus: [ACTIVE, TEMPORARILY_CLOSED, CLOSED]
+  SettingValueType: [STRING, NUMBER, BOOLEAN, JSON, DURATION, AMOUNT]
+  BrandingChannel: [ALL, MOBILE, WEB, CONSOLE, EMAIL, SMS, USSD]
+  PlatformModule: [LEDGER, DEPOSITS, PAYMENTS, WALLETS, CARDS, LENDING, RISK, REPORTING, OPEN_BANKING, AI, ANALYTICS]
+  StaffUserStatus: [INVITED, ACTIVE, LOCKED, SUSPENDED, DEACTIVATED]
+  StaffUserType: [STAFF, PLATFORM_OPERATOR, AGENT_STAFF, AUDITOR, SERVICE_ACCOUNT]
+  RoleType: [SYSTEM, CUSTOM]
+  RoleScopeType: [TENANT, LEGAL_ENTITY, BRANCH]
+  PolicyEffect: [ALLOW, DENY]
+  SsoProtocol: [OIDC, SAML2]
+  ProviderIntegrationStatus: [ACTIVE, INACTIVE, ERROR, TESTING]
+  MfaFactorType: [TOTP, WEBAUTHN, SMS_OTP, EMAIL_OTP, PUSH]
+  MfaFactorStatus: [PENDING_VERIFICATION, ACTIVE, DISABLED]
+  ApiClientType: [SERVER, PUBLIC_APP, PARTNER, TPP, INTERNAL]
+  ClientAuthMethod: [CLIENT_SECRET_BASIC, CLIENT_SECRET_POST, PRIVATE_KEY_JWT, TLS_CLIENT_AUTH, NONE]
+  ApiEnvironment: [SANDBOX, PRODUCTION]
+  ApiClientStatus: [ACTIVE, SUSPENDED, REVOKED]
+  ApiKeyStatus: [ACTIVE, ROTATING, REVOKED, EXPIRED]
+  RateLimitScope: [TENANT, CLIENT, IP, USER]
+  ConfigEntryStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK]
+  CustomFieldDataType: [TEXT, NUMBER, DECIMAL, BOOLEAN, DATE, DATETIME, EMAIL, PHONE, URL, ENUM, REFERENCE]
+  CountryPackStatus: [DRAFT, RELEASED, DEPRECATED]
+  InstalledPackStatus: [INSTALLING, INSTALLED, UPGRADE_AVAILABLE, FAILED, UNINSTALLED]
+  TaxRuleType: [WITHHOLDING, VAT, GST, STAMP_DUTY, EXCISE, FINANCIAL_TRANSACTION_TAX, LEVY]
+  FatfStatus: [NONE, INCREASED_MONITORING, CALL_FOR_ACTION]
+  CalendarType: [COUNTRY, PAYMENT_RAIL, CARD_SCHEME, MARKET, BRANCH, CUSTOM]
+  HolidayType: [PUBLIC, BANK, RAIL, OBSERVED, AD_HOC]
+  FxRateType: [MID, BUY, SELL, CASH_BUY, CASH_SELL, REVALUATION]
+  PlatformDocumentType: [ID_CARD, PASSPORT, DRIVING_LICENSE, RESIDENCE_PERMIT, PROOF_OF_ADDRESS, SELFIE, VIDEO,
+                         BANK_STATEMENT, ACCOUNT_STATEMENT, CONTRACT, LOAN_AGREEMENT, INVOICE, RECEIPT, REPORT,
+                         CERTIFICATE, CORPORATE_DOCUMENT, LOGO, EXPORT, OTHER]
+  DataClassification: [PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED]
+  DocumentStatus: [UPLOADING, SCANNING, AVAILABLE, QUARANTINED, ARCHIVED, DELETED]
+  TemplateFormat: [PDF, HTML, DOCX, CSV, XLSX, TEXT]
+  DocumentCategory: [STATEMENT, CONTRACT, LETTER, CERTIFICATE, RECEIPT, NOTICE, REPORT]
+  PlatformTemplateStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, RETIRED]
+  EsignStatus: [DRAFT, SENT, VIEWED, PARTIALLY_SIGNED, SIGNED, DECLINED, EXPIRED, CANCELLED]
+  ApprovalRequestStatus: [PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED, EXECUTED, EXECUTION_FAILED]
+  ApprovalDecisionType: [APPROVE, REJECT, REQUEST_CHANGES]
+  WorkTaskPriority: [LOW, NORMAL, HIGH, URGENT]
+  WorkflowDefinitionStatus: [DRAFT, PUBLISHED, DEPRECATED]
+  WorkflowInstanceStatus: [RUNNING, WAITING, COMPLETED, FAILED, CANCELLED, SUSPENDED]
+  WorkTaskStatus: [OPEN, CLAIMED, IN_PROGRESS, COMPLETED, CANCELLED, ESCALATED]
+  NotificationChannel: [PUSH, SMS, EMAIL, WHATSAPP, IN_APP, USSD, VOICE]
+  NotificationCategory: [TRANSACTIONAL, SECURITY, SERVICE, MARKETING, REGULATORY, COLLECTIONS]
+  NotificationRecipientType: [CUSTOMER, STAFF, AGENT, MERCHANT, EXTERNAL]
+  NotificationStatus: [QUEUED, SCHEDULED, SENT, DELIVERED, READ, FAILED, SUPPRESSED, EXPIRED]
+  WebhookEndpointStatus: [ACTIVE, DISABLED, FAILING]
+  WebhookDeliveryStatus: [PENDING, RETRYING, SUCCEEDED, FAILED, ABANDONED]
+  AuditActorType: [STAFF_USER, CUSTOMER, API_CLIENT, SERVICE, SYSTEM, PLATFORM_OPERATOR, AGENT]
+  AuditOutcome: [SUCCESS, FAILURE, DENIED]
+  DataExportType: [AUDIT_LOG, DATA_SUBJECT_ACCESS, DATA_PORTABILITY, REGULATOR_EXTRACT, LEGAL_DISCOVERY]
+  BillingPeriod: [MONTHLY, QUARTERLY, ANNUAL]
+  PricePlanStatus: [DRAFT, ACTIVE, RETIRED]
+  TenantSubscriptionStatus: [TRIAL, ACTIVE, PAST_DUE, SUSPENDED, CANCELLED]
+  UsageMetric: [ACTIVE_ACCOUNT, API_CALL, LEDGER_POSTING, CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION,
+                NOTIFICATION_SMS, NOTIFICATION_EMAIL, KYC_CHECK, SANCTIONS_SCREENING, STORAGE_GB, AI_TOKENS]
+  TenantInvoiceStatus: [DRAFT, ISSUED, PAID, PARTIALLY_PAID, OVERDUE, VOID]
+
+services:
+  # ------------------------------------------------------------------ tenant-service
+  - name: tenant-service
+    database: tenant_db
+    description: >
+      Tenant lifecycle and placement on cells, legal entities, branches, per-tenant settings,
+      feature flags, enabled modules and white-label branding.
+    tables:
+      - name: cell
+        prefix: cel
+        description: A deployment cell (full stack slice) in one region that hosts a set of tenants
+        tenant: false
+        fr: [ADM-01]
+        columns:
+          - "code string(32) nn uq | Cell code, e.g. aws-euw1-c03"
+          - "region string(32) nn | Cloud region"
+          - "cloud_provider enum:CloudProvider nn | Cloud or on-premises"
+          - "status enum:CellStatus nn default=PROVISIONING | Lifecycle status"
+          - "is_dedicated bool nn default=false | Dedicated to a single tenant"
+          - "capacity_tenants int nn default=200 | Maximum tenants for a shared cell"
+          - "tenant_count int nn default=0 ro | Tenants currently placed"
+          - "kubernetes_cluster string(128) | Cluster identifier"
+          - "ledger_db_cluster string(128) | Ledger database cluster"
+          - "kafka_cluster string(128) | Event backbone cluster"
+          - "standby_region string(32) | Paired region for failover"
+          - "metadata json | Operational metadata"
+
+      - name: tenant
+        prefix: ten
+        description: A client organisation (bank, fintech, telco) using the platform
+        tenant: false
+        fr: [ADM-01]
+        columns:
+          - "code string(32) nn uq | Short unique tenant code"
+          - "name string(160) nn | Display name"
+          - "legal_name string(255) nn | Registered legal name"
+          - "tenant_type enum:TenantType nn | Kind of organisation"
+          - "status enum:TenantStatus nn default=PROVISIONING | Lifecycle status"
+          - "deployment_model enum:DeploymentModel nn default=SAAS_MULTI_TENANT | How the tenant is deployed"
+          - "cell_id uuid fk=cell idx | Home cell"
+          - "home_region string(32) nn | Home region for data residency"
+          - "data_residency_country country | Country data must stay in"
+          - "default_currency currency nn | Default currency"
+          - "default_country country nn | Default country"
+          - "default_language string(10) nn default=en | Default language (BCP 47)"
+          - "timezone string(64) nn default=UTC | IANA timezone"
+          - "environment enum:ApiEnvironment nn default=PRODUCTION | Sandbox or production tenant"
+          - "primary_contact_email email nn | Primary contact"
+          - "billing_email email | Billing contact"
+          - "activated_at ts ro | Activation time"
+          - "suspended_at ts ro | Suspension time"
+          - "suspension_reason string(255) ro | Reason for suspension"
+          - "metadata json | Operator metadata"
+
+      - name: tenant_placement
+        prefix: tpl
+        description: History of a tenant's placement on cells, including cell-to-cell migrations
+        tenant: false
+        fr: [ADM-01]
+        columns:
+          - "subject_tenant_id uuid nn fk=tenant idx | Tenant being placed"
+          - "cell_id uuid nn fk=cell idx | Target cell"
+          - "status enum:PlacementStatus nn default=ACTIVE | Placement status"
+          - "effective_from ts nn | Start of placement"
+          - "effective_to ts | End of placement"
+          - "reason string(255) | Reason, e.g. initial placement, rebalancing, dedicated upgrade"
+
+      - name: tenant_module
+        prefix: tmo
+        description: Platform modules enabled for the tenant and their module-level configuration
+        fr: [ADM-01]
+        columns:
+          - "module enum:PlatformModule nn uq | Module"
+          - "is_enabled bool nn default=false | Whether the module is enabled"
+          - "enabled_at ts ro | When it was enabled"
+          - "config json | Module-level configuration"
+
+      - name: legal_entity
+        prefix: lge
+        description: A licensed or registered legal entity of the tenant that owns books, products and customers
+        fr: [ADM-01, GL-05]
+        columns:
+          - "code string(32) nn uq | Short code"
+          - "legal_name string(255) nn | Registered legal name"
+          - "trading_name string(255) | Trading name"
+          - "registration_number string(64) | Company registration number"
+          - "lei string(20) | Legal Entity Identifier (ISO 17442)"
+          - "tax_id string(64) | Tax identification number"
+          - "country country nn | Country of incorporation"
+          - "base_currency currency nn | Functional / reporting currency"
+          - "regulator string(120) | Primary regulator"
+          - "license_type string(64) | E.g. BANK, EMI, PI, MFI, NBFC"
+          - "license_number string(64) | Licence number"
+          - "swift_bic string(11) | BIC, if any"
+          - "parent_id uuid fk=legal_entity idx | Parent entity for group structures"
+          - "address_line1 string(255) | Registered address line 1"
+          - "address_line2 string(255) | Registered address line 2"
+          - "city string(120) | City"
+          - "postal_code string(20) | Postal code"
+          - "timezone string(64) nn default=UTC | IANA timezone for business dates"
+          - "fiscal_year_start_month int nn default=1 | First month of the fiscal year (1-12)"
+          - "status enum:LegalEntityStatus nn default=ACTIVE | Status"
+
+      - name: branch
+        prefix: brn
+        description: A branch, service centre or virtual unit of a legal entity
+        fr: [ADM-01]
+        columns:
+          - "legal_entity_id uuid nn fk=legal_entity idx | Owning legal entity"
+          - "code string(32) nn uq | Branch code"
+          - "name string(160) nn | Branch name"
+          - "branch_type enum:BranchType nn default=BRANCH | Kind of unit"
+          - "parent_id uuid fk=branch idx | Parent unit (region, head office)"
+          - "routing_code string(32) | Sort code / routing / IFSC code"
+          - "address_line1 string(255) | Address line 1"
+          - "address_line2 string(255) | Address line 2"
+          - "city string(120) | City"
+          - "region string(120) | State / province"
+          - "postal_code string(20) | Postal code"
+          - "country country nn | Country"
+          - "latitude rate | Latitude"
+          - "longitude rate | Longitude"
+          - "phone phone | Branch phone"
+          - "email email | Branch email"
+          - "opening_hours json | Opening hours by weekday"
+          - "holiday_calendar_id uuid ref=holiday_calendar | Holiday calendar"
+          - "manager_user_id uuid ref=app_user | Branch manager"
+          - "status enum:BranchStatus nn default=ACTIVE | Status"
+          - "opened_on date | Opening date"
+          - "closed_on date | Closing date"
+
+      - name: tenant_setting
+        prefix: tst
+        description: Typed tenant-level setting (key/value) used by all services
+        fr: [ADM-01]
+        columns:
+          - "setting_key string(128) nn uq | Setting key, e.g. payments.default_rail"
+          - "value json nn | Setting value"
+          - "value_type enum:SettingValueType nn | Value type"
+          - "category string(64) | Grouping for the console"
+          - "description string(500) | What the setting controls"
+          - "is_sensitive bool nn default=false | Masked in the console and audit log"
+
+      - name: feature_flag
+        prefix: ffl
+        description: Feature flag with targeting rules and gradual rollout
+        fr: [ADM-01]
+        columns:
+          - "flag_key string(128) nn uq | Flag key"
+          - "description string(500) | Purpose"
+          - "is_enabled bool nn default=false | Master switch"
+          - "rollout_percentage int nn default=0 | Percent of subjects that see the feature (0-100)"
+          - "targeting_rules json | Rules by legal entity, segment, user, app version"
+          - "variants json | Multivariate values"
+          - "owner string(120) | Owning team"
+          - "expires_at ts | When the flag should be removed"
+
+      - name: tenant_branding
+        prefix: tbr
+        description: White-label branding per channel (logo, colours, fonts, copy, domains, senders)
+        fr: [ADM-01]
+        columns:
+          - "legal_entity_id uuid fk=legal_entity | Brand per legal entity (empty = tenant-wide)"
+          - "channel enum:BrandingChannel nn default=ALL | Channel the branding applies to"
+          - "app_name string(80) nn | Product / app name shown to customers"
+          - "logo_document_id uuid ref=document | Logo"
+          - "icon_document_id uuid ref=document | App icon / favicon"
+          - "primary_color string(9) nn | Hex colour, e.g. #1F3864"
+          - "secondary_color string(9) | Hex colour"
+          - "accent_color string(9) | Hex colour"
+          - "font_family string(80) | Font family"
+          - "theme_tokens json | Full design-token overrides (light and dark)"
+          - "default_locale string(10) nn default=en | Default locale"
+          - "supported_locales json | Enabled locales"
+          - "custom_domain string(255) | Custom domain for web apps"
+          - "support_email email | Support email"
+          - "support_phone phone | Support phone"
+          - "terms_url string(500) | Terms and conditions URL"
+          - "privacy_url string(500) | Privacy policy URL"
+          - "email_sender_name string(120) | Email sender name"
+          - "email_sender_address email | Email sender address"
+          - "sms_sender_id string(11) | Alphanumeric SMS sender id"
+        unique: [[tenant_id, legal_entity_id, channel]]
+
+    apis:
+      - resource: cells
+        path: /v1/platform/cells
+        table: cell
+        description: Platform-operator API for deployment cells
+        ops: [list, get, create, update]
+        filters: [region, cloud_provider, status, is_dedicated]
+        actions:
+          - "POST /{id}/drain | Stop placing new tenants on the cell | reason string(255) nn"
+      - resource: tenants
+        path: /v1/platform/tenants
+        table: tenant
+        description: Platform-operator API for tenant lifecycle
+        ops: [list, get, create, update]
+        filters: [status, tenant_type, deployment_model, cell_id, environment]
+        actions:
+          - "POST /{id}/activate | Activate a provisioned tenant"
+          - "POST /{id}/suspend | Suspend a tenant (all APIs return 403) | reason string(255) nn"
+          - "POST /{id}/reinstate | Lift a suspension | reason string(255) nn"
+          - "POST /{id}/migrate | Move the tenant to another cell | cell_id uuid nn, scheduled_at ts | tenant_placement"
+          - "GET /{id}/placements | Placement history | | tenant_placement[]"
+          - "POST /provision-from-template | Provision a tenant from a template bank in minutes | template_code string(64) nn, code string(32) nn, name string(160) nn, legal_name string(255) nn, tenant_type enum:TenantType nn, default_currency currency nn, default_country country nn, primary_contact_email email nn"
+      - resource: modules
+        path: /v1/modules
+        table: tenant_module
+        ops: [list, get, update]
+        filters: [module, is_enabled]
+        actions:
+          - "POST /{id}/enable | Enable a module (maker-checker) | config json | approval_request"
+          - "POST /{id}/disable | Disable a module (maker-checker) | reason string(255) nn | approval_request"
+      - resource: legal-entities
+        path: /v1/legal-entities
+        table: legal_entity
+        ops: [list, get, create, update]
+        filters: [country, status, parent_id, base_currency]
+      - resource: branches
+        path: /v1/branches
+        table: branch
+        ops: [list, get, create, update]
+        filters: [legal_entity_id, branch_type, parent_id, status, country, city]
+        actions:
+          - "POST /{id}/close | Close a branch | closed_on date nn, reason string(255) nn"
+      - resource: settings
+        path: /v1/settings
+        table: tenant_setting
+        ops: [list, get, create, update, delete]
+        filters: [setting_key, category]
+      - resource: feature-flags
+        path: /v1/feature-flags
+        table: feature_flag
+        ops: [list, get, create, update, delete]
+        filters: [flag_key, is_enabled]
+        actions:
+          - "POST /evaluate | Evaluate flags for a subject | subject_type string(40) nn, subject_id string(64) nn, context json | none"
+      - resource: branding
+        path: /v1/branding
+        table: tenant_branding
+        ops: [list, get, create, update]
+        filters: [legal_entity_id, channel]
+        actions:
+          - "GET /{id}/preview | Rendered preview of the branding on sample screens | | none"
+
+    events:
+      - "platform.tenant.provisioned | tenant | A tenant was provisioned"
+      - "platform.tenant.activated | tenant | A tenant was activated"
+      - "platform.tenant.suspended | tenant | A tenant was suspended"
+      - "platform.tenant.migrated | tenant_placement | A tenant moved to another cell"
+      - "platform.tenant_module.changed | tenant_module | A module was enabled or disabled"
+      - "platform.legal_entity.created | legal_entity | A legal entity was created"
+      - "platform.legal_entity.updated | legal_entity | A legal entity was updated"
+      - "platform.branch.created | branch | A branch was created"
+      - "platform.branch.updated | branch | A branch was updated or closed"
+      - "platform.tenant_setting.changed | tenant_setting | A tenant setting changed"
+      - "platform.feature_flag.changed | feature_flag | A feature flag changed"
+
+  # ------------------------------------------------------------------ identity-service
+  - name: identity-service
+    database: identity_db
+    description: >
+      Staff and operator identity: users, roles, permissions, ABAC policies, SSO (OIDC/SAML), MFA, sessions;
+      and machine identity: OAuth 2.1 API clients, API keys, scopes, rate-limit policies and request logs.
+      Customer credentials and device binding live in the party domain.
+    tables:
+      - name: sso_provider
+        prefix: sso
+        description: Enterprise identity provider used for staff single sign-on
+        fr: [ADM-02]
+        columns:
+          - "name string(120) nn | Display name, e.g. Corporate Entra ID"
+          - "protocol enum:SsoProtocol nn | OIDC or SAML 2.0"
+          - "issuer_url string(500) nn | Issuer / entity id"
+          - "metadata_url string(500) | Discovery or SAML metadata URL"
+          - "client_id string(255) | OIDC client id"
+          - "client_secret string(500) secret | OIDC client secret (vault reference)"
+          - "signing_certificate text | SAML IdP signing certificate (PEM)"
+          - "attribute_mapping json | Maps IdP claims to user fields and roles"
+          - "email_domains json | Email domains that must use this provider"
+          - "jit_provisioning bool nn default=true | Create users on first login"
+          - "default_role_id uuid fk=role | Role assigned to just-in-time users"
+          - "status enum:ProviderIntegrationStatus nn default=TESTING | Status"
+
+      - name: role
+        prefix: rol
+        description: A named set of permissions assignable to staff users
+        fr: [ADM-02]
+        columns:
+          - "code string(64) nn uq | Role code, e.g. OPS_PAYMENTS_MAKER"
+          - "name string(120) nn | Display name"
+          - "description string(500) | Purpose of the role"
+          - "role_type enum:RoleType nn default=CUSTOM | System roles cannot be edited"
+          - "is_privileged bool nn default=false | Privileged roles need just-in-time elevation and approval"
+          - "requires_mfa bool nn default=true | MFA required for sessions using this role"
+          - "max_session_minutes int nn default=480 | Session lifetime"
+          - "incompatible_role_ids json | Segregation-of-duties conflicts"
+
+      - name: permission
+        prefix: prm
+        description: Catalogue of fine-grained permissions (resource + action), shared by all tenants
+        tenant: false
+        fr: [ADM-02]
+        columns:
+          - "code string(128) nn uq | Permission code, e.g. payments.payment.approve"
+          - "domain string(40) nn | Owning domain"
+          - "resource string(64) nn | Resource"
+          - "action string(40) nn | Action: read, create, update, approve, export ..."
+          - "description string(500) | What it allows"
+          - "is_sensitive bool nn default=false | Sensitive (PII, money movement, configuration)"
+          - "requires_approval bool nn default=false | Operations need maker-checker"
+
+      - name: role_permission
+        prefix: rpm
+        description: Grants a permission to a role, optionally constrained by ABAC conditions
+        fr: [ADM-02]
+        columns:
+          - "role_id uuid nn fk=role idx | Role"
+          - "permission_id uuid nn fk=permission idx | Permission"
+          - "conditions json | ABAC constraints, e.g. amount <= 10000, own branch only"
+        unique: [[role_id, permission_id]]
+
+      - name: app_user
+        prefix: usr
+        description: Staff, operator, auditor or service-account user of the console and back-office APIs
+        fr: [ADM-02]
+        columns:
+          - "username string(120) nn uq | Login name"
+          - "email email nn uq pii | Work email"
+          - "first_name string(120) nn pii | First name"
+          - "last_name string(120) nn pii | Last name"
+          - "display_name string(160) | Display name"
+          - "phone phone pii | Work phone"
+          - "user_type enum:StaffUserType nn default=STAFF | Kind of user"
+          - "status enum:StaffUserStatus nn default=INVITED | Status"
+          - "sso_provider_id uuid fk=sso_provider | SSO provider, if federated"
+          - "external_subject string(255) idx | Subject id at the identity provider"
+          - "legal_entity_id uuid ref=legal_entity | Home legal entity"
+          - "branch_id uuid ref=branch | Home branch"
+          - "department string(120) | Department"
+          - "job_title string(120) | Job title"
+          - "manager_id uuid fk=app_user | Line manager"
+          - "locale string(10) nn default=en | Preferred locale"
+          - "timezone string(64) nn default=UTC | Timezone"
+          - "password_hash string(255) secret | Argon2id hash for local accounts"
+          - "password_changed_at ts ro | Last password change"
+          - "mfa_enrolled bool nn default=false ro | Has an active MFA factor"
+          - "last_login_at ts ro | Last successful login"
+          - "failed_login_count int nn default=0 ro | Consecutive failed logins"
+          - "locked_until ts ro | Lockout end"
+          - "invited_at ts ro | Invitation time"
+          - "deactivated_at ts ro | Deactivation time"
+
+      - name: user_role
+        prefix: url
+        description: Assignment of a role to a user, scoped to the tenant, a legal entity or a branch, optionally time-bound
+        fr: [ADM-02, LIM-02]
+        columns:
+          - "user_id uuid nn fk=app_user idx | User"
+          - "role_id uuid nn fk=role idx | Role"
+          - "scope_type enum:RoleScopeType nn default=TENANT | Scope of the assignment"
+          - "scope_id uuid | Legal entity or branch id when scoped"
+          - "valid_from ts nn default=now | Start"
+          - "valid_to ts | End (just-in-time elevation)"
+          - "granted_by string(64) ro | Who granted it"
+          - "approval_request_id uuid ref=approval_request | Approval for privileged roles"
+          - "justification string(500) | Business justification"
+
+      - name: access_policy
+        prefix: apo
+        description: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
+        fr: [ADM-02]
+        columns:
+          - "name string(120) nn uq | Policy name"
+          - "description string(500) | Purpose"
+          - "effect enum:PolicyEffect nn | Allow or deny"
+          - "priority int nn default=100 | Lower evaluates first; deny wins on tie"
+          - "resource_pattern string(255) nn | Resource pattern, e.g. payments.payment.*"
+          - "actions json nn | Actions covered"
+          - "condition_expression text nn | CEL expression over subject, resource and context"
+          - "is_active bool nn default=true | Active"
+
+      - name: mfa_factor
+        prefix: mfa
+        description: A multi-factor authentication factor enrolled by a staff user
+        fr: [ADM-02]
+        columns:
+          - "user_id uuid nn fk=app_user idx | User"
+          - "factor_type enum:MfaFactorType nn | Factor type"
+          - "label string(120) | User-visible label, e.g. YubiKey 5C"
+          - "credential_id string(512) | WebAuthn credential id"
+          - "public_key text secret | WebAuthn public key"
+          - "totp_secret string(255) secret | Encrypted TOTP seed"
+          - "destination string(320) pii | Phone or email for OTP factors"
+          - "is_primary bool nn default=false | Default factor"
+          - "status enum:MfaFactorStatus nn default=PENDING_VERIFICATION | Status"
+          - "last_used_at ts ro | Last successful use"
+
+      - name: user_session
+        prefix: ses
+        description: An authenticated staff session; revocable
+        fr: [ADM-02, ADM-03]
+        columns:
+          - "user_id uuid nn fk=app_user idx | User"
+          - "auth_method string(32) nn | PASSWORD, SSO_OIDC, SSO_SAML, PASSKEY"
+          - "mfa_verified bool nn default=false | MFA completed"
+          - "ip_address inet | Client IP"
+          - "user_agent string(500) | Browser user agent"
+          - "device_fingerprint string(128) | Device fingerprint"
+          - "geo_country country | Country resolved from IP"
+          - "started_at ts nn default=now ro | Session start"
+          - "last_seen_at ts ro | Last activity"
+          - "expires_at ts nn | Absolute expiry"
+          - "revoked_at ts ro | Revocation time"
+          - "revoke_reason string(255) ro | Revocation reason"
+
+      - name: rate_limit_policy
+        prefix: rlp
+        description: Rate and concurrency limits applied by the API gateway
+        fr: [API-02]
+        columns:
+          - "name string(120) nn uq | Policy name"
+          - "applies_to enum:RateLimitScope nn default=CLIENT | What the limit is keyed on"
+          - "requests_per_second int nn | Sustained rate"
+          - "burst int nn | Burst size"
+          - "requests_per_day bigint | Daily quota"
+          - "max_concurrent_requests int | Concurrency cap"
+          - "operation_overrides json | Per-operation overrides"
+
+      - name: api_client
+        prefix: cli
+        description: An OAuth 2.1 client (server integration, app, partner or open banking TPP)
+        fr: [API-02, OBK-01]
+        columns:
+          - "name string(120) nn | Client name"
+          - "description string(500) | Purpose"
+          - "client_type enum:ApiClientType nn | Kind of client"
+          - "client_id string(64) nn uq ro | Public client identifier"
+          - "client_secret_hash string(255) secret | Hashed secret for confidential clients"
+          - "auth_method enum:ClientAuthMethod nn default=PRIVATE_KEY_JWT | Token endpoint authentication"
+          - "jwks_uri string(500) | JWKS URL for private_key_jwt"
+          - "mtls_cert_thumbprint string(128) | Bound certificate (RFC 8705)"
+          - "redirect_uris json | Allowed redirect URIs"
+          - "allowed_scopes json nn | Scopes this client may request"
+          - "allowed_ip_ranges json | CIDR allow-list"
+          - "rate_limit_policy_id uuid fk=rate_limit_policy | Rate limits"
+          - "environment enum:ApiEnvironment nn default=SANDBOX | Sandbox or production"
+          - "status enum:ApiClientStatus nn default=ACTIVE | Status"
+          - "owner_email email | Technical owner"
+          - "tpp_registration_id string(128) | Open banking TPP registration / eIDAS id"
+          - "fapi_profile bool nn default=false | Enforce FAPI 2.0 security profile"
+          - "last_used_at ts ro | Last token issued"
+          - "expires_at ts | Expiry"
+
+      - name: api_key
+        prefix: key
+        description: Secret API key for an API client (shown once at creation; stored hashed)
+        fr: [API-02]
+        columns:
+          - "api_client_id uuid nn fk=api_client idx | Client"
+          - "name string(120) nn | Key label"
+          - "key_prefix string(16) nn ro | Visible prefix, e.g. mk_live_4f9a"
+          - "key_hash string(255) nn secret | SHA-256 of the key"
+          - "scopes json | Scopes (subset of the client's)"
+          - "status enum:ApiKeyStatus nn default=ACTIVE | Status"
+          - "rotated_from_id uuid fk=api_key | Key this one replaced"
+          - "expires_at ts | Expiry"
+          - "last_used_at ts ro | Last use"
+          - "last_used_ip inet ro | Last caller IP"
+          - "revoked_at ts ro | Revocation time"
+
+      - name: oauth_scope
+        prefix: scp
+        description: Catalogue of OAuth scopes (e.g. payments:write), shared by all tenants
+        tenant: false
+        fr: [API-02]
+        columns:
+          - "scope string(128) nn uq | Scope string"
+          - "domain string(40) nn | Owning domain"
+          - "description string(500) nn | What the scope grants"
+          - "is_sensitive bool nn default=false | Needs extra approval to grant"
+          - "requires_customer_consent bool nn default=false | Needs customer consent (open banking)"
+
+      - name: api_request_log
+        prefix: req
+        description: One API request handled by the gateway; powers developer logs and usage metering. Append-only.
+        immutable: true
+        fr: [API-02, ADM-05]
+        columns:
+          - "api_client_id uuid fk=api_client idx | Calling client"
+          - "request_id string(64) nn idx | Request id returned in X-Request-Id"
+          - "method string(8) nn | HTTP method"
+          - "path string(500) nn | Request path"
+          - "operation_id string(128) | OpenAPI operation id"
+          - "status_code int nn | HTTP status"
+          - "error_code string(64) | Problem code for errors"
+          - "latency_ms int nn | Gateway latency"
+          - "request_bytes int | Request size"
+          - "response_bytes int | Response size"
+          - "idempotency_key string(128) | Idempotency key sent"
+          - "ip_address inet | Caller IP"
+          - "user_agent string(500) | Caller user agent"
+          - "environment enum:ApiEnvironment nn | Sandbox or production"
+          - "occurred_at ts nn | Request time"
+        indexes: [[api_client_id, occurred_at]]
+
+    apis:
+      - resource: users
+        path: /v1/users
+        table: app_user
+        ops: [list, get, create, update]
+        filters: [status, user_type, legal_entity_id, branch_id, email, username, sso_provider_id]
+        actions:
+          - "POST /{id}/invite | Send or resend the invitation email"
+          - "POST /{id}/lock | Lock a user | reason string(255) nn"
+          - "POST /{id}/unlock | Unlock a user | reason string(255) nn"
+          - "POST /{id}/deactivate | Deactivate a user and revoke sessions | reason string(255) nn"
+          - "POST /{id}/reset-mfa | Remove all MFA factors (maker-checker) | reason string(255) nn | approval_request"
+          - "GET /{id}/roles | Role assignments of a user | | user_role[]"
+          - "GET /{id}/effective-permissions | Permissions after RBAC and ABAC evaluation | | none"
+          - "GET /me | The calling user | | app_user"
+      - resource: user-roles
+        path: /v1/user-roles
+        table: user_role
+        ops: [list, get, create, delete]
+        filters: [user_id, role_id, scope_type, scope_id]
+        actions:
+          - "POST /elevate | Request just-in-time elevation to a privileged role | role_id uuid nn, duration_minutes int nn, justification string(500) nn | approval_request"
+      - resource: roles
+        path: /v1/roles
+        table: role
+        ops: [list, get, create, update, delete]
+        filters: [role_type, is_privileged, code]
+        actions:
+          - "GET /{id}/permissions | Permissions granted to a role | | role_permission[]"
+          - "POST /{id}/permissions | Grant permissions to a role (maker-checker) | permission_ids json nn, conditions json | approval_request"
+          - "POST /{id}/clone | Copy a role as a new custom role | code string(64) nn, name string(120) nn"
+      - resource: role-permissions
+        path: /v1/role-permissions
+        table: role_permission
+        ops: [list, get, delete]
+        filters: [role_id, permission_id]
+      - resource: permissions
+        path: /v1/permissions
+        table: permission
+        ops: [list, get]
+        filters: [domain, resource, is_sensitive]
+      - resource: access-policies
+        path: /v1/access-policies
+        table: access_policy
+        ops: [list, get, create, update, delete]
+        filters: [effect, is_active]
+        actions:
+          - "POST /simulate | Evaluate an access decision for a subject, action and resource | user_id uuid nn, action string(128) nn, resource json nn | none"
+      - resource: sso-providers
+        path: /v1/sso-providers
+        table: sso_provider
+        ops: [list, get, create, update, delete]
+        filters: [protocol, status]
+        actions:
+          - "POST /{id}/test | Run a test login against the provider | | none"
+      - resource: mfa-factors
+        path: /v1/users/{user_id}/mfa-factors
+        table: mfa_factor
+        ops: [list, get, create, delete]
+        filters: [factor_type, status]
+        actions:
+          - "POST /{id}/verify | Verify enrolment with a code or WebAuthn assertion | code string(16), assertion json"
+      - resource: sessions
+        path: /v1/sessions
+        table: user_session
+        ops: [list, get]
+        filters: [user_id, mfa_verified]
+        actions:
+          - "POST /{id}/revoke | Revoke a session | reason string(255) nn"
+          - "POST /revoke-all | Revoke all sessions of a user | user_id uuid nn, reason string(255) nn | none"
+      - resource: api-clients
+        path: /v1/api-clients
+        table: api_client
+        ops: [list, get, create, update]
+        filters: [client_type, environment, status]
+        actions:
+          - "POST /{id}/rotate-secret | Rotate the client secret (returned once) | | none"
+          - "POST /{id}/suspend | Suspend a client | reason string(255) nn"
+          - "POST /{id}/reactivate | Reactivate a suspended client"
+          - "GET /{id}/usage | Request counts, error rates and latency for a period (?from=&to=) | | none"
+      - resource: api-keys
+        path: /v1/api-clients/{api_client_id}/keys
+        table: api_key
+        ops: [list, get, create]
+        filters: [status]
+        actions:
+          - "POST /{id}/rotate | Create a replacement key; the old key stays valid for a grace period | grace_period_hours int | api_key"
+          - "POST /{id}/revoke | Revoke a key immediately | reason string(255) nn"
+      - resource: oauth-scopes
+        path: /v1/oauth-scopes
+        table: oauth_scope
+        ops: [list, get]
+        filters: [domain, is_sensitive]
+      - resource: rate-limit-policies
+        path: /v1/rate-limit-policies
+        table: rate_limit_policy
+        ops: [list, get, create, update, delete]
+        filters: [applies_to]
+      - resource: request-logs
+        path: /v1/request-logs
+        table: api_request_log
+        ops: [list, get]
+        filters: [api_client_id, request_id, method, status_code, operation_id, environment]
+
+    events:
+      - "platform.app_user.created | app_user | A staff user was created"
+      - "platform.app_user.status_changed | app_user | A user was activated, locked or deactivated"
+      - "platform.app_user.logged_in | user_session | A staff user logged in"
+      - "platform.app_user.login_failed | app_user | A login attempt failed"
+      - "platform.user_role.granted | user_role | A role was granted"
+      - "platform.user_role.revoked | user_role | A role was revoked"
+      - "platform.role.changed | role | A role or its permissions changed"
+      - "platform.user_session.revoked | user_session | A session was revoked"
+      - "platform.api_client.created | api_client | An API client was registered"
+      - "platform.api_client.status_changed | api_client | An API client was suspended or reactivated"
+      - "platform.api_key.created | api_key | An API key was created"
+      - "platform.api_key.revoked | api_key | An API key was revoked"
+
+  # ------------------------------------------------------------------ config-service
+  - name: config-service
+    database: config_db
+    description: >
+      Versioned, approval-gated configuration promoted across environments, country packs (regulatory
+      reports, tax rules, holidays, schemes per jurisdiction) and tax rules.
+    tables:
+      - name: custom_field_definition
+        prefix: cfd
+        description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation, UI)
+        fr: [ADM-01]
+        unique: [[tenant_id, table_name, slot]]
+        columns:
+          - "table_name string(64) nn idx | Table / API resource the slot belongs to, e.g. customer"
+          - "slot int nn | Slot number 1..5 (maps to custom_field_<slot>)"
+          - "field_key string(64) nn | Stable machine key, e.g. employer_id"
+          - "label string(120) nn | Display label"
+          - "label_translations json | Labels per language code"
+          - "data_type enum:CustomFieldDataType nn default=TEXT | Type used to validate the stored string"
+          - "is_required bool nn default=false | Must be provided on create"
+          - "is_searchable bool nn default=true | Exposed as a list filter in the API and console"
+          - "is_pii bool nn default=false | Encrypt and mask like other personal data"
+          - "validation_regex string(500) | Optional pattern the value must match"
+          - "allowed_values json | Allowed values when data_type is ENUM"
+          - "min_value string(64) | Lower bound for NUMBER, DECIMAL, DATE"
+          - "max_value string(64) | Upper bound for NUMBER, DECIMAL, DATE"
+          - "default_value string(500) | Default applied on create"
+          - "ui_visible bool nn default=true | Shown in console and apps"
+          - "ui_order int nn default=0 | Display order"
+          - "help_text string(500) | Help shown to users"
+          - "is_active bool nn default=true | Disable without deleting history"
+      - name: config_entry
+        prefix: cfg
+        description: A versioned configuration document (configuration as data); one ACTIVE version per key
+        fr: [ADM-01, LIM-02]
+        columns:
+          - "namespace string(64) nn | Owning area, e.g. payments, limits, onboarding"
+          - "config_key string(128) nn | Key within the namespace"
+          - "version int nn default=1 ro | Version number"
+          - "value json nn | Configuration document"
+          - "value_schema json | JSON Schema the value must satisfy"
+          - "status enum:ConfigEntryStatus nn default=DRAFT | Status"
+          - "effective_from ts | When the version takes effect"
+          - "change_reason string(500) | Why it changed"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "promoted_from_environment string(32) | Source environment when promoted"
+        unique: [[tenant_id, namespace, config_key, version]]
+
+      - name: config_change
+        prefix: cfc
+        description: Immutable history of configuration changes with diffs
+        immutable: true
+        fr: [ADM-03, LIM-02]
+        columns:
+          - "config_entry_id uuid nn fk=config_entry idx | Version created"
+          - "namespace string(64) nn | Namespace"
+          - "config_key string(128) nn | Key"
+          - "from_version int | Previous version"
+          - "to_version int nn | New version"
+          - "change_type string(32) nn | CREATED, ACTIVATED, ROLLED_BACK, PROMOTED"
+          - "diff json | JSON patch from the previous version"
+          - "approved_by string(64) | Checker"
+
+      - name: country_pack
+        prefix: cpk
+        description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
+        tenant: false
+        fr: [REG-01, ADM-04]
+        columns:
+          - "code string(32) nn uq | Pack code, e.g. KE-2026.3"
+          - "country country nn idx | Country"
+          - "name string(160) nn | Name"
+          - "version string(32) nn | Semantic version"
+          - "status enum:CountryPackStatus nn default=DRAFT | Status"
+          - "regulator string(160) | Main regulator"
+          - "currency currency nn | Local currency"
+          - "contents json nn | Manifest: report templates, tax rules, calendars, rails, KYC tiers"
+          - "release_notes text | Release notes"
+          - "released_at ts ro | Release time"
+
+      - name: tenant_country_pack
+        prefix: tcp
+        description: A country pack installed for a tenant's legal entity, with local overrides
+        fr: [REG-01]
+        columns:
+          - "country_pack_id uuid nn fk=country_pack idx | Installed pack version"
+          - "legal_entity_id uuid nn ref=legal_entity | Legal entity"
+          - "status enum:InstalledPackStatus nn default=INSTALLING ro | Status"
+          - "installed_at ts ro | Install time"
+          - "overrides json | Tenant overrides of pack defaults"
+        unique: [[tenant_id, legal_entity_id, country_pack_id]]
+
+      - name: tax_rate_rule
+        prefix: tax
+        description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
+        fr: [PRC-03]
+        columns:
+          - "country_pack_id uuid fk=country_pack | Source pack (empty = tenant-defined)"
+          - "legal_entity_id uuid ref=legal_entity | Legal entity (empty = all)"
+          - "country country nn | Jurisdiction"
+          - "tax_type enum:TaxRuleType nn | Tax type"
+          - "name string(120) nn | Name"
+          - "rate rate nn | Rate as a fraction, e.g. 0.15"
+          - "applies_to string(64) nn | INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ..."
+          - "customer_segment string(64) | Segment the rule applies to (e.g. NON_RESIDENT)"
+          - "threshold_amount amount | Amount below which no tax applies"
+          - "currency currency | Threshold currency"
+          - "tax_gl_code string(32) | GL code for the tax liability"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+
+    apis:
+      - resource: custom-field-definitions
+        path: /v1/config/custom-fields
+        table: custom_field_definition
+        ops: [list, get, create, update, delete]
+        filters: [table_name, slot, field_key, is_active]
+        actions:
+          - "POST /validate | Validate values against a table's custom field definitions | table_name string(64) nn, values json nn | none"
+      - resource: config-entries
+        path: /v1/config/entries
+        table: config_entry
+        ops: [list, get, create]
+        filters: [namespace, config_key, status]
+        actions:
+          - "POST /{id}/submit | Submit a draft for approval | change_reason string(500) nn | approval_request"
+          - "POST /{id}/activate | Activate an approved version"
+          - "POST /{id}/rollback | Roll back to this version | reason string(500) nn"
+          - "GET /{id}/history | Change history of the key | | config_change[]"
+          - "POST /export | Export configuration for promotion to another environment | namespaces json | none"
+          - "POST /import | Import configuration exported from another environment | bundle json nn | none"
+          - "GET /resolve | Effective configuration for a namespace (?namespace=) | | none"
+      - resource: config-changes
+        path: /v1/config/changes
+        table: config_change
+        ops: [list, get]
+        filters: [config_entry_id, namespace, config_key, change_type]
+      - resource: country-packs
+        path: /v1/config/country-packs
+        table: country_pack
+        ops: [list, get]
+        filters: [country, status]
+        actions:
+          - "POST /{id}/install | Install the pack for a legal entity | legal_entity_id uuid nn, overrides json | tenant_country_pack"
+      - resource: installed-country-packs
+        path: /v1/config/installed-country-packs
+        table: tenant_country_pack
+        ops: [list, get, update]
+        filters: [legal_entity_id, country_pack_id, status]
+        actions:
+          - "POST /{id}/upgrade | Upgrade to a newer pack version | country_pack_id uuid nn"
+          - "POST /{id}/uninstall | Uninstall a pack | reason string(255) nn"
+      - resource: tax-rate-rules
+        path: /v1/config/tax-rules
+        table: tax_rate_rule
+        ops: [list, get, create, update, delete]
+        filters: [country, tax_type, legal_entity_id, applies_to]
+        actions:
+          - "POST /calculate | Calculate tax for an amount and context | country country nn, applies_to string(64) nn, amount amount nn, currency currency nn, customer_segment string(64) | none"
+
+    events:
+      - "platform.custom_field_definition.changed | custom_field_definition | A custom field definition was created, changed or retired"
+      - "platform.config_entry.activated | config_entry | A configuration version became active"
+      - "platform.config_entry.rolled_back | config_entry | A configuration was rolled back"
+      - "platform.country_pack.released | country_pack | A new country pack version was released"
+      - "platform.country_pack.installed | tenant_country_pack | A country pack was installed or upgraded"
+      - "platform.tax_rule.changed | tax_rate_rule | A tax rule changed"
+
+  # ------------------------------------------------------------------ reference-data-service
+  - name: reference-data-service
+    database: refdata_db
+    description: >
+      Golden source of reference data: currencies, countries, languages, business and rail calendars,
+      FX rates and their sources, bank directory (BIC / national clearing codes), MCC and ISO 20022 purpose codes.
+    tables:
+      - name: currency
+        prefix: ccy
+        description: ISO 4217 currency (plus supported digital currencies)
+        tenant: false
+        fr: [ADM-04, LED-03]
+        columns:
+          - "code currency nn uq | ISO 4217 alpha code"
+          - "numeric_code string(3) | ISO 4217 numeric code"
+          - "name string(80) nn | English name"
+          - "symbol string(8) | Display symbol"
+          - "minor_units int nn default=2 | Decimal places"
+          - "cash_rounding_increment amount | Smallest cash denomination, e.g. 0.05"
+          - "is_crypto bool nn default=false | Digital asset / stablecoin"
+          - "is_active bool nn default=true | Available for new accounts"
+
+      - name: country
+        prefix: cty
+        description: ISO 3166 country with banking and compliance attributes
+        tenant: false
+        fr: [ADM-04]
+        columns:
+          - "code country nn uq | ISO 3166-1 alpha-2"
+          - "alpha3 string(3) nn | ISO 3166-1 alpha-3"
+          - "numeric_code string(3) | ISO 3166-1 numeric"
+          - "name string(120) nn | Short English name"
+          - "official_name string(255) | Official name"
+          - "region string(64) | Region"
+          - "sub_region string(64) | Sub-region"
+          - "currency_code currency | Main currency"
+          - "phone_prefix string(8) | International dialling prefix"
+          - "iban_length int | IBAN length when IBAN is used"
+          - "is_eea bool nn default=false | European Economic Area member"
+          - "is_sanctioned bool nn default=false | Comprehensively sanctioned jurisdiction"
+          - "fatf_status enum:FatfStatus nn default=NONE | FATF list status"
+          - "address_format json | Address fields and order"
+          - "postal_code_regex string(255) | Postal code validation pattern"
+
+      - name: language
+        prefix: lng
+        description: Supported language / locale
+        tenant: false
+        fr: [ADM-04]
+        columns:
+          - "code string(10) nn uq | BCP 47 tag, e.g. sw-KE"
+          - "name string(80) nn | English name"
+          - "native_name string(80) | Name in the language"
+          - "is_rtl bool nn default=false | Right-to-left script"
+          - "is_active bool nn default=true | Available"
+
+      - name: holiday_calendar
+        prefix: hcl
+        description: Business calendar for a country, rail, scheme or market (global or tenant-specific)
+        tenant: false
+        fr: [ADM-04, PAY-05]
+        columns:
+          - "owner_tenant_id uuid ref=tenant idx | Owning tenant for custom calendars (empty = global)"
+          - "code string(64) nn uq | Calendar code, e.g. KE-PUBLIC, TARGET2, FEDNOW"
+          - "name string(160) nn | Name"
+          - "calendar_type enum:CalendarType nn | Kind of calendar"
+          - "country country | Country"
+          - "timezone string(64) nn | IANA timezone"
+          - "weekend_days json nn | Non-business weekdays, e.g. [SATURDAY, SUNDAY]"
+          - "description string(500) | Notes"
+
+      - name: holiday
+        prefix: hol
+        description: A non-business day in a calendar
+        tenant: false
+        fr: [ADM-04, PAY-05]
+        columns:
+          - "holiday_calendar_id uuid nn fk=holiday_calendar idx | Calendar"
+          - "holiday_date date nn | Date"
+          - "name string(160) nn | Holiday name"
+          - "holiday_type enum:HolidayType nn default=PUBLIC | Kind"
+          - "is_half_day bool nn default=false | Half business day"
+        unique: [[holiday_calendar_id, holiday_date]]
+
+      - name: fx_rate_source
+        prefix: fxs
+        description: A provider of FX rates (market data feed, central bank, treasury desk)
+        tenant: false
+        fr: [ADM-04, PAY-06]
+        columns:
+          - "code string(32) nn uq | Source code, e.g. ECB, REFINITIV, TREASURY"
+          - "name string(120) nn | Name"
+          - "provider string(64) nn | Vendor or institution"
+          - "update_frequency_seconds int | Expected refresh interval"
+          - "is_active bool nn default=true | Active"
+
+      - name: fx_rate
+        prefix: fxr
+        description: An FX rate observation for a currency pair and rate type (tenant rates include margins). Append-only.
+        immutable: true
+        fr: [ADM-04, LED-03, PAY-06]
+        columns:
+          - "fx_rate_source_id uuid nn fk=fx_rate_source idx | Source"
+          - "base_currency currency nn | Base currency"
+          - "quote_currency currency nn | Quote currency"
+          - "rate_type enum:FxRateType nn | Mid, buy, sell, cash or revaluation"
+          - "rate rate nn | Units of quote per 1 base"
+          - "inverse_rate rate nn | Units of base per 1 quote"
+          - "as_of_date date nn | Business date"
+          - "valid_from ts nn | Valid from"
+          - "valid_to ts | Valid to (empty = until superseded)"
+        indexes: [[base_currency, quote_currency, rate_type, valid_from]]
+
+      - name: bank_directory
+        prefix: bnk
+        description: Directory of banks and branches (BIC, national clearing codes, rail participation)
+        tenant: false
+        fr: [ADM-04, PAY-02]
+        columns:
+          - "bic string(11) idx | SWIFT BIC"
+          - "bank_name string(255) nn | Bank name"
+          - "branch_name string(255) | Branch name"
+          - "country country nn idx | Country"
+          - "clearing_system string(32) | Clearing system, e.g. USABA, GBDSC, INFSC"
+          - "national_clearing_code string(35) idx | Routing / sort / IFSC code"
+          - "city string(120) | City"
+          - "address string(500) | Address"
+          - "rail_participation json | Rails the bank participates in (SEPA_INST, FEDNOW, PIX ...)"
+          - "is_active bool nn default=true | Active"
+          - "source string(64) | Directory source, e.g. SWIFTRef"
+          - "source_updated_at ts | Last refresh from source"
+
+      - name: mcc_code
+        prefix: mcc
+        description: ISO 18245 merchant category code with risk attributes
+        tenant: false
+        fr: [ADM-04, CRD-04]
+        columns:
+          - "code string(4) nn uq | MCC"
+          - "description string(255) nn | Description"
+          - "category string(80) | Category group"
+          - "is_high_risk bool nn default=false | High-risk category (gambling, crypto ...)"
+          - "is_quasi_cash bool nn default=false | Quasi-cash"
+
+      - name: purpose_code
+        prefix: pur
+        description: ISO 20022 external purpose code for payments
+        tenant: false
+        fr: [ADM-04, PAY-03]
+        columns:
+          - "code string(4) nn uq | ISO 20022 purpose code, e.g. SALA"
+          - "name string(160) nn | Name"
+          - "category string(80) | Category"
+          - "description string(500) | Definition"
+
+    apis:
+      - resource: currencies
+        path: /v1/reference/currencies
+        table: currency
+        ops: [list, get, create, update]
+        filters: [code, is_active, is_crypto]
+      - resource: countries
+        path: /v1/reference/countries
+        table: country
+        ops: [list, get, update]
+        filters: [code, region, is_eea, is_sanctioned, fatf_status]
+      - resource: languages
+        path: /v1/reference/languages
+        table: language
+        ops: [list, get, create, update]
+        filters: [is_active]
+      - resource: holiday-calendars
+        path: /v1/reference/holiday-calendars
+        table: holiday_calendar
+        ops: [list, get, create, update]
+        filters: [calendar_type, country, owner_tenant_id]
+        actions:
+          - "GET /{id}/is-business-day | Whether a date is a business day (?date=) | | none"
+          - "GET /{id}/next-business-day | Next business day after a date, with offset (?date=&days=) | | none"
+          - "POST /{id}/import | Import holidays from a file or provider feed | year int nn, source string(64) | none"
+      - resource: holidays
+        path: /v1/reference/holidays
+        table: holiday
+        ops: [list, get, create, update, delete]
+        filters: [holiday_calendar_id, holiday_date, holiday_type]
+      - resource: fx-rate-sources
+        path: /v1/reference/fx-rate-sources
+        table: fx_rate_source
+        ops: [list, get, create, update]
+        filters: [is_active]
+      - resource: fx-rates
+        path: /v1/reference/fx-rates
+        table: fx_rate
+        ops: [list, get, create]
+        filters: [base_currency, quote_currency, rate_type, as_of_date, fx_rate_source_id]
+        actions:
+          - "GET /latest | Latest rate for a pair and type (?base=&quote=&type=) | | fx_rate"
+          - "POST /convert | Convert an amount using current rates | amount amount nn, from_currency currency nn, to_currency currency nn, rate_type enum:FxRateType | none"
+          - "POST /bulk | Load a batch of rates | rates json nn | none"
+      - resource: banks
+        path: /v1/reference/banks
+        table: bank_directory
+        ops: [list, get]
+        filters: [bic, country, national_clearing_code, clearing_system]
+        actions:
+          - "POST /validate-account | Validate IBAN / account number and resolve the bank | account_number string(64) nn, country country nn, clearing_code string(35) | none"
+      - resource: mcc-codes
+        path: /v1/reference/mcc-codes
+        table: mcc_code
+        ops: [list, get]
+        filters: [category, is_high_risk]
+      - resource: purpose-codes
+        path: /v1/reference/purpose-codes
+        table: purpose_code
+        ops: [list, get]
+        filters: [category]
+
+    events:
+      - "platform.fx_rate.published | fx_rate | A new FX rate was published"
+      - "platform.holiday_calendar.changed | holiday_calendar | A calendar or its holidays changed"
+      - "platform.currency.changed | currency | A currency was added or changed"
+      - "platform.country.risk_changed | country | A country's sanctions or FATF status changed"
+
+  # ------------------------------------------------------------------ document-service
+  - name: document-service
+    database: document_db
+    description: >
+      Encrypted document storage with virus scanning, classification and retention / legal hold;
+      templates and document generation (statements, contracts, letters); electronic signatures.
+    tables:
+      - name: document
+        prefix: doc
+        description: A stored file (KYC document, statement, contract, report) owned by a business object
+        fr: [ONB-02, DEP-06, ADM-03]
+        columns:
+          - "owner_type string(40) nn | Owning object type, e.g. CUSTOMER, LOAN, ACCOUNT"
+          - "owner_id uuid nn | Owning object id"
+          - "document_type enum:PlatformDocumentType nn | Document type"
+          - "file_name string(255) nn | Original file name"
+          - "content_type string(120) nn | MIME type"
+          - "size_bytes bigint nn ro | Size"
+          - "storage_uri string(500) nn ro hide | Object storage location"
+          - "checksum string(64) nn ro | SHA-256"
+          - "encryption_key_id string(128) hide | Envelope key id"
+          - "classification enum:DataClassification nn default=CONFIDENTIAL | Data classification"
+          - "status enum:DocumentStatus nn default=UPLOADING ro | Status"
+          - "virus_scan_result string(32) ro | CLEAN, INFECTED, ERROR"
+          - "issuing_country country | Issuing country for identity documents"
+          - "document_number string(64) pii | Number printed on the document"
+          - "issued_on date | Issue date"
+          - "expires_on date | Expiry date"
+          - "retention_until date | Earliest deletion date"
+          - "legal_hold bool nn default=false | Deletion blocked by legal hold"
+          - "uploaded_via string(32) | API, CONSOLE, MOBILE_APP, AGENT_APP, SYSTEM"
+          - "metadata json | Extra attributes (OCR fields, page count)"
+        indexes: [[owner_type, owner_id]]
+
+      - name: document_template
+        prefix: dtp
+        description: Versioned template for generated documents (statements, contracts, letters, receipts)
+        fr: [DEP-06, LND-01]
+        columns:
+          - "code string(64) nn | Template code"
+          - "name string(160) nn | Name"
+          - "category enum:DocumentCategory nn | Category"
+          - "output_format enum:TemplateFormat nn default=PDF | Output format"
+          - "locale string(10) nn default=en | Locale"
+          - "version int nn default=1 ro | Version"
+          - "body text | Template source (Handlebars / HTML)"
+          - "body_document_id uuid fk=document | Binary template file (e.g. DOCX)"
+          - "variables_schema json | JSON Schema of the input data"
+          - "legal_entity_id uuid ref=legal_entity | Legal entity (empty = all)"
+          - "status enum:PlatformTemplateStatus nn default=DRAFT | Status"
+        unique: [[tenant_id, code, locale, version]]
+
+      - name: generated_document
+        prefix: gdc
+        description: A document produced from a template and input data
+        fr: [DEP-06]
+        columns:
+          - "document_template_id uuid nn fk=document_template idx | Template version used"
+          - "document_id uuid fk=document | Resulting document"
+          - "owner_type string(40) nn | Owning object type"
+          - "owner_id uuid nn | Owning object id"
+          - "input_hash string(64) nn ro | Hash of input data (reproducibility)"
+          - "status enum:RunStatus nn default=QUEUED ro | Generation status"
+          - "error text ro | Error details"
+          - "generated_at ts ro | Generation time"
+
+      - name: esign_request
+        prefix: esg
+        description: Electronic signature envelope for one or more signers
+        fr: [LND-01, DEP-02]
+        columns:
+          - "document_id uuid nn fk=document | Document to sign"
+          - "owner_type string(40) nn | Owning object type, e.g. LOAN_APPLICATION"
+          - "owner_id uuid nn | Owning object id"
+          - "provider string(32) nn | DOCUSIGN, ADOBE_SIGN, NATIVE_OTP"
+          - "provider_envelope_id string(128) ro | Provider envelope id"
+          - "signers json nn | Signers: name, email/phone, order, auth method"
+          - "status enum:EsignStatus nn default=DRAFT ro | Status"
+          - "signed_document_id uuid fk=document ro | Signed copy with audit certificate"
+          - "sent_at ts ro | Sent time"
+          - "completed_at ts ro | Completion time"
+          - "expires_at ts | Expiry"
+
+    apis:
+      - resource: documents
+        path: /v1/documents
+        table: document
+        ops: [list, get, create, update, delete]
+        filters: [owner_type, owner_id, document_type, status, classification]
+        actions:
+          - "POST /{id}/upload-url | Pre-signed URL to upload the file content | | none"
+          - "GET /{id}/download-url | Short-lived pre-signed URL to download the file | | none"
+          - "POST /{id}/legal-hold | Place or lift a legal hold | legal_hold bool nn, reason string(255) nn"
+          - "POST /{id}/archive | Move to archive storage"
+      - resource: document-templates
+        path: /v1/document-templates
+        table: document_template
+        ops: [list, get, create, update]
+        filters: [code, category, locale, status, legal_entity_id]
+        actions:
+          - "POST /{id}/preview | Render the template with sample data | data json nn | none"
+          - "POST /{id}/publish | Submit a template version for approval | | approval_request"
+          - "POST /{id}/retire | Retire a template version"
+      - resource: generated-documents
+        path: /v1/generated-documents
+        table: generated_document
+        ops: [list, get, create]
+        filters: [document_template_id, owner_type, owner_id, status]
+      - resource: esign-requests
+        path: /v1/esign-requests
+        table: esign_request
+        ops: [list, get, create]
+        filters: [owner_type, owner_id, status, provider]
+        actions:
+          - "POST /{id}/send | Send to signers"
+          - "POST /{id}/remind | Remind pending signers"
+          - "POST /{id}/cancel | Cancel the envelope | reason string(255) nn"
+          - "POST /callbacks/{provider}/events | Provider status callback (signed) | payload json nn | none"
+
+    events:
+      - "platform.document.uploaded | document | A document finished uploading and scanning"
+      - "platform.document.quarantined | document | A document failed virus scanning"
+      - "platform.document.expiring | document | An identity document expires soon"
+      - "platform.generated_document.completed | generated_document | A document was generated"
+      - "platform.esign_request.completed | esign_request | All signers signed"
+      - "platform.esign_request.declined | esign_request | A signer declined"
+
+  # ------------------------------------------------------------------ workflow-service
+  - name: workflow-service
+    database: workflow_db
+    description: >
+      Maker-checker approvals for configuration and sensitive operations (multi-level, amount thresholds,
+      segregation of duties), workflow definitions and instances on Temporal, and human work queues with SLAs.
+    tables:
+      - name: approval_policy
+        prefix: apl
+        description: Defines when an operation needs approval and by whom
+        fr: [LIM-02]
+        columns:
+          - "code string(64) nn uq | Policy code"
+          - "name string(160) nn | Name"
+          - "resource_type string(64) nn | Resource, e.g. product, payment, config_entry, user_role"
+          - "action string(40) nn | Action, e.g. publish, release, update"
+          - "required_approvals int nn default=1 | Approvals needed at each level"
+          - "approval_levels json nn | Levels with approver roles and amount thresholds"
+          - "allow_self_approval bool nn default=false | Maker may approve (never for money movement)"
+          - "expires_after_hours int nn default=72 | Pending requests expire after this"
+          - "auto_execute bool nn default=true | Execute the operation once approved"
+          - "is_active bool nn default=true | Active"
+        unique: [[tenant_id, resource_type, action]]
+
+      - name: approval_request
+        prefix: apr
+        description: A pending sensitive operation awaiting checker approval (four-eyes)
+        fr: [LIM-02, ADM-03]
+        columns:
+          - "approval_policy_id uuid fk=approval_policy idx | Policy applied"
+          - "resource_type string(64) nn | Resource type"
+          - "resource_id uuid idx | Resource id (empty for creates)"
+          - "action string(40) nn | Action"
+          - "title string(255) nn | Short title shown in the approvals queue"
+          - "summary text | Human-readable description of the change"
+          - "payload json nn | Operation to execute once approved"
+          - "diff json | Before/after diff for updates"
+          - "amount amount | Amount, for threshold routing"
+          - "currency currency | Currency of the amount"
+          - "priority enum:WorkTaskPriority nn default=NORMAL | Priority"
+          - "status enum:ApprovalRequestStatus nn default=PENDING ro | Status"
+          - "maker string(64) nn ro | Requesting user"
+          - "required_approvals int nn ro | Approvals required"
+          - "approvals_received int nn default=0 ro | Approvals received"
+          - "current_level int nn default=1 ro | Current approval level"
+          - "expires_at ts ro | Expiry"
+          - "decided_at ts ro | Final decision time"
+          - "executed_at ts ro | Execution time"
+          - "execution_result json ro | Result or error from executing the operation"
+        indexes: [[resource_type, resource_id], [status, expires_at]]
+
+      - name: approval_decision
+        prefix: apd
+        description: A checker's decision on an approval request. Append-only.
+        immutable: true
+        fr: [LIM-02, ADM-03]
+        columns:
+          - "approval_request_id uuid nn fk=approval_request idx | Request"
+          - "approver string(64) nn | Approving user"
+          - "level int nn | Level approved"
+          - "decision enum:ApprovalDecisionType nn | Approve, reject, request changes"
+          - "comment string(1000) | Comment"
+          - "mfa_verified bool nn default=true | Step-up MFA performed"
+
+      - name: workflow_definition
+        prefix: wfd
+        description: Versioned workflow definition executed by the workflow engine (Temporal)
+        fr: [ONB-01, SRV-01]
+        columns:
+          - "code string(64) nn | Workflow code, e.g. retail-onboarding"
+          - "name string(160) nn | Name"
+          - "version int nn default=1 ro | Version"
+          - "engine string(32) nn default=TEMPORAL | Engine"
+          - "definition json nn | Steps, transitions, SLAs, forms"
+          - "input_schema json | JSON Schema of the input"
+          - "status enum:WorkflowDefinitionStatus nn default=DRAFT | Status"
+        unique: [[tenant_id, code, version]]
+
+      - name: workflow_instance
+        prefix: wfi
+        description: A running or completed workflow
+        fr: [ONB-01, SRV-01]
+        columns:
+          - "workflow_definition_id uuid nn fk=workflow_definition idx | Definition version"
+          - "business_key string(128) idx | Business key, e.g. application number"
+          - "subject_type string(40) | Subject type"
+          - "subject_id uuid idx | Subject id"
+          - "status enum:WorkflowInstanceStatus nn default=RUNNING ro | Status"
+          - "current_step string(128) ro | Current step"
+          - "engine_run_id string(128) ro | Engine run id"
+          - "variables json | Workflow variables"
+          - "started_at ts nn default=now ro | Start"
+          - "completed_at ts ro | End"
+          - "error text ro | Failure details"
+
+      - name: work_task
+        prefix: tsk
+        description: A human task in a work queue (review, approve, investigate) with SLA
+        fr: [SRV-01, ONB-05, COL-02]
+        columns:
+          - "workflow_instance_id uuid fk=workflow_instance idx | Owning workflow"
+          - "task_type string(64) nn | Task type, e.g. KYC_REVIEW, PAYMENT_REPAIR"
+          - "title string(255) nn | Title"
+          - "description text | Instructions"
+          - "subject_type string(40) | Subject type"
+          - "subject_id uuid idx | Subject id"
+          - "queue string(64) nn idx | Work queue"
+          - "assignee string(64) idx | Assigned user"
+          - "candidate_roles json | Roles that may claim the task"
+          - "priority enum:WorkTaskPriority nn default=NORMAL | Priority"
+          - "status enum:WorkTaskStatus nn default=OPEN | Status"
+          - "due_at ts | SLA due time"
+          - "sla_breached bool nn default=false ro | SLA breached"
+          - "form_data json | Data captured by the task form"
+          - "outcome string(64) | Completion outcome"
+          - "completed_at ts ro | Completion time"
+
+    apis:
+      - resource: approval-policies
+        path: /v1/approval-policies
+        table: approval_policy
+        ops: [list, get, create, update, delete]
+        filters: [resource_type, action, is_active]
+      - resource: approval-requests
+        path: /v1/approval-requests
+        table: approval_request
+        ops: [list, get, create]
+        filters: [resource_type, resource_id, status, maker, priority]
+        actions:
+          - "POST /{id}/approve | Approve (checker; step-up MFA) | comment string(1000)"
+          - "POST /{id}/reject | Reject | comment string(1000) nn"
+          - "POST /{id}/request-changes | Send back to the maker | comment string(1000) nn"
+          - "POST /{id}/cancel | Cancel (maker only) | reason string(255)"
+          - "GET /{id}/decisions | Decisions taken | | approval_decision[]"
+          - "GET /inbox | Requests the caller can approve | | approval_request[]"
+      - resource: workflow-definitions
+        path: /v1/workflows/definitions
+        table: workflow_definition
+        ops: [list, get, create, update]
+        filters: [code, status]
+        actions:
+          - "POST /{id}/publish | Publish a definition version | | approval_request"
+          - "POST /{id}/deprecate | Deprecate a version"
+      - resource: workflow-instances
+        path: /v1/workflows/instances
+        table: workflow_instance
+        ops: [list, get, create]
+        filters: [workflow_definition_id, business_key, subject_type, subject_id, status]
+        actions:
+          - "POST /{id}/signal | Send a signal to a running workflow | signal string(64) nn, data json"
+          - "POST /{id}/cancel | Cancel a workflow | reason string(255) nn"
+          - "POST /{id}/retry | Retry a failed workflow from the failed step"
+      - resource: tasks
+        path: /v1/tasks
+        table: work_task
+        ops: [list, get, update]
+        filters: [queue, assignee, status, priority, task_type, subject_type, subject_id, sla_breached]
+        actions:
+          - "POST /{id}/claim | Claim a task"
+          - "POST /{id}/release | Return a task to the queue"
+          - "POST /{id}/assign | Assign to a user | assignee string(64) nn"
+          - "POST /{id}/complete | Complete with an outcome | outcome string(64) nn, form_data json"
+          - "POST /{id}/escalate | Escalate | reason string(255) nn"
+
+    events:
+      - "platform.approval_request.created | approval_request | An approval was requested"
+      - "platform.approval_request.approved | approval_request | A request was fully approved"
+      - "platform.approval_request.rejected | approval_request | A request was rejected"
+      - "platform.approval_request.executed | approval_request | An approved operation was executed"
+      - "platform.approval_request.expired | approval_request | A request expired without decision"
+      - "platform.workflow_instance.completed | workflow_instance | A workflow completed"
+      - "platform.workflow_instance.failed | workflow_instance | A workflow failed"
+      - "platform.work_task.created | work_task | A human task was created"
+      - "platform.work_task.sla_breached | work_task | A task breached its SLA"
+      - "platform.work_task.completed | work_task | A task was completed"
+
+  # ------------------------------------------------------------------ notification-service
+  - name: notification-service
+    database: notification_db
+    description: >
+      Event-driven multi-channel notifications (push, SMS, email, WhatsApp, in-app, USSD, voice) with
+      localised templates, provider failover, delivery tracking, preferences and quiet hours.
+    tables:
+      - name: notification_template
+        prefix: ntp
+        description: Localised message template per channel
+        fr: [NOT-01]
+        columns:
+          - "code string(64) nn | Template code, e.g. CARD_AUTH_APPROVED"
+          - "channel enum:NotificationChannel nn | Channel"
+          - "locale string(10) nn default=en | Locale"
+          - "category enum:NotificationCategory nn | Category (drives opt-out rules)"
+          - "subject string(255) | Subject / push title"
+          - "body text nn | Body with placeholders"
+          - "variables_schema json | Expected variables"
+          - "version int nn default=1 ro | Version"
+          - "status enum:PlatformTemplateStatus nn default=DRAFT | Status"
+        unique: [[tenant_id, code, channel, locale, version]]
+
+      - name: notification_provider
+        prefix: npr
+        description: Delivery provider per channel with priority for failover
+        fr: [NOT-01]
+        columns:
+          - "channel enum:NotificationChannel nn | Channel"
+          - "provider_name string(64) nn | TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP"
+          - "priority int nn default=1 | Lower is tried first"
+          - "credentials_ref string(255) nn secret | Vault path of credentials"
+          - "sender_id string(64) | Sender id / from address"
+          - "country_scope json | Countries routed to this provider"
+          - "config json | Provider options"
+          - "status enum:ProviderIntegrationStatus nn default=TESTING | Status"
+
+      - name: notification_rule
+        prefix: nrl
+        description: Maps a domain event to notifications (template, channels, recipient, conditions)
+        fr: [NOT-01]
+        columns:
+          - "event_type string(128) nn idx | Domain event, e.g. ledger.balance.changed"
+          - "template_code string(64) nn | Template to use"
+          - "channels json nn | Channels in preference order"
+          - "recipient_expression string(255) nn | How to resolve the recipient from the event"
+          - "conditions text | CEL condition on the event payload"
+          - "category enum:NotificationCategory nn | Category"
+          - "is_active bool nn default=true | Active"
+
+      - name: notification
+        prefix: ntf
+        description: A message sent (or to be sent) to a recipient on one channel
+        fr: [NOT-01, NOT-02]
+        columns:
+          - "recipient_type enum:NotificationRecipientType nn | Recipient type"
+          - "recipient_id uuid idx | Recipient id (customer, user, agent ...)"
+          - "channel enum:NotificationChannel nn | Channel"
+          - "destination string(512) nn pii | Phone, email, device token or inbox id"
+          - "notification_template_id uuid fk=notification_template | Template version"
+          - "category enum:NotificationCategory nn | Category"
+          - "locale string(10) nn default=en | Locale"
+          - "subject string(255) | Rendered subject"
+          - "body text nn pii | Rendered body"
+          - "data json | Deep-link and payload data"
+          - "source_event_type string(128) | Triggering event type"
+          - "source_event_id string(64) idx | Triggering event id (dedupe)"
+          - "priority enum:WorkTaskPriority nn default=NORMAL | Priority"
+          - "status enum:NotificationStatus nn default=QUEUED ro | Status"
+          - "scheduled_at ts | Send time (respects quiet hours)"
+          - "sent_at ts ro | Sent"
+          - "delivered_at ts ro | Delivered"
+          - "read_at ts ro | Read"
+          - "failure_reason string(255) ro | Failure reason"
+          - "provider_message_id string(128) ro | Provider message id"
+          - "cost amount ro | Provider cost"
+          - "cost_currency currency ro | Cost currency"
+          - "expires_at ts | Do not deliver after this time"
+        indexes: [[recipient_type, recipient_id, created_at]]
+
+      - name: notification_delivery_attempt
+        prefix: nda
+        description: One attempt to deliver a notification through a provider. Append-only.
+        immutable: true
+        fr: [NOT-01]
+        columns:
+          - "notification_id uuid nn fk=notification idx | Notification"
+          - "notification_provider_id uuid nn fk=notification_provider | Provider used"
+          - "attempt_no int nn | Attempt number"
+          - "status string(32) nn | ACCEPTED, REJECTED, TIMEOUT, ERROR"
+          - "provider_response json | Raw provider response"
+          - "error_code string(64) | Provider error code"
+          - "latency_ms int | Provider latency"
+
+      - name: notification_preference
+        prefix: npf
+        description: A recipient's channel preferences and quiet hours per category
+        fr: [NOT-02]
+        columns:
+          - "recipient_type enum:NotificationRecipientType nn | Recipient type"
+          - "recipient_id uuid nn | Recipient id"
+          - "category enum:NotificationCategory nn | Category"
+          - "channel enum:NotificationChannel nn | Channel"
+          - "is_enabled bool nn default=true | Opted in (security and regulatory cannot be disabled)"
+          - "quiet_hours_start string(5) | HH:MM local"
+          - "quiet_hours_end string(5) | HH:MM local"
+          - "timezone string(64) | Timezone for quiet hours"
+          - "locale string(10) | Preferred language"
+        unique: [[tenant_id, recipient_type, recipient_id, category, channel]]
+
+    apis:
+      - resource: notifications
+        path: /v1/notifications
+        table: notification
+        ops: [list, get, create]
+        filters: [recipient_type, recipient_id, channel, category, status, source_event_id]
+        actions:
+          - "POST /{id}/resend | Resend a failed notification"
+          - "POST /{id}/cancel | Cancel a scheduled notification"
+          - "POST /{id}/mark-read | Mark an in-app message as read"
+          - "GET /{id}/attempts | Delivery attempts | | notification_delivery_attempt[]"
+          - "POST /send-templated | Render a template and send to a recipient | template_code string(64) nn, recipient_type enum:NotificationRecipientType nn, recipient_id uuid nn, channel enum:NotificationChannel, variables json | notification"
+          - "POST /provider-callbacks/{provider}/events | Delivery receipt webhook from a provider | payload json nn | none"
+      - resource: notification-templates
+        path: /v1/notification-templates
+        table: notification_template
+        ops: [list, get, create, update]
+        filters: [code, channel, locale, category, status]
+        actions:
+          - "POST /{id}/preview | Render with sample variables | variables json nn | none"
+          - "POST /{id}/publish | Submit for approval | | approval_request"
+          - "POST /{id}/test-send | Send a test to the caller | destination string(320) nn | none"
+      - resource: notification-providers
+        path: /v1/notification-providers
+        table: notification_provider
+        ops: [list, get, create, update, delete]
+        filters: [channel, status]
+        actions:
+          - "POST /{id}/test | Send a test message through the provider | destination string(320) nn | none"
+      - resource: notification-rules
+        path: /v1/notification-rules
+        table: notification_rule
+        ops: [list, get, create, update, delete]
+        filters: [event_type, category, is_active]
+      - resource: notification-preferences
+        path: /v1/notification-preferences
+        table: notification_preference
+        ops: [list, get, create, update]
+        filters: [recipient_type, recipient_id, category, channel]
+
+    events:
+      - "platform.notification.sent | notification | A notification was handed to a provider"
+      - "platform.notification.delivered | notification | Delivery was confirmed"
+      - "platform.notification.failed | notification | All delivery attempts failed"
+      - "platform.notification_preference.changed | notification_preference | A recipient changed preferences"
+
+  # ------------------------------------------------------------------ webhook-service
+  - name: webhook-service
+    database: webhook_db
+    description: >
+      Delivers domain events to client endpoints: signed (HMAC-SHA256 + timestamp), at-least-once with
+      exponential retries for 72 hours, ordering per aggregate, delivery logs and event replay.
+    tables:
+      - name: webhook_endpoint
+        prefix: whe
+        description: A client HTTPS endpoint receiving events
+        fr: [API-01]
+        columns:
+          - "url string(1000) nn | HTTPS URL"
+          - "description string(500) | Description"
+          - "api_client_id uuid ref=api_client idx | Owning API client"
+          - "environment enum:ApiEnvironment nn default=SANDBOX | Sandbox or production"
+          - "api_version string(16) nn default=v1 | Payload version"
+          - "signing_secret string(255) nn secret | HMAC secret (vault reference)"
+          - "signing_secret_version int nn default=1 ro | Secret version (rotation)"
+          - "status enum:WebhookEndpointStatus nn default=ACTIVE | Status"
+          - "max_requests_per_second int nn default=50 | Delivery rate cap"
+          - "mtls_enabled bool nn default=false | Present a client certificate"
+          - "custom_headers json | Extra headers sent with each delivery"
+          - "consecutive_failures int nn default=0 ro | Consecutive failures (auto-disable at threshold)"
+          - "last_success_at ts ro | Last successful delivery"
+          - "last_failure_at ts ro | Last failed delivery"
+          - "disabled_reason string(255) ro | Why it was disabled"
+
+      - name: webhook_subscription
+        prefix: whs
+        description: An event type (or wildcard) an endpoint subscribes to, with an optional filter
+        fr: [API-01]
+        columns:
+          - "webhook_endpoint_id uuid nn fk=webhook_endpoint idx | Endpoint"
+          - "event_type string(128) nn | Event type or wildcard, e.g. payments.*"
+          - "filter_expression text | CEL filter on the payload"
+          - "is_active bool nn default=true | Active"
+        unique: [[webhook_endpoint_id, event_type]]
+
+      - name: webhook_delivery
+        prefix: whd
+        description: Delivery of one event to one endpoint, with retry state
+        fr: [API-01]
+        columns:
+          - "webhook_endpoint_id uuid nn fk=webhook_endpoint idx | Endpoint"
+          - "event_id string(64) nn idx | CloudEvents id"
+          - "event_type string(128) nn | Event type"
+          - "ordering_key string(64) | Aggregate id used for ordering"
+          - "payload json nn | Payload sent"
+          - "status enum:WebhookDeliveryStatus nn default=PENDING ro | Status"
+          - "attempt_count int nn default=0 ro | Attempts made"
+          - "next_attempt_at ts ro | Next retry"
+          - "last_status_code int ro | Last HTTP status"
+          - "last_error string(500) ro | Last error"
+          - "delivered_at ts ro | Success time"
+          - "replay_job_id uuid fk=webhook_replay_job | Replay job that produced it"
+        unique: [[webhook_endpoint_id, event_id, replay_job_id]]
+
+      - name: webhook_delivery_attempt
+        prefix: wha
+        description: One HTTP attempt of a webhook delivery. Append-only.
+        immutable: true
+        fr: [API-01]
+        columns:
+          - "webhook_delivery_id uuid nn fk=webhook_delivery idx | Delivery"
+          - "attempt_no int nn | Attempt number"
+          - "request_headers json | Headers sent (signature redacted)"
+          - "status_code int | HTTP status"
+          - "response_body string(4000) | First 4 KB of the response"
+          - "latency_ms int | Round-trip time"
+          - "error string(500) | Network / TLS error"
+
+      - name: webhook_replay_job
+        prefix: whr
+        description: A request to re-deliver past events to an endpoint
+        fr: [API-01]
+        columns:
+          - "webhook_endpoint_id uuid nn fk=webhook_endpoint idx | Endpoint"
+          - "event_types json | Event types to replay (empty = subscribed types)"
+          - "from_time ts nn | Range start"
+          - "to_time ts nn | Range end"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "events_total int ro | Events found"
+          - "events_replayed int ro | Events re-delivered"
+
+    apis:
+      - resource: webhook-endpoints
+        path: /v1/webhook-endpoints
+        table: webhook_endpoint
+        ops: [list, get, create, update, delete]
+        filters: [api_client_id, environment, status]
+        actions:
+          - "POST /{id}/rotate-secret | Rotate the signing secret (old secret valid 24h) | | none"
+          - "POST /{id}/enable | Re-enable a disabled endpoint"
+          - "POST /{id}/disable | Disable an endpoint | reason string(255)"
+          - "POST /{id}/test | Send a test event | event_type string(128) nn | webhook_delivery"
+      - resource: webhook-subscriptions
+        path: /v1/webhook-subscriptions
+        table: webhook_subscription
+        ops: [list, get, create, update, delete]
+        filters: [webhook_endpoint_id, event_type, is_active]
+      - resource: webhook-deliveries
+        path: /v1/webhook-deliveries
+        table: webhook_delivery
+        ops: [list, get]
+        filters: [webhook_endpoint_id, event_id, event_type, status]
+        actions:
+          - "POST /{id}/retry | Retry a failed delivery now"
+          - "GET /{id}/attempts | HTTP attempts of a delivery | | webhook_delivery_attempt[]"
+      - resource: event-replays
+        path: /v1/event-replays
+        table: webhook_replay_job
+        ops: [list, get, create]
+        filters: [webhook_endpoint_id, status]
+        actions:
+          - "POST /{id}/cancel | Cancel a running replay"
+
+    events:
+      - "platform.webhook_endpoint.disabled | webhook_endpoint | An endpoint was disabled after repeated failures"
+      - "platform.webhook_delivery.abandoned | webhook_delivery | A delivery exhausted its retries"
+      - "platform.webhook_replay_job.completed | webhook_replay_job | A replay finished"
+
+  # ------------------------------------------------------------------ audit-service
+  - name: audit-service
+    database: audit_db
+    description: >
+      Tamper-evident, hash-chained audit log of every user, API and system action, retained per
+      jurisdiction (10 years minimum), with regulator / DSAR exports under maker-checker.
+    tables:
+      - name: audit_event
+        prefix: aud
+        description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
+        immutable: true
+        fr: [ADM-03]
+        columns:
+          - "occurred_at ts nn | Time of the action"
+          - "sequence_no bigint nn ro | Gapless sequence per tenant"
+          - "actor_type enum:AuditActorType nn | Actor type"
+          - "actor_id string(64) nn idx | Actor id"
+          - "actor_display string(255) | Actor display name at the time"
+          - "impersonator_id string(64) | Operator acting on behalf of the actor"
+          - "action string(128) nn idx | Action, e.g. payments.payment.approve"
+          - "resource_type string(64) nn | Resource type"
+          - "resource_id string(64) idx | Resource id"
+          - "outcome enum:AuditOutcome nn | Outcome"
+          - "reason string(500) | Reason or justification"
+          - "before_state json | State before (PII masked)"
+          - "after_state json | State after (PII masked)"
+          - "legal_entity_id uuid ref=legal_entity | Legal entity"
+          - "approval_request_id uuid ref=approval_request | Approval, if maker-checker"
+          - "ip_address inet | Client IP"
+          - "user_agent string(500) | User agent"
+          - "session_id string(64) | Session id"
+          - "request_id string(64) | Request id"
+          - "trace_id string(32) | Trace id"
+          - "service_name string(64) nn | Service that emitted the event"
+          - "hash string(64) nn ro | SHA-256 over this event and prev_hash"
+          - "prev_hash string(64) nn ro | Hash of the previous event"
+        unique: [[tenant_id, sequence_no]]
+        indexes: [[resource_type, resource_id, occurred_at], [actor_id, occurred_at]]
+
+      - name: audit_retention_policy
+        prefix: arp
+        description: Retention rule for audit and business records per resource type and jurisdiction
+        fr: [ADM-03]
+        columns:
+          - "resource_type string(64) nn | Resource type (or * for default)"
+          - "country country | Jurisdiction (empty = all)"
+          - "retention_years int nn default=10 | Years to retain"
+          - "archive_after_days int nn default=365 | Move to cold storage after"
+          - "legal_basis string(255) | Regulation requiring retention"
+        unique: [[tenant_id, resource_type, country]]
+
+      - name: data_export_request
+        prefix: dex
+        description: Export of audit or personal data for regulators, auditors or data-subject requests
+        fr: [ADM-03, CIF-04]
+        columns:
+          - "export_type enum:DataExportType nn | Kind of export"
+          - "requested_for string(255) nn | Recipient, e.g. Central Bank inspection team"
+          - "subject_type string(40) | Subject type for DSAR (CUSTOMER)"
+          - "subject_id uuid | Subject id"
+          - "from_time ts | Range start"
+          - "to_time ts | Range end"
+          - "filters json | Additional filters"
+          - "approval_request_id uuid ref=approval_request | Approval (four-eyes)"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "row_count int ro | Rows exported"
+          - "document_id uuid ref=document ro | Export file"
+          - "expires_at ts | Download link expiry"
+          - "due_date date | Legal deadline (e.g. 30 days for DSAR)"
+
+    apis:
+      - resource: audit-events
+        path: /v1/audit-events
+        table: audit_event
+        ops: [list, get]
+        filters: [actor_type, actor_id, action, resource_type, resource_id, outcome, legal_entity_id, request_id]
+        actions:
+          - "POST /verify-chain | Verify the hash chain for a range | from_sequence bigint nn, to_sequence bigint nn | none"
+          - "POST /search | Full-text and structured search over audit events | query json nn | audit_event[]"
+      - resource: audit-retention-policies
+        path: /v1/audit-retention-policies
+        table: audit_retention_policy
+        ops: [list, get, create, update]
+        filters: [resource_type, country]
+      - resource: data-exports
+        path: /v1/data-exports
+        table: data_export_request
+        ops: [list, get, create]
+        filters: [export_type, subject_type, subject_id, status]
+        actions:
+          - "GET /{id}/download-url | Signed download URL once approved and complete | | none"
+          - "POST /{id}/cancel | Cancel a pending export | reason string(255) nn"
+
+    events:
+      - "platform.audit_event.recorded | audit_event | An audit event was recorded (for SIEM streaming)"
+      - "platform.audit_chain.broken | audit_event | Hash-chain verification failed"
+      - "platform.data_export_request.completed | data_export_request | A data export is ready"
+
+  # ------------------------------------------------------------------ billing-service
+  - name: billing-service
+    database: billing_db
+    description: >
+      SaaS commercial engine: price plans, tenant subscriptions, usage metering from platform events,
+      and monthly invoicing with usage tiers.
+    tables:
+      - name: price_plan
+        prefix: ppl
+        description: A published price plan (platform fee, per active account, per transaction tiers)
+        tenant: false
+        fr: [ADM-05]
+        columns:
+          - "code string(32) nn uq | Plan code"
+          - "name string(120) nn | Plan name"
+          - "currency currency nn | Billing currency"
+          - "billing_period enum:BillingPeriod nn default=MONTHLY | Billing period"
+          - "platform_fee amount nn default=0 | Fixed fee per period"
+          - "included_active_accounts int nn default=0 | Active accounts included"
+          - "price_per_active_account amount nn default=0 | Price per extra active account"
+          - "metric_prices json nn | Tiered prices per usage metric"
+          - "status enum:PricePlanStatus nn default=DRAFT | Status"
+          - "valid_from date nn | Available from"
+          - "valid_to date | Available to"
+
+      - name: tenant_subscription
+        prefix: sub
+        description: A tenant's subscription to a price plan
+        fr: [ADM-05]
+        columns:
+          - "price_plan_id uuid nn fk=price_plan idx | Plan"
+          - "status enum:TenantSubscriptionStatus nn default=TRIAL | Status"
+          - "start_date date nn | Start"
+          - "end_date date | End"
+          - "currency currency nn | Billing currency"
+          - "discount_rate rate nn default=0 | Negotiated discount (fraction)"
+          - "committed_monthly_spend amount | Minimum commitment"
+          - "custom_prices json | Negotiated price overrides"
+          - "billing_email email nn | Invoice recipient"
+          - "payment_terms_days int nn default=30 | Payment terms"
+          - "external_customer_ref string(64) | Customer id in the finance system"
+
+      - name: usage_record
+        prefix: use
+        description: Metered usage aggregated per day and metric. Append-only.
+        immutable: true
+        fr: [ADM-05]
+        columns:
+          - "metric enum:UsageMetric nn | Metric"
+          - "period_date date nn | Usage date"
+          - "quantity bigint nn | Quantity"
+          - "service_name string(64) nn | Reporting service"
+          - "dimensions json | Breakdown, e.g. by legal entity or environment"
+          - "idempotency_key string(128) nn | Dedupe key from the reporting service"
+        unique: [[tenant_id, idempotency_key]]
+        indexes: [[metric, period_date]]
+
+      - name: tenant_invoice
+        prefix: inv
+        description: Invoice issued to a tenant for a billing period
+        fr: [ADM-05]
+        columns:
+          - "tenant_subscription_id uuid nn fk=tenant_subscription idx | Subscription"
+          - "invoice_number string(32) nn uq ro | Invoice number"
+          - "period_start date nn | Period start"
+          - "period_end date nn | Period end"
+          - "currency currency nn | Currency"
+          - "subtotal amount nn ro | Before tax"
+          - "tax_amount amount nn ro | Tax"
+          - "total amount nn ro | Total due"
+          - "amount_paid amount nn default=0 ro | Paid so far"
+          - "status enum:TenantInvoiceStatus nn default=DRAFT | Status"
+          - "issued_at ts ro | Issue time"
+          - "due_date date | Due date"
+          - "paid_at ts ro | Fully paid time"
+          - "document_id uuid ref=document ro | PDF invoice"
+
+      - name: tenant_invoice_line
+        prefix: inl
+        description: A line of a tenant invoice
+        immutable: true
+        fr: [ADM-05]
+        columns:
+          - "tenant_invoice_id uuid nn fk=tenant_invoice idx | Invoice"
+          - "line_no int nn | Line number"
+          - "metric enum:UsageMetric | Metric (empty for fixed fees)"
+          - "description string(255) nn | Description"
+          - "quantity bigint nn | Quantity"
+          - "unit_price amount nn | Unit price"
+          - "amount amount nn | Line amount"
+          - "tier string(64) | Pricing tier applied"
+
+    apis:
+      - resource: price-plans
+        path: /v1/billing/price-plans
+        table: price_plan
+        ops: [list, get, create, update]
+        filters: [status, currency, billing_period]
+      - resource: subscriptions
+        path: /v1/billing/subscriptions
+        table: tenant_subscription
+        ops: [list, get, create, update]
+        filters: [price_plan_id, status]
+        actions:
+          - "POST /{id}/change-plan | Move to another plan from a date | price_plan_id uuid nn, effective_date date nn"
+          - "POST /{id}/cancel | Cancel at period end | reason string(255) nn"
+      - resource: usage
+        path: /v1/billing/usage
+        table: usage_record
+        ops: [list, get, create]
+        filters: [metric, period_date, service_name]
+        actions:
+          - "GET /summary | Usage totals per metric for a period (?from=&to=) | | none"
+      - resource: invoices
+        path: /v1/billing/invoices
+        table: tenant_invoice
+        ops: [list, get]
+        filters: [tenant_subscription_id, status, period_start]
+        actions:
+          - "POST /{id}/issue | Finalise and issue a draft invoice"
+          - "POST /{id}/void | Void an invoice | reason string(255) nn"
+          - "POST /{id}/record-payment | Record a payment against the invoice | amount amount nn, paid_at ts nn, reference string(64)"
+          - "GET /{id}/lines | Invoice lines | | tenant_invoice_line[]"
+          - "POST /generate | Generate draft invoices for a period | period_start date nn, period_end date nn | none"
+
+    events:
+      - "platform.usage_record.recorded | usage_record | Usage was recorded"
+      - "platform.tenant_invoice.issued | tenant_invoice | An invoice was issued"
+      - "platform.tenant_invoice.paid | tenant_invoice | An invoice was paid"
+      - "platform.tenant_subscription.changed | tenant_subscription | A subscription changed plan or status"

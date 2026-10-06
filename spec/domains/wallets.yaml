@@ -1,0 +1,1615 @@
+domain: wallets
+title: Wallets, Agents and Merchants
+phase: 2
+description: >
+  Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system
+  wallets with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission
+  engine; biller catalogue, bill payments and airtime; merchant acceptance (QR, terminals, payment links)
+  and settlement; USSD and SMS channels; G2P and bulk disbursements; interoperability with national
+  switches and other wallets. Every money movement posts through the ledger.
+
+enums:
+  WalletType: [CUSTOMER, MERCHANT, AGENT, SUPER_AGENT, FLOAT, COMMISSION, ESCROW, G2P, TREASURY]
+  WalletStatus: [PENDING, ACTIVE, DORMANT, SUSPENDED, BLOCKED, CLOSED]
+  WalletTxnType: [P2P, CASH_IN, CASH_OUT, MERCHANT_PAYMENT, BILL_PAYMENT, AIRTIME, G2P, BULK_DISBURSEMENT,
+                  WALLET_TO_BANK, BANK_TO_WALLET, FLOAT_TRANSFER, COMMISSION_PAYOUT, INTEROP_OUT, INTEROP_IN,
+                  REFUND, REVERSAL, FEE, ADJUSTMENT, LOAN_DISBURSEMENT, LOAN_REPAYMENT]
+  WalletTxnStatus: [INITIATED, PENDING_CONFIRMATION, PENDING_APPROVAL, PROCESSING, COMPLETED, FAILED,
+                    REVERSED, EXPIRED, CANCELLED]
+  WalletChannel: [USSD, SMS, APP, WEB, API, AGENT_APP, POS, QR, BULK, SYSTEM]
+  WalletLegRole: [PAYER, PAYEE, FEE, COMMISSION, TAX, FLOAT]
+  WalletLinkStatus: [PENDING_VERIFICATION, ACTIVE, SUSPENDED, REMOVED]
+  PinResetStatus: [REQUESTED, VERIFIED, COMPLETED, REJECTED, EXPIRED]
+  AgentLevel: [SUPER_AGENT, AGENT, SUB_AGENT]
+  AgentStatus: [ONBOARDING, ACTIVE, SUSPENDED, TERMINATED]
+  OutletStatus: [ACTIVE, INACTIVE, CLOSED]
+  FloatRequestType: [TOP_UP, REBALANCE, WITHDRAW, TRANSFER]
+  FloatRequestStatus: [REQUESTED, APPROVED, REJECTED, COMPLETED, CANCELLED]
+  AgentTillStatus: [OPEN, CLOSED, SUSPENDED]
+  AgentDeviceType: [POS, SMARTPHONE, TABLET, FEATURE_PHONE]
+  AgentDeviceStatus: [ACTIVE, INACTIVE, LOST, RETIRED]
+  CashRequestType: [CASH_DELIVERY, CASH_PICKUP]
+  CommissionBasis: [FLAT, PERCENTAGE, TIERED, FLAT_PLUS_PERCENTAGE]
+  CommissionBeneficiary: [AGENT, SUPER_AGENT, SUB_AGENT, MERCHANT, BILLER, PLATFORM, CUSTOMER]
+  CommissionPlanStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, RETIRED]
+  PayoutFrequency: [REALTIME, DAILY, WEEKLY, MONTHLY]
+  BillerCategory: [ELECTRICITY, WATER, GAS, TELECOM, AIRTIME, DATA, TV, INTERNET, EDUCATION, GOVERNMENT, TAX,
+                   INSURANCE, LOAN, OTHER]
+  BillerStatus: [ACTIVE, SUSPENDED, RETIRED]
+  BillerIntegration: [API, ISO8583, FILE, AGGREGATOR]
+  BillPaymentStatus: [INITIATED, VALIDATED, PROCESSING, PENDING_PROVIDER, COMPLETED, FAILED, REVERSED]
+  SettlementFrequency: [REALTIME, DAILY, WEEKLY, MONTHLY, ON_DEMAND]
+  WalletSettlementStatus: [PENDING, CALCULATED, APPROVED, PAID, FAILED]
+  MerchantStatus: [ONBOARDING, ACTIVE, SUSPENDED, TERMINATED]
+  MerchantType: [INDIVIDUAL, SOLE_TRADER, COMPANY, GOVERNMENT, NGO]
+  MerchantTerminalStatus: [ACTIVE, INACTIVE, LOST, RETIRED]
+  QrType: [STATIC, DYNAMIC]
+  MerchantRefundStatus: [REQUESTED, APPROVED, COMPLETED, REJECTED, FAILED]
+  UssdMenuStatus: [DRAFT, PUBLISHED, RETIRED]
+  UssdNodeType: [MENU, INPUT, CONFIRM, ACTION, END]
+  UssdSessionStatus: [ACTIVE, COMPLETED, TIMED_OUT, ABORTED, FAILED]
+  SmsDirection: [INBOUND, OUTBOUND]
+  SmsStatus: [QUEUED, SENT, DELIVERED, FAILED, RECEIVED]
+  DisbursementProgramStatus: [DRAFT, ACTIVE, SUSPENDED, CLOSED]
+  DisbursementBatchStatus: [DRAFT, VALIDATING, VALIDATED, PENDING_APPROVAL, APPROVED, PROCESSING, COMPLETED,
+                            PARTIALLY_COMPLETED, FAILED, CANCELLED]
+  BeneficiaryValidation: [PENDING, VALID, INVALID, NAME_MISMATCH, DUPLICATE]
+  BeneficiaryPayoutStatus: [PENDING, PAID, FAILED, SKIPPED, RETURNED]
+  InteropSwitchType: [NATIONAL_SWITCH, MOJALOOP_HUB, WALLET_PARTNER, BANK_PARTNER]
+  InteropDirection: [OUTBOUND, INBOUND]
+  InteropQuoteStatus: [PENDING, ACCEPTED, REJECTED, EXPIRED]
+  InteropTransferStatus: [QUOTE_REQUESTED, QUOTED, RESERVED, COMMITTED, ABORTED, FAILED, EXPIRED]
+
+services:
+  # ------------------------------------------------------------------ wallet-service
+  - name: wallet-service
+    database: wallet_db
+    description: >
+      Wallet lifecycle, KYC-tier limits, PINs, linked bank accounts and every wallet money movement
+      (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank, reversals). Each transaction is
+      broken into legs and posted atomically to the ledger.
+    tables:
+      - name: wallet
+        prefix: wal
+        description: A stored-value account held by a customer, merchant, agent or the platform
+        fr: [WAL-01, CIF-03, LND-07]
+        columns:
+          - "wallet_number string(32) nn uq | Public wallet number"
+          - "wallet_type enum:WalletType nn | Kind of wallet"
+          - "customer_id uuid ref=customer idx | Owning customer (customer wallets)"
+          - "agent_id uuid ref=agent idx | Owning agent (agent, super-agent, float and commission wallets)"
+          - "merchant_id uuid ref=merchant idx | Owning merchant (merchant wallets)"
+          - "msisdn phone idx pii | Mobile number bound to the wallet (E.164)"
+          - "alias string(64) | Optional handle used for P2P lookup"
+          - "display_name string(160) nn | Name shown to payers for confirmation"
+          - "currency currency nn | Wallet currency"
+          - "product_id uuid ref=product | Wallet product"
+          - "product_version_id uuid ref=product_version | Product version the wallet is on"
+          - "ledger_account_id uuid nn ref=ledger_account | Ledger account holding the balance"
+          - "kyc_tier int nn default=0 | KYC tier (0 = phone only) driving limits"
+          - "status enum:WalletStatus nn default=PENDING | Lifecycle status"
+          - "status_reason string(255) | Reason for the current status"
+          - "is_default bool nn default=true | Default wallet of the owner for this currency"
+          - "pin_hash string(255) secret | Argon2id hash of the wallet PIN"
+          - "pin_failed_attempts int nn default=0 hide | Consecutive failed PIN attempts"
+          - "pin_locked_until ts ro | PIN locked until this time after too many failures"
+          - "language string(8) | Preferred language for USSD/SMS"
+          - "opened_channel enum:WalletChannel | Channel the wallet was opened on"
+          - "opened_by_agent_id uuid ref=agent | Agent who registered the wallet"
+          - "last_activity_at ts ro | Last customer-initiated transaction"
+          - "dormant_since ts ro | Time the wallet became dormant"
+          - "credit_score int ro | Transaction-based score for nano-loan offers"
+          - "closed_at ts ro | Closing time"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, ledger_account_id]]
+
+      - name: wallet_tier_limit
+        prefix: wtl
+        description: Balance and transaction limits per KYC tier, wallet type and transaction type
+        fr: [WAL-01, CIF-03, LIM-01]
+        columns:
+          - "kyc_tier int nn | KYC tier"
+          - "wallet_type enum:WalletType nn | Wallet type"
+          - "txn_type enum:WalletTxnType | Transaction type (empty = all)"
+          - "currency currency nn | Currency"
+          - "max_balance amount | Maximum wallet balance"
+          - "per_txn_min amount | Minimum amount per transaction"
+          - "per_txn_max amount | Maximum amount per transaction"
+          - "daily_amount amount | Maximum amount per day"
+          - "daily_count int | Maximum transactions per day"
+          - "monthly_amount amount | Maximum amount per month"
+          - "monthly_count int | Maximum transactions per month"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+        unique: [[tenant_id, kyc_tier, wallet_type, txn_type, currency, valid_from]]
+
+      - name: wallet_transaction
+        prefix: wtx
+        description: A wallet money movement of any type, with its full lifecycle
+        fr: [WAL-01, WAL-02, WAL-05, WAL-06, WAL-07, PAY-01, LND-07]
+        columns:
+          - "reference string(32) nn uq | Human-readable transaction reference shown on receipts"
+          - "txn_type enum:WalletTxnType nn | Transaction type"
+          - "status enum:WalletTxnStatus nn default=INITIATED ro | Lifecycle status"
+          - "channel enum:WalletChannel nn | Initiating channel"
+          - "payer_wallet_id uuid fk=wallet | Debited wallet"
+          - "payee_wallet_id uuid fk=wallet | Credited wallet"
+          - "payee_msisdn phone pii | Payee mobile number as entered"
+          - "payee_name string(160) pii ro | Payee name shown for confirmation"
+          - "payee_external_ref string(64) | External account / meter / bank reference"
+          - "amount amount nn | Principal amount"
+          - "currency currency nn | Currency"
+          - "fee_amount amount nn default=0 ro | Fee charged to the payer"
+          - "tax_amount amount nn default=0 ro | Tax on the fee"
+          - "commission_amount amount nn default=0 ro | Total commission generated"
+          - "total_debit_amount amount ro | Amount + fee + tax debited from the payer"
+          - "fx_rate rate ro | FX rate applied for cross-currency transfers"
+          - "settlement_amount amount ro | Amount credited in the payee currency"
+          - "settlement_currency currency ro | Payee currency"
+          - "initiator_type string(32) nn | CUSTOMER, AGENT, MERCHANT, SYSTEM, BULK, STAFF"
+          - "initiated_by string(64) | Principal that initiated the transaction"
+          - "agent_id uuid ref=agent idx | Agent involved (cash-in / cash-out)"
+          - "agent_outlet_id uuid ref=agent_outlet | Outlet where the transaction took place"
+          - "merchant_id uuid ref=merchant idx | Merchant paid"
+          - "bill_payment_id uuid ref=bill_payment | Bill payment"
+          - "disbursement_beneficiary_id uuid ref=disbursement_beneficiary | Bulk disbursement line"
+          - "interop_transfer_id uuid ref=interop_transfer | Interoperable transfer"
+          - "payment_id uuid ref=payment | Bank payment (wallet-to-bank / bank-to-wallet)"
+          - "loan_id uuid ref=loan | Nano-loan disbursed or repaid"
+          - "original_transaction_id uuid fk=wallet_transaction | Transaction reversed or refunded"
+          - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
+          - "hold_id uuid ref=hold ro | Funds hold while pending confirmation"
+          - "idempotency_key string(128) nn | Client key"
+          - "description string(255) | Narrative"
+          - "customer_note string(160) | Note from payer to payee"
+          - "confirmation_expires_at ts ro | Deadline for PIN/OTP confirmation"
+          - "completed_at ts ro | Completion time"
+          - "failure_code string(64) ro | Stable failure code"
+          - "failure_reason string(255) ro | Failure description"
+          - "risk_score rate ro | Fraud score 0..1"
+          - "device_id uuid ref=customer_device | Device used"
+          - "ip_address inet | Source IP (app / web)"
+          - "geo_lat rate | Latitude at initiation"
+          - "geo_lon rate | Longitude at initiation"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, idempotency_key]]
+        indexes: [[payer_wallet_id, created_at], [payee_wallet_id, created_at], [txn_type, status]]
+
+      - name: wallet_transaction_leg
+        prefix: wlg
+        description: One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.
+        immutable: true
+        fr: [WAL-01, LED-01]
+        columns:
+          - "wallet_transaction_id uuid nn fk=wallet_transaction idx | Parent transaction"
+          - "leg_no int nn | Leg number"
+          - "role enum:WalletLegRole nn | Purpose of the leg"
+          - "wallet_id uuid fk=wallet idx | Wallet affected (empty for internal accounts)"
+          - "ledger_account_id uuid nn ref=ledger_account | Ledger account posted"
+          - "direction enum:EntryDirection nn | Debit or credit"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "beneficiary_type string(32) | AGENT, SUPER_AGENT, PLATFORM, BILLER, TAX_AUTHORITY"
+          - "description string(255) | Narrative"
+        unique: [[wallet_transaction_id, leg_no]]
+
+      - name: wallet_bank_link
+        prefix: wbl
+        description: A bank account linked to a wallet for wallet-to-bank and bank-to-wallet transfers
+        fr: [PAY-01, WAL-08]
+        columns:
+          - "wallet_id uuid nn fk=wallet idx | Wallet"
+          - "bank_code string(32) nn | Bank / sort code / IFSC / BIC"
+          - "bank_name string(160) | Bank name"
+          - "account_number string(34) nn pii | Account number or IBAN"
+          - "account_name string(160) pii | Account holder name returned by name enquiry"
+          - "deposit_account_id uuid ref=deposit_account | Internal deposit account when held on Meridian"
+          - "currency currency nn | Account currency"
+          - "status enum:WalletLinkStatus nn default=PENDING_VERIFICATION | Status"
+          - "verification_method string(32) | NAME_ENQUIRY, MICRO_DEPOSIT, OPEN_BANKING, MANUAL"
+          - "verified_at ts ro | Verification time"
+          - "mandate_reference string(64) | Direct-debit mandate for bank-to-wallet pulls"
+          - "is_default bool nn default=false | Default link"
+
+      - name: wallet_pin_reset
+        prefix: wpr
+        description: A PIN reset request verified by OTP, agent or ID check
+        fr: [WAL-03]
+        columns:
+          - "wallet_id uuid nn fk=wallet idx | Wallet"
+          - "channel enum:WalletChannel nn | Channel of the request"
+          - "status enum:PinResetStatus nn default=REQUESTED ro | Status"
+          - "verification_method string(32) nn | OTP, ID_CHECK, AGENT, SECURITY_QUESTIONS"
+          - "agent_id uuid ref=agent | Agent who verified the customer"
+          - "document_id uuid ref=document | ID document captured"
+          - "otp_attempts int nn default=0 ro | OTP attempts used"
+          - "expires_at ts nn | Request expiry"
+          - "completed_at ts ro | Completion time"
+          - "rejected_reason string(255) ro | Rejection reason"
+
+      - name: wallet_favorite
+        prefix: wfv
+        description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
+        fr: [PAY-01, WAL-05]
+        columns:
+          - "wallet_id uuid nn fk=wallet idx | Owner wallet"
+          - "nickname string(64) nn | Display name"
+          - "favorite_type string(32) nn | WALLET, BILLER, MERCHANT, BANK, AIRTIME"
+          - "target_wallet_id uuid fk=wallet | Saved wallet"
+          - "target_msisdn phone pii | Saved mobile number"
+          - "biller_id uuid ref=biller | Saved biller"
+          - "merchant_id uuid ref=merchant | Saved merchant"
+          - "payee_id uuid ref=payee | Saved bank payee"
+          - "account_reference string(64) | Meter / account number at the biller"
+
+      - name: wallet_status_history
+        prefix: wsh
+        description: Immutable history of wallet status changes
+        immutable: true
+        fr: [WAL-01, ADM-03]
+        columns:
+          - "wallet_id uuid nn fk=wallet idx | Wallet"
+          - "from_status enum:WalletStatus | Previous status"
+          - "to_status enum:WalletStatus nn | New status"
+          - "reason string(255) | Reason"
+          - "changed_by string(64) | Principal"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+
+    apis:
+      - resource: wallets
+        path: /v1/wallets
+        table: wallet
+        ops: [list, get, create, update]
+        filters: [wallet_type, status, customer_id, agent_id, merchant_id, msisdn, currency, kyc_tier, wallet_number]
+        actions:
+          - "GET /lookup | Resolve a wallet by msisdn or alias (?msisdn=&alias=) for payee name confirmation | | wallet"
+          - "GET /{id}/balance | Current balance (posted, available, held) | | account_balance"
+          - "GET /{id}/transactions | Transactions of the wallet, newest first | | wallet_transaction[]"
+          - "GET /{id}/limits | Effective limits and remaining headroom for the wallet tier | | wallet_tier_limit[]"
+          - "GET /{id}/status-history | Status change history | | wallet_status_history[]"
+          - "POST /{id}/upgrade-tier | Upgrade the KYC tier after verification | kyc_tier int nn, kyc_profile_id uuid nn"
+          - "POST /{id}/activate | Activate a pending or dormant wallet | reason string(255)"
+          - "POST /{id}/suspend | Suspend the wallet | reason string(255) nn"
+          - "POST /{id}/block | Block the wallet (fraud or legal) | reason string(255) nn"
+          - "POST /{id}/reactivate | Lift a suspension or block (maker-checker) | reason string(255) nn"
+          - "POST /{id}/close | Close a wallet, sweeping any residual balance | reason string(255) nn, sweep_to_wallet_id uuid"
+          - "POST /{id}/set-pin | Set or change the wallet PIN | new_pin string(12) nn, current_pin string(12) | none"
+          - "POST /{id}/verify-pin | Verify the wallet PIN | pin string(12) nn | none"
+          - "POST /{id}/statements | Request a full statement delivered by notification | from_date date nn, to_date date nn, format string(8) | none"
+
+      - resource: wallet-transactions
+        path: /v1/wallet-transactions
+        table: wallet_transaction
+        ops: [list, get, create]
+        filters: [txn_type, status, channel, payer_wallet_id, payee_wallet_id, agent_id, merchant_id, reference, original_transaction_id]
+        actions:
+          - "POST /quote | Fee, tax and commission quote before initiation | txn_type enum:WalletTxnType nn, amount amount nn, currency currency nn, payer_wallet_id uuid nn, payee_wallet_id uuid, payee_msisdn phone, channel enum:WalletChannel | none"
+          - "POST /p2p | Send money to another wallet by msisdn, alias or wallet id | payer_wallet_id uuid nn, payee_wallet_id uuid, payee_msisdn phone, amount amount nn, currency currency nn, description string(255), pin string(12)"
+          - "POST /cash-in | Agent cash-in to a customer wallet | agent_outlet_id uuid nn, payee_msisdn phone nn, amount amount nn, currency currency nn"
+          - "POST /cash-out | Customer cash-out at an agent outlet (customer confirms with PIN) | agent_outlet_id uuid nn, payer_wallet_id uuid nn, amount amount nn, currency currency nn"
+          - "POST /wallet-to-bank | Transfer to a linked bank account | payer_wallet_id uuid nn, wallet_bank_link_id uuid nn, amount amount nn, currency currency nn, pin string(12)"
+          - "POST /bank-to-wallet | Pull funds from a linked bank account | payee_wallet_id uuid nn, wallet_bank_link_id uuid nn, amount amount nn, currency currency nn"
+          - "POST /{id}/confirm | Confirm a pending transaction with PIN or OTP | pin string(12), otp string(8)"
+          - "POST /{id}/cancel | Cancel a transaction awaiting confirmation | reason string(255)"
+          - "POST /{id}/reverse | Reverse a completed transaction (maker-checker) | reason string(255) nn, amount amount"
+          - "GET /{id}/legs | Ledger legs of the transaction | | wallet_transaction_leg[]"
+          - "GET /{id}/receipt | Receipt (PDF or text) for the transaction | | none"
+
+      - resource: wallet-tier-limits
+        path: /v1/wallet-tier-limits
+        table: wallet_tier_limit
+        ops: [list, get, create, update, delete]
+        filters: [kyc_tier, wallet_type, txn_type, currency]
+
+      - resource: wallet-bank-links
+        path: /v1/wallet-bank-links
+        table: wallet_bank_link
+        ops: [list, get, create, update]
+        filters: [wallet_id, status, bank_code]
+        actions:
+          - "POST /{id}/verify | Verify ownership by name enquiry or micro-deposit code | verification_code string(16)"
+          - "POST /{id}/remove | Remove the link | reason string(255)"
+
+      - resource: wallet-pin-resets
+        path: /v1/wallet-pin-resets
+        table: wallet_pin_reset
+        ops: [list, get, create]
+        filters: [wallet_id, status, agent_id]
+        actions:
+          - "POST /{id}/verify | Verify the customer by OTP or ID document | otp string(8), document_id uuid"
+          - "POST /{id}/complete | Set the new PIN | new_pin string(12) nn"
+          - "POST /{id}/reject | Reject the reset request | reason string(255) nn"
+
+      - resource: wallet-favorites
+        path: /v1/wallet-favorites
+        table: wallet_favorite
+        ops: [list, get, create, update, delete]
+        filters: [wallet_id, favorite_type]
+
+    events:
+      - "wallets.wallet.created | wallet | A wallet was opened"
+      - "wallets.wallet.status_changed | wallet | A wallet was activated, suspended, blocked, made dormant or closed"
+      - "wallets.wallet.tier_upgraded | wallet | A wallet moved to a higher KYC tier"
+      - "wallets.wallet_transaction.initiated | wallet_transaction | A wallet transaction was initiated"
+      - "wallets.wallet_transaction.completed | wallet_transaction | A wallet transaction completed and was posted"
+      - "wallets.wallet_transaction.failed | wallet_transaction | A wallet transaction failed"
+      - "wallets.wallet_transaction.reversed | wallet_transaction | A wallet transaction was reversed"
+      - "wallets.wallet_bank_link.verified | wallet_bank_link | A bank account link was verified"
+      - "wallets.wallet_pin_reset.completed | wallet_pin_reset | A wallet PIN was reset"
+
+  # ------------------------------------------------------------------ agent-network-service
+  - name: agent-network-service
+    database: agent_db
+    description: >
+      Agent hierarchy (super-agent, agent, sub-agent), outlets with geo-location, territories, float
+      management and rebalancing, tills and cash counts, agent devices / POS, agent KYB documents,
+      cash-in-transit requests and daily performance.
+    tables:
+      - name: agent_territory
+        prefix: atr
+        description: Geographic territory used to organise and manage the agent network
+        fr: [WAL-01]
+        columns:
+          - "code string(32) nn uq | Territory code"
+          - "name string(120) nn | Name"
+          - "parent_id uuid fk=agent_territory idx | Parent territory"
+          - "territory_level string(32) nn | COUNTRY, REGION, DISTRICT, ZONE"
+          - "country country nn | Country"
+          - "manager_user_id uuid ref=app_user | Territory manager"
+          - "geo_boundary json | GeoJSON polygon"
+
+      - name: agent
+        prefix: agt
+        description: A cash-in/cash-out agent business at any level of the hierarchy
+        fr: [WAL-01, WAL-02, ONB-04]
+        columns:
+          - "agent_code string(32) nn uq | Agent code used at the till and on USSD"
+          - "agent_level enum:AgentLevel nn | Level in the hierarchy"
+          - "parent_agent_id uuid fk=agent idx | Direct parent (agent for sub-agents, super-agent for agents)"
+          - "super_agent_id uuid fk=agent idx | Top-level super-agent"
+          - "legal_name string(200) nn | Registered business name"
+          - "trading_name string(200) | Trading name"
+          - "customer_id uuid ref=customer | Business party record (KYB)"
+          - "registration_number string(64) | Company registration number"
+          - "tax_id string(64) pii | Tax identification number"
+          - "contact_name string(160) pii | Main contact"
+          - "contact_msisdn phone nn pii | Main contact mobile"
+          - "contact_email email pii | Main contact email"
+          - "agent_territory_id uuid fk=agent_territory idx | Territory"
+          - "branch_id uuid ref=branch | Sponsoring bank branch"
+          - "float_wallet_id uuid ref=wallet | Main float wallet"
+          - "commission_wallet_id uuid ref=wallet | Wallet receiving commissions"
+          - "commission_plan_id uuid ref=commission_plan | Commission plan"
+          - "status enum:AgentStatus nn default=ONBOARDING | Status"
+          - "status_reason string(255) | Reason for the current status"
+          - "contract_start date | Agency contract start"
+          - "contract_end date | Agency contract end"
+          - "max_float_amount amount | Maximum float the agent may hold"
+          - "kyc_status string(32) | PENDING, VERIFIED, REJECTED, EXPIRED"
+          - "risk_rating string(16) | LOW, MEDIUM, HIGH"
+          - "onboarded_at ts ro | Activation time"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: agent_outlet
+        prefix: aot
+        description: A physical point of service operated by an agent
+        fr: [WAL-02, ONB-07]
+        columns:
+          - "agent_id uuid nn fk=agent idx | Operating agent"
+          - "outlet_code string(32) nn uq | Outlet code"
+          - "name string(160) nn | Outlet name"
+          - "address_line1 string(200) | Address line 1"
+          - "address_line2 string(200) | Address line 2"
+          - "city string(100) | City"
+          - "region string(100) | Region / state"
+          - "postal_code string(20) | Postal code"
+          - "country country nn | Country"
+          - "latitude rate | Latitude"
+          - "longitude rate | Longitude"
+          - "agent_territory_id uuid fk=agent_territory idx | Territory"
+          - "opening_hours json | Opening hours per weekday"
+          - "services json | Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME"
+          - "float_wallet_id uuid ref=wallet | Outlet-level float wallet when separate from the agent"
+          - "contact_msisdn phone pii | Outlet phone"
+          - "photo_document_id uuid ref=document | Storefront photo"
+          - "status enum:OutletStatus nn default=ACTIVE | Status"
+        indexes: [[latitude, longitude]]
+
+      - name: agent_float
+        prefix: afl
+        description: Float position configuration and alerting for an agent or outlet float wallet
+        fr: [WAL-02]
+        columns:
+          - "agent_id uuid nn fk=agent idx | Agent"
+          - "agent_outlet_id uuid fk=agent_outlet | Outlet (empty = agent-level float)"
+          - "wallet_id uuid nn ref=wallet uq | Float wallet"
+          - "currency currency nn | Currency"
+          - "min_balance amount | Balance below which cash-in is refused"
+          - "max_balance amount | Maximum float"
+          - "low_float_alert_threshold amount | Alert threshold"
+          - "auto_rebalance bool nn default=false | Request rebalancing automatically when low"
+          - "rebalance_source_agent_id uuid fk=agent | Default source of rebalancing (usually the super-agent)"
+          - "last_alert_at ts ro | Last low-float alert"
+
+      - name: agent_float_request
+        prefix: afr
+        description: A float top-up, rebalance, withdrawal or transfer between agents
+        fr: [WAL-02]
+        columns:
+          - "request_type enum:FloatRequestType nn | Request type"
+          - "requesting_agent_id uuid nn fk=agent idx | Agent requesting"
+          - "source_agent_id uuid fk=agent idx | Agent providing float (rebalance / transfer)"
+          - "source_wallet_id uuid ref=wallet | Source wallet"
+          - "target_wallet_id uuid nn ref=wallet | Target wallet"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "funding_method string(32) | BANK_TRANSFER, CASH_DEPOSIT, SUPER_AGENT, WALLET"
+          - "bank_reference string(64) | Bank deposit reference"
+          - "proof_document_id uuid ref=document | Deposit slip"
+          - "status enum:FloatRequestStatus nn default=REQUESTED ro | Status"
+          - "approved_by string(64) ro | Approver"
+          - "approved_at ts ro | Approval time"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Resulting float transfer"
+          - "rejection_reason string(255) ro | Rejection reason"
+
+      - name: agent_till
+        prefix: atl
+        description: A cash till at an outlet, opened and closed per shift with cash counts
+        fr: [WAL-02]
+        columns:
+          - "agent_outlet_id uuid nn fk=agent_outlet idx | Outlet"
+          - "till_number string(32) nn uq | Till number"
+          - "operator_user_id uuid ref=app_user | Operator on shift"
+          - "status enum:AgentTillStatus nn default=CLOSED ro | Status"
+          - "currency currency nn | Currency"
+          - "opened_at ts ro | Shift start"
+          - "closed_at ts ro | Shift end"
+          - "opening_cash amount ro | Declared cash at opening"
+          - "expected_cash amount ro | Opening cash + cash-in - cash-out"
+          - "declared_cash amount ro | Declared cash at closing"
+          - "variance amount ro | Declared minus expected"
+          - "denominations json ro | Cash count by denomination"
+
+      - name: agent_device
+        prefix: adv
+        description: A POS terminal or phone used by an agent
+        fr: [WAL-02, ONB-07]
+        columns:
+          - "agent_id uuid nn fk=agent idx | Agent"
+          - "agent_outlet_id uuid fk=agent_outlet | Outlet"
+          - "device_type enum:AgentDeviceType nn | Device type"
+          - "serial_number string(64) nn uq | Serial number"
+          - "imei string(20) | IMEI"
+          - "model string(64) | Model"
+          - "os_version string(32) | OS version"
+          - "app_version string(32) | Agent app version"
+          - "sim_msisdn phone | SIM number"
+          - "status enum:AgentDeviceStatus nn default=ACTIVE | Status"
+          - "assigned_at ts | Assignment time"
+          - "last_seen_at ts ro | Last heartbeat"
+          - "last_latitude rate ro | Last known latitude"
+          - "last_longitude rate ro | Last known longitude"
+
+      - name: agent_kyc_document
+        prefix: akd
+        description: KYB document held for an agent (licence, tax certificate, contract)
+        fr: [ONB-04, ONB-06]
+        columns:
+          - "agent_id uuid nn fk=agent idx | Agent"
+          - "document_type string(48) nn | BUSINESS_LICENSE, TAX_CERTIFICATE, ID, PROOF_OF_ADDRESS, CONTRACT"
+          - "document_id uuid nn ref=document | Stored document"
+          - "expires_at date | Expiry date"
+          - "verified bool nn default=false ro | Verified"
+          - "verified_by string(64) ro | Verifier"
+          - "verified_at ts ro | Verification time"
+
+      - name: cash_management_request
+        prefix: cmr
+        description: Cash-in-transit delivery or pickup request for an outlet
+        fr: [WAL-02]
+        columns:
+          - "agent_outlet_id uuid nn fk=agent_outlet idx | Outlet"
+          - "request_type enum:CashRequestType nn | Delivery or pickup"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "denominations json | Requested denominations"
+          - "requested_for ts | Requested time"
+          - "status enum:FloatRequestStatus nn default=REQUESTED | Status"
+          - "cit_provider string(64) | Cash-in-transit company"
+          - "cit_reference string(64) | CIT reference"
+          - "completed_at ts ro | Completion time"
+
+      - name: agent_performance_daily
+        prefix: apd
+        description: Daily KPIs per agent and outlet (append-only)
+        immutable: true
+        fr: [WAL-02, WAL-04]
+        columns:
+          - "agent_id uuid nn fk=agent idx | Agent"
+          - "agent_outlet_id uuid fk=agent_outlet | Outlet"
+          - "business_date date nn | Business date"
+          - "currency currency nn | Currency"
+          - "cash_in_count int nn default=0 | Cash-in transactions"
+          - "cash_in_amount amount nn default=0 | Cash-in value"
+          - "cash_out_count int nn default=0 | Cash-out transactions"
+          - "cash_out_amount amount nn default=0 | Cash-out value"
+          - "onboarding_count int nn default=0 | Customers registered"
+          - "bill_pay_count int nn default=0 | Bill payments"
+          - "commission_earned amount nn default=0 | Commission earned"
+          - "active_customers int nn default=0 | Distinct customers served"
+        unique: [[agent_id, agent_outlet_id, business_date]]
+
+    apis:
+      - resource: agents
+        path: /v1/agents
+        table: agent
+        ops: [list, get, create, update]
+        filters: [agent_level, parent_agent_id, super_agent_id, status, agent_territory_id, agent_code, risk_rating]
+        actions:
+          - "POST /{id}/activate | Activate an onboarded agent | comment string(500)"
+          - "POST /{id}/suspend | Suspend the agent and its outlets | reason string(255) nn"
+          - "POST /{id}/terminate | Terminate the agency contract | reason string(255) nn, effective_date date"
+          - "POST /{id}/assign-commission-plan | Assign a commission plan | commission_plan_id uuid nn, effective_from date nn"
+          - "GET /{id}/sub-agents | Direct children in the hierarchy | | agent[]"
+          - "GET /{id}/outlets | Outlets of the agent | | agent_outlet[]"
+          - "GET /{id}/float | Float positions | | agent_float[]"
+          - "GET /{id}/performance | Daily KPIs (?from=&to=) | | agent_performance_daily[]"
+
+      - resource: agent-territories
+        path: /v1/agent-territories
+        table: agent_territory
+        ops: [list, get, create, update]
+        filters: [parent_id, territory_level, country, manager_user_id]
+
+      - resource: agent-outlets
+        path: /v1/agent-outlets
+        table: agent_outlet
+        ops: [list, get, create, update]
+        filters: [agent_id, status, agent_territory_id, city, outlet_code]
+        actions:
+          - "GET /nearby | Outlets near a location (?lat=&lon=&radius_m=&service=) | | agent_outlet[]"
+          - "POST /{id}/close | Close the outlet | reason string(255) nn"
+
+      - resource: agent-floats
+        path: /v1/agent-floats
+        table: agent_float
+        ops: [list, get, create, update]
+        filters: [agent_id, agent_outlet_id, wallet_id]
+
+      - resource: agent-float-requests
+        path: /v1/agent-float-requests
+        table: agent_float_request
+        ops: [list, get, create]
+        filters: [request_type, requesting_agent_id, source_agent_id, status]
+        actions:
+          - "POST /{id}/approve | Approve and execute the float movement | comment string(500)"
+          - "POST /{id}/reject | Reject the request | reason string(255) nn"
+          - "POST /{id}/cancel | Cancel a pending request | reason string(255)"
+
+      - resource: agent-tills
+        path: /v1/agent-tills
+        table: agent_till
+        ops: [list, get, create]
+        filters: [agent_outlet_id, status, operator_user_id]
+        actions:
+          - "POST /{id}/open | Open the till for a shift | operator_user_id uuid nn, opening_cash amount nn, denominations json"
+          - "POST /{id}/close | Close the till with a cash count | declared_cash amount nn, denominations json"
+
+      - resource: agent-devices
+        path: /v1/agent-devices
+        table: agent_device
+        ops: [list, get, create, update]
+        filters: [agent_id, agent_outlet_id, status, device_type, serial_number]
+        actions:
+          - "POST /{id}/report-lost | Report a device lost and block it | reason string(255)"
+          - "POST /{id}/retire | Retire a device"
+
+      - resource: agent-kyc-documents
+        path: /v1/agent-kyc-documents
+        table: agent_kyc_document
+        ops: [list, get, create, delete]
+        filters: [agent_id, document_type, verified]
+        actions:
+          - "POST /{id}/verify | Mark the document verified | comment string(500)"
+
+      - resource: cash-management-requests
+        path: /v1/cash-management-requests
+        table: cash_management_request
+        ops: [list, get, create, update]
+        filters: [agent_outlet_id, request_type, status]
+        actions:
+          - "POST /{id}/complete | Confirm the cash delivery or pickup | cit_reference string(64)"
+
+    events:
+      - "wallets.agent.onboarded | agent | An agent was activated"
+      - "wallets.agent.status_changed | agent | An agent was suspended, reactivated or terminated"
+      - "wallets.agent_float.low_balance | agent_float | A float wallet fell below its alert threshold"
+      - "wallets.agent_float_request.approved | agent_float_request | A float request was approved and executed"
+      - "wallets.agent_till.closed | agent_till | A till was closed with a cash count"
+      - "wallets.agent_device.lost | agent_device | A device was reported lost"
+
+  # ------------------------------------------------------------------ commission-service
+  - name: commission-service
+    database: commission_db
+    description: >
+      Multi-level commission engine: versioned plans with rules by transaction type, channel, tier,
+      agent level, territory and biller; real-time accrual on every completed transaction; periodic or
+      real-time payout runs to commission wallets with tax withholding.
+    tables:
+      - name: commission_plan
+        prefix: cpl
+        description: A versioned set of commission rules assigned to agents, merchants or billers
+        fr: [WAL-04]
+        columns:
+          - "code string(32) nn | Plan code"
+          - "name string(120) nn | Name"
+          - "description text | Description"
+          - "version int nn default=1 | Version"
+          - "applies_to string(32) nn | AGENT, MERCHANT, BILLER, ALL"
+          - "currency currency nn | Currency"
+          - "payout_frequency enum:PayoutFrequency nn default=DAILY | Payout frequency"
+          - "status enum:CommissionPlanStatus nn default=DRAFT ro | Status"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+        unique: [[tenant_id, code, version]]
+
+      - name: commission_rule
+        prefix: crl
+        description: One commission rule; the most specific matching rule per beneficiary wins
+        fr: [WAL-04]
+        columns:
+          - "commission_plan_id uuid nn fk=commission_plan idx | Plan"
+          - "name string(120) nn | Rule name"
+          - "priority int nn default=100 | Lower wins among equally specific rules"
+          - "txn_type enum:WalletTxnType nn | Transaction type"
+          - "channel enum:WalletChannel | Channel (empty = any)"
+          - "kyc_tier int | Customer KYC tier (empty = any)"
+          - "agent_level enum:AgentLevel | Agent level (empty = any)"
+          - "agent_territory_id uuid ref=agent_territory | Territory (empty = any)"
+          - "biller_id uuid ref=biller | Biller (empty = any)"
+          - "min_amount amount | Applies from this transaction amount"
+          - "max_amount amount | Applies up to this transaction amount"
+          - "basis enum:CommissionBasis nn | Calculation basis"
+          - "flat_amount amount | Flat commission"
+          - "percentage rate | Percentage of the base (0.005 = 0.5%)"
+          - "tiers json | Tier table for TIERED basis: [{from, to, flat, percentage}]"
+          - "cap_amount amount | Maximum commission per transaction"
+          - "base string(16) nn default=FEE | Base of the percentage: AMOUNT or FEE"
+          - "beneficiary enum:CommissionBeneficiary nn | Who earns it"
+          - "beneficiary_share rate nn default=1 | Share of the computed commission for this beneficiary"
+          - "funded_by string(32) nn default=FEE | FEE, PLATFORM, BILLER, MERCHANT"
+          - "tax_withholding_rate rate | Withholding tax on commission"
+          - "is_active bool nn default=true | Active"
+
+      - name: commission_earning
+        prefix: cer
+        description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+        immutable: true
+        fr: [WAL-04]
+        columns:
+          - "commission_plan_id uuid nn fk=commission_plan | Plan"
+          - "commission_rule_id uuid nn fk=commission_rule | Rule applied"
+          - "wallet_transaction_id uuid nn ref=wallet_transaction idx | Source transaction"
+          - "beneficiary enum:CommissionBeneficiary nn | Beneficiary type"
+          - "beneficiary_agent_id uuid ref=agent idx | Agent beneficiary"
+          - "beneficiary_merchant_id uuid ref=merchant | Merchant beneficiary"
+          - "beneficiary_wallet_id uuid nn ref=wallet idx | Wallet to pay"
+          - "base_amount amount nn | Base the commission was computed on"
+          - "commission_amount amount nn | Gross commission (negative for clawback)"
+          - "tax_amount amount nn default=0 | Withholding tax"
+          - "net_amount amount nn | Net commission"
+          - "currency currency nn | Currency"
+          - "is_clawback bool nn default=false | Clawback of an earlier earning (reversal)"
+          - "earned_at ts nn | Transaction completion time"
+          - "payout_due_on date nn | Payout date per plan frequency"
+
+      - name: commission_payout_run
+        prefix: cpr
+        description: A payout run paying accrued commissions to beneficiary wallets
+        fr: [WAL-04]
+        columns:
+          - "payout_frequency enum:PayoutFrequency nn | Frequency covered"
+          - "period_start date nn | Earnings from"
+          - "period_end date nn | Earnings to"
+          - "currency currency nn | Currency"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "beneficiary_count int ro | Beneficiaries paid"
+          - "total_amount amount ro | Total net paid"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "journal_entry_id uuid ref=journal_entry ro | Summary posting"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+
+      - name: commission_payout_line
+        prefix: cpn
+        description: Amount paid to one beneficiary in a payout run. Append-only.
+        immutable: true
+        fr: [WAL-04]
+        columns:
+          - "commission_payout_run_id uuid nn fk=commission_payout_run idx | Run"
+          - "beneficiary_wallet_id uuid nn ref=wallet | Wallet paid"
+          - "beneficiary_agent_id uuid ref=agent | Agent paid"
+          - "earning_count int nn | Earnings included"
+          - "gross_amount amount nn | Gross commission"
+          - "tax_amount amount nn | Tax withheld"
+          - "net_amount amount nn | Net paid"
+          - "currency currency nn | Currency"
+          - "payout_status string(16) nn | PAID, FAILED, HELD"
+          - "wallet_transaction_id uuid ref=wallet_transaction | Payout transaction"
+          - "failure_reason string(255) | Failure reason"
+
+    apis:
+      - resource: commission-plans
+        path: /v1/commission-plans
+        table: commission_plan
+        ops: [list, get, create, update]
+        filters: [status, applies_to, currency, code]
+        actions:
+          - "GET /{id}/rules | Rules of the plan | | commission_rule[]"
+          - "POST /{id}/submit | Submit a draft plan for approval"
+          - "POST /{id}/approve | Approve and activate the plan (checker) | comment string(500)"
+          - "POST /{id}/retire | Retire the plan | effective_date date"
+          - "POST /{id}/clone | Create a new draft version from this plan | | commission_plan"
+          - "POST /{id}/simulate | Simulate commissions for a hypothetical transaction | txn_type enum:WalletTxnType nn, amount amount nn, channel enum:WalletChannel, agent_id uuid, kyc_tier int | commission_earning[]"
+
+      - resource: commission-rules
+        path: /v1/commission-rules
+        table: commission_rule
+        ops: [list, get, create, update, delete]
+        filters: [commission_plan_id, txn_type, beneficiary, is_active]
+
+      - resource: commission-earnings
+        path: /v1/commission-earnings
+        table: commission_earning
+        ops: [list, get]
+        filters: [commission_plan_id, wallet_transaction_id, beneficiary_agent_id, beneficiary_wallet_id, beneficiary, payout_due_on]
+
+      - resource: commission-payout-runs
+        path: /v1/commission-payout-runs
+        table: commission_payout_run
+        ops: [list, get, create]
+        filters: [status, payout_frequency]
+        actions:
+          - "POST /{id}/approve | Approve the payout run (checker) | comment string(500)"
+          - "POST /{id}/retry-failed | Retry failed payout lines"
+          - "GET /{id}/lines | Lines of the run | | commission_payout_line[]"
+
+    events:
+      - "wallets.commission_plan.activated | commission_plan | A commission plan version became active"
+      - "wallets.commission_earning.accrued | commission_earning | Commission was accrued on a transaction"
+      - "wallets.commission_payout_run.completed | commission_payout_run | A commission payout run finished"
+
+  # ------------------------------------------------------------------ biller-service
+  - name: biller-service
+    database: biller_db
+    description: >
+      Biller catalogue (utilities, telecom, TV, government, education), airtime and bundle products,
+      bill inquiry and validation, bill payments and airtime top-ups with provider integration and
+      retries, and periodic settlement to billers.
+    tables:
+      - name: biller
+        prefix: blr
+        description: A company or agency that customers can pay bills to
+        fr: [WAL-05]
+        columns:
+          - "biller_code string(32) nn uq | Biller code"
+          - "name string(160) nn | Display name"
+          - "category enum:BillerCategory nn | Category"
+          - "country country nn | Country"
+          - "currency currency nn | Currency"
+          - "integration_type enum:BillerIntegration nn | How payments reach the biller"
+          - "aggregator_name string(64) | Aggregator when integration is AGGREGATOR"
+          - "connection_config json hide | Endpoint and credentials reference (secrets in Vault)"
+          - "supports_inquiry bool nn default=true | Supports bill inquiry"
+          - "supports_partial_payment bool nn default=false | Accepts less than the amount due"
+          - "supports_overpayment bool nn default=false | Accepts more than the amount due"
+          - "min_amount amount | Minimum payment"
+          - "max_amount amount | Maximum payment"
+          - "account_reference_label string(64) | Label shown to the customer, e.g. Meter number"
+          - "account_reference_regex string(128) | Validation pattern"
+          - "settlement_wallet_id uuid ref=wallet | Biller collection wallet"
+          - "settlement_frequency enum:SettlementFrequency nn default=DAILY | Settlement frequency"
+          - "fee_bearer string(16) nn default=CUSTOMER | CUSTOMER, BILLER, SHARED"
+          - "logo_document_id uuid ref=document | Logo"
+          - "display_order int | Order in menus"
+          - "status enum:BillerStatus nn default=ACTIVE | Status"
+
+      - name: biller_product
+        prefix: bpr
+        description: A fixed product sold through a biller (airtime denomination, data bundle, TV package)
+        fr: [WAL-05]
+        columns:
+          - "biller_id uuid nn fk=biller idx | Biller"
+          - "product_code string(32) nn | Provider product code"
+          - "name string(160) nn | Name"
+          - "product_type string(32) nn | AIRTIME, DATA_BUNDLE, TV_PACKAGE, TOKEN, FIXED_BILL"
+          - "denomination amount | Fixed price (empty = open amount)"
+          - "currency currency nn | Currency"
+          - "validity_days int | Validity of the bundle"
+          - "description string(500) | Description"
+          - "is_active bool nn default=true | Active"
+        unique: [[biller_id, product_code]]
+
+      - name: bill_inquiry
+        prefix: biq
+        description: A bill lookup at the biller returning the customer name and amount due
+        fr: [WAL-05]
+        columns:
+          - "biller_id uuid nn fk=biller idx | Biller"
+          - "account_reference string(64) nn | Account / meter / policy number"
+          - "customer_name string(160) pii ro | Name returned by the biller"
+          - "amount_due amount ro | Amount due"
+          - "currency currency ro | Currency"
+          - "due_date date ro | Due date"
+          - "inquiry_reference string(64) ro | Biller inquiry reference to quote on payment"
+          - "response_code string(32) ro | Biller response code"
+          - "expires_at ts ro | Inquiry validity"
+          - "raw_response json hide | Raw biller response"
+
+      - name: biller_settlement
+        prefix: bst
+        description: Settlement of collected bill payments to a biller for a period
+        fr: [WAL-05]
+        columns:
+          - "biller_id uuid nn fk=biller idx | Biller"
+          - "period_start date nn | From"
+          - "period_end date nn | To"
+          - "currency currency nn | Currency"
+          - "payment_count int ro | Payments included"
+          - "gross_amount amount ro | Collected"
+          - "fee_amount amount ro | Fees retained"
+          - "commission_amount amount ro | Commissions retained"
+          - "net_amount amount ro | Net payable to the biller"
+          - "status enum:WalletSettlementStatus nn default=PENDING ro | Status"
+          - "payment_reference string(64) ro | Bank payment reference"
+          - "paid_at ts ro | Payment time"
+          - "report_document_id uuid ref=document ro | Settlement report"
+
+      - name: bill_payment
+        prefix: bpy
+        description: A payment of a bill from a wallet to a biller
+        fr: [WAL-05]
+        columns:
+          - "biller_id uuid nn fk=biller idx | Biller"
+          - "biller_product_id uuid fk=biller_product | Product (fixed bills and bundles)"
+          - "bill_inquiry_id uuid fk=bill_inquiry | Inquiry the payment is based on"
+          - "payer_wallet_id uuid nn ref=wallet idx | Paying wallet"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Wallet transaction"
+          - "account_reference string(64) nn | Account / meter number"
+          - "customer_name string(160) pii | Name on the bill"
+          - "amount amount nn | Amount paid"
+          - "currency currency nn | Currency"
+          - "fee_amount amount nn default=0 ro | Fee"
+          - "status enum:BillPaymentStatus nn default=INITIATED ro | Status"
+          - "provider_reference string(64) ro idx | Biller transaction reference"
+          - "token string(128) ro | Prepaid token (e.g. electricity) returned by the biller"
+          - "receipt_number string(64) ro | Biller receipt number"
+          - "retry_count int nn default=0 ro | Provider retries"
+          - "completed_at ts ro | Completion time"
+          - "failure_reason string(255) ro | Failure reason"
+          - "biller_settlement_id uuid fk=biller_settlement ro | Settlement that paid it out"
+          - "idempotency_key string(128) nn | Client key"
+        unique: [[tenant_id, idempotency_key]]
+
+      - name: airtime_topup
+        prefix: atu
+        description: An airtime or data top-up for any mobile number
+        fr: [WAL-05]
+        columns:
+          - "biller_id uuid nn fk=biller idx | Mobile operator"
+          - "biller_product_id uuid fk=biller_product | Bundle, if any"
+          - "payer_wallet_id uuid nn ref=wallet idx | Paying wallet"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Wallet transaction"
+          - "target_msisdn phone nn pii | Number topped up"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "status enum:BillPaymentStatus nn default=INITIATED ro | Status"
+          - "provider_reference string(64) ro | Operator reference"
+          - "completed_at ts ro | Completion time"
+          - "failure_reason string(255) ro | Failure reason"
+          - "idempotency_key string(128) nn | Client key"
+        unique: [[tenant_id, idempotency_key]]
+
+    apis:
+      - resource: billers
+        path: /v1/billers
+        table: biller
+        ops: [list, get, create, update]
+        filters: [category, country, status, integration_type, biller_code]
+        actions:
+          - "GET /{id}/products | Products of the biller | | biller_product[]"
+          - "POST /{id}/validate-reference | Validate an account reference and fetch the bill | account_reference string(64) nn | bill_inquiry"
+          - "POST /{id}/activate | Activate the biller"
+          - "POST /{id}/suspend | Suspend the biller | reason string(255) nn"
+
+      - resource: biller-products
+        path: /v1/biller-products
+        table: biller_product
+        ops: [list, get, create, update]
+        filters: [biller_id, product_type, is_active]
+
+      - resource: bill-inquiries
+        path: /v1/bill-inquiries
+        table: bill_inquiry
+        ops: [list, get, create]
+        filters: [biller_id, account_reference]
+
+      - resource: bill-payments
+        path: /v1/bill-payments
+        table: bill_payment
+        ops: [list, get, create]
+        filters: [biller_id, status, payer_wallet_id, account_reference, provider_reference, biller_settlement_id]
+        actions:
+          - "POST /{id}/retry | Retry a payment pending at the provider"
+          - "POST /{id}/reverse | Reverse a failed or disputed payment | reason string(255) nn"
+          - "GET /{id}/receipt | Receipt with token and biller reference | | none"
+
+      - resource: airtime-topups
+        path: /v1/airtime-topups
+        table: airtime_topup
+        ops: [list, get, create]
+        filters: [biller_id, status, payer_wallet_id, target_msisdn]
+        actions:
+          - "POST /{id}/retry | Retry a top-up pending at the operator"
+
+      - resource: biller-settlements
+        path: /v1/biller-settlements
+        table: biller_settlement
+        ops: [list, get, create]
+        filters: [biller_id, status]
+        actions:
+          - "POST /{id}/approve | Approve the settlement (checker) | comment string(500)"
+          - "POST /{id}/mark-paid | Record the bank payment of the settlement | payment_reference string(64) nn"
+          - "GET /{id}/payments | Payments included | | bill_payment[]"
+
+    events:
+      - "wallets.bill_payment.completed | bill_payment | A bill payment was accepted by the biller"
+      - "wallets.bill_payment.failed | bill_payment | A bill payment failed"
+      - "wallets.airtime_topup.completed | airtime_topup | An airtime top-up was delivered"
+      - "wallets.biller_settlement.paid | biller_settlement | A biller settlement was paid"
+
+  # ------------------------------------------------------------------ merchant-service
+  - name: merchant-service
+    database: merchant_db
+    description: >
+      Merchant onboarding and acceptance: stores, terminals, EMVCo static/dynamic QR codes and payment
+      links; merchant discount rate fee plans; periodic settlement to wallet or bank; refunds.
+    tables:
+      - name: merchant_fee_plan
+        prefix: mfp
+        description: Merchant discount rate and fees charged to merchants
+        fr: [WAL-06, PRC-02]
+        columns:
+          - "code string(32) nn uq | Plan code"
+          - "name string(120) nn | Name"
+          - "currency currency nn | Currency"
+          - "mdr_percentage rate nn default=0 | Merchant discount rate (0.01 = 1%)"
+          - "fixed_fee amount nn default=0 | Fixed fee per payment"
+          - "min_fee amount | Minimum fee per payment"
+          - "max_fee amount | Maximum fee per payment"
+          - "refund_fee amount | Fee per refund"
+          - "settlement_fee amount | Fee per settlement"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+          - "is_active bool nn default=true | Active"
+
+      - name: merchant
+        prefix: mer
+        description: A business accepting wallet payments
+        fr: [WAL-06, ONB-04]
+        columns:
+          - "merchant_code string(32) nn uq | Merchant code / till number"
+          - "legal_name string(200) nn | Registered name"
+          - "trading_name string(200) nn | Name shown to payers"
+          - "merchant_type enum:MerchantType nn | Merchant type"
+          - "mcc string(4) nn | ISO 18245 merchant category code"
+          - "customer_id uuid ref=customer | Business party record (KYB)"
+          - "registration_number string(64) | Company registration number"
+          - "tax_id string(64) pii | Tax identification number"
+          - "contact_name string(160) pii | Main contact"
+          - "contact_msisdn phone pii | Main contact mobile"
+          - "contact_email email pii | Main contact email"
+          - "website string(255) | Website"
+          - "address json | Registered address"
+          - "country country nn | Country"
+          - "settlement_wallet_id uuid ref=wallet | Merchant wallet receiving payments"
+          - "settlement_account_id uuid ref=deposit_account | Bank account for settlement sweeps"
+          - "settlement_frequency enum:SettlementFrequency nn default=DAILY | Settlement frequency"
+          - "merchant_fee_plan_id uuid fk=merchant_fee_plan | Fee plan"
+          - "acquiring_agent_id uuid ref=agent | Agent who onboarded the merchant"
+          - "risk_rating string(16) | LOW, MEDIUM, HIGH"
+          - "daily_limit amount | Maximum daily collections"
+          - "status enum:MerchantStatus nn default=ONBOARDING | Status"
+          - "status_reason string(255) | Reason for the current status"
+          - "onboarded_at ts ro | Activation time"
+          - "logo_document_id uuid ref=document | Logo"
+          - "metadata json | Client-defined key/value metadata"
+
+      - name: merchant_store
+        prefix: mst
+        description: A physical or online store of a merchant
+        fr: [WAL-06]
+        columns:
+          - "merchant_id uuid nn fk=merchant idx | Merchant"
+          - "store_code string(32) nn uq | Store code"
+          - "name string(160) nn | Name"
+          - "mcc string(4) | MCC override for this store"
+          - "address json | Address"
+          - "city string(100) | City"
+          - "country country nn | Country"
+          - "latitude rate | Latitude"
+          - "longitude rate | Longitude"
+          - "contact_msisdn phone pii | Store phone"
+          - "status enum:OutletStatus nn default=ACTIVE | Status"
+
+      - name: merchant_terminal
+        prefix: mtm
+        description: A POS, soft-POS, e-commerce or vending terminal of a merchant
+        fr: [WAL-06]
+        columns:
+          - "merchant_id uuid nn fk=merchant idx | Merchant"
+          - "merchant_store_id uuid fk=merchant_store idx | Store"
+          - "terminal_id string(16) nn uq | Terminal id"
+          - "terminal_type string(32) nn | POS, SOFT_POS, ECOMMERCE, VENDING"
+          - "serial_number string(64) | Serial number"
+          - "app_version string(32) | App version"
+          - "status enum:MerchantTerminalStatus nn default=ACTIVE | Status"
+          - "last_seen_at ts ro | Last heartbeat"
+
+      - name: merchant_qr
+        prefix: mqr
+        description: An EMVCo merchant-presented QR code (static or dynamic)
+        fr: [WAL-06, PAY-07]
+        columns:
+          - "merchant_id uuid nn fk=merchant idx | Merchant"
+          - "merchant_store_id uuid fk=merchant_store | Store"
+          - "merchant_terminal_id uuid fk=merchant_terminal | Terminal"
+          - "qr_type enum:QrType nn | Static (any amount) or dynamic (one payment)"
+          - "payload text ro | EMVCo QR payload string"
+          - "amount amount | Fixed amount for dynamic QR"
+          - "currency currency nn | Currency"
+          - "reference string(64) | Bill / order reference embedded in the QR"
+          - "expires_at ts | Expiry for dynamic QR"
+          - "scan_count int nn default=0 ro | Times paid"
+          - "is_active bool nn default=true | Active"
+
+      - name: merchant_payment_link
+        prefix: mpl
+        description: A shareable link that lets anyone pay a merchant
+        fr: [WAL-06, PAY-07]
+        columns:
+          - "merchant_id uuid nn fk=merchant idx | Merchant"
+          - "link_code string(32) nn uq | Short code in the URL"
+          - "url string(500) ro | Full payment URL"
+          - "amount amount | Fixed amount (empty = payer enters it)"
+          - "currency currency nn | Currency"
+          - "description string(255) | What is being paid for"
+          - "reference string(64) | Merchant order reference"
+          - "max_uses int | Maximum payments (empty = unlimited)"
+          - "use_count int nn default=0 ro | Payments received"
+          - "expires_at ts | Expiry"
+          - "is_active bool nn default=true | Active"
+
+      - name: merchant_settlement
+        prefix: mse
+        description: Periodic settlement of merchant collections net of fees and refunds
+        fr: [WAL-06]
+        columns:
+          - "merchant_id uuid nn fk=merchant idx | Merchant"
+          - "period_start date nn | From"
+          - "period_end date nn | To"
+          - "currency currency nn | Currency"
+          - "payment_count int ro | Payments included"
+          - "gross_amount amount ro | Gross collections"
+          - "mdr_amount amount ro | Merchant discount fees"
+          - "refund_amount amount ro | Refunds"
+          - "net_amount amount ro | Net payable"
+          - "status enum:WalletSettlementStatus nn default=PENDING ro | Status"
+          - "settlement_wallet_id uuid ref=wallet | Wallet credited"
+          - "payment_id uuid ref=payment ro | Bank payment when settled to bank"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Settlement transaction"
+          - "paid_at ts ro | Payment time"
+          - "report_document_id uuid ref=document ro | Settlement report"
+
+      - name: merchant_refund
+        prefix: mrf
+        description: A full or partial refund of a merchant payment
+        fr: [WAL-06]
+        columns:
+          - "merchant_id uuid nn fk=merchant idx | Merchant"
+          - "original_transaction_id uuid nn ref=wallet_transaction idx | Payment refunded"
+          - "amount amount nn | Refund amount"
+          - "currency currency nn | Currency"
+          - "reason string(255) nn | Reason"
+          - "status enum:MerchantRefundStatus nn default=REQUESTED ro | Status"
+          - "approved_by string(64) ro | Approver"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Refund transaction"
+          - "completed_at ts ro | Completion time"
+          - "idempotency_key string(128) nn | Client key"
+        unique: [[tenant_id, idempotency_key]]
+
+    apis:
+      - resource: merchants
+        path: /v1/merchants
+        table: merchant
+        ops: [list, get, create, update]
+        filters: [merchant_type, mcc, status, acquiring_agent_id, merchant_code, country, customer_id]
+        actions:
+          - "POST /{id}/activate | Activate the merchant | comment string(500)"
+          - "POST /{id}/suspend | Suspend acceptance | reason string(255) nn"
+          - "POST /{id}/terminate | Terminate the merchant | reason string(255) nn"
+          - "GET /{id}/stores | Stores of the merchant | | merchant_store[]"
+          - "GET /{id}/transactions | Payments received | | wallet_transaction[]"
+          - "GET /{id}/settlements | Settlements | | merchant_settlement[]"
+
+      - resource: merchant-stores
+        path: /v1/merchant-stores
+        table: merchant_store
+        ops: [list, get, create, update]
+        filters: [merchant_id, status, city]
+
+      - resource: merchant-terminals
+        path: /v1/merchant-terminals
+        table: merchant_terminal
+        ops: [list, get, create, update]
+        filters: [merchant_id, merchant_store_id, status, terminal_id]
+        actions:
+          - "POST /{id}/deactivate | Deactivate the terminal | reason string(255)"
+
+      - resource: merchant-qr-codes
+        path: /v1/merchant-qr-codes
+        table: merchant_qr
+        ops: [list, get, create]
+        filters: [merchant_id, merchant_store_id, qr_type, is_active]
+        actions:
+          - "POST /{id}/deactivate | Deactivate the QR code"
+          - "POST /decode | Decode a scanned EMVCo QR payload into payment details | payload text nn | merchant_qr"
+          - "POST /pay | Pay a merchant QR from a wallet | payload text nn, payer_wallet_id uuid nn, amount amount, currency currency, pin string(12) | wallet_transaction"
+
+      - resource: merchant-payment-links
+        path: /v1/merchant-payment-links
+        table: merchant_payment_link
+        ops: [list, get, create, update]
+        filters: [merchant_id, is_active, link_code]
+        actions:
+          - "POST /{id}/deactivate | Deactivate the link"
+
+      - resource: merchant-fee-plans
+        path: /v1/merchant-fee-plans
+        table: merchant_fee_plan
+        ops: [list, get, create, update]
+        filters: [is_active, currency]
+
+      - resource: merchant-settlements
+        path: /v1/merchant-settlements
+        table: merchant_settlement
+        ops: [list, get, create]
+        filters: [merchant_id, status]
+        actions:
+          - "POST /{id}/approve | Approve the settlement (checker) | comment string(500)"
+          - "POST /{id}/pay | Pay the net amount to the settlement wallet or bank account"
+          - "GET /{id}/report | Download the settlement report | | none"
+
+      - resource: merchant-refunds
+        path: /v1/merchant-refunds
+        table: merchant_refund
+        ops: [list, get, create]
+        filters: [merchant_id, status, original_transaction_id]
+        actions:
+          - "POST /{id}/approve | Approve and execute the refund | comment string(500)"
+          - "POST /{id}/reject | Reject the refund | reason string(255) nn"
+
+    events:
+      - "wallets.merchant.onboarded | merchant | A merchant was activated"
+      - "wallets.merchant.status_changed | merchant | A merchant was suspended or terminated"
+      - "wallets.merchant_settlement.paid | merchant_settlement | A merchant settlement was paid"
+      - "wallets.merchant_refund.completed | merchant_refund | A merchant refund was completed"
+
+  # ------------------------------------------------------------------ channel-service
+  - name: channel-service
+    database: channel_db
+    description: >
+      USSD and SMS channels for feature phones: per-tenant, per-language menu trees with versioning and
+      a simulator, MNO gateway callbacks and session state, SMS keyword commands, and an SMS log.
+    tables:
+      - name: ussd_menu
+        prefix: umn
+        description: A versioned USSD menu tree for one short code and language
+        fr: [WAL-03]
+        columns:
+          - "code string(32) nn | Menu code"
+          - "name string(120) nn | Name"
+          - "short_code string(16) nn | Dialled code, e.g. *123#"
+          - "language string(8) nn | Language"
+          - "version int nn default=1 | Version"
+          - "root_node_key string(64) nn | Key of the first node"
+          - "session_timeout_seconds int nn default=120 | Session timeout"
+          - "status enum:UssdMenuStatus nn default=DRAFT ro | Status"
+          - "published_at ts ro | Publication time"
+          - "published_by string(64) ro | Publisher"
+        unique: [[tenant_id, short_code, language, version]]
+
+      - name: ussd_menu_node
+        prefix: und
+        description: A screen in a USSD menu tree
+        fr: [WAL-03]
+        columns:
+          - "ussd_menu_id uuid nn fk=ussd_menu idx | Menu"
+          - "node_key string(64) nn | Node key"
+          - "parent_node_key string(64) | Parent node"
+          - "node_type enum:UssdNodeType nn | Node type"
+          - "option_number int | Option number in the parent menu"
+          - "label string(182) nn | Text shown (182-character USSD limit)"
+          - "prompt string(182) | Input prompt"
+          - "input_validation string(128) | Regex the input must match"
+          - "action_code string(64) | Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE"
+          - "next_node_key string(64) | Next node after input"
+          - "requires_pin bool nn default=false | Ask for the PIN before the action"
+          - "min_kyc_tier int | Hide the node below this tier"
+          - "display_order int | Order among siblings"
+        unique: [[ussd_menu_id, node_key]]
+
+      - name: ussd_session
+        prefix: uss
+        description: One USSD dialogue between a subscriber and the platform
+        fr: [WAL-03]
+        columns:
+          - "session_id string(64) nn uq | MNO session id"
+          - "msisdn phone nn pii idx | Subscriber"
+          - "short_code string(16) nn | Dialled code"
+          - "mno string(32) | Mobile network operator"
+          - "ussd_menu_id uuid fk=ussd_menu | Menu version served"
+          - "current_node_key string(64) ro | Current node"
+          - "wallet_id uuid ref=wallet | Resolved wallet"
+          - "language string(8) | Language"
+          - "status enum:UssdSessionStatus nn default=ACTIVE ro | Status"
+          - "context json hide | Inputs collected so far (PINs never stored)"
+          - "step_count int nn default=0 ro | Steps taken"
+          - "started_at ts nn default=now | Start"
+          - "ended_at ts ro | End"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Transaction created"
+
+      - name: ussd_session_step
+        prefix: ust
+        description: One request/response step of a USSD session. Append-only.
+        immutable: true
+        fr: [WAL-03]
+        columns:
+          - "ussd_session_id uuid nn fk=ussd_session idx | Session"
+          - "step_no int nn | Step number"
+          - "node_key string(64) nn | Node served"
+          - "user_input string(182) | Input received (masked on PIN nodes)"
+          - "response_text string(182) | Text returned"
+          - "latency_ms int | Processing time"
+        unique: [[ussd_session_id, step_no]]
+
+      - name: sms_command
+        prefix: smc
+        description: A keyword command customers can send by SMS (e.g. BAL, SEND)
+        fr: [WAL-03]
+        columns:
+          - "keyword string(32) nn | Keyword"
+          - "short_code string(16) nn | Short code"
+          - "language string(8) nn | Language"
+          - "action_code string(64) nn | Action executed"
+          - "syntax string(255) | Syntax, e.g. SEND amount msisdn pin"
+          - "help_text string(160) | Help reply"
+          - "requires_pin bool nn default=true | PIN required in the message"
+          - "is_active bool nn default=true | Active"
+        unique: [[tenant_id, keyword, short_code, language]]
+
+      - name: sms_message
+        prefix: sms
+        description: Inbound and outbound SMS log
+        fr: [WAL-03, NOT-01]
+        columns:
+          - "direction enum:SmsDirection nn | Direction"
+          - "msisdn phone nn pii idx | Subscriber"
+          - "short_code string(16) | Short code / sender id"
+          - "body text pii | Message text (PINs masked)"
+          - "status enum:SmsStatus nn | Status"
+          - "mno string(32) | Network operator"
+          - "provider string(32) | SMS gateway"
+          - "provider_message_id string(64) ro idx | Gateway message id"
+          - "sms_command_id uuid fk=sms_command | Command matched (inbound)"
+          - "wallet_transaction_id uuid ref=wallet_transaction | Related transaction"
+          - "notification_id uuid ref=notification | Related notification (outbound)"
+          - "segments int | SMS segments"
+          - "cost amount | Cost"
+          - "currency currency | Cost currency"
+          - "sent_at ts ro | Sent time"
+          - "delivered_at ts ro | Delivery time"
+          - "failure_reason string(255) ro | Failure reason"
+
+    apis:
+      - resource: ussd-menus
+        path: /v1/ussd-menus
+        table: ussd_menu
+        ops: [list, get, create, update]
+        filters: [short_code, language, status, code]
+        actions:
+          - "GET /{id}/nodes | Nodes of the menu | | ussd_menu_node[]"
+          - "POST /{id}/publish | Publish the menu version (maker-checker) | comment string(500)"
+          - "POST /{id}/clone | Create a new draft version | | ussd_menu"
+          - "POST /{id}/simulate | Run the menu in a simulator with scripted inputs | msisdn phone nn, inputs json nn | none"
+
+      - resource: ussd-menu-nodes
+        path: /v1/ussd-menu-nodes
+        table: ussd_menu_node
+        ops: [list, get, create, update, delete]
+        filters: [ussd_menu_id, node_type, parent_node_key]
+
+      - resource: ussd-sessions
+        path: /v1/ussd-sessions
+        table: ussd_session
+        ops: [list, get]
+        filters: [msisdn, status, short_code, wallet_id, mno]
+        actions:
+          - "GET /{id}/steps | Steps of the session | | ussd_session_step[]"
+          - "POST /callback | MNO gateway callback that processes one USSD request and returns the next screen | session_id string(64) nn, msisdn phone nn, short_code string(16) nn, input string(182), mno string(32) | none"
+
+      - resource: sms-commands
+        path: /v1/sms-commands
+        table: sms_command
+        ops: [list, get, create, update, delete]
+        filters: [keyword, short_code, is_active]
+
+      - resource: sms-messages
+        path: /v1/sms-messages
+        table: sms_message
+        ops: [list, get]
+        filters: [direction, msisdn, status, sms_command_id, provider_message_id]
+        actions:
+          - "POST /inbound | SMS gateway webhook for inbound messages | msisdn phone nn, short_code string(16) nn, body text nn, provider_message_id string(64), mno string(32) | none"
+          - "POST /delivery-reports | SMS gateway delivery receipts | provider_message_id string(64) nn, status enum:SmsStatus nn, failure_reason string(255) | none"
+
+    events:
+      - "wallets.ussd_session.completed | ussd_session | A USSD session ended"
+      - "wallets.sms_message.received | sms_message | An inbound SMS command was received"
+
+  # ------------------------------------------------------------------ disbursement-service
+  - name: disbursement-service
+    database: disbursement_db
+    description: >
+      Government-to-person, payroll, social-transfer and humanitarian bulk disbursements: programs with
+      funding wallets, batch upload, beneficiary validation (wallet exists, name match, tier, duplicates),
+      multi-level approval, execution with retries and reporting.
+    tables:
+      - name: disbursement_program
+        prefix: dpg
+        description: A disbursement program with its sponsor, funding wallet and rules
+        fr: [WAL-07]
+        columns:
+          - "code string(32) nn uq | Program code"
+          - "name string(160) nn | Name"
+          - "sponsor_name string(200) nn | Ministry, NGO or employer"
+          - "program_type string(32) nn | G2P, PAYROLL, SOCIAL_TRANSFER, HUMANITARIAN, B2C_PAYOUT"
+          - "funding_wallet_id uuid nn ref=wallet | Funding wallet"
+          - "currency currency nn | Currency"
+          - "max_amount_per_beneficiary amount | Cap per beneficiary per batch"
+          - "require_name_match bool nn default=true | Reject when the wallet name does not match"
+          - "require_kyc_tier int | Minimum KYC tier of the receiving wallet"
+          - "approval_levels int nn default=2 | Approvals needed per batch"
+          - "auto_create_wallets bool nn default=false | Open Tier 0 wallets for unregistered beneficiaries"
+          - "status enum:DisbursementProgramStatus nn default=DRAFT | Status"
+          - "start_date date | Start"
+          - "end_date date | End"
+
+      - name: disbursement_batch
+        prefix: dbt
+        description: A batch of payments to many beneficiaries under a program
+        fr: [WAL-07, PAY-01]
+        columns:
+          - "disbursement_program_id uuid nn fk=disbursement_program idx | Program"
+          - "batch_reference string(64) nn uq | Batch reference"
+          - "description string(255) | Description"
+          - "file_document_id uuid ref=document | Uploaded beneficiary file"
+          - "currency currency nn | Currency"
+          - "scheduled_for ts | Execution time"
+          - "status enum:DisbursementBatchStatus nn default=DRAFT ro | Status"
+          - "total_count int ro | Lines"
+          - "total_amount amount ro | Total amount"
+          - "valid_count int ro | Valid lines"
+          - "invalid_count int ro | Invalid lines"
+          - "paid_count int ro | Paid lines"
+          - "failed_count int ro | Failed lines"
+          - "paid_amount amount ro | Amount paid"
+          - "fee_amount amount ro | Fees"
+          - "approval_request_id uuid ref=approval_request ro | Approval workflow"
+          - "approved_by string(64) ro | Final approver"
+          - "started_at ts ro | Execution start"
+          - "completed_at ts ro | Execution end"
+
+      - name: disbursement_beneficiary
+        prefix: dbn
+        description: One beneficiary line of a disbursement batch
+        fr: [WAL-07]
+        columns:
+          - "disbursement_batch_id uuid nn fk=disbursement_batch idx | Batch"
+          - "line_no int nn | Line number in the file"
+          - "beneficiary_reference string(64) | Program beneficiary id"
+          - "msisdn phone pii idx | Mobile number"
+          - "national_id string(64) pii | National id"
+          - "full_name string(200) pii | Name in the file"
+          - "wallet_id uuid ref=wallet | Resolved wallet"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "narrative string(255) | Narrative"
+          - "validation_status enum:BeneficiaryValidation nn default=PENDING ro | Validation result"
+          - "validation_message string(255) ro | Validation detail"
+          - "matched_name string(200) pii ro | Name on the resolved wallet"
+          - "payout_status enum:BeneficiaryPayoutStatus nn default=PENDING ro | Payout status"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Payout transaction"
+          - "paid_at ts ro | Payment time"
+          - "failure_reason string(255) ro | Failure reason"
+        unique: [[disbursement_batch_id, line_no]]
+
+    apis:
+      - resource: disbursement-programs
+        path: /v1/disbursement-programs
+        table: disbursement_program
+        ops: [list, get, create, update]
+        filters: [status, program_type, code]
+        actions:
+          - "POST /{id}/activate | Activate the program"
+          - "POST /{id}/suspend | Suspend the program | reason string(255) nn"
+          - "POST /{id}/close | Close the program"
+          - "GET /{id}/batches | Batches of the program | | disbursement_batch[]"
+
+      - resource: disbursement-batches
+        path: /v1/disbursement-batches
+        table: disbursement_batch
+        ops: [list, get, create]
+        filters: [disbursement_program_id, status, batch_reference]
+        actions:
+          - "POST /{id}/upload | Attach a beneficiary file (CSV or XLSX) for parsing | file_document_id uuid nn"
+          - "POST /{id}/validate | Validate beneficiaries (wallet exists, name match, tier, duplicates)"
+          - "POST /{id}/submit | Submit the validated batch for approval"
+          - "POST /{id}/approve | Approve the batch at the current level | comment string(500)"
+          - "POST /{id}/reject | Reject the batch | reason string(255) nn"
+          - "POST /{id}/cancel | Cancel the batch before execution | reason string(255)"
+          - "POST /{id}/retry-failed | Retry failed lines"
+          - "GET /{id}/beneficiaries | Lines of the batch | | disbursement_beneficiary[]"
+          - "GET /{id}/report | Download the execution report | | none"
+
+      - resource: disbursement-beneficiaries
+        path: /v1/disbursement-beneficiaries
+        table: disbursement_beneficiary
+        ops: [list, get, create, update]
+        filters: [disbursement_batch_id, validation_status, payout_status, msisdn, wallet_id]
+
+    events:
+      - "wallets.disbursement_batch.approved | disbursement_batch | A disbursement batch was approved"
+      - "wallets.disbursement_batch.completed | disbursement_batch | A disbursement batch finished executing"
+      - "wallets.disbursement_beneficiary.paid | disbursement_beneficiary | A beneficiary was paid"
+
+  # ------------------------------------------------------------------ interop-service
+  - name: interop-service
+    database: interop_db
+    description: >
+      Interoperability with national switches, Mojaloop hubs and partner wallets/banks: participant
+      directory, party lookup, quotes, two-phase transfers (reserve, commit, abort) with liquidity and
+      net-debit-cap control, and inbound callbacks.
+    tables:
+      - name: interop_switch
+        prefix: isw
+        description: A connected switch or partner network
+        fr: [WAL-08]
+        columns:
+          - "code string(32) nn uq | Switch code"
+          - "name string(160) nn | Name"
+          - "switch_type enum:InteropSwitchType nn | Type"
+          - "country country | Country"
+          - "currency currency | Settlement currency"
+          - "protocol string(32) nn | MOJALOOP_FSPIOP, ISO20022, ISO8583, PROPRIETARY_API"
+          - "participant_id string(64) nn | Our FSP / participant id on the switch"
+          - "endpoint_url string(500) | Switch endpoint"
+          - "connection_config json hide | Certificates and credentials reference (secrets in Vault)"
+          - "settlement_account_id uuid ref=ledger_account | Settlement position account"
+          - "liquidity_limit amount | Prefunded liquidity"
+          - "net_debit_cap amount | Net debit cap set by the switch"
+          - "is_active bool nn default=true | Active"
+
+      - name: interop_participant
+        prefix: ipt
+        description: Another wallet, bank or MFI reachable through a switch
+        fr: [WAL-08]
+        columns:
+          - "interop_switch_id uuid nn fk=interop_switch idx | Switch"
+          - "fsp_id string(64) nn | Participant id"
+          - "name string(160) nn | Name"
+          - "participant_type string(32) nn | WALLET, BANK, MFI"
+          - "currency currency | Currency"
+          - "supports_lookup bool nn default=true | Supports party lookup"
+          - "is_active bool nn default=true | Active"
+        unique: [[interop_switch_id, fsp_id]]
+
+      - name: interop_quote
+        prefix: iqt
+        description: A quote for an interoperable transfer (fees and amounts agreed before transfer)
+        fr: [WAL-08]
+        columns:
+          - "interop_switch_id uuid nn fk=interop_switch idx | Switch"
+          - "quote_id string(64) nn uq | Quote id on the switch"
+          - "direction enum:InteropDirection nn | Outbound or inbound"
+          - "payer_wallet_id uuid ref=wallet | Payer wallet (outbound)"
+          - "payee_party_type string(32) nn | MSISDN, ACCOUNT, ALIAS"
+          - "payee_party_id string(64) nn pii | Payee identifier"
+          - "payee_fsp_id string(64) | Payee participant"
+          - "payee_name string(160) pii ro | Payee name returned by lookup"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "payee_receive_amount amount ro | Amount the payee receives"
+          - "fee_amount amount ro | Fees"
+          - "ilp_condition string(128) ro | Cryptographic condition for the transfer"
+          - "status enum:InteropQuoteStatus nn default=PENDING ro | Status"
+          - "expires_at ts ro | Expiry"
+
+      - name: interop_transfer
+        prefix: itr
+        description: A two-phase transfer to or from another participant
+        fr: [WAL-08, PAY-01]
+        columns:
+          - "interop_switch_id uuid nn fk=interop_switch idx | Switch"
+          - "interop_quote_id uuid fk=interop_quote | Quote"
+          - "transfer_id string(64) nn uq | Transfer id on the switch"
+          - "direction enum:InteropDirection nn | Outbound or inbound"
+          - "payer_wallet_id uuid ref=wallet | Payer wallet (outbound)"
+          - "payee_wallet_id uuid ref=wallet | Payee wallet (inbound)"
+          - "counterparty_fsp_id string(64) nn | Other participant"
+          - "counterparty_party_id string(64) pii | Other party identifier"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "status enum:InteropTransferStatus nn default=QUOTE_REQUESTED ro | Status"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Wallet transaction"
+          - "hold_id uuid ref=hold ro | Funds reserved while pending"
+          - "fulfilment string(128) hide | Fulfilment proving the commit"
+          - "expires_at ts ro | Expiry"
+          - "completed_at ts ro | Completion time"
+          - "error_code string(32) ro | Switch error code"
+          - "error_description string(255) ro | Error description"
+          - "idempotency_key string(128) nn | Client key"
+        unique: [[tenant_id, idempotency_key]]
+
+    apis:
+      - resource: interop-switches
+        path: /v1/interop-switches
+        table: interop_switch
+        ops: [list, get, create, update]
+        filters: [switch_type, country, is_active]
+        actions:
+          - "GET /{id}/participants | Participants reachable through the switch | | interop_participant[]"
+          - "POST /{id}/sync-participants | Refresh the participant directory from the switch"
+          - "GET /{id}/position | Net position and liquidity against the net debit cap | | none"
+
+      - resource: interop-participants
+        path: /v1/interop-participants
+        table: interop_participant
+        ops: [list, get, create, update]
+        filters: [interop_switch_id, fsp_id, participant_type, is_active]
+
+      - resource: interop-quotes
+        path: /v1/interop-quotes
+        table: interop_quote
+        ops: [list, get, create]
+        filters: [interop_switch_id, direction, payer_wallet_id, status]
+        actions:
+          - "POST /lookup-party | Resolve a payee by MSISDN or alias through the switch | interop_switch_id uuid nn, party_type string(32) nn, party_id string(64) nn | none"
+
+      - resource: interop-transfers
+        path: /v1/interop-transfers
+        table: interop_transfer
+        ops: [list, get, create]
+        filters: [interop_switch_id, direction, status, payer_wallet_id, payee_wallet_id, counterparty_fsp_id]
+        actions:
+          - "POST /{id}/abort | Abort a reserved transfer | reason string(255) nn"
+          - "POST /callbacks/quotes | Inbound quote request or response from the switch | payload json nn | none"
+          - "POST /callbacks/transfers | Inbound transfer prepare or fulfil from the switch | payload json nn | none"
+
+    events:
+      - "wallets.interop_quote.received | interop_quote | An inbound quote request was received"
+      - "wallets.interop_transfer.committed | interop_transfer | An interoperable transfer was committed"
+      - "wallets.interop_transfer.aborted | interop_transfer | An interoperable transfer was aborted or expired"

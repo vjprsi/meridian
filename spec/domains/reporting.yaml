@@ -1,0 +1,698 @@
+domain: reporting
+title: Regulatory Reporting, Analytics and AI
+phase: 4
+description: >
+  Country-pack regulatory reporting (definitions, runs, validation, submission, CRS/FATCA), self-service
+  analytics over the lakehouse (dashboards, saved queries, exports, data shares), and the AI platform:
+  model registry and model risk management, deployments and monitoring, copilots with a full audit trail,
+  and the LLM gateway policy.
+
+enums:
+  ReportFrequency: [DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, AD_HOC, EVENT_DRIVEN]
+  ReportFormat: [XBRL, XML, CSV, XLSX, JSON, PDF, FIXED_WIDTH]
+  ReportDefinitionStatus: [DRAFT, ACTIVE, DEPRECATED]
+  ReportTrigger: [SCHEDULE, MANUAL, API, RESUBMISSION]
+  ReportSubmissionStatus: [PENDING_APPROVAL, APPROVED, SUBMITTED, ACKNOWLEDGED, ACCEPTED, REJECTED, RESUBMISSION_REQUIRED]
+  ReportSubmissionChannel: [API, SFTP, PORTAL_UPLOAD, EMAIL, MANUAL]
+  ReportValidationSeverity: [INFO, WARNING, ERROR]
+  ReportAdjustmentStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
+  CrsReportingRegime: [CRS, FATCA]
+  CrsAccountHolderType: [INDIVIDUAL, ENTITY, CONTROLLING_PERSON]
+  AnalyticsVisibility: [PRIVATE, TEAM, TENANT]
+  AnalyticsWidgetType: [KPI, LINE, BAR, AREA, PIE, TABLE, MAP, FUNNEL, HEATMAP, TEXT]
+  DataExportFormat: [CSV, PARQUET, JSON, XLSX]
+  DataShareTarget: [S3, GCS, AZURE_BLOB, SNOWFLAKE, BIGQUERY, DATABRICKS, SFTP, ICEBERG_REST]
+  DataShareStatus: [ACTIVE, PAUSED, FAILED, REVOKED]
+  MlModelType: [FRAUD, CREDIT_SCORE, AML, COLLECTIONS, CHURN, PROPENSITY, RECON_MATCHING, DOCUMENT_AI, LLM]
+  MlModelStatus: [ACTIVE, UNDER_REVIEW, RETIRED]
+  ModelRiskTier: [LOW, MEDIUM, HIGH]
+  MlModelVersionStatus: [TRAINING, VALIDATING, PENDING_APPROVAL, APPROVED, REJECTED, DEPLOYED, RETIRED]
+  ModelDeploymentMode: [SHADOW, CANARY, CHAMPION, CHALLENGER]
+  ModelDeploymentStatus: [DEPLOYING, ACTIVE, ROLLED_BACK, RETIRED]
+  CopilotType: [OPERATIONS, DISPUTES, AML_INVESTIGATION, COLLECTIONS, RECONCILIATION, PRODUCT_STUDIO,
+                CUSTOMER_ASSISTANT, DEVELOPER, SERVICING]
+  CopilotStatus: [DRAFT, ACTIVE, DISABLED]
+  CopilotOutcome: [ANSWERED, ACTION_PROPOSED, ACTION_APPROVED, ACTION_REJECTED, REFUSED, HANDED_OFF, ERROR]
+
+services:
+  # ------------------------------------------------------------------ regulatory-reporting-service
+  - name: regulatory-reporting-service
+    database: regreport_db
+    description: >
+      Catalogue of regulatory reports per country pack with versioned templates and data mappings; runs
+      reports reproducibly from lakehouse snapshots, validates them, tracks manual adjustments and submits
+      to regulators with acknowledgements. Also builds CRS and FATCA records.
+    tables:
+      - name: report_definition
+        prefix: rpd
+        description: A regulatory or statutory report in a country pack (e.g. central-bank balance sheet, liquidity, CRS)
+        fr: [REG-01]
+        columns:
+          - "code string(64) nn uq | Report code, e.g. NG-CBN-MBR300"
+          - "name string(255) nn | Report name"
+          - "country_pack string(16) nn idx | Country pack code, e.g. NG, KE, BR, GB"
+          - "jurisdiction country nn | Jurisdiction"
+          - "regulator string(64) nn | Regulator / authority"
+          - "report_family string(40) nn | BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER"
+          - "frequency enum:ReportFrequency nn | Frequency"
+          - "format enum:ReportFormat nn | Submission format"
+          - "deadline_rule string(64) | Deadline expression, e.g. T+15BD or MONTH_END+10D"
+          - "status enum:ReportDefinitionStatus nn default=DRAFT | Status"
+          - "active_version int ro | Version currently in force"
+          - "description text | Purpose and scope"
+          - "owner string(64) | Accountable owner (finance / compliance)"
+
+      - name: report_definition_version
+        prefix: rdv
+        description: Versioned template, data mapping and validation rules of a report definition
+        fr: [REG-01, REG-02, REG-03]
+        columns:
+          - "report_definition_id uuid nn fk=report_definition idx | Report definition"
+          - "definition_version int nn | Version number"
+          - "template_document_id uuid ref=document | Template file (XBRL taxonomy entry point, XLSX, XSD)"
+          - "mapping json nn | Cell/element to dataset mapping (SQL or dbt model references)"
+          - "validation_rules json | Validation rules (cross-checks, totals, regulator formulas)"
+          - "xbrl_taxonomy string(255) | XBRL taxonomy and entry point, when XBRL"
+          - "effective_from date nn | First reporting date this version applies to"
+          - "effective_to date | Last reporting date"
+          - "status enum:ReportDefinitionStatus nn default=DRAFT | Status"
+          - "change_note text | What changed"
+          - "approved_by string(64) ro | Approver"
+        unique: [[report_definition_id, definition_version]]
+
+      - name: report_schedule
+        prefix: rsc
+        description: Automatic schedule for producing a report for a legal entity
+        fr: [REG-02]
+        columns:
+          - "report_definition_id uuid nn fk=report_definition idx | Report definition"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "cron string(64) nn | Cron expression"
+          - "timezone string(64) nn | IANA time zone"
+          - "next_run_at ts ro | Next scheduled run"
+          - "notify json | Recipients notified on completion or failure"
+          - "auto_submit bool nn default=false | Submit automatically after validation and approval"
+          - "is_active bool nn default=true | Active"
+
+      - name: report_run
+        prefix: rpr
+        description: One production of a report for a legal entity and reporting date, reproducible from a data snapshot
+        fr: [REG-01, REG-02]
+        columns:
+          - "report_definition_id uuid nn fk=report_definition idx | Report definition"
+          - "report_definition_version_id uuid nn fk=report_definition_version | Version used"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "as_of_date date nn | Reporting date"
+          - "period_start date | Period start"
+          - "period_end date | Period end"
+          - "parameters json | Run parameters"
+          - "trigger enum:ReportTrigger nn default=MANUAL | What started the run"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "data_snapshot_id string(128) ro | Lakehouse (Iceberg) snapshot id for reproducibility"
+          - "row_count int ro | Rows / facts produced"
+          - "error_count int ro | Validation errors"
+          - "warning_count int ro | Validation warnings"
+          - "supersedes_run_id uuid fk=report_run | Run this one corrects (resubmission)"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Failure details"
+        indexes: [[report_definition_id, legal_entity_id, as_of_date]]
+
+      - name: report_output
+        prefix: rpo
+        description: A file produced by a report run. Append-only.
+        immutable: true
+        fr: [REG-02, REG-03]
+        columns:
+          - "report_run_id uuid nn fk=report_run idx | Run"
+          - "format enum:ReportFormat nn | Format"
+          - "document_id uuid nn ref=document | Stored file"
+          - "file_name string(255) nn | File name"
+          - "size_bytes bigint nn | Size"
+          - "sha256 string(64) nn | Checksum"
+          - "record_count int | Rows / facts in the file"
+
+      - name: report_validation_result
+        prefix: rvr
+        description: Result of one validation rule on a report run. Append-only.
+        immutable: true
+        fr: [REG-02]
+        columns:
+          - "report_run_id uuid nn fk=report_run idx | Run"
+          - "rule_code string(64) nn | Rule code"
+          - "severity enum:ReportValidationSeverity nn | Severity"
+          - "message string(1000) nn | Message"
+          - "cell_ref string(128) | Cell / XBRL element reference"
+          - "expected_value string(255) | Expected value"
+          - "actual_value string(255) | Actual value"
+
+      - name: report_adjustment
+        prefix: rad
+        description: Manual adjustment (overlay) to a reported value, with justification and approval
+        fr: [REG-02]
+        columns:
+          - "report_run_id uuid nn fk=report_run idx | Run"
+          - "cell_ref string(128) nn | Cell / XBRL element adjusted"
+          - "original_value string(255) | Value produced by the mapping"
+          - "adjusted_value string(255) nn | Value reported"
+          - "reason text nn | Justification"
+          - "status enum:ReportAdjustmentStatus nn default=PENDING_APPROVAL ro | Status"
+          - "adjusted_by string(64) ro | Maker"
+          - "approved_by string(64) ro | Checker"
+
+      - name: report_submission
+        prefix: rsb
+        description: Submission of a report output to the regulator, with acknowledgement tracking
+        fr: [REG-02]
+        columns:
+          - "report_run_id uuid nn fk=report_run idx | Run"
+          - "report_output_id uuid nn fk=report_output | File submitted"
+          - "channel enum:ReportSubmissionChannel nn | Submission channel"
+          - "status enum:ReportSubmissionStatus nn default=PENDING_APPROVAL | Status"
+          - "approval_request_id uuid ref=approval_request | Sign-off workflow"
+          - "approved_by string(64) ro | Sign-off"
+          - "submitted_at ts ro | Submission time"
+          - "submitted_by string(64) ro | Submitter"
+          - "regulator_reference string(128) | Regulator receipt / reference"
+          - "acknowledgement_document_id uuid ref=document | Acknowledgement file"
+          - "acknowledged_at ts ro | Acknowledgement time"
+          - "rejection_reason text | Regulator rejection reason"
+          - "deadline_at ts | Submission deadline"
+
+      - name: crs_fatca_record
+        prefix: crs
+        description: Reportable account record for CRS or FATCA for one account holder and year
+        fr: [REG-01]
+        columns:
+          - "regime enum:CrsReportingRegime nn | CRS or FATCA"
+          - "reporting_year int nn | Reporting year"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Reporting financial institution"
+          - "customer_id uuid nn ref=customer idx | Account holder"
+          - "account_ref string(64) nn | Account number reported"
+          - "account_holder_type enum:CrsAccountHolderType nn | Holder type"
+          - "holder_name string(255) nn pii | Holder name"
+          - "holder_address text pii | Holder address"
+          - "date_of_birth date pii | Date of birth (individuals)"
+          - "tax_residence country nn | Reportable jurisdiction"
+          - "tin string(64) pii | Taxpayer identification number"
+          - "account_balance amount nn | Year-end balance"
+          - "currency currency nn | Currency"
+          - "gross_interest amount | Gross interest paid"
+          - "gross_dividends amount | Gross dividends"
+          - "gross_proceeds amount | Gross proceeds"
+          - "is_undocumented bool nn default=false | Undocumented account"
+          - "is_closed bool nn default=false | Account closed in the year"
+          - "report_run_id uuid fk=report_run | Run that reported it"
+        unique: [[tenant_id, regime, reporting_year, account_ref, customer_id]]
+
+    apis:
+      - resource: report-definitions
+        path: /v1/reporting/definitions
+        table: report_definition
+        ops: [list, get, create, update]
+        filters: [country_pack, jurisdiction, regulator, report_family, frequency, status]
+        actions:
+          - "GET /{id}/versions | Versions of the definition | | report_definition_version[]"
+          - "POST /{id}/versions | Create a new version | template_document_id uuid, mapping json nn, validation_rules json, xbrl_taxonomy string(255), effective_from date nn, change_note text | report_definition_version"
+          - "POST /{id}/publish | Make a version active (maker-checker) | definition_version int nn"
+          - "POST /{id}/deprecate | Deprecate the report | reason text nn"
+          - "GET /{id}/calendar | Upcoming due dates per legal entity | | none"
+
+      - resource: report-definition-versions
+        path: /v1/reporting/definition-versions
+        table: report_definition_version
+        ops: [list, get]
+        filters: [report_definition_id, status]
+
+      - resource: report-schedules
+        path: /v1/reporting/schedules
+        table: report_schedule
+        ops: [list, get, create, update, delete]
+        filters: [report_definition_id, legal_entity_id, is_active]
+
+      - resource: report-runs
+        path: /v1/reporting/runs
+        table: report_run
+        ops: [list, get, create]
+        filters: [report_definition_id, legal_entity_id, as_of_date, status, trigger]
+        actions:
+          - "GET /{id}/outputs | Files produced | | report_output[]"
+          - "GET /{id}/validation-results | Validation results | | report_validation_result[]"
+          - "GET /{id}/adjustments | Manual adjustments | | report_adjustment[]"
+          - "POST /{id}/adjustments | Record a manual adjustment | cell_ref string(128) nn, adjusted_value string(255) nn, reason text nn | report_adjustment"
+          - "POST /{id}/rerun | Produce a corrected run superseding this one | parameters json | report_run"
+          - "POST /{id}/cancel | Cancel a queued or running run | reason string(255)"
+          - "GET /{id}/drilldown | Source records behind a reported cell (?cell_ref=) | | none"
+
+      - resource: report-outputs
+        path: /v1/reporting/outputs
+        table: report_output
+        ops: [list, get]
+        filters: [report_run_id, format]
+        actions:
+          - "GET /{id}/download | Signed URL to download the file | | none"
+
+      - resource: report-adjustments
+        path: /v1/reporting/adjustments
+        table: report_adjustment
+        ops: [list, get]
+        filters: [report_run_id, status]
+        actions:
+          - "POST /{id}/approve | Approve the adjustment (checker) | comment text"
+          - "POST /{id}/reject | Reject the adjustment | reason text nn"
+
+      - resource: report-submissions
+        path: /v1/reporting/submissions
+        table: report_submission
+        ops: [list, get, create]
+        filters: [report_run_id, status, channel]
+        actions:
+          - "POST /{id}/approve | Sign off the submission | comment text"
+          - "POST /{id}/submit | Submit to the regulator | | report_submission"
+          - "POST /{id}/acknowledge | Record the regulator acknowledgement | regulator_reference string(128) nn, acknowledgement_document_id uuid"
+          - "POST /{id}/record-rejection | Record a regulator rejection | rejection_reason text nn"
+
+      - resource: crs-fatca-records
+        path: /v1/reporting/crs-fatca-records
+        table: crs_fatca_record
+        ops: [list, get, update]
+        filters: [regime, reporting_year, legal_entity_id, customer_id, tax_residence, is_undocumented]
+        actions:
+          - "POST /generate | Build reportable records for a year | regime enum:CrsReportingRegime nn, reporting_year int nn, legal_entity_id uuid nn | report_run"
+
+    events:
+      - "reporting.report_definition.published | report_definition_version | A report definition version was published"
+      - "reporting.report_run.completed | report_run | A report run finished"
+      - "reporting.report_run.failed | report_run | A report run failed"
+      - "reporting.report_run.validation_failed | report_run | A report run has validation errors"
+      - "reporting.report_submission.submitted | report_submission | A report was submitted to the regulator"
+      - "reporting.report_submission.acknowledged | report_submission | The regulator acknowledged a submission"
+      - "reporting.report_submission.rejected | report_submission | The regulator rejected a submission"
+      - "reporting.report_submission.deadline_approaching | report_submission | A submission deadline is near"
+
+  # ------------------------------------------------------------------ analytics-service
+  - name: analytics-service
+    database: analytics_db
+    description: >
+      Self-service analytics over the Iceberg lakehouse via Trino: KPI catalogue, dashboards and widgets
+      embedded in the console, saved parameterised queries, exports and scheduled data shares to the
+      tenant's warehouse or bucket.
+    tables:
+      - name: analytics_kpi
+        prefix: kpi
+        description: Governed KPI definition (formula, unit, dataset, owner)
+        columns:
+          - "code string(64) nn uq | KPI code, e.g. ACTIVE_ACCOUNTS_30D"
+          - "name string(160) nn | KPI name"
+          - "description text | Business definition"
+          - "formula text nn | SQL expression over the canonical model"
+          - "dataset string(128) nn | Source dataset / dbt model"
+          - "unit string(16) nn | COUNT, AMOUNT, PERCENT, BPS, DAYS"
+          - "owner string(64) | Data owner"
+          - "is_certified bool nn default=false | Certified by data governance"
+
+      - name: analytics_saved_query
+        prefix: asq
+        description: Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)
+        columns:
+          - "name string(160) nn | Query name"
+          - "description text | Description"
+          - "sql text nn | Trino SQL (read-only, row-level security applied)"
+          - "dataset string(128) | Primary dataset"
+          - "parameters json | Parameter definitions"
+          - "owner string(64) nn | Owner"
+          - "visibility enum:AnalyticsVisibility nn default=PRIVATE | Sharing"
+          - "last_run_at ts ro | Last run"
+
+      - name: analytics_dashboard
+        prefix: adb
+        description: Dashboard shown in the console (portfolio, liquidity, delinquency, agents, fraud, ...)
+        columns:
+          - "name string(160) nn | Dashboard name"
+          - "description text | Description"
+          - "owner string(64) nn | Owner"
+          - "visibility enum:AnalyticsVisibility nn default=PRIVATE | Sharing"
+          - "is_system bool nn default=false | Shipped with the platform"
+          - "layout json | Grid layout"
+          - "filters json | Global filters"
+          - "refresh_seconds int nn default=300 | Auto-refresh interval"
+          - "tags json | Tags"
+
+      - name: analytics_widget
+        prefix: awg
+        description: A chart, table or KPI tile on a dashboard
+        columns:
+          - "analytics_dashboard_id uuid nn fk=analytics_dashboard idx | Dashboard"
+          - "title string(160) nn | Title"
+          - "widget_type enum:AnalyticsWidgetType nn | Widget type"
+          - "analytics_saved_query_id uuid fk=analytics_saved_query | Query feeding the widget"
+          - "analytics_kpi_id uuid fk=analytics_kpi | KPI feeding the widget"
+          - "config json | Visual configuration (axes, series, thresholds)"
+          - "position json nn | Position and size on the grid"
+
+      - name: analytics_export_job
+        prefix: aej
+        description: Export of a saved query's results to a file
+        columns:
+          - "analytics_saved_query_id uuid nn fk=analytics_saved_query idx | Query"
+          - "format enum:DataExportFormat nn | Format"
+          - "parameters json | Parameter values"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "row_count bigint ro | Rows exported"
+          - "document_id uuid ref=document ro | Result file"
+          - "requested_by string(64) ro | Requester"
+          - "expires_at ts ro | Download expiry"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Error"
+
+      - name: analytics_data_share
+        prefix: ads
+        description: Scheduled delivery of datasets to the tenant's warehouse, bucket or Iceberg catalog
+        columns:
+          - "name string(160) nn | Share name"
+          - "target enum:DataShareTarget nn | Destination type"
+          - "target_config json nn secret | Destination connection details (stored encrypted)"
+          - "datasets json nn | Datasets / tables shared"
+          - "schedule_cron string(64) | Delivery schedule (empty = continuous)"
+          - "status enum:DataShareStatus nn default=ACTIVE | Status"
+          - "last_delivery_at ts ro | Last successful delivery"
+          - "last_error text ro | Last error"
+
+    apis:
+      - resource: analytics-kpis
+        path: /v1/analytics/kpis
+        table: analytics_kpi
+        ops: [list, get, create, update]
+        filters: [code, dataset, is_certified]
+        actions:
+          - "GET /{id}/values | KPI values over time (?from=&to=&granularity=) | | none"
+          - "POST /{id}/certify | Certify the KPI definition | comment text"
+
+      - resource: analytics-saved-queries
+        path: /v1/analytics/saved-queries
+        table: analytics_saved_query
+        ops: [list, get, create, update, delete]
+        filters: [owner, visibility, dataset]
+        actions:
+          - "POST /{id}/run | Run the query and return rows (?limit=) | parameters json | none"
+          - "POST /{id}/export | Export results to a file | format enum:DataExportFormat nn, parameters json | analytics_export_job"
+          - "POST /validate | Validate SQL without running it | sql text nn | none"
+
+      - resource: analytics-dashboards
+        path: /v1/analytics/dashboards
+        table: analytics_dashboard
+        ops: [list, get, create, update, delete]
+        filters: [owner, visibility, is_system]
+        actions:
+          - "GET /{id}/widgets | Widgets of the dashboard | | analytics_widget[]"
+          - "POST /{id}/duplicate | Copy a dashboard | name string(160) nn | analytics_dashboard"
+          - "GET /{id}/embed-token | Short-lived token to embed the dashboard | | none"
+
+      - resource: analytics-widgets
+        path: /v1/analytics/widgets
+        table: analytics_widget
+        ops: [list, get, create, update, delete]
+        filters: [analytics_dashboard_id, widget_type]
+        actions:
+          - "GET /{id}/data | Data for the widget with dashboard filters applied | | none"
+
+      - resource: analytics-exports
+        path: /v1/analytics/exports
+        table: analytics_export_job
+        ops: [list, get, create]
+        filters: [analytics_saved_query_id, status, requested_by]
+        actions:
+          - "GET /{id}/download | Signed URL to download | | none"
+          - "POST /{id}/cancel | Cancel the export | reason string(255)"
+
+      - resource: analytics-data-shares
+        path: /v1/analytics/data-shares
+        table: analytics_data_share
+        ops: [list, get, create, update, delete]
+        filters: [target, status]
+        actions:
+          - "POST /{id}/pause | Pause deliveries | reason string(255)"
+          - "POST /{id}/resume | Resume deliveries"
+          - "POST /{id}/test | Test connectivity and permissions | | none"
+
+    events:
+      - "reporting.analytics_export.completed | analytics_export_job | An analytics export finished"
+      - "reporting.data_share.failed | analytics_data_share | A data share delivery failed"
+      - "reporting.analytics_kpi.certified | analytics_kpi | A KPI definition was certified"
+
+  # ------------------------------------------------------------------ ai-platform-service
+  - name: ai-platform-service
+    database: ai_db
+    description: >
+      Model registry with model risk management (validation, bias tests, explainability, approval),
+      deployments in shadow/canary/champion-challenger with monitoring, feature catalogue, copilot
+      definitions, an immutable audit of every copilot interaction, and LLM gateway policies.
+    tables:
+      - name: ml_model
+        prefix: mlm
+        description: A registered ML model (fraud, credit, AML, collections, LLM, ...) under model risk governance
+        fr: [AI-02]
+        columns:
+          - "code string(64) nn uq | Model code"
+          - "name string(160) nn | Model name"
+          - "model_type enum:MlModelType nn | Use case"
+          - "description text | Description"
+          - "intended_use text | Intended use and limitations"
+          - "risk_tier enum:ModelRiskTier nn default=MEDIUM | Model risk tier"
+          - "owner_team string(64) nn | Owning team"
+          - "validator string(64) | Independent model validator"
+          - "status enum:MlModelStatus nn default=ACTIVE | Status"
+          - "champion_version_id uuid ro | Version currently serving as champion"
+          - "next_review_date date | Periodic model review date"
+
+      - name: ml_model_version
+        prefix: mmv
+        description: A trained version with metrics, bias tests, explainability and approval record
+        fr: [AI-02, LND-01]
+        columns:
+          - "ml_model_id uuid nn fk=ml_model idx | Model"
+          - "model_version string(32) nn | Version label"
+          - "status enum:MlModelVersionStatus nn default=TRAINING | Status"
+          - "framework string(32) | XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM"
+          - "artifact_uri string(500) nn | Model artifact location (MLflow)"
+          - "artifact_sha256 string(64) nn | Artifact checksum"
+          - "training_dataset_ref string(255) | Training data snapshot reference"
+          - "training_from date | Training window start"
+          - "training_to date | Training window end"
+          - "features json | Feature list"
+          - "hyperparameters json | Hyperparameters"
+          - "metrics json | Offline metrics (AUC, KS, Gini, precision at k, calibration)"
+          - "bias_test_results json | Fairness tests across protected attributes"
+          - "explainability_document_id uuid ref=document | Explainability report (SHAP)"
+          - "validation_document_id uuid ref=document | Independent validation report"
+          - "approval_request_id uuid ref=approval_request | Approval workflow"
+          - "approved_by string(64) ro | Approver"
+          - "approved_at ts ro | Approval time"
+        unique: [[ml_model_id, model_version]]
+
+      - name: model_deployment
+        prefix: mdp
+        description: Deployment of a model version to an environment in shadow, canary, champion or challenger mode
+        fr: [AI-02]
+        columns:
+          - "ml_model_version_id uuid nn fk=ml_model_version idx | Version deployed"
+          - "environment string(32) nn | SANDBOX, STAGING, PRODUCTION"
+          - "mode enum:ModelDeploymentMode nn | Serving mode"
+          - "traffic_percent int nn default=0 | Share of traffic served (canary / challenger)"
+          - "status enum:ModelDeploymentStatus nn default=DEPLOYING ro | Status"
+          - "endpoint string(255) ro | Serving endpoint (KServe)"
+          - "deployed_by string(64) ro | Deployer"
+          - "deployed_at ts ro | Deployment time"
+          - "retired_at ts ro | Retirement time"
+
+      - name: model_monitoring_metric
+        prefix: mmm
+        description: Monitoring measurement of a deployed model (drift, stability, performance, latency). Append-only.
+        immutable: true
+        fr: [AI-02]
+        columns:
+          - "model_deployment_id uuid nn fk=model_deployment idx | Deployment"
+          - "metric_name string(40) nn | PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE"
+          - "metric_value rate nn | Value"
+          - "threshold rate | Alert threshold"
+          - "breached bool nn default=false | Threshold breached"
+          - "window_start ts nn | Window start"
+          - "window_end ts nn | Window end"
+
+      - name: ml_feature_definition
+        prefix: mfd
+        description: Feature catalogue entry (Feast) used by fraud, credit and AML models
+        fr: [AI-02]
+        columns:
+          - "name string(128) nn uq | Feature name, e.g. customer_txn_count_24h"
+          - "entity string(40) nn | CUSTOMER, ACCOUNT, CARD, DEVICE, MERCHANT"
+          - "dtype string(16) nn | INT, FLOAT, STRING, BOOL, LIST"
+          - "description text | Definition"
+          - "source_dataset string(128) nn | Source stream or table"
+          - "online bool nn default=true | Served online for real-time scoring"
+          - "freshness_sla_seconds int | Maximum staleness"
+          - "owner string(64) | Owner"
+          - "contains_pii bool nn default=false | Derived from personal data"
+
+      - name: copilot_definition
+        prefix: cpd
+        description: A copilot configuration (purpose, tools, model, guardrails, human-approval rules)
+        fr: [AI-01, SRV-02]
+        columns:
+          - "code string(64) nn uq | Copilot code"
+          - "name string(160) nn | Name"
+          - "copilot_type enum:CopilotType nn | Use case"
+          - "description text | Description"
+          - "system_prompt_ref string(255) nn | Versioned prompt reference"
+          - "model_alias string(64) nn | Model alias resolved by the LLM gateway"
+          - "allowed_tools json nn | Read / write tools the copilot may call"
+          - "data_scopes json | Data the copilot may read"
+          - "requires_human_approval bool nn default=true | Any write action needs a human approval"
+          - "llm_gateway_policy_id uuid fk=llm_gateway_policy | Gateway policy applied"
+          - "status enum:CopilotStatus nn default=DRAFT | Status"
+
+      - name: copilot_interaction
+        prefix: cpi
+        description: Immutable audit of one copilot turn (redacted prompt/response, hashes, tool calls, citations, outcome)
+        immutable: true
+        fr: [AI-01, SRV-02]
+        columns:
+          - "copilot_definition_id uuid nn fk=copilot_definition idx | Copilot"
+          - "user_id uuid ref=app_user idx | Staff user (empty for customer assistant)"
+          - "customer_id uuid ref=customer idx | Customer, for the customer assistant or a customer context"
+          - "session_id string(64) nn idx | Conversation session"
+          - "subject_type string(40) | Business object in context, e.g. AML_CASE, DISPUTE, PAYMENT"
+          - "subject_id uuid | Business object id"
+          - "prompt_redacted text nn | Prompt after PII redaction"
+          - "response_redacted text | Response after PII redaction"
+          - "prompt_sha256 string(64) nn | Hash of the original prompt"
+          - "response_sha256 string(64) | Hash of the original response"
+          - "model_name string(64) nn | Model used"
+          - "model_version string(64) | Model version"
+          - "input_tokens int | Input tokens"
+          - "output_tokens int | Output tokens"
+          - "latency_ms int | End-to-end latency"
+          - "tool_calls json | Tools called with arguments and results summary"
+          - "citations json | Sources cited (records, documents, events)"
+          - "outcome enum:CopilotOutcome nn | Outcome"
+          - "approved_by string(64) | Human who approved a proposed action"
+          - "cost amount | Cost of the call"
+          - "cost_currency currency | Cost currency"
+
+      - name: ai_copilot_feedback
+        prefix: cpf
+        description: User rating and comment on a copilot interaction. Append-only.
+        immutable: true
+        fr: [AI-01]
+        columns:
+          - "copilot_interaction_id uuid nn fk=copilot_interaction idx | Interaction"
+          - "rating int nn | 1-5"
+          - "comment text | Comment"
+          - "given_by string(64) nn | User"
+
+      - name: llm_gateway_policy
+        prefix: lgp
+        description: Tenant policy for LLM use (opt-in, allowed models, PII redaction, residency, budgets, logging)
+        fr: [AI-01]
+        columns:
+          - "name string(160) nn | Policy name"
+          - "tenant_opt_in bool nn default=false | Tenant has opted in to LLM features"
+          - "allowed_models json nn | Models / providers allowed"
+          - "self_hosted_only bool nn default=false | Only self-hosted models (data cannot leave region)"
+          - "data_residency_region string(32) | Region requests must stay in"
+          - "pii_redaction bool nn default=true | Redact PII before sending"
+          - "redaction_entities json | Entity types redacted (names, account numbers, PAN, national ids)"
+          - "max_tokens_per_request int nn default=8000 | Per-request token cap"
+          - "monthly_token_budget bigint | Monthly token budget"
+          - "log_prompts bool nn default=true | Store redacted prompts in the audit log"
+          - "retention_days int nn default=365 | Interaction retention"
+          - "is_active bool nn default=true | Active"
+
+    apis:
+      - resource: ml-models
+        path: /v1/ai/models
+        table: ml_model
+        ops: [list, get, create, update]
+        filters: [model_type, status, risk_tier, owner_team, code]
+        actions:
+          - "GET /{id}/versions | Versions of the model | | ml_model_version[]"
+          - "GET /{id}/deployments | Deployments across versions | | model_deployment[]"
+
+      - resource: ml-model-versions
+        path: /v1/ai/model-versions
+        table: ml_model_version
+        ops: [list, get, create, update]
+        filters: [ml_model_id, status, framework]
+        actions:
+          - "POST /{id}/submit-for-approval | Send to model risk for approval | comment text"
+          - "POST /{id}/approve | Approve the version (model risk committee) | comment text"
+          - "POST /{id}/reject | Reject the version | reason text nn"
+          - "POST /{id}/deploy | Deploy to an environment | environment string(32) nn, mode enum:ModelDeploymentMode nn, traffic_percent int nn | model_deployment"
+
+      - resource: model-deployments
+        path: /v1/ai/deployments
+        table: model_deployment
+        ops: [list, get, update]
+        filters: [ml_model_version_id, environment, mode, status]
+        actions:
+          - "POST /{id}/promote | Promote a challenger to champion | comment text"
+          - "POST /{id}/rollback | Roll back the deployment | reason text nn"
+          - "POST /{id}/retire | Retire the deployment | reason text"
+          - "GET /{id}/metrics | Monitoring metrics | | model_monitoring_metric[]"
+
+      - resource: model-metrics
+        path: /v1/ai/model-metrics
+        table: model_monitoring_metric
+        ops: [list, get, create]
+        filters: [model_deployment_id, metric_name, breached]
+
+      - resource: ml-features
+        path: /v1/ai/features
+        table: ml_feature_definition
+        ops: [list, get, create, update]
+        filters: [entity, online, contains_pii]
+
+      - resource: copilots
+        path: /v1/ai/copilots
+        table: copilot_definition
+        ops: [list, get, create, update]
+        filters: [copilot_type, status, code]
+        actions:
+          - "POST /{id}/ask | Ask the copilot (Accept text/event-stream to stream) | prompt text nn, session_id string(64), subject_type string(40), subject_id uuid | copilot_interaction"
+          - "POST /{id}/activate | Activate the copilot | comment text"
+          - "POST /{id}/disable | Disable the copilot | reason text nn"
+
+      - resource: copilot-interactions
+        path: /v1/ai/copilot-interactions
+        table: copilot_interaction
+        ops: [list, get]
+        filters: [copilot_definition_id, user_id, customer_id, session_id, subject_type, subject_id, outcome]
+        actions:
+          - "POST /{id}/approve-action | Approve the action proposed in this turn | comment text | copilot_interaction"
+          - "POST /{id}/reject-action | Reject the proposed action | reason text nn | copilot_interaction"
+          - "POST /{id}/feedback | Rate the answer | rating int nn, comment text | ai_copilot_feedback"
+
+      - resource: ai-copilot-feedback
+        path: /v1/ai/copilot-feedback
+        table: ai_copilot_feedback
+        ops: [list, get]
+        filters: [copilot_interaction_id, rating]
+
+      - resource: llm-gateway-policies
+        path: /v1/ai/llm-policies
+        table: llm_gateway_policy
+        ops: [list, get, create, update]
+        filters: [is_active, tenant_opt_in]
+        actions:
+          - "GET /{id}/usage | Token usage and cost against budget | | none"
+
+    events:
+      - "reporting.ml_model_version.approved | ml_model_version | A model version was approved"
+      - "reporting.ml_model_version.rejected | ml_model_version | A model version was rejected"
+      - "reporting.model_deployment.activated | model_deployment | A model deployment went live"
+      - "reporting.model_deployment.rolled_back | model_deployment | A model deployment was rolled back"
+      - "reporting.model_metric.breached | model_monitoring_metric | A model monitoring threshold was breached"
+      - "reporting.copilot_interaction.recorded | copilot_interaction | A copilot interaction was recorded"
+      - "reporting.copilot_action.approved | copilot_interaction | A human approved a copilot-proposed action"
+      - "reporting.llm_budget.exceeded | llm_gateway_policy | A tenant exceeded its LLM token budget"

@@ -1,0 +1,227 @@
+# Roadmap steps, cross-cutting tasks, requirements, decisions and risks.
+# Feeds tracker/Meridian_Tracker.xlsx. Status/owner/dates edited in Excel are preserved on regeneration.
+
+steps:
+  - {id: S01, phase: 0, name: "Specification foundation", status: Done,
+     deliverables: "Conventions, spec format, generator (DDL, OpenAPI, AsyncAPI, data dictionary), Excel tracker, ledger domain as reference spec",
+     exit: "python tools/generate.py runs clean; tracker opens in Excel"}
+  - {id: S02, phase: 0, name: "Complete domain specifications", status: Done,
+     deliverables: "All domains specified: platform, party, product, accounts, payments, wallets, cards, lending, risk, reporting/servicing — every table, column, enum, API and event",
+     exit: "Strict validation passes with zero unresolved references; every requirement mapped (no Gap rows)"}
+  - {id: S03, phase: 0, name: "Apps and screens catalogue", status: Done,
+     deliverables: "All web/mobile apps and screens with the API operations each screen calls",
+     exit: "Every screen references existing operation ids"}
+  - {id: S04, phase: 0, name: "Monorepo and build scaffold", status: Not started,
+     deliverables: "Gradle multi-module monorepo, version catalog, shared libs (meridian-common, meridian-events, meridian-test), OpenAPI codegen per service, ArchUnit rules, CI pipeline",
+     exit: "All service modules compile from generated interfaces; CI green"}
+  - {id: S05, phase: 0, name: "Local developer platform", status: In progress,
+     deliverables: "docker-compose: PostgreSQL 18, Kafka + Schema Registry, Temporal, Keycloak, Redis, OpenSearch, Grafana LGTM stack; seed tenant",
+     exit: "make up brings the full stack up in under 5 minutes"}
+  - {id: S06, phase: 1, name: "Platform services",
+     deliverables: "Tenant, identity and access, configuration, audit, reference data, documents, workflow/approvals, webhooks, notifications",
+     exit: "A tenant can be provisioned, users log in with SSO+MFA, every change is audited"}
+  - {id: S07, phase: 1, name: "Ledger and GL services",
+     deliverables: "ledger-service, gl-service with property-based tests, hash chain and continuous verification",
+     exit: "1,000 TPS sustained in staging; zero unbalanced journals"}
+  - {id: S08, phase: 1, name: "Party, onboarding and KYC",
+     deliverables: "customer-service, onboarding-service, kyc-service with provider adapters",
+     exit: "Tier 0 to Tier 3 onboarding works end to end in sandbox"}
+  - {id: S09, phase: 1, name: "Product Studio and pricing",
+     deliverables: "product-catalog-service, pricing/rules engine, WASM scripting runtime, simulation",
+     exit: "A deposit and a wallet product can be designed, simulated and published with maker-checker"}
+  - {id: S10, phase: 1, name: "Deposits and accounts",
+     deliverables: "deposit-service: current, savings, term deposits, interest accrual, fees, statements, standing orders",
+     exit: "Accounts accrue and capitalise interest correctly against golden test sets"}
+  - {id: S11, phase: 1, name: "Back-office console v1 and developer portal v1",
+     deliverables: "Console: customer 360, accounts, ledger explorer, approvals; developer portal with sandbox and keys",
+     exit: "Ops can service a customer end to end from the console"}
+  - {id: S12, phase: 2, name: "Payments hub",
+     deliverables: "payment-service, rail adapters (2 launch-market rails), ISO 20022 model, payees, mandates, FX quotes, bulk payments",
+     exit: "Instant payment out and in on the launch rail in staging"}
+  - {id: S13, phase: 2, name: "Wallets, agents and USSD",
+     deliverables: "wallet-service, agent-network-service, commission-service, biller-service, merchant-service, USSD gateway",
+     exit: "Cash-in, cash-out, P2P, bill pay and commissions work on USSD and app"}
+  - {id: S14, phase: 2, name: "Risk, limits and notifications",
+     deliverables: "fraud-service (rules), transaction monitoring, sanctions screening, case management, limits service, notification channels",
+     exit: "Every payment is screened and scored before release"}
+  - {id: S15, phase: 2, name: "Customer and agent apps",
+     deliverables: "Customer mobile app (iOS/Android), web banking, agent app with offline mode",
+     exit: "Pilot users complete all Flow A, C, E journeys"}
+  - {id: S16, phase: 2, name: "Pilot go-live",
+     deliverables: "Production cell, runbooks, SOC 2 Type I, regulator sign-off, pilot client live",
+     exit: "Gate G2 passed"}
+  - {id: S17, phase: 3, name: "Card issuing and processing",
+     deliverables: "card-service, authorization-service, clearing, tokenisation, 3DS, disputes, PCI vault, scheme certification",
+     exit: "Gate G3: PCI DSS L1 + scheme certification, first live card program"}
+  - {id: S18, phase: 3, name: "Lending and collections",
+     deliverables: "loan-origination-service, loan-service, credit lines, collections-service, collateral, bureau adapters",
+     exit: "Loan lifecycle (Flow D) passes golden tests"}
+  - {id: S19, phase: 3, name: "Reconciliation, ML fraud, business and merchant channels",
+     deliverables: "reconciliation-service, ML fraud scoring, business banking portal, merchant app",
+     exit: "Daily reconciliation auto-match rate above 98%"}
+  - {id: S20, phase: 4, name: "Multi-region cells and deployment models",
+     deliverables: "Active-active regions, cell router, dedicated and self-hosted packaging",
+     exit: "Region failover RTO under 5 minutes, RPO 0 in game day"}
+  - {id: S21, phase: 4, name: "Regulatory packs, open banking and AI copilots",
+     deliverables: "Regulatory reporting packs for 3 countries, open banking APIs, ops/disputes/AML copilots",
+     exit: "Reports accepted by regulators in test submissions"}
+  - {id: S22, phase: 4, name: "GA hardening and certification",
+     deliverables: "SOC 2 Type II, ISO 27001, 10,000 TPS per cell load test, pen test, documentation",
+     exit: "Gate G4: general availability"}
+
+tasks:
+  - {id: PLT-SPEC-CONVENTIONS, phase: 0, type: Spec, title: "Engineering conventions (docs/CONVENTIONS.md)", priority: P0, est: 1, status: Done}
+  - {id: PLT-SPEC-GENERATOR, phase: 0, type: Tooling, title: "Spec generator: DDL, OpenAPI 3.1, AsyncAPI 3, data dictionary", priority: P0, est: 3, status: Done}
+  - {id: PLT-SPEC-TRACKER, phase: 0, type: Tooling, title: "Excel tracker generation with preserved manual edits", priority: P0, est: 1, status: Done}
+  - {id: PLT-MONOREPO, phase: 0, type: Platform, title: "Gradle monorepo, version catalog, convention plugins", priority: P0, est: 3}
+  - {id: PLT-LIB-COMMON, phase: 0, type: Platform, title: "meridian-common: Money/BigDecimal, ids (UUIDv7), errors (RFC 9457), tenancy context, idempotency", priority: P0, est: 5, depends: PLT-MONOREPO}
+  - {id: PLT-LIB-EVENTS, phase: 0, type: Platform, title: "meridian-events: CloudEvents envelope, outbox writer, Kafka publisher/consumer base", priority: P0, est: 4, depends: PLT-MONOREPO}
+  - {id: PLT-LIB-TEST, phase: 0, type: Platform, title: "meridian-test: Testcontainers fixtures, tenant fixtures, contract test helpers", priority: P0, est: 3, depends: PLT-MONOREPO}
+  - {id: PLT-CODEGEN, phase: 0, type: Platform, title: "OpenAPI → Spring interfaces/DTO generation per service in Gradle", priority: P0, est: 2, depends: PLT-MONOREPO}
+  - {id: PLT-CI, phase: 0, type: DevOps, title: "CI: build, test, Spotless, Error Prone, Semgrep, Trivy, SBOM, image signing", priority: P0, est: 4, depends: PLT-MONOREPO}
+  - {id: PLT-DEV-TOOLS, phase: 0, type: DevOps, title: "Portable toolchain in D:/DevTools:JDK 25, Gradle 9.8, kubectl, Helm, OpenTofu, Temporal CLI, k9s, DBeaver (tools/setup/install-dev-tools.ps1)", priority: P0, est: 1, status: Done}
+  - {id: PLT-LOCAL-STACK, phase: 0, type: DevOps, title: "Docker Compose local stack (infra/local): Postgres 18, Kafka, Schema Registry, Kafka console, Valkey, Temporal, Keycloak, OpenSearch, Grafana LGTM, Mailpit, SeaweedFS S3", priority: P0, est: 3, status: Done}
+  - {id: PLT-DB-VERIFY, phase: 0, type: Test, title: "Apply all generated DDL to Postgres 18 (tools/db/apply-ddl.sh) + behaviour smoke test: RLS, append-only, optimistic locking, enums, custom fields", priority: P0, est: 1, status: Done}
+  - {id: PLT-CUSTOM-FIELDS, phase: 0, type: Spec, title: "custom_field_1..5 on every table and API (writable, filterable) + custom_field_definition per tenant", priority: P0, est: 1, status: Done}
+  - {id: PLT-SEED-TENANT, phase: 1, type: Platform, title: "Seed data: demo tenant, legal entity, branch, currencies, calendars, products, users in Keycloak", priority: P1, est: 3}
+  - {id: PLT-IAC, phase: 1, type: DevOps, title: "Terraform/OpenTofu cell module: EKS, networking, Postgres, MSK, KMS, observability", priority: P0, est: 10}
+  - {id: PLT-GITOPS, phase: 1, type: DevOps, title: "Argo CD + Argo Rollouts canary per cell", priority: P1, est: 5, depends: PLT-IAC}
+  - {id: PLT-GATEWAY, phase: 1, type: Platform, title: "API gateway (Envoy/Kong): OAuth2, rate limits, idempotency, mTLS", priority: P0, est: 5}
+  - {id: PLT-OBSERVABILITY, phase: 1, type: Platform, title: "OpenTelemetry collector, dashboards, SLO alerts per service", priority: P1, est: 4}
+  - {id: PLT-DATA-LAKE, phase: 2, type: Data, title: "Debezium → Kafka → Iceberg lakehouse, dbt canonical model", priority: P1, est: 10}
+  - {id: PLT-DESIGN-SYSTEM, phase: 1, type: Web/Mobile, title: "Design system: tokens, React components, theming, dark mode, WCAG 2.2 AA", priority: P0, est: 10}
+  - {id: PLT-SDKS, phase: 2, type: API, title: "Generated SDKs: TypeScript, Python, Java, Go, C#, Swift, Kotlin + CLI", priority: P1, est: 8}
+  - {id: PLT-SANDBOX, phase: 1, type: API, title: "Sandbox with test clocks and scheme/rail simulators", priority: P1, est: 10}
+  - {id: PLT-MCP, phase: 3, type: API, title: "MCP server over sandbox and read APIs for AI agents", priority: P2, est: 4}
+
+requirements:
+  LED-01: {module: Ledger, priority: M, text: "Immutable, append-only double-entry journal; every posting balances per currency and legal entity"}
+  LED-02: {module: Ledger, priority: M, text: "Real-time balances: ledger, available, pending, reserved, overdraft limit; read under 10 ms"}
+  LED-03: {module: Ledger, priority: M, text: "Multi-currency accounts and postings with FX rate snapshot per entry"}
+  LED-04: {module: Ledger, priority: M, text: "Holds and authorisations with expiry, partial capture, incremental auth and reversal"}
+  LED-05: {module: Ledger, priority: M, text: "Value date vs booking date; back- and future-dated postings with interest recalculation"}
+  LED-06: {module: Ledger, priority: M, text: "Idempotency key on every posting; exactly-once booking under retries"}
+  LED-07: {module: Ledger, priority: M, text: "Reversals and corrections only by compensating entries"}
+  LED-08: {module: Ledger, priority: S, text: "Sub-ledgers and virtual accounts with unlimited hierarchy"}
+  LED-09: {module: Ledger, priority: S, text: "Point-in-time balance query for any account at any timestamp"}
+  GL-01: {module: General ledger, priority: M, text: "Configurable chart of accounts per legal entity; product-to-GL mapping rules"}
+  GL-02: {module: General ledger, priority: M, text: "Automatic GL posting from every ledger event; real-time trial balance"}
+  GL-03: {module: General ledger, priority: M, text: "Continuous close; EOD, EOM and EOY are logical cut-offs"}
+  GL-04: {module: General ledger, priority: M, text: "Accruals, IFRS 9 ECL provisions (stages 1-3), income recognition"}
+  GL-05: {module: General ledger, priority: S, text: "Inter-entity and inter-branch accounting with automatic due-to/due-from"}
+  GL-06: {module: General ledger, priority: S, text: "Export to ERP (SAP, Oracle, NetSuite) via files and APIs"}
+  REC-01: {module: Reconciliation, priority: M, text: "Automated matching of ledger vs scheme files, bank statements and partner reports"}
+  REC-02: {module: Reconciliation, priority: M, text: "Configurable match rules with tolerances; exception queues with ageing"}
+  REC-03: {module: Reconciliation, priority: S, text: "AI-suggested matches for unresolved breaks"}
+  CIF-01: {module: Customer, priority: M, text: "Individuals, sole traders, companies, trusts, groups; relationships (director, UBO, guardian, joint holder)"}
+  CIF-02: {module: Customer, priority: M, text: "Single customer view across products and entities"}
+  CIF-03: {module: Customer, priority: M, text: "Tiered KYC levels with limits per tier"}
+  CIF-04: {module: Customer, priority: M, text: "Consent management and data privacy: access, export, erasure where lawful"}
+  CIF-05: {module: Customer, priority: S, text: "Household and group views for relationship managers"}
+  ONB-01: {module: Onboarding, priority: M, text: "Configurable onboarding journeys per product and country (no-code flow builder)"}
+  ONB-02: {module: Onboarding, priority: M, text: "Document capture, OCR, liveness and face match via pluggable providers"}
+  ONB-03: {module: Onboarding, priority: M, text: "Sanctions, PEP and adverse-media screening at onboarding and on change"}
+  ONB-04: {module: Onboarding, priority: M, text: "KYB with registry lookups and UBO discovery"}
+  ONB-05: {module: Onboarding, priority: M, text: "Onboarding risk scoring; auto-approve, refer or reject"}
+  ONB-06: {module: Onboarding, priority: S, text: "Periodic KYC refresh and document-expiry workflows"}
+  ONB-07: {module: Onboarding, priority: S, text: "Agent-assisted onboarding offline with later sync"}
+  PRD-01: {module: Product Studio, priority: M, text: "Versioned product catalogue; accounts stay on their version until migrated"}
+  PRD-02: {module: Product Studio, priority: M, text: "No-code templates for deposits, wallets, cards, loans, lines, BNPL, overdraft"}
+  PRD-03: {module: Product Studio, priority: M, text: "Parameters: interest, fees, limits, eligibility, tax, statements, dormancy"}
+  PRD-04: {module: Product Studio, priority: M, text: "Rules engine for pricing and eligibility (DMN-compatible decision tables)"}
+  PRD-05: {module: Product Studio, priority: S, text: "Sandboxed WASM scripts for custom behaviour with simulation"}
+  PRD-06: {module: Product Studio, priority: M, text: "Product simulation over a multi-year horizon before launch"}
+  PRD-07: {module: Product Studio, priority: S, text: "Bundles and packages"}
+  PRC-01: {module: Pricing, priority: M, text: "Daily interest accrual with day-count conventions and compounding"}
+  PRC-02: {module: Pricing, priority: M, text: "Event, periodic and tiered fees, waivers, caps"}
+  PRC-03: {module: Pricing, priority: M, text: "Withholding tax and VAT/GST on fees per jurisdiction"}
+  PRC-04: {module: Pricing, priority: S, text: "Relationship pricing and promotional rates"}
+  DEP-01: {module: Deposits, priority: M, text: "Account lifecycle: open, active, dormant, frozen, blocked, closed"}
+  DEP-02: {module: Deposits, priority: M, text: "Joint accounts, minor accounts, authorised signatories with mandates"}
+  DEP-03: {module: Deposits, priority: M, text: "Term deposits: placement, auto-renewal, premature withdrawal penalties"}
+  DEP-04: {module: Deposits, priority: M, text: "Arranged and unarranged overdrafts with limits and interest"}
+  DEP-05: {module: Deposits, priority: M, text: "Standing orders, scheduled and recurring payments, sweeps and savings pots"}
+  DEP-06: {module: Deposits, priority: M, text: "Statements (PDF, CSV, camt.053), interest certificates, tax documents"}
+  DEP-07: {module: Deposits, priority: S, text: "Cheque handling where required"}
+  LND-01: {module: Lending, priority: M, text: "Origination: application, bureau, scoring, decision, offer, e-signature, disbursement"}
+  LND-02: {module: Lending, priority: M, text: "Repayment schedules: annuity, equal principal, bullet, balloon, interest-only, custom"}
+  LND-03: {module: Lending, priority: M, text: "Revolving credit lines and credit cards on the same engine"}
+  LND-04: {module: Lending, priority: M, text: "Configurable repayment allocation waterfall"}
+  LND-05: {module: Lending, priority: M, text: "Delinquency buckets, penalty interest, restructuring, write-off and recovery"}
+  LND-06: {module: Lending, priority: S, text: "BNPL, merchant financing, secured loans with collateral registry"}
+  LND-07: {module: Lending, priority: S, text: "Nano-loans for wallet users scored on transaction data"}
+  COL-01: {module: Collections, priority: M, text: "Collection strategies by segment and DPD; automated reminders"}
+  COL-02: {module: Collections, priority: M, text: "Agent work queues, promises to pay, payment plans"}
+  COL-03: {module: Collections, priority: S, text: "AI next-best-action and contact timing"}
+  PAY-01: {module: Payments, priority: M, text: "Internal transfers, P2P by alias, bulk payments, payroll"}
+  PAY-02: {module: Payments, priority: M, text: "Pluggable rail adapters (SEPA, FPS, FedNow, ACH, RTP, UPI, PIX, SPEI, NIP, mobile money, SWIFT)"}
+  PAY-03: {module: Payments, priority: M, text: "ISO 20022 canonical model; legacy mapping at the edge"}
+  PAY-04: {module: Payments, priority: M, text: "Payment state machine with automated repair queues"}
+  PAY-05: {module: Payments, priority: M, text: "Cut-offs, holiday calendars and liquidity checks per rail"}
+  PAY-06: {module: Payments, priority: M, text: "Cross-border and remittance with FX quotes, corridors and partner routing"}
+  PAY-07: {module: Payments, priority: S, text: "Request-to-pay, QR, payment links, direct debits and mandates"}
+  PAY-08: {module: Payments, priority: S, text: "Smart routing by cost, speed and success rate"}
+  WAL-01: {module: Wallets, priority: M, text: "Wallet types: customer, merchant, agent, super-agent, float, commission, escrow, G2P"}
+  WAL-02: {module: Wallets, priority: M, text: "Cash-in, cash-out, float transfer and agent rebalancing"}
+  WAL-03: {module: Wallets, priority: M, text: "USSD and SMS channels with configurable menus"}
+  WAL-04: {module: Wallets, priority: M, text: "Multi-level commission engine"}
+  WAL-05: {module: Wallets, priority: M, text: "Bill payments and airtime via biller catalogue"}
+  WAL-06: {module: Wallets, priority: S, text: "Merchant payments, QR, settlement to bank"}
+  WAL-07: {module: Wallets, priority: S, text: "G2P and bulk disbursements with beneficiary validation"}
+  WAL-08: {module: Wallets, priority: S, text: "Interoperability with national switches and other wallets"}
+  CRD-01: {module: Cards, priority: M, text: "Card programs: debit, prepaid, credit, corporate; BIN and scheme configuration"}
+  CRD-02: {module: Cards, priority: M, text: "Virtual card issuing under 1 second; physical cards via bureau"}
+  CRD-03: {module: Cards, priority: M, text: "Real-time authorisation inside the ledger with controls, fraud score, JIT funding"}
+  CRD-04: {module: Cards, priority: M, text: "Card controls: MCC, merchant, country, channel, velocity, amount; freeze"}
+  CRD-05: {module: Cards, priority: M, text: "Tokenisation (Apple/Google/Samsung Pay); 3-D Secure 2.x"}
+  CRD-06: {module: Cards, priority: M, text: "Clearing and settlement files; presentment matching; interchange"}
+  CRD-07: {module: Cards, priority: M, text: "PIN management, lifecycle, PCI card data vault"}
+  CRD-08: {module: Cards, priority: M, text: "Disputes and chargebacks per scheme rules"}
+  CRD-09: {module: Cards, priority: S, text: "Stand-in processing with later reconciliation"}
+  FRM-01: {module: Fraud and AML, priority: M, text: "Real-time transaction scoring (rules + ML) before authorisation and release"}
+  FRM-02: {module: Fraud and AML, priority: M, text: "Transaction monitoring scenarios with case management"}
+  FRM-03: {module: Fraud and AML, priority: M, text: "Payment sanctions screening with fuzzy matching and whitelists"}
+  FRM-04: {module: Fraud and AML, priority: M, text: "SAR/STR filing workflows and goAML export"}
+  FRM-05: {module: Fraud and AML, priority: S, text: "Device fingerprinting, behavioural biometrics, graph analysis"}
+  LIM-01: {module: Limits, priority: M, text: "Limits by customer, tier, product, channel, type and period"}
+  LIM-02: {module: Limits, priority: M, text: "Maker-checker on configuration changes and sensitive operations"}
+  REG-01: {module: Regulatory reporting, priority: M, text: "Country packs with regulatory report templates"}
+  REG-02: {module: Regulatory reporting, priority: M, text: "Report scheduling, versioning and submission audit trail"}
+  REG-03: {module: Regulatory reporting, priority: S, text: "XBRL output"}
+  NOT-01: {module: Notifications, priority: M, text: "Event-driven notifications on push, SMS, email, WhatsApp, in-app; templates per language"}
+  NOT-02: {module: Notifications, priority: M, text: "Customer preferences and quiet hours"}
+  SRV-01: {module: Servicing, priority: M, text: "Service requests and complaints with regulatory SLAs; customer timeline"}
+  SRV-02: {module: Servicing, priority: S, text: "Agent copilot summarising history and drafting responses"}
+  ADM-01: {module: Platform admin, priority: M, text: "Tenant onboarding, configuration, feature flags, branding"}
+  ADM-02: {module: Platform admin, priority: M, text: "RBAC + ABAC, SSO (SAML, OIDC), MFA for staff"}
+  ADM-03: {module: Platform admin, priority: M, text: "Immutable audit log of every user and API action"}
+  ADM-04: {module: Platform admin, priority: M, text: "Calendars, currencies, FX rates and reference data"}
+  ADM-05: {module: Platform admin, priority: S, text: "Usage metering and billing for SaaS tenants"}
+  OBK-01: {module: Open banking, priority: S, text: "Consent APIs (UK OBIE, Berlin Group, Brazil Open Finance, FDX)"}
+  OBK-02: {module: Open banking, priority: S, text: "Account information services for third-party providers"}
+  OBK-03: {module: Open banking, priority: S, text: "Payment initiation services for third-party providers"}
+  API-01: {module: Developer platform, priority: M, text: "Webhooks: signed, retried, replayable; event catalogue"}
+  API-02: {module: Developer platform, priority: M, text: "API clients, keys, scopes, rate limits, request logs"}
+  AI-01: {module: AI, priority: S, text: "Ops, disputes, AML and servicing copilots with audit trail"}
+  AI-02: {module: AI, priority: S, text: "Model registry, versioning and monitoring for fraud and credit models"}
+
+decisions:
+  - {id: D01, title: "Product name and brand", options: "Meridian Core (placeholder) / other", recommendation: "Decide before public developer portal launch (S11)"}
+  - {id: D02, title: "Launch market(s) and anchor client type", options: "Neobank / telco wallet / card program", recommendation: "Telco wallet or neobank in one market: exercises ledger, wallets and payments first"}
+  - {id: D03, title: "Ledger database engine", options: "CockroachDB / YugabyteDB / PostgreSQL 18 + Citus / TigerBeetle (as posting kernel)", recommendation: "Benchmark in S07; keep ledger behind a repository port so the engine can change"}
+  - {id: D04, title: "Backend language and framework", options: "Java + Spring Boot / Kotlin / Go", recommendation: "Java 25 + Spring Boot 4", status: Decided, decision: "Java 25 LTS + Spring Boot 4 for every service (user decision)"}
+  - {id: D05, title: "Primary cloud and first region", options: "AWS / GCP / Azure", recommendation: "AWS first, portability checks in CI"}
+  - {id: D06, title: "KYC, bureau, card bureau and sanctions providers for market 1", options: "Per market shortlist", recommendation: "Two providers per capability behind adapters"}
+  - {id: D07, title: "Commercial model", options: "Per active account / per transaction / platform fee + usage", recommendation: "Platform fee + per active account + per transaction tiers"}
+  - {id: D08, title: "Front-end framework for web apps", options: "React 19 + Next.js / Angular", recommendation: "React 19 + Next.js + TypeScript"}
+  - {id: D09, title: "Mobile approach", options: "Native (SwiftUI/Compose) + KMP / Flutter / React Native", recommendation: "Flutter for white-label speed, native modules for security features"}
+
+risks:
+  - {id: R01, risk: "Ledger correctness bug loses or misstates money", impact: Critical, likelihood: Medium, mitigation: "Property-based tests, continuous verification job, hash chain, shadow run in pilot"}
+  - {id: R02, risk: "Scope too broad; GA slips", impact: High, likelihood: High, mitigation: "Strict phase gates; cards and wallets first; partner for acquiring and treasury"}
+  - {id: R03, risk: "Scheme and PCI certification delays card launch", impact: High, likelihood: Medium, mitigation: "Start certification in Phase 1; sponsor BIN partner"}
+  - {id: R04, risk: "No licence to hold funds", impact: High, likelihood: Medium, mitigation: "Launch with licensed partner banks; act as technology provider"}
+  - {id: R05, risk: "Distributed SQL misses TPS targets", impact: High, likelihood: Medium, mitigation: "Benchmark early (D03); repository port; sharding by account"}
+  - {id: R06, risk: "Shortage of payments and card-processing talent", impact: Medium, likelihood: High, mitigation: "Hire senior domain experts early; scheme consultants"}
+  - {id: R07, risk: "Country-specific rules cause rework", impact: Medium, likelihood: High, mitigation: "Country packs as configuration from day one"}
+  - {id: R08, risk: "Spec and code drift apart", impact: Medium, likelihood: Medium, mitigation: "Contract-first codegen from generated OpenAPI; CI fails on drift"}

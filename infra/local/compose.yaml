@@ -1,0 +1,153 @@
+# Meridian Core local developer stack.
+# Ports are in the 1xxxx range to avoid clashing with other local projects.
+#   cd infra/local && docker compose up -d          (from WSL / any Docker host)
+# UIs: Kafka console http://localhost:15080 · Temporal http://localhost:17280 · Keycloak http://localhost:15180
+#      Grafana http://localhost:13000 · OpenSearch Dashboards http://localhost:15601 · Mailpit http://localhost:18025
+#      S3 (SeaweedFS) http://localhost:19000 · SeaweedFS master UI http://localhost:19333
+
+name: meridian
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *restart
+    image: postgres:18
+    container_name: meridian-postgres
+    environment:
+      POSTGRES_USER: meridian
+      POSTGRES_PASSWORD: meridian
+      POSTGRES_DB: meridian
+    command: >
+      postgres -c max_connections=600 -c shared_buffers=2GB -c work_mem=32MB
+               -c wal_level=logical -c max_replication_slots=64 -c max_wal_senders=64
+    ports: ["15432:5432"]
+    volumes: [pgdata:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meridian"]
+      interval: 5s
+      retries: 20
+
+  kafka:
+    <<: *restart
+    image: apache/kafka:4.1.0
+    container_name: meridian-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 12
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports: ["19092:19092"]
+    volumes: [kafkadata:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      retries: 20
+
+  schema-registry:
+    <<: *restart
+    image: confluentinc/cp-schema-registry:8.0.0
+    container_name: meridian-schema-registry
+    depends_on: { kafka: { condition: service_healthy } }
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports: ["18081:8081"]
+
+  kafka-console:
+    <<: *restart
+    image: redpandadata/console:latest
+    container_name: meridian-kafka-console
+    depends_on: { kafka: { condition: service_healthy } }
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      SCHEMAREGISTRY_ENABLED: "true"
+      SCHEMAREGISTRY_URLS: http://schema-registry:8081
+    ports: ["15080:8080"]
+
+  valkey:
+    <<: *restart
+    image: valkey/valkey:8
+    container_name: meridian-valkey
+    ports: ["16379:6379"]
+
+  temporal:
+    <<: *restart
+    image: temporalio/temporal:latest
+    container_name: meridian-temporal
+    user: "0:0"   # dev server writes SQLite to a root-owned volume
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--ui-ip", "0.0.0.0", "--db-filename", "/data/temporal.db",
+              "--namespace", "meridian"]
+    ports: ["17233:7233", "17280:8233"]
+    volumes: [temporaldata:/data]
+
+  keycloak:
+    <<: *restart
+    image: quay.io/keycloak/keycloak:26.4
+    container_name: meridian-keycloak
+    command: ["start-dev", "--http-port=8080", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports: ["15180:8080"]
+
+  opensearch:
+    <<: *restart
+    image: opensearchproject/opensearch:3.2.0
+    container_name: meridian-opensearch
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+    ulimits: { memlock: { soft: -1, hard: -1 }, nofile: { soft: 65536, hard: 65536 } }
+    ports: ["19200:9200"]
+    volumes: [osdata:/usr/share/opensearch/data]
+
+  opensearch-dashboards:
+    <<: *restart
+    image: opensearchproject/opensearch-dashboards:3.2.0
+    container_name: meridian-opensearch-dashboards
+    depends_on: [opensearch]
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    ports: ["15601:5601"]
+
+  observability:
+    <<: *restart
+    image: grafana/otel-lgtm:latest
+    container_name: meridian-observability
+    ports: ["13000:3000", "14317:4317", "14318:4318"]
+
+  mailpit:
+    <<: *restart
+    image: axllent/mailpit:latest
+    container_name: meridian-mailpit
+    ports: ["18025:8025", "11025:1025"]
+
+  object-store:
+    <<: *restart
+    image: chrislusf/seaweedfs:latest
+    container_name: meridian-object-store
+    command: ["server", "-dir=/data", "-s3", "-s3.port=8333", "-master.port=9333", "-volume.port=8080"]
+    ports: ["19000:8333", "19333:9333"]
+    volumes: [objectdata:/data]
+
+volumes:
+  pgdata:
+  kafkadata:
+  temporaldata:
+  osdata:
+  objectdata:

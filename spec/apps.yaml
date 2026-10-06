@@ -1,0 +1,468 @@
+# Applications and screens. Every entry in `apis` must be an existing operationId
+# (python tools/generate.py fails otherwise). Front ends: React 19 + Next.js (web), Flutter (mobile).
+
+apps:
+  # ======================================================================= customer mobile
+  - id: customer-mobile
+    name: Customer Mobile App
+    platform: iOS, Android (Flutter)
+    users: Retail customers
+    phase: 2
+    screens:
+      - name: Splash, device binding and passkey login
+        priority: P0
+        apis: [customerDevicesCreate, customerCredentialsPasskeysRegistrationOptions, customerCredentialsPasskeys, mfaFactorsVerify]
+      - name: Onboarding - phone and OTP
+        priority: P0
+        apis: [onboardingApplicationsCreate, customerContactsSendVerification, customerContactsVerify]
+      - name: Onboarding - ID capture, selfie and liveness
+        priority: P0
+        apis: [onboardingApplicationsNextStep, kycDocumentsCreate, documentsUploadUrl, kycChecksCreate]
+      - name: Onboarding - personal details, address, consents
+        priority: P0
+        apis: [onboardingApplicationsUpdate, customerAddressesCreate, consentsCreate, onboardingApplicationsSubmit]
+      - name: Onboarding status and tier upgrade
+        apis: [onboardingApplicationsGet, customersTierHistory, walletsUpgradeTier]
+      - name: Home dashboard (balances, pots, cards, insights)
+        priority: P0
+        apis: [depositAccountsList, depositAccountsBalance, walletsBalance, savingsPotsList, cardsList, notificationsList]
+      - name: Account details and transactions
+        priority: P0
+        apis: [depositAccountsGet, depositAccountsTransactions, ledgerAccountsEntries]
+      - name: Transaction details and receipt
+        apis: [paymentsGet, paymentsReceipt, walletTransactionsReceipt, cardAuthorizationsGet]
+      - name: Send money - P2P to phone or alias
+        priority: P0
+        apis: [payeeAliasesResolve, walletTransactionsQuote, walletTransactionsP2p, walletTransactionsConfirm]
+      - name: Send money - bank transfer
+        priority: P0
+        apis: [payeesList, payeesCreate, payeeVerificationsCreate, paymentsValidate, paymentsCreate, paymentsTracker]
+      - name: International transfer and FX quote
+        apis: [remittanceCorridorsQuote, fxQuotesCreate, fxQuotesAccept, paymentsCreate]
+      - name: Scan to pay (QR)
+        priority: P0
+        apis: [paymentQrCodesDecode, paymentQrCodesPay, merchantQrCodesDecode, merchantQrCodesPay]
+      - name: Request money and payment links
+        apis: [requestsToPayCreate, requestsToPayList, requestsToPayAccept, requestsToPayDecline, paymentLinksCreate]
+      - name: Pay bills and buy airtime
+        priority: P0
+        apis: [billersList, billersProducts, billersValidateReference, billInquiriesCreate, billPaymentsCreate, airtimeTopupsCreate]
+      - name: Scheduled payments and standing orders
+        apis: [standingOrdersList, standingOrdersCreate, standingOrdersPause, standingOrdersResume, standingOrdersCancel]
+      - name: Savings pots and goals
+        apis: [savingsPotsList, savingsPotsCreate, savingsPotsDeposit, savingsPotsWithdraw, savingsPotRulesCreate]
+      - name: Term deposits
+        apis: [productsList, termDepositsCreate, termDepositsList, termDepositsBreakQuote, termDepositsBreak]
+      - name: Cards - list, details, freeze
+        priority: P0
+        apis: [cardsList, cardsGet, cardsFreeze, cardsUnfreeze, cardVaultReveal]
+      - name: Cards - controls and limits
+        apis: [cardControlsList, cardControlsCreate, cardControlsUpdate, cardSpendLimitsCreate, cardSpendLimitsUpdate]
+      - name: Cards - order virtual or physical card
+        apis: [cardsCreate, cardsOrderPhysical, cardOrdersGet]
+      - name: Cards - PIN, replace, add to wallet
+        apis: [cardsPin, cardsReplace, cardTokensPushProvision]
+      - name: Dispute a card transaction
+        apis: [cardDisputesCreate, cardDisputeEvidenceCreate, cardDisputesGet]
+      - name: Loans - offers and apply
+        apis: [productsEligibilityCheck, loanApplicationsQuickQuote, loanApplicationsCreate, loanApplicationsSubmit, loanOffersAccept]
+      - name: Loans - my loans, schedule, repay
+        apis: [loansList, loansGet, loansSchedule, loansRepay, loansPrepaymentQuote]
+      - name: Credit line and BNPL
+        apis: [creditLinesGet, creditLinesDraw, creditLinesRepay, creditLinesStatements, bnplPlansList]
+      - name: Statements and documents
+        apis: [statementsList, statementsDownload, taxCertificatesList, taxCertificatesDownload]
+      - name: Notifications inbox and preferences
+        apis: [notificationsList, notificationsMarkRead, notificationPreferencesList, notificationPreferencesUpdate]
+      - name: Profile, addresses and contacts
+        apis: [customersGet, customersUpdate, customerAddressesList, customerAddressesUpdate, customerContactsList]
+      - name: Security - devices, passkeys, PIN
+        apis: [customerDevicesList, customerDevicesRevoke, customerCredentialsList, customerCredentialsPin]
+      - name: Privacy and consents
+        apis: [consentsList, consentsWithdraw, privacyRequestsCreate, obConsentsList, obConsentsRevoke]
+      - name: Help, chat and complaints
+        apis: [knowledgeArticlesSearch, serviceCasesCreate, serviceCasesList, complaintsCreate]
+
+  # ======================================================================= customer web
+  - id: customer-web
+    name: Customer Web Banking
+    platform: Web (React + Next.js)
+    users: Retail customers
+    phase: 2
+    screens:
+      - name: Login with passkey or password + MFA
+        priority: P0
+        apis: [customerCredentialsPasskeys, mfaFactorsVerify]
+      - name: Accounts overview
+        priority: P0
+        apis: [depositAccountsList, depositAccountsBalance, walletsList, cardsList, loansList]
+      - name: Transaction search and export
+        apis: [depositAccountsTransactions, statementsCreate, statementsDownload]
+      - name: Payments and transfers
+        priority: P0
+        apis: [payeesList, payeesCreate, paymentsCreate, paymentsList, standingOrdersCreate]
+      - name: Statements, certificates and letters
+        apis: [statementsList, taxCertificatesList, depositAccountsConfirmationLetter]
+      - name: Cards management
+        apis: [cardsList, cardsFreeze, cardControlsUpdate, cardsReplace]
+      - name: Loans and credit
+        apis: [loansList, loansSchedule, loansRepay, creditLinesGet]
+      - name: Third-party access (open banking)
+        apis: [obConsentsList, obConsentsRevoke, obConsentsAccessLog]
+      - name: Settings and security
+        apis: [customersGet, customersUpdate, customerDevicesList, notificationPreferencesUpdate]
+
+  # ======================================================================= business portal
+  - id: business-portal
+    name: Business Banking Portal
+    platform: Web, mobile companion
+    users: SME owners, finance teams
+    phase: 3
+    screens:
+      - name: Business onboarding (KYB, directors, UBOs)
+        priority: P0
+        apis: [onboardingApplicationsCreate, customerRelationshipsCreate, customersOwnershipTree, kycDocumentsCreate, onboardingApplicationsSubmit]
+      - name: Cash position dashboard
+        priority: P0
+        apis: [depositAccountsList, depositAccountsBalance, virtualAccountsList, paymentsList]
+      - name: Team users, roles and approval matrix
+        priority: P0
+        apis: [accountHoldersList, accountHoldersCreate, accountMandatesList, accountMandatesCreate, accountMandatesEvaluate]
+      - name: Payments with multi-level approvals
+        priority: P0
+        apis: [paymentsCreate, paymentApprovalsList, paymentApprovalsApprove, paymentApprovalsReject]
+      - name: Bulk payments and payroll upload
+        apis: [bulkPaymentsCreate, bulkPaymentsUpload, bulkPaymentsValidate, bulkPaymentsSubmit, bulkPaymentsApprove, bulkPaymentsReport]
+      - name: Collections - virtual accounts and payment links
+        apis: [virtualAccountsCreate, virtualAccountsBulk, virtualAccountsTransactions, paymentLinksCreate, paymentLinksPayments]
+      - name: Direct debit mandates and collections
+        apis: [paymentMandatesCreate, paymentMandatesList, directDebitCollectionsCreate, directDebitCollectionsList]
+      - name: FX and international payments
+        apis: [fxQuotesCreate, fxQuotesAccept, fxDealsList, paymentsCreate]
+      - name: Expense cards for employees
+        apis: [cardsCreate, cardsList, cardControlsCreate, cardSpendLimitsCreate, cardAuthorizationsList]
+      - name: Business loans and credit lines
+        apis: [loanApplicationsCreate, loanApplicationDocumentsCreate, loansList, creditLinesDraw]
+      - name: Statements and accounting export
+        apis: [statementsCreate, statementsDownload, statementSchedulesCreate]
+      - name: API keys and webhooks for the business
+        apis: [apiClientsCreate, apiKeysCreate, webhookEndpointsCreate, webhookDeliveriesList]
+
+  # ======================================================================= agent app
+  - id: agent-app
+    name: Agent App
+    platform: Android, POS terminals, USSD fallback
+    users: Agents, sub-agents, super-agents
+    phase: 2
+    screens:
+      - name: Agent login and till open
+        priority: P0
+        apis: [agentDevicesGet, agentTillsOpen, mfaFactorsVerify]
+      - name: Agent dashboard (float, cash, commissions)
+        priority: P0
+        apis: [agentsFloat, agentsPerformance, commissionEarningsList]
+      - name: Cash-in for customer
+        priority: P0
+        apis: [walletsLookup, walletTransactionsCashIn, walletTransactionsConfirm, walletTransactionsReceipt]
+      - name: Cash-out for customer
+        priority: P0
+        apis: [walletsLookup, walletTransactionsCashOut, walletTransactionsConfirm, walletTransactionsReceipt]
+      - name: Assisted customer onboarding (offline capable)
+        priority: P0
+        apis: [onboardingApplicationsCreate, kycDocumentsCreate, onboardingOfflineBatchesCreate]
+      - name: Bill payment and airtime for walk-in customers
+        apis: [billersList, billPaymentsCreate, airtimeTopupsCreate]
+      - name: Float top-up and rebalancing requests
+        apis: [agentFloatRequestsCreate, agentFloatRequestsList, cashManagementRequestsCreate]
+      - name: Sub-agent management (super-agents)
+        apis: [agentsSubAgents, agentsCreate, agentOutletsList, agentsSuspend]
+      - name: Till close and end-of-day report
+        apis: [agentTillsClose, walletsTransactions]
+      - name: Agent KYC documents and device
+        apis: [agentKycDocumentsCreate, agentDevicesReportLost]
+
+  # ======================================================================= merchant app
+  - id: merchant-app
+    name: Merchant App
+    platform: Android, iOS, web
+    users: Merchants and cashiers
+    phase: 3
+    screens:
+      - name: Merchant onboarding
+        priority: P0
+        apis: [merchantsCreate, kycDocumentsCreate, merchantStoresCreate]
+      - name: Collect payment (dynamic QR)
+        priority: P0
+        apis: [merchantQrCodesCreate, merchantsTransactions]
+      - name: Payment links
+        apis: [merchantPaymentLinksCreate, merchantPaymentLinksList, merchantPaymentLinksDeactivate]
+      - name: Sales and transactions
+        priority: P0
+        apis: [merchantsTransactions, walletTransactionsGet]
+      - name: Refunds
+        apis: [merchantRefundsCreate, merchantRefundsList]
+      - name: Settlements to bank
+        apis: [merchantsSettlements, merchantSettlementsGet, merchantSettlementsReport]
+      - name: Stores, tills and terminals
+        apis: [merchantStoresList, merchantTerminalsList, merchantTerminalsCreate]
+
+  # ======================================================================= back-office console
+  - id: console
+    name: Back-office Console
+    platform: Web (React + Next.js)
+    users: Operations, risk, compliance, finance, collections, admins
+    phase: 1
+    screens:
+      - name: Staff login with SSO and MFA
+        phase: 1
+        priority: P0
+        apis: [usersMe, ssoProvidersList, mfaFactorsVerify]
+      - name: Global search
+        phase: 1
+        priority: P0
+        apis: [customersSearch, auditEventsSearch]
+      - name: Customer 360
+        phase: 1
+        priority: P0
+        apis: [customersView, customersRelationships, depositAccountsList, walletsList, cardsList, loansList, customerTimelineList, serviceCasesList]
+      - name: Customer edit, tier change, suspend, merge
+        phase: 1
+        apis: [customersUpdate, customersChangeTier, customersSuspend, customersReactivate, customersMerge, customersDuplicatesCheck]
+      - name: KYC profile and document review
+        phase: 1
+        priority: P0
+        apis: [kycProfilesGet, kycProfilesChecks, kycDocumentsAccept, kycDocumentsReject, kycScreeningsDisposition, kycReviewsComplete]
+      - name: Onboarding application queue
+        phase: 1
+        priority: P0
+        apis: [onboardingApplicationsList, onboardingApplicationsApprove, onboardingApplicationsReject, onboardingApplicationsRequestInfo]
+      - name: Account servicing (blocks, freezes, closures)
+        phase: 1
+        priority: P0
+        apis: [depositAccountsGet, depositAccountsFreeze, depositAccountsUnfreeze, accountBlocksCreate, accountBlocksLift, accountClosuresCreate, accountClosuresApprove]
+      - name: Fees and interest adjustments
+        phase: 1
+        apis: [depositAccountsChargeFee, feeChargesRefund, depositAccountsRecalculateInterest, accountRateOverridesCreate]
+      - name: Overdraft facilities
+        phase: 1
+        apis: [overdraftFacilitiesList, overdraftFacilitiesCreate, overdraftFacilitiesApprove, overdraftFacilitiesChangeLimit]
+      - name: Approvals inbox (maker-checker)
+        phase: 1
+        priority: P0
+        apis: [approvalRequestsInbox, approvalRequestsApprove, approvalRequestsReject, approvalRequestsRequestChanges]
+      - name: Ledger explorer
+        phase: 1
+        priority: P0
+        apis: [ledgersList, ledgerAccountsList, ledgerAccountsBalance, ledgerAccountsEntries, journalEntriesList, journalEntriesGet]
+      - name: Manual journal entry and reversal
+        phase: 1
+        apis: [journalEntriesCreate, journalEntriesReverse, holdsList, holdsRelease]
+      - name: Chart of accounts and GL mapping
+        phase: 1
+        apis: [glAccountsList, glAccountsCreate, glMappingRulesList, glMappingRulesCreate, glMappingRulesSimulate]
+      - name: Period close and trial balance
+        phase: 1
+        apis: [accountingPeriodsList, accountingPeriodsClose, accountingPeriodsApproveClose, accountingPeriodsTrialBalance, periodCloseRunsGet]
+      - name: Reconciliation workbench
+        phase: 3
+        apis: [reconRunsList, reconExceptionsList, reconExceptionsAssign, reconExceptionsResolve, reconExceptionsAcceptSuggestion, reconMatchesCreate]
+      - name: Payments monitor and repair queue
+        phase: 2
+        priority: P0
+        apis: [paymentsList, paymentsStatusHistory, paymentRepairsList, paymentRepairsResubmit, paymentsReturn, paymentsRecall]
+      - name: Rails, cut-offs and liquidity
+        phase: 2
+        apis: [paymentRailsList, railCutoffsList, nostroAccountsPositions, liquidityPositionsList, railMessagesList]
+      - name: Wallet operations
+        phase: 2
+        apis: [walletsList, walletsGet, walletsSuspend, walletsReactivate, walletTransactionsReverse, walletPinResetsComplete]
+      - name: Agent network management
+        phase: 2
+        apis: [agentsList, agentsCreate, agentsActivate, agentFloatRequestsApprove, agentOutletsList, agentTerritoriesList]
+      - name: Commission plans and payouts
+        phase: 2
+        apis: [commissionPlansList, commissionPlansCreate, commissionPlansSimulate, commissionPayoutRunsCreate, commissionPayoutRunsApprove]
+      - name: Billers and settlements
+        phase: 2
+        apis: [billersList, billersCreate, billerSettlementsList, billerSettlementsApprove]
+      - name: Merchant management
+        phase: 3
+        apis: [merchantsList, merchantsCreate, merchantsActivate, merchantSettlementsApprove, merchantFeePlansList]
+      - name: G2P and bulk disbursements
+        phase: 2
+        apis: [disbursementProgramsList, disbursementBatchesCreate, disbursementBatchesApprove, disbursementBatchesReport]
+      - name: USSD menu designer
+        phase: 2
+        apis: [ussdMenusList, ussdMenusNodes, ussdMenuNodesCreate, ussdMenusSimulate, ussdMenusPublish]
+      - name: Card programs and products
+        phase: 3
+        apis: [cardProgramsList, cardProgramsCreate, cardProductsCreate, cardBureausList]
+      - name: Card servicing (block, replace, PIN unblock)
+        phase: 3
+        priority: P0
+        apis: [cardsGet, cardsBlock, cardsReplace, cardsPinUnblock, cardsStatusHistory, cardsAuthorizations]
+      - name: Authorisation monitor and stand-in
+        phase: 3
+        apis: [cardAuthorizationsList, cardAuthorizationsGet, cardStandInRecordsList, cardStandInRecordsReplay]
+      - name: Clearing and settlement
+        phase: 3
+        apis: [clearingFilesList, clearingRecordsList, clearingRecordsForceMatch, cardSettlementsConfirm]
+      - name: Disputes workbench with AI summary
+        phase: 3
+        apis: [cardDisputesList, cardDisputesAiSummary, cardDisputesProvisionalCredit, cardDisputesSubmitChargeback, cardDisputesClose]
+      - name: Loan origination queue
+        phase: 3
+        priority: P0
+        apis: [loanApplicationsList, loanApplicationsBureauPull, loanApplicationsScore, loanApplicationsDecide, loanOffersCreate]
+      - name: Loan servicing
+        phase: 3
+        apis: [loansGet, loansSchedule, loansDisburse, loansChangeRate, loansRestructure, loanRestructuresApprove, loansWriteOff]
+      - name: Collateral registry
+        phase: 3
+        apis: [collateralsList, collateralsCreate, collateralValuationsCreate, collateralLinksCreate]
+      - name: Collections workspace
+        phase: 3
+        priority: P0
+        apis: [collectionQueuesCases, collectionCasesGet, collectionCasesLogAction, collectionCasesPromise, collectionCasesPaymentPlan, collectionCasesNextBestAction]
+      - name: Collection strategies
+        phase: 3
+        apis: [collectionStrategiesList, collectionStrategiesCreate, collectionStrategyStepsCreate]
+      - name: Fraud alerts queue
+        phase: 2
+        priority: P0
+        apis: [fraudAlertsList, fraudAlertsAssign, fraudAlertsResolve, fraudScoresExplanation, fraudAlertsContactCustomer]
+      - name: Fraud rules and backtesting
+        phase: 2
+        apis: [fraudRulesList, fraudRulesCreate, fraudRulesTestExpression, fraudRulesBacktest, fraudRulesActivate]
+      - name: Transaction monitoring alerts
+        phase: 2
+        apis: [tmAlertsList, tmAlertsTransactions, tmAlertsEscalate, tmAlertsClose, riskGraphEntitiesNetwork]
+      - name: Sanctions screening review
+        phase: 2
+        priority: P0
+        apis: [screeningResultsList, screeningResultsMatches, screeningResultsReview, screeningWhitelistCreate]
+      - name: AML case management and SAR filing
+        phase: 2
+        apis: [amlCasesList, amlCasesGet, amlCasesTimeline, amlCasesAiSummary, sarReportsCreate, sarReportsDraftNarrative, sarReportsFile]
+      - name: Limits configuration and overrides
+        phase: 2
+        apis: [limitRulesList, limitRulesCreate, limitRulesSimulate, limitOverridesCreate, limitOverridesApprove]
+      - name: Service cases and complaints
+        phase: 2
+        priority: P0
+        apis: [serviceCasesList, serviceCasesGet, serviceCasesResolve, complaintsList, complaintsFinalResponse, complaintRedressCreate]
+      - name: Work queues
+        phase: 2
+        apis: [workQueuesList, workItemsNext, workItemsComplete, workQueuesStats]
+      - name: Servicing copilot panel
+        phase: 4
+        apis: [copilotSessionsCreate, copilotSessionsFeedback, knowledgeArticlesSearch]
+      - name: Regulatory reports
+        phase: 4
+        apis: [reportDefinitionsList, reportRunsCreate, reportRunsValidationResults, reportSubmissionsCreate, reportSubmissionsSubmit]
+      - name: Analytics dashboards
+        phase: 3
+        apis: [analyticsDashboardsList, analyticsDashboardsGet, analyticsWidgetsData, analyticsExportsCreate]
+      - name: Audit log viewer
+        phase: 1
+        apis: [auditEventsList, auditEventsSearch, auditEventsVerifyChain, dataExportsCreate]
+      - name: Users, roles and access policies
+        phase: 1
+        priority: P0
+        apis: [usersList, usersInvite, usersRoles, rolesList, rolesCreate, accessPoliciesList, accessPoliciesSimulate]
+      - name: Tenant settings, branding and feature flags
+        phase: 1
+        apis: [settingsList, settingsUpdate, brandingUpdate, brandingPreview, featureFlagsList, featureFlagsUpdate]
+      - name: Reference data (currencies, calendars, FX rates)
+        phase: 1
+        apis: [currenciesList, holidayCalendarsList, holidaysCreate, fxRatesList, fxRatesCreate]
+      - name: Notification templates
+        phase: 1
+        apis: [notificationTemplatesList, notificationTemplatesCreate, notificationTemplatesPreview, notificationTemplatesPublish]
+      - name: Document templates
+        phase: 1
+        apis: [documentTemplatesList, documentTemplatesCreate, documentTemplatesPreview]
+
+  # ======================================================================= product studio
+  - id: product-studio
+    name: Product Studio
+    platform: Web (part of console)
+    users: Product managers, pricing, risk approvers
+    phase: 1
+    screens:
+      - name: Product catalogue
+        priority: P0
+        apis: [productsList, productTemplatesList, productsFromTemplate, productsClone]
+      - name: Product builder - general and parameters
+        priority: P0
+        apis: [productsGet, productVersionsCreate, productVersionsUpdate, productParametersList, productParametersCreate]
+      - name: Interest configuration and rate indexes
+        priority: P0
+        apis: [interestRateConfigsCreate, interestRateTiersCreate, interestRateConfigsEffectiveRate, rateIndexesList, rateIndexesValues]
+      - name: Fees, waivers and tax
+        priority: P0
+        apis: [feeDefinitionsCreate, feeTiersCreate, feeWaiverRulesCreate, feeDefinitionsCalculate, taxRulesList]
+      - name: Limits and eligibility
+        apis: [productLimitTemplatesCreate, eligibilityRulesCreate, productsEligibilityCheck]
+      - name: Decision tables (DMN)
+        apis: [decisionTablesList, decisionTablesCreate, decisionTableVersionsTest, decisionTablesImportDmn]
+      - name: Product scripts (WASM)
+        apis: [productScriptsCreate, productScriptsCompile, productScriptsTest, productScriptsSubmit]
+      - name: Simulation
+        priority: P0
+        apis: [productSimulationsCreate, productSimulationsGet, productSimulationsExport]
+      - name: Review, approve and publish
+        priority: P0
+        apis: [productVersionsDiff, productVersionsSubmit, productVersionsApprove, productVersionsPublish]
+      - name: Bundles, promotions and relationship pricing
+        apis: [productBundlesCreate, productBundleItemsCreate, promotionalRatesCreate, relationshipPricingRulesCreate]
+      - name: Migrate accounts to a new version
+        apis: [productVersionsMigrateAccounts]
+
+  # ======================================================================= developer portal
+  - id: developer-portal
+    name: Developer Portal
+    platform: Web
+    users: Client and partner developers
+    phase: 1
+    screens:
+      - name: API reference and guides
+        priority: P0
+        apis: [oauthScopesList]
+      - name: Sandbox apps and API keys
+        priority: P0
+        apis: [apiClientsList, apiClientsCreate, apiClientsRotateSecret, apiKeysCreate, apiKeysRevoke]
+      - name: Request logs and usage
+        apis: [requestLogsList, apiClientsUsage]
+      - name: Webhooks and event replay
+        priority: P0
+        apis: [webhookEndpointsCreate, webhookEndpointsTest, webhookSubscriptionsCreate, webhookDeliveriesList, webhookDeliveriesRetry, eventReplaysCreate]
+      - name: Sandbox simulators (card auths, test clocks)
+        apis: [cardAuthorizationsSimulate, cardAuthorizationsSimulateClearing, loansSimulate]
+      - name: Third-party provider registration (open banking)
+        phase: 4
+        apis: [tppsRegister, tppCertificatesCreate, tppsGet]
+
+  # ======================================================================= platform operator console
+  - id: ops-console
+    name: Platform Operator Console
+    platform: Web
+    users: Meridian SRE and platform operators
+    phase: 1
+    screens:
+      - name: Tenants and provisioning
+        priority: P0
+        apis: [tenantsList, tenantsCreate, tenantsProvisionFromTemplate, tenantsActivate, tenantsSuspend]
+      - name: Cells and tenant placement
+        apis: [cellsList, cellsDrain, tenantsPlacements, tenantsMigrate]
+      - name: Modules and country packs
+        apis: [modulesList, modulesEnable, countryPacksList, countryPacksInstall]
+      - name: Billing, usage and invoices
+        phase: 4
+        apis: [pricePlansList, subscriptionsList, usageSummary, invoicesGenerate, invoicesIssue]
+      - name: Model registry and deployments
+        phase: 4
+        apis: [mlModelsList, mlModelVersionsApprove, modelDeploymentsPromote, modelDeploymentsRollback, modelDeploymentsMetrics]
+      - name: LLM gateway policies and copilots
+        phase: 4
+        apis: [llmGatewayPoliciesList, llmGatewayPoliciesUpdate, copilotsList, copilotInteractionsList]
