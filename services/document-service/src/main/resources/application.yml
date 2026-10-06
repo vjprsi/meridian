@@ -37,6 +37,23 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.platform.v1
+  documents:
+    s3:                        # S3-compatible object store (local: SeaweedFS); path-style SigV4 presigned URLs
+      endpoint: http://localhost:19000
+      bucket: meridian-documents
+      region: us-east-1
+      access-key: meridian
+      secret-key: meridian-secret
+    upload-url-ttl: PT15M
+    download-url-ttl: PT5M
+    expiry-warning-days: 30
+    jobs-enabled: true
+    jobs-interval-ms: 300000
+    consumer-enabled: true     # consume platform.approval_request.* to activate published templates
+    approval-topic: meridian.platform.v1
+  esign:
+    callback-secret: change-me-esign-callback-secret   # HMAC key for X-Esign-Signature on provider callbacks
+    default-validity: P30D
 
 management:
   endpoints:

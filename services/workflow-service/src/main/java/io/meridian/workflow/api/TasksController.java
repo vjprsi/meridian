@@ -1,12 +1,85 @@
 package io.meridian.workflow.api;
 
 import io.meridian.workflow.api.generated.TasksApi;
+import io.meridian.workflow.api.generated.model.TasksAssignRequest;
+import io.meridian.workflow.api.generated.model.TasksCompleteRequest;
+import io.meridian.workflow.api.generated.model.TasksEscalateRequest;
+import io.meridian.workflow.api.generated.model.WorkTask;
+import io.meridian.workflow.api.generated.model.WorkTaskUpdate;
+import io.meridian.workflow.application.TaskService;
+import io.meridian.web.crud.Crud;
+import io.meridian.web.crud.CrudEngine;
+import io.meridian.web.idempotency.Idempotency;
+import java.util.UUID;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Tasks API. Operations not yet overridden here return 501 Not Implemented (generated default methods).
- * Contract: generated/openapi/services/workflow-service.openapi.yaml
- */
+/** Human tasks: claim, release, assign, complete (advances the owning workflow), escalate; guarded PATCH. */
 @RestController
 public class TasksController implements TasksApi {
+    private final TaskService tasks;
+    private final CallerResolver callers;
+    private final CrudEngine crud;
+    private final Idempotency idempotency;
+    private final JsonMapper json;
+
+    public TasksController(TaskService tasks, CallerResolver callers, CrudEngine crud, Idempotency idempotency,
+                           JsonMapper json) {
+        this.tasks = tasks;
+        this.callers = callers;
+        this.crud = crud;
+        this.idempotency = idempotency;
+        this.json = json;
+    }
+
+    @Override
+    public ResponseEntity<WorkTask> tasksUpdate(UUID id, String ifMatch, WorkTaskUpdate body) {
+        callers.current();
+        tasks.checkUpdate(id, crud.toColumns("work_task", body));
+        return crud.update("work_task", WorkTask.class, body, ifMatch, Crud.params().with("id", id));
+    }
+
+    @Override
+    public ResponseEntity<WorkTask> tasksClaim(UUID id, String idempotencyKey) {
+        var caller = callers.current();
+        return idempotency.execute(idempotencyKey, Actions.fingerprint("claim", id, null), WorkTask.class,
+                () -> ResponseEntity.ok(model(tasks.claim(id, caller))));
+    }
+
+    @Override
+    public ResponseEntity<WorkTask> tasksRelease(UUID id, String idempotencyKey) {
+        var caller = callers.current();
+        return idempotency.execute(idempotencyKey, Actions.fingerprint("release", id, null), WorkTask.class,
+                () -> ResponseEntity.ok(model(tasks.release(id, caller))));
+    }
+
+    @Override
+    public ResponseEntity<WorkTask> tasksAssign(UUID id, String idempotencyKey, TasksAssignRequest body) {
+        callers.current();
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, Actions.fingerprint("assign", id, body), WorkTask.class,
+                () -> ResponseEntity.ok(model(tasks.assign(id, req.path("assignee").asString(null)))));
+    }
+
+    @Override
+    public ResponseEntity<WorkTask> tasksComplete(UUID id, String idempotencyKey, TasksCompleteRequest body) {
+        var caller = callers.current();
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, Actions.fingerprint("complete", id, body), WorkTask.class,
+                () -> ResponseEntity.ok(model(tasks.complete(id, req.path("outcome").asString(null), req.get("form_data"), caller))));
+    }
+
+    @Override
+    public ResponseEntity<WorkTask> tasksEscalate(UUID id, String idempotencyKey, TasksEscalateRequest body) {
+        var caller = callers.current();
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, Actions.fingerprint("escalate", id, body), WorkTask.class,
+                () -> ResponseEntity.ok(model(tasks.escalate(id, req.path("reason").asString(null), caller))));
+    }
+
+    private WorkTask model(JsonNode row) {
+        return crud.read(row.toString(), WorkTask.class);
+    }
 }
