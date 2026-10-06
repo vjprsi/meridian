@@ -36,7 +36,7 @@ public class PostingService {
     /** A posting request after header/body parsing. */
     public record Posting(UUID ledgerId, String idempotencyKey, String entryType, String description,
                           OffsetDateTime effectiveAt, LocalDate valueDate, String sourceService, String sourceType,
-                          UUID sourceId, String correlationId, UUID reversalOfId, JsonNode metadata,
+                          UUID sourceId, String correlationId, String reference, UUID reversalOfId, JsonNode metadata,
                           JsonNode customFields, List<PostingLine> lines) {}
 
     /** Result: the entry JSON (JournalEntry API shape) and whether it was a replay. */
@@ -99,6 +99,10 @@ public class PostingService {
             row.put("fx_rate", fx.toPlainString());
             row.put("base_amount", base.toPlainString());
             row.put("effective_at", effectiveAt.toString());
+            row.put("value_date", valueDate.toString());
+            if (p.reference() != null) {
+                row.put("reference", p.reference());
+            }
             row.put("account_version", account.version);
             row.put("balance_after", balanceAfter.toPlainString());
             if (line.description() != null) {
@@ -124,6 +128,7 @@ public class PostingService {
         putIfPresent(entry, "source_type", p.sourceType());
         putIfPresent(entry, "source_id", p.sourceId());
         putIfPresent(entry, "correlation_id", p.correlationId());
+        putIfPresent(entry, "reference", p.reference());
         putIfPresent(entry, "reversal_of_id", p.reversalOfId());
         if (p.metadata() != null && !p.metadata().isNull()) {
             entry.set("metadata", p.metadata());
@@ -183,7 +188,8 @@ public class PostingService {
                     new BigDecimal(e.get("fx_rate").asString()), "Reversal: " + reason).reversed());
         }
         return post(new Posting(ledgerId, idempotencyKey, "REVERSAL", "Reversal of " + journalEntryId + ": " + reason,
-                effectiveAt, null, TenantContext.principal(), "JOURNAL_ENTRY", journalEntryId, null, journalEntryId,
+                effectiveAt, null, TenantContext.principal(), "JOURNAL_ENTRY", journalEntryId, null,
+                original.hasNonNull("reference") ? original.get("reference").asString() : null, journalEntryId,
                 null, null, lines));
     }
 

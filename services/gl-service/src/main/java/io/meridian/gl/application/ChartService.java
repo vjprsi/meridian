@@ -46,6 +46,9 @@ public class ChartService {
         }
         v.put("level", level);
         v.put("status", status);
+        if (v.path("is_retained_earnings").asBoolean(false)) {
+            validateRetainedEarnings(le, cls, v.path("is_postable").asBoolean(true), null);
+        }
         return crud.insert(T, v);
     }
 
@@ -96,6 +99,12 @@ public class ChartService {
             throw ApiException.unprocessable("account_has_children", "A header with children cannot become postable");
         }
 
+        boolean retained = v.hasNonNull("is_retained_earnings") ? v.get("is_retained_earnings").asBoolean()
+                : cur.path("is_retained_earnings").asBoolean(false);
+        if (retained) {
+            validateRetainedEarnings(le, cls, postable, id);
+        }
+
         UUID curParent = Fields.uuid(cur, "parent_id");
         UUID newParent = v.hasNonNull("parent_id") ? Fields.uuid(v, "parent_id") : curParent;
         boolean levelChanged = false;
@@ -119,6 +128,22 @@ public class ChartService {
                     where g.id = tree.id and g.id <> ? and g.level <> tree.level""", id, id);
         }
         return row;
+    }
+
+    /** The retained-earnings designation: a postable EQUITY account, at most one per legal entity. */
+    private void validateRetainedEarnings(UUID legalEntityId, String accountClass, boolean postable, UUID self) {
+        if (!"EQUITY".equals(accountClass) || !postable) {
+            throw ApiException.unprocessable("invalid_retained_earnings_account",
+                    "The retained-earnings account must be a postable EQUITY account");
+        }
+        store.advisoryLock("gl_retained_earnings:" + legalEntityId);
+        store.row("""
+                select row_to_json(a)::text from gl_account a
+                where a.legal_entity_id = ? and a.is_retained_earnings and (?::uuid is null or a.id <> ?::uuid)""",
+                legalEntityId, self, self).ifPresent(other -> {
+                    throw ApiException.conflict("retained_earnings_already_designated", "GL account "
+                            + other.get("code").asString() + " is already the retained-earnings account of the legal entity");
+                });
     }
 
     private JsonNode validateParent(UUID parentId, UUID legalEntityId, String accountClass, UUID self) {

@@ -8,7 +8,6 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -53,16 +52,11 @@ public class LedgerGateway {
                 + PAGE_SIZE * MAX_PAGES + " entries for account " + ledgerAccountId + "; narrow the run's date range");
     }
 
+    /** A ledger entry carries the value date and the reference of its journal entry (copied at posting time). */
     static Matcher.Internal toInternal(JsonNode e) {
-        LocalDate valueDate = e.hasNonNull("value_date") ? LocalDate.parse(e.get("value_date").asString())
-                : OffsetDateTime.parse(e.get("effective_at").asString()).toLocalDate();
-        String reference = null;
-        for (String f : List.of("reference", "end_to_end_id", "correlation_id", "external_ref", "description")) {
-            if (e.hasNonNull(f) && !e.get(f).asString().isBlank()) {
-                reference = e.get(f).asString();
-                break;
-            }
-        }
+        LocalDate valueDate = LocalDate.parse(e.get("value_date").asString());
+        String reference = e.hasNonNull("reference") && !e.get("reference").asString().isBlank()
+                ? e.get("reference").asString() : null;
         return new Matcher.Internal(UUID.fromString(e.get("id").asString()), reference, valueDate,
                 StatementLine.Direction.valueOf(e.get("direction").asString()),
                 new BigDecimal(e.get("amount").asString()), e.get("currency").asString().trim());

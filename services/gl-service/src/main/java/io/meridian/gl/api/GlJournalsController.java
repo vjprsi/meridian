@@ -4,6 +4,7 @@ import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.gl.api.generated.GlJournalsApi;
 import io.meridian.gl.api.generated.model.GlJournal;
+import io.meridian.gl.api.generated.model.GlJournalApproval;
 import io.meridian.gl.api.generated.model.GlJournalCreate;
 import io.meridian.gl.api.generated.model.GlJournalLinePage;
 import io.meridian.gl.api.generated.model.GlJournalsApproveRequest;
@@ -20,9 +21,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * GL journals. Manual journals carry their debit/credit {@code lines} in the request body (not yet declared in the
- * generated contract): [{gl_account_id, direction, amount, currency, base_amount | fx_rate, cost_center, branch_id,
- * product_id}]. They post to the GL only when approved by a different principal.
+ * GL journals. Manual journals carry their debit/credit {@code lines}; they post to the GL only when approved by a
+ * different principal, which records an append-only gl_journal_approval.
  */
 @RestController
 public class GlJournalsController implements GlJournalsApi {
@@ -44,17 +44,24 @@ public class GlJournalsController implements GlJournalsApi {
     @Override
     public ResponseEntity<GlJournal> glJournalsCreate(String idempotencyKey, GlJournalCreate body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
-        return idempotency.execute(idempotencyKey, req, GlJournal.class,
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, body, GlJournal.class,
                 () -> responses.created(journals.createManual(req), GlJournal.class));
     }
 
     @Override
-    public ResponseEntity<GlJournal> glJournalsApprove(UUID id, String idempotencyKey, GlJournalsApproveRequest body) {
+    public ResponseEntity<GlJournal> glJournalsGet(UUID id) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
-        return idempotency.execute(idempotencyKey, responses.action("approve", id, req), GlJournal.class,
-                () -> responses.ok(journals.approve(id, Fields.text(req, "comment")), GlJournal.class));
+        return responses.ok(journals.withLines(id), GlJournal.class);
+    }
+
+    @Override
+    public ResponseEntity<GlJournalApproval> glJournalsApprove(UUID id, String idempotencyKey,
+                                                              GlJournalsApproveRequest body) {
+        TenantContext.require();
+        JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, responses.action("approve", id, req), GlJournalApproval.class,
+                () -> responses.ok(journals.approve(id, Fields.text(req, "comment")), GlJournalApproval.class));
     }
 
     @Override

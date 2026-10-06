@@ -9,6 +9,8 @@ import io.meridian.ledger.api.generated.model.LedgerAccount;
 import io.meridian.ledger.api.generated.model.LedgerAccountCreate;
 import io.meridian.ledger.api.generated.model.LedgerAccountsCloseRequest;
 import io.meridian.ledger.api.generated.model.LedgerAccountsFreezeRequest;
+import io.meridian.ledger.api.generated.model.LedgerAccountUpdate;
+import io.meridian.ledger.api.generated.model.LedgerAccountsOverdraftLimitRequest;
 import io.meridian.ledger.api.generated.model.LedgerAccountsUnfreezeRequest;
 import io.meridian.ledger.api.generated.model.LedgerEntryPage;
 import io.meridian.ledger.application.AccountService;
@@ -16,6 +18,7 @@ import io.meridian.ledger.infrastructure.LedgerStore;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -26,7 +29,10 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Ledger accounts: open with a balance row, balances (current and point-in-time), entries, status changes. */
+/**
+ * Ledger accounts: open with a balance row, balances (current and point-in-time), entries, idempotent status
+ * changes and overdraft limit.
+ */
 @RestController
 public class LedgerAccountsController implements LedgerAccountsApi {
     private final AccountService accounts;
@@ -106,13 +112,42 @@ public class LedgerAccountsController implements LedgerAccountsApi {
     public ResponseEntity<LedgerAccount> ledgerAccountsFreeze(UUID id, String idempotencyKey,
                                                               LedgerAccountsFreezeRequest body) {
         JsonNode req = json.valueToTree(body);
-        return ok(accounts.changeStatus(id, req.get("status").asString(), req.get("reason").asString()));
+        String status = req.get("status").asString();
+        if (!status.startsWith("FROZEN")) {
+            throw ApiException.unprocessable("invalid_status",
+                    "freeze takes FROZEN, FROZEN_DEBIT or FROZEN_CREDIT; use /unfreeze or /close for " + status);
+        }
+        return ok(accounts.changeStatus(id, status, req.get("reason").asString()));
     }
 
     @Override
     public ResponseEntity<LedgerAccount> ledgerAccountsUnfreeze(UUID id, String idempotencyKey,
                                                                 LedgerAccountsUnfreezeRequest body) {
         return ok(accounts.changeStatus(id, "ACTIVE", json.valueToTree(body).get("reason").asString()));
+    }
+
+    @Override
+    public ResponseEntity<LedgerAccount> ledgerAccountsOverdraftLimit(UUID id, String idempotencyKey,
+                                                                      LedgerAccountsOverdraftLimitRequest body) {
+        TenantContext.require();
+        JsonNode req = json.valueToTree(body);
+        return ok(accounts.setOverdraftLimit(id, new BigDecimal(req.get("limit").asString()),
+                req.hasNonNull("reason") ? req.get("reason").asString() : null));
+    }
+
+    @Override
+    public ResponseEntity<LedgerAccount> ledgerAccountsUpdate(UUID id, String ifMatch, LedgerAccountUpdate body) {
+        TenantContext.require();
+        String v = ifMatch == null ? "" : ifMatch.replace("W/", "").replace("\"", "").trim();
+        int version;
+        try {
+            version = Integer.parseInt(v);
+        } catch (NumberFormatException e) {
+            throw ApiException.badRequest("invalid_if_match", "If-Match must be the resource's row_version");
+        }
+        String row = accounts.update(id, version, body);
+        LedgerAccount account = crud.read(row, LedgerAccount.class);
+        return ResponseEntity.ok().eTag("\"" + json.readTree(row).get("row_version").asString() + "\"").body(account);
     }
 
     @Override

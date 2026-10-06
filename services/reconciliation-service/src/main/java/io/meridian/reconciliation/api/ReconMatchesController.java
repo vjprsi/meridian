@@ -32,15 +32,15 @@ public class ReconMatchesController implements ReconMatchesApi {
     @Override
     public ResponseEntity<ReconMatch> reconMatchesCreate(String idempotencyKey, ReconMatchCreate body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
-        return idempotency.execute(idempotencyKey, req, ReconMatch.class,
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, body, ReconMatch.class,
                 () -> responses.created(matches.createManual(req), ReconMatch.class));
     }
 
     @Override
     public ResponseEntity<ReconMatch> reconMatchesUnmatch(UUID id, String idempotencyKey, ReconMatchesUnmatchRequest body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
+        JsonNode req = json.valueToTree(body);
         return idempotency.execute(idempotencyKey, responses.action("unmatch", id, req), ReconMatch.class,
                 () -> responses.ok(matches.unmatch(id, Fields.text(req, "reason")), ReconMatch.class));
     }

@@ -4,7 +4,7 @@ import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.reconciliation.api.generated.ReconFilesApi;
 import io.meridian.reconciliation.api.generated.model.ReconFile;
-import io.meridian.reconciliation.api.generated.model.ReconFileCreate;
+import io.meridian.reconciliation.api.generated.model.ReconFilesImportRequest;
 import io.meridian.reconciliation.api.generated.model.ReconRecordPage;
 import io.meridian.reconciliation.application.FileService;
 import io.meridian.web.crud.Crud;
@@ -18,8 +18,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Statement files. Create takes, beyond the generated model, the file {@code content} (text) or pre-parsed
- * {@code records} (array of {value_date, direction, amount, currency, external_ref, end_to_end_id, ...}).
+ * Statement files. POST /import takes the file {@code content} (text) or pre-parsed {@code records} (array of
+ * {value_date, direction, amount, currency, external_ref, end_to_end_id, ...}) and parses it synchronously.
  */
 @RestController
 public class ReconFilesController implements ReconFilesApi {
@@ -39,11 +39,11 @@ public class ReconFilesController implements ReconFilesApi {
     }
 
     @Override
-    public ResponseEntity<ReconFile> reconFilesCreate(String idempotencyKey, ReconFileCreate body) {
+    public ResponseEntity<ReconFile> reconFilesImport(String idempotencyKey, ReconFilesImportRequest body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
-        return idempotency.execute(idempotencyKey, req, ReconFile.class,
-                () -> responses.created(files.create(req), ReconFile.class));
+        JsonNode req = json.valueToTree(body);
+        return idempotency.execute(idempotencyKey, body, ReconFile.class,
+                () -> responses.ok(files.create(req), ReconFile.class));
     }
 
     @Override

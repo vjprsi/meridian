@@ -22,7 +22,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Matches are append-only. A match is undone by a compensating record (same record sets, unmatched_at set), after
- * which its records return to the matching queue. Every path that creates matches serialises on a per-tenant lock
+ * which its records return to the matching queue. Every match publishes {@code ledger.recon_match.created}, every
+ * undo {@code ledger.recon_match.unmatched} (keyed by the undone match). Every path that creates matches serialises on a per-tenant lock
  * so a record can never be in two active matches.
  */
 @Service
@@ -51,8 +52,8 @@ public class MatchService {
         if (req.hasNonNull("unmatched_at")) {
             throw ApiException.unprocessable("field_not_allowed", "unmatched_at is set by POST /matches/{id}/unmatch");
         }
-        List<UUID> ext = uuids(req.path("external_record_ids").path("ids"), "external_record_ids");
-        List<UUID> in = uuids(req.path("internal_entry_ids").path("ids"), "internal_entry_ids");
+        List<UUID> ext = uuids(req.path("external_record_ids"), "external_record_ids");
+        List<UUID> in = uuids(req.path("internal_entry_ids"), "internal_entry_ids");
         long found = store.count("select count(*) from recon_record where id = any(?)", (Object) ext.toArray(UUID[]::new));
         if (found != ext.size()) {
             throw ApiException.unprocessable("record_not_found", "Some external_record_ids do not exist");
@@ -97,8 +98,13 @@ public class MatchService {
         v.put("confirmed_by", TenantContext.principal());
         v.put("unmatched_at", java.time.OffsetDateTime.now().toString());
         String row = crud.insert("recon_match", v);
+        JsonNode compensating = json.readTree(row);
+        ObjectNode payload = ((ObjectNode) compensating).deepCopy();
+        payload.put("unmatched_match_id", id.toString());
+        payload.put("reason", reason);
+        outbox.publish("ledger.recon_match.unmatched", "recon_match", id, payload);
         List<UUID> ext = new ArrayList<>();
-        m.get("external_record_ids").path("ids").forEach(e -> ext.add(UUID.fromString(e.asString())));
+        m.get("external_record_ids").forEach(e -> ext.add(UUID.fromString(e.asString())));
         refreshFileStatus(ext);
         return row;
     }
@@ -143,7 +149,10 @@ public class MatchService {
         if (confirmedBy != null) {
             v.put("confirmed_by", confirmedBy);
         }
-        return crud.insert("recon_match", v);
+        String row = crud.insert("recon_match", v);
+        JsonNode match = json.readTree(row);
+        outbox.publish("ledger.recon_match.created", "recon_match", UUID.fromString(match.get("id").asString()), match);
+        return row;
     }
 
     /** Resolves open breaks that reference any of the records now matched. */
@@ -179,12 +188,11 @@ public class MatchService {
         }
     }
 
-    /** Canonical stored form of an id list: {"ids": [sorted ids]} (the contract types json columns as objects). */
-    private ObjectNode sortedArray(Collection<UUID> ids) {
-        ObjectNode o = json.createObjectNode();
-        ArrayNode a = o.putArray("ids");
+    /** Stored form of an id list: the ids sorted, so equal sets compare equal (compensating records). */
+    private ArrayNode sortedArray(Collection<UUID> ids) {
+        ArrayNode a = json.createArrayNode();
         new TreeSet<>(ids).forEach(id -> a.add(id.toString()));
-        return o;
+        return a;
     }
 
     private static List<UUID> uuids(JsonNode arr, String field) {

@@ -26,15 +26,19 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * GL journals. Manual journals (adjustments, accruals, ...) are created by a maker, balance per currency and only
- * hit the GL balances when a different principal approves them. System journals (ledger aggregation, provisions)
- * post immediately. Nothing posts into a period that is soft-closed or closed.
+ * GL journals. Manual journals (adjustments, accruals, ...) are created by a maker with their lines, balance per
+ * currency and only hit the GL balances when a different principal approves them (an append-only
+ * gl_journal_approval). System journals (ledger aggregation, provisions, year-end close) post immediately;
+ * provisions carry a system approval. Nothing posts into a period that is soft-closed or closed.
  */
 @Service
 public class JournalService {
     public static final String AUTO_AGGREGATE = "AUTO_AGGREGATE";
+    public static final String YEAR_END_CLOSE = "YEAR_END_CLOSE";
     static final Set<String> TYPES = Set.of(AUTO_AGGREGATE, "MANUAL_ADJUSTMENT", "ACCRUAL", "PROVISION", "INTER_ENTITY",
-            "REVALUATION");
+            "REVALUATION", YEAR_END_CLOSE);
+    /** Journal types only the system creates; they need no checker approval. */
+    public static final Set<String> SYSTEM_TYPES = Set.of(AUTO_AGGREGATE, YEAR_END_CLOSE);
     static final Set<String> BALANCE_SHEET = Set.of("ASSET", "LIABILITY", "EQUITY", "CONTINGENT");
 
     private final GlStore store;
@@ -49,7 +53,7 @@ public class JournalService {
         this.json = json;
     }
 
-    /** Maker step: records a balanced manual journal awaiting approval. */
+    /** Maker step: records a balanced manual journal awaiting approval (request = GlJournalCreate with lines). */
     @Transactional
     public String createManual(JsonNode req) {
         UUID le = Fields.requireUuid(req, "legal_entity_id");
@@ -59,13 +63,9 @@ public class JournalService {
         if (!TYPES.contains(type)) {
             throw Fields.invalid("journal_type", "invalid_enum", "journal_type must be one of " + TYPES);
         }
-        if (AUTO_AGGREGATE.equals(type)) {
+        if (SYSTEM_TYPES.contains(type)) {
             throw ApiException.unprocessable("journal_type_reserved",
-                    "AUTO_AGGREGATE journals are produced by ledger aggregation only");
-        }
-        if (req.hasNonNull("approved_by")) {
-            throw ApiException.unprocessable("approved_by_not_allowed",
-                    "approved_by is set by the approve action (checker), not on creation");
+                    type + " journals are produced by the system (ledger aggregation, year-end close) only");
         }
         JsonNode period = store.row("select row_to_json(t)::text from accounting_period t where t.id = ? for share", periodId)
                 .orElseThrow(() -> ApiException.unprocessable("period_not_found", "Accounting period " + periodId + " does not exist"));
@@ -75,21 +75,24 @@ public class JournalService {
         validateAccounts(le, lines);
 
         ObjectNode v = crud.toColumns("gl_journal", req);
-        v.remove("approved_by");
-        return insert(v, lines);
+        return withLines(insert(v, lines));
     }
 
-    /** Checker step: four-eyes approval posts the journal to the GL balances. */
+    /**
+     * Checker step: four-eyes approval posts the journal to the GL balances. The approval is its own append-only
+     * record (gl_journal_approval); a journal can be approved once.
+     */
     @Transactional
     public String approve(UUID id, String comment) {
         JsonNode j = store.requireLocked("gl_journal", id);
-        if (AUTO_AGGREGATE.equals(j.get("journal_type").asString())) {
+        if (SYSTEM_TYPES.contains(j.get("journal_type").asString())) {
             throw ApiException.conflict("not_approvable", "System-generated journals are posted without approval");
         }
-        if (j.hasNonNull("approved_by")) {
-            throw ApiException.conflict("already_approved", "Journal " + id + " was already approved by "
-                    + j.get("approved_by").asString());
-        }
+        store.row("select row_to_json(a)::text from gl_journal_approval a where a.gl_journal_id = ?", id)
+                .ifPresent(a -> {
+                    throw ApiException.conflict("already_approved", "Journal " + id + " was already approved by "
+                            + a.get("approved_by").asString());
+                });
         if (TenantContext.principal().equals(Fields.text(j, "created_by"))) {
             throw ApiException.unprocessable("four_eyes_violation", "The maker of a journal cannot approve it");
         }
@@ -97,10 +100,35 @@ public class JournalService {
         LocalDate valueDate = LocalDate.parse(j.get("value_date").asString());
         List<JournalLine> lines = loadLines(id);
         applyToBalances(le, valueDate, lines);
-        store.update("update gl_journal set approved_by = ? where id = ?", TenantContext.principal(), id);
-        String row = store.require("gl_journal", id).toString();
-        publishPosted(id, row, comment);
-        return row;
+        JsonNode approval = json.readTree(recordApproval(id, TenantContext.principal(), comment));
+        publishPosted(id, store.require("gl_journal", id).toString(), comment);
+        outbox.publish("ledger.gl_journal.approved", "gl_journal_approval",
+                UUID.fromString(approval.get("id").asString()), approval);
+        return approval.toString();
+    }
+
+    /** The journal row with its lines embedded as {@code lines} (GlJournal API shape). */
+    @Transactional(readOnly = true)
+    public String withLines(UUID id) {
+        return withLines(store.require("gl_journal", id).toString());
+    }
+
+    private String withLines(String journalRow) {
+        ObjectNode n = (ObjectNode) json.readTree(journalRow);
+        ArrayNode lines = n.putArray("lines");
+        store.rows("select row_to_json(t)::text from gl_journal_line t where t.gl_journal_id = ?::uuid order by t.id",
+                n.get("id").asString()).forEach(lines::add);
+        return n.toString();
+    }
+
+    private String recordApproval(UUID journalId, String approvedBy, String comment) {
+        ObjectNode a = json.createObjectNode();
+        a.put("gl_journal_id", journalId.toString());
+        a.put("approved_by", approvedBy);
+        if (comment != null) {
+            a.put("comment", comment.length() > 500 ? comment.substring(0, 500) : comment);
+        }
+        return crud.insert("gl_journal_approval", a);
     }
 
     /** Posts a system journal (aggregation, provisions) immediately: validated, balanced, applied, published. */
@@ -110,9 +138,29 @@ public class JournalService {
         JournalRules.validate(lines);
         validateAccounts(legalEntityId, lines);
         List<JsonNode> periods = applyToBalances(legalEntityId, valueDate, lines);
+        return insertSystemJournal(legalEntityId, periods.getFirst(), type, valueDate, description, sourceJournalEntryId,
+                approvedBy, lines);
+    }
+
+    /**
+     * Year-end closing journal: posted to the YEAR period only (the closing entries zero the P&L accounts of the
+     * year and move the result to retained earnings; finer periods are not touched).
+     */
+    @Transactional
+    public String postClosingJournal(UUID legalEntityId, JsonNode yearPeriod, LocalDate valueDate, String description,
+                                     List<JournalLine> lines) {
+        JournalRules.validate(lines);
+        validateAccounts(legalEntityId, lines);
+        applyToPeriods(List.of(yearPeriod), lines);
+        return insertSystemJournal(legalEntityId, yearPeriod, YEAR_END_CLOSE, valueDate, description, null, null, lines);
+    }
+
+    private String insertSystemJournal(UUID legalEntityId, JsonNode period, String type, LocalDate valueDate,
+                                       String description, UUID sourceJournalEntryId, String approvedBy,
+                                       List<JournalLine> lines) {
         ObjectNode v = json.createObjectNode();
         v.put("legal_entity_id", legalEntityId.toString());
-        v.put("accounting_period_id", periods.getFirst().get("id").asString());
+        v.put("accounting_period_id", period.get("id").asString());
         v.put("journal_type", type);
         v.put("value_date", valueDate.toString());
         if (description != null) {
@@ -121,11 +169,12 @@ public class JournalService {
         if (sourceJournalEntryId != null) {
             v.put("source_journal_entry_id", sourceJournalEntryId.toString());
         }
-        if (approvedBy != null) {
-            v.put("approved_by", approvedBy);
-        }
         String row = insert(v, lines);
-        publishPosted(UUID.fromString(json.readTree(row).get("id").asString()), row, null);
+        UUID id = UUID.fromString(json.readTree(row).get("id").asString());
+        if (approvedBy != null) {
+            recordApproval(id, approvedBy, null);
+        }
+        publishPosted(id, row, null);
         return row;
     }
 
@@ -139,6 +188,12 @@ public class JournalService {
             throw ApiException.unprocessable("no_open_period",
                     "No accounting period of legal entity " + legalEntityId + " covers " + valueDate);
         }
+        applyToPeriods(periods, lines);
+        return periods;
+    }
+
+    /** Adds the lines to the GL balances of exactly these periods; all of them must accept postings. */
+    void applyToPeriods(List<JsonNode> periods, List<JournalLine> lines) {
         for (JsonNode p : periods) {
             if (!PeriodStatus.valueOf(p.get("status").asString()).acceptsPostings()) {
                 throw ApiException.conflict("period_closed", "Accounting period " + p.get("id").asString() + " ("
@@ -166,7 +221,6 @@ public class JournalService {
                 store.addToBalance(k.account(), p, k.currency(), s[0], s[1], s[2], BALANCE_SHEET.contains(cls));
             });
         }
-        return periods;
     }
 
     void requirePostable(JsonNode period, UUID legalEntityId, LocalDate valueDate) {
@@ -217,11 +271,11 @@ public class JournalService {
         }
         for (JsonNode n : arr) {
             BigDecimal amount = Fields.requireDecimal(n, "amount");
-            BigDecimal base = Fields.decimal(n, "base_amount");
-            if (base == null) {
-                BigDecimal fx = Fields.decimal(n, "fx_rate");
-                base = fx == null ? amount : amount.multiply(fx).setScale(8, RoundingMode.HALF_EVEN);
+            BigDecimal fx = Fields.decimal(n, "fx_rate");
+            if (fx != null && fx.signum() <= 0) {
+                throw Fields.invalid("fx_rate", "min", "fx_rate must be positive");
             }
+            BigDecimal base = fx == null ? amount : amount.multiply(fx).setScale(8, RoundingMode.HALF_EVEN);
             JournalLine.Direction dir = Fields.enumValue(n, "direction", JournalLine.Direction.class);
             if (dir == null) {
                 throw Fields.invalid("direction", "required", "Each line needs a direction (DEBIT or CREDIT)");
@@ -256,6 +310,7 @@ public class JournalService {
             r.put("amount", l.amount().toPlainString());
             r.put("currency", l.currency());
             r.put("base_amount", l.baseAmount().toPlainString());
+            r.put("fx_rate", l.baseAmount().divide(l.amount(), 10, RoundingMode.HALF_EVEN).toPlainString());
             if (l.costCenter() != null) {
                 r.put("cost_center", l.costCenter());
             }

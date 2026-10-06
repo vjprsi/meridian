@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -47,8 +48,13 @@ public class EclService {
         this.json = json;
     }
 
+    /**
+     * Runs the calculation (request = EclProvisionsCalculateRequest) and returns the result object: legal_entity_id,
+     * reporting_date, model_version, exposures, total_ecl per currency, gl_journal_id, period_close_run_id and the
+     * persisted provisions.
+     */
     @Transactional
-    public String calculate(JsonNode req) {
+    public JsonNode calculate(JsonNode req) {
         UUID le = Fields.requireUuid(req, "legal_entity_id");
         LocalDate date = Fields.requireDate(req, "reporting_date");
         UUID expenseGl = Fields.uuid(req, "provision_expense_gl_account_id");
@@ -134,6 +140,8 @@ public class EclService {
             }
         }
 
+        ObjectNode result = json.createObjectNode();
+        ArrayNode provisions = json.createArrayNode();
         for (EclCalculator.Result r : results) {
             ObjectNode v = json.createObjectNode();
             v.put("legal_entity_id", le.toString());
@@ -151,6 +159,7 @@ public class EclService {
                 v.put("gl_journal_id", journalId);
             }
             JsonNode row = json.readTree(crud.insert("ecl_provision", v));
+            provisions.add(row);
             outbox.publish("ledger.ecl_provision.calculated", "ecl_provision",
                     UUID.fromString(row.get("id").asString()), row);
         }
@@ -176,7 +185,20 @@ public class EclService {
         run.set("steps", steps);
         String runRow = crud.insert("period_close_run", run);
         outbox.publish("ledger.period_close_run.completed", "period_close_run", runId, json.readTree(runRow));
-        return runRow;
+
+        result.put("legal_entity_id", le.toString());
+        result.put("reporting_date", date.toString());
+        result.put("model_version", EclCalculator.MODEL_VERSION);
+        result.put("exposures", results.size());
+        result.set("total_ecl", total.deepCopy());
+        if (journalId != null) {
+            result.put("gl_journal_id", journalId);
+        } else {
+            result.putNull("gl_journal_id");
+        }
+        result.put("period_close_run_id", runId.toString());
+        result.set("provisions", provisions);
+        return result;
     }
 
     private static EclCalculator.Input parseInput(JsonNode e) {

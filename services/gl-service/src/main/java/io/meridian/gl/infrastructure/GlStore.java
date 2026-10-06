@@ -17,7 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Repository
 public class GlStore {
     private static final Set<String> TABLES = Set.of("gl_account", "gl_mapping_rule", "accounting_period", "gl_balance",
-            "gl_journal", "gl_journal_line", "period_close_run", "ecl_provision", "erp_export");
+            "gl_journal", "gl_journal_line", "gl_journal_approval", "period_close_run", "ecl_provision", "erp_export");
 
     private final JdbcClient jdbc;
     private final JsonMapper json;
