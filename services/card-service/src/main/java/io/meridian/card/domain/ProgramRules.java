@@ -58,6 +58,8 @@ public final class ProgramRules {
             case "certify" -> "DRAFT".equals(from) ? "CERTIFICATION" : null;
             case "activate" -> "CERTIFICATION".equals(from) || "SUSPENDED".equals(from) ? "ACTIVE" : null;
             case "suspend" -> "ACTIVE".equals(from) ? "SUSPENDED" : null;
+            // go-live declined by the checker (central approvals): back to DRAFT to be reworked and re-certified
+            case "reject_go_live" -> "CERTIFICATION".equals(from) ? "DRAFT" : null;
             default -> throw new IllegalArgumentException(action);
         };
         if (to == null) {
