@@ -1,5 +1,7 @@
 package io.meridian.limits.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -9,6 +11,7 @@ import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -27,14 +30,19 @@ public class LimitAdminService {
     static final Set<String> COUNTER_PERIODS = Set.of("DAILY", "WEEKLY", "MONTHLY", "YEARLY", "LIFETIME",
             "ROLLING_24H", "ROLLING_7D", "ROLLING_30D");
     static final Duration MAX_OVERRIDE = Duration.ofDays(90);
+    /** Approval resource type for limit overrides in workflow-service (G11). */
+    public static final String OVERRIDE_APPROVAL = "limit_override";
 
     private final Db db;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final LimitRuleCache cache;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public LimitAdminService(Db db, CrudEngine crud, OutboxWriter outbox, LimitRuleCache cache, JsonMapper json) {
+    public LimitAdminService(Db db, CrudEngine crud, OutboxWriter outbox, LimitRuleCache cache, JsonMapper json,
+                             Approvals approvals) {
+        this.approvals = approvals;
         this.db = db;
         this.crud = crud;
         this.outbox = outbox;
@@ -171,8 +179,53 @@ public class LimitAdminService {
         v.put("requested_by", TenantContext.principal());
         String row = crud.insert("limit_override", v);
         JsonNode n = json.readTree(row);
-        outbox.publish("risk.limit_override.requested", "limit_override", UUID.fromString(n.get("id").asString()), n);
+        UUID id = UUID.fromString(n.get("id").asString());
+        // Central maker-checker: the checker decides in the workflow inbox; LimitOverrideApprovalHandler applies it.
+        UUID approvalId = Approvals.idOf(approvals.request(overrideApproval(rule, n), "override:" + id));
+        if (approvalId != null) {
+            db.update("update limit_override set approval_request_id = ? where id = ?", approvalId, id);
+            n = db.require("limit_override", id, false);
+            row = db.text(n);
+        }
+        outbox.publish("risk.limit_override.requested", "limit_override", id, n);
         return row;
+    }
+
+    /** What checkers see in the workflow inbox: the limit, the subject, old and new values and the window. */
+    private ApprovalSpec overrideApproval(JsonNode rule, JsonNode o) {
+        String currency = Db.str(rule, "currency");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("limit_rule_id", rule.get("id").asString());
+        payload.put("limit_code", rule.get("code").asString());
+        payload.put("subject_type", Db.str(o, "subject_type"));
+        payload.put("subject_id", Db.str(o, "subject_id"));
+        payload.put("rule_max_amount", Db.str(rule, "max_amount"));
+        payload.put("rule_max_count", Db.integer(rule, "max_count"));
+        payload.put("max_amount", Db.str(o, "max_amount"));
+        payload.put("max_count", Db.integer(o, "max_count"));
+        payload.put("currency", currency);
+        payload.put("valid_from", Db.str(o, "valid_from"));
+        payload.put("valid_to", Db.str(o, "valid_to"));
+        payload.put("reason", Db.str(o, "reason"));
+        ApprovalSpec spec = ApprovalSpec.of(OVERRIDE_APPROVAL, UUID.fromString(o.get("id").asString()), "approve",
+                        "Limit override " + rule.get("code").asString() + " for " + Db.str(o, "subject_type") + " "
+                                + Db.str(o, "subject_id"), payload)
+                .withSummary("Temporary override of limit " + rule.get("code").asString() + " until " + Db.str(o, "valid_to"));
+        BigDecimal amount = Db.dec(o, "max_amount");
+        return amount != null && currency != null ? spec.withAmount(amount, currency) : spec;
+    }
+
+    /**
+     * True while the override is PENDING_APPROVAL and, when a workflow approval request was recorded on it, the
+     * decision belongs to that request.
+     */
+    @Transactional(readOnly = true)
+    public boolean overrideAwaitsApproval(UUID id, UUID approvalRequestId) {
+        return db.one("select row_to_json(o)::text from limit_override o where id = ?", id)
+                .filter(o -> "PENDING_APPROVAL".equals(Db.str(o, "status")))
+                .filter(o -> Db.str(o, "approval_request_id") == null
+                        || String.valueOf(approvalRequestId).equals(Db.str(o, "approval_request_id")))
+                .isPresent();
     }
 
     @Transactional
@@ -187,6 +240,7 @@ public class LimitAdminService {
         }
         db.update("update limit_override set status = 'ACTIVE', approved_by = ?, decision_reason = ? where id = ?",
                 TenantContext.principal(), comment, id);
+        approvals.cancelOpen(OVERRIDE_APPROVAL, id, null, "approved directly");
         return publishOverride(id, "risk.limit_override.approved");
     }
 
@@ -195,6 +249,7 @@ public class LimitAdminService {
         JsonNode o = db.require("limit_override", id, true);
         requireStatus(o, "PENDING_APPROVAL", "reject");
         db.update("update limit_override set status = 'REJECTED', decision_reason = ? where id = ?", reason, id);
+        approvals.cancelOpen(OVERRIDE_APPROVAL, id, null, "rejected directly");
         return publishOverride(id, "risk.limit_override.rejected");
     }
 

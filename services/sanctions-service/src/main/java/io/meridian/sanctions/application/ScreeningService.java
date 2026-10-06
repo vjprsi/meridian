@@ -1,5 +1,7 @@
 package io.meridian.sanctions.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
@@ -9,10 +11,16 @@ import io.meridian.sanctions.infrastructure.Db;
 import io.meridian.sanctions.infrastructure.Downstream;
 import io.meridian.sanctions.infrastructure.ScreeningStore;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -29,6 +37,9 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class ScreeningService {
     static final Set<String> PERIODIC_SUBJECTS = Set.of("CUSTOMER", "RELATED_PARTY", "MERCHANT", "AGENT", "EMPLOYEE");
+    /** Approval resource type for confirming a screening result's true matches in workflow-service (G11). */
+    public static final String CONFIRM_APPROVAL = "screening_result";
+    public static final String CONFIRM_ACTION = "confirm_match";
 
     private final ScreeningEngine engine;
     private final ScreeningStore store;
@@ -38,9 +49,11 @@ public class ScreeningService {
     private final TransactionTemplate tx;
     private final Db db;
     private final JsonMapper json;
+    private final Approvals approvals;
 
     public ScreeningService(ScreeningEngine engine, ScreeningStore store, ListCatalog catalog, Downstream downstream,
-                            OutboxWriter outbox, TransactionTemplate tx, Db db, JsonMapper json) {
+                            OutboxWriter outbox, TransactionTemplate tx, Db db, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.engine = engine;
         this.store = store;
         this.catalog = catalog;
@@ -251,6 +264,7 @@ public class ScreeningService {
             JsonNode row = db.require("screening_result", resultId, false);
             outbox.publish("CONFIRMED_MATCH".equals(status) ? "risk.screening.confirmed_match" : "risk.screening.cleared",
                     "screening_result", resultId, row);
+            approvals.cancelOpen(CONFIRM_APPROVAL, resultId, null, "reviewed directly");
             return row;
         });
     }
@@ -268,9 +282,13 @@ public class ScreeningService {
             String reason = Db.str(changes, "disposition_reason");
             String from = m.get("disposition").asString();
             String who = TenantContext.principal();
+            UUID resultId = UUID.fromString(m.get("screening_result_id").asString());
             if (to == null || to.equals(from)) {
                 if (reason != null) {
                     db.update("update screening_match set disposition_reason = ?, updated_by = ? where id = ?", reason, who, matchId);
+                    if ("TRUE_MATCH".equals(from)) {
+                        requestConfirmation(result);
+                    }
                 }
                 return db.require("screening_match", matchId, false);
             }
@@ -284,8 +302,100 @@ public class ScreeningService {
             db.update("""
                     update screening_match set disposition = ?, disposition_reason = ?, dispositioned_by = ?, updated_by = ?
                     where id = ?""", to, reason, "PENDING".equals(to) ? null : who, who, matchId);
+            if ("TRUE_MATCH".equals(to) || "TRUE_MATCH".equals(from)) {
+                if (!requestConfirmation(result)) {
+                    approvals.cancelOpen(CONFIRM_APPROVAL, resultId, null, "no true match left to confirm");
+                }
+            }
             return db.require("screening_match", matchId, false);
         });
+    }
+
+    // ------------------------------------------------------------------ central approval of confirmations (G11)
+
+    /**
+     * Central maker-checker: a result with TRUE_MATCH dispositions waits for a second reviewer's confirmation, so
+     * workflow-service gets a confirmation request (one per set of true matches; ConfirmationApprovalHandler applies
+     * the decision). Ids and scores only: names stay in sanctions-service. Returns false when no match is TRUE_MATCH.
+     */
+    private boolean requestConfirmation(JsonNode result) {
+        UUID resultId = UUID.fromString(result.get("id").asString());
+        List<JsonNode> trueMatches = trueMatches(resultId);
+        if (trueMatches.isEmpty()) {
+            return false;
+        }
+        String fingerprint = fingerprint(trueMatches);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("screening_result_id", resultId.toString());
+        payload.put("screening_request_id", Db.str(result, "screening_request_id"));
+        payload.put("subject_type", Db.str(result, "subject_type"));
+        payload.put("subject_id", Db.str(result, "subject_id"));
+        payload.put("true_match_ids", ids(trueMatches));
+        payload.put("max_score", trueMatches.stream().map(mm -> Db.str(mm, "match_score")).filter(java.util.Objects::nonNull)
+                .map(BigDecimal::new).max(BigDecimal::compareTo).map(BigDecimal::toPlainString).orElse(null));
+        payload.put("dispositioned_by", trueMatches.stream().map(mm -> Db.str(mm, "dispositioned_by")).distinct().toList());
+        payload.put("fingerprint", fingerprint);
+        approvals.request(new ApprovalSpec(CONFIRM_APPROVAL, resultId, CONFIRM_ACTION,
+                        "Confirm sanctions match for " + Db.str(result, "subject_type") + " " + Db.str(result, "subject_id"),
+                        trueMatches.size() + " match(es) dispositioned TRUE_MATCH; a second reviewer confirms (opens a"
+                                + " SANCTIONS case) or returns them for review", payload, null, null, "HIGH"),
+                "confirm:" + resultId + ":" + fingerprint);
+        return true;
+    }
+
+    /** True while the result is POTENTIAL_MATCH with the same TRUE_MATCH dispositions as the submission. */
+    public boolean awaitsConfirmation(UUID resultId, String fingerprint) {
+        return db.one("select row_to_json(r)::text from screening_result r where id = ?", resultId)
+                .filter(r -> "POTENTIAL_MATCH".equals(Db.str(r, "status")))
+                .map(r -> trueMatches(resultId))
+                .filter(t -> !t.isEmpty() && (fingerprint == null || fingerprint.equals(fingerprint(t))))
+                .isPresent();
+    }
+
+    /**
+     * A second reviewer returns the TRUE_MATCH dispositions of a result to PENDING for re-review (rejection of the
+     * confirmation). Same four-eyes rule as clearing a true match: not by the analyst who dispositioned it.
+     */
+    public JsonNode returnTrueMatches(UUID resultId, String fingerprint, String reason) {
+        return tx.execute(st -> {
+            JsonNode result = db.require("screening_result", resultId, true);
+            requirePotential(result);
+            List<JsonNode> trueMatches = trueMatches(resultId);
+            if (trueMatches.isEmpty() || (fingerprint != null && !fingerprint.equals(fingerprint(trueMatches)))) {
+                throw ApiException.conflict("stale_confirmation", "The true matches changed since the confirmation was requested");
+            }
+            String who = TenantContext.principal();
+            for (JsonNode m : trueMatches) {
+                if (who.equals(Db.str(m, "dispositioned_by"))) {
+                    throw ApiException.unprocessable("four_eyes_violation",
+                            "Clearing a true match needs a second reviewer (not " + who + ")");
+                }
+            }
+            db.update("""
+                    update screening_match set disposition = 'PENDING', disposition_reason = ?, dispositioned_by = null,
+                        updated_by = ? where screening_result_id = ? and disposition = 'TRUE_MATCH'""", reason, who, resultId);
+            approvals.cancelOpen(CONFIRM_APPROVAL, resultId, null, "returned for review");
+            return db.require("screening_result", resultId, false);
+        });
+    }
+
+    private List<JsonNode> trueMatches(UUID resultId) {
+        return db.list("""
+                select row_to_json(m)::text from screening_match m
+                where screening_result_id = ? and disposition = 'TRUE_MATCH' order by id""", resultId);
+    }
+
+    /** Fingerprint of a set of TRUE_MATCH dispositions: match ids and their row versions. */
+    static String fingerprint(List<JsonNode> trueMatches) {
+        StringBuilder sb = new StringBuilder();
+        trueMatches.stream().map(m -> m.get("id").asString() + ":" + m.get("row_version").asInt()).sorted()
+                .forEach(x -> sb.append(x).append(';'));
+        try {
+            byte[] h = MessageDigest.getInstance("SHA-256").digest(sb.toString().getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(h, 0, 16);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // ------------------------------------------------------------------ whitelist

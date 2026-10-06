@@ -1,5 +1,7 @@
 package io.meridian.transactionmonitoring.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -8,6 +10,10 @@ import io.meridian.transactionmonitoring.infrastructure.Db;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -26,13 +32,19 @@ import tools.jackson.databind.node.ObjectNode;
 public class RatingService {
     static final Set<String> FACTOR_KEYS = Set.of("country_risk", "product_risk", "channel_risk", "occupation_risk", "pep",
             "adverse_media", "sanctioned");
+    /** Approval resource type for rating overrides in workflow-service (G11). */
+    public static final String OVERRIDE_APPROVAL = "customer_risk_rating";
+    /** Approval action for a rating override (recalculations need no approval). */
+    public static final String OVERRIDE_ACTION = "override";
 
     private final Db db;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public RatingService(Db db, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    public RatingService(Db db, CrudEngine crud, OutboxWriter outbox, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.db = db;
         this.crud = crud;
         this.outbox = outbox;
@@ -109,7 +121,41 @@ public class RatingService {
                 rating, reason, TenantContext.principal(), TenantContext.principal(), id);
         JsonNode row = db.require("customer_risk_rating", id, false);
         outbox.publish("risk.customer_risk_rating.override_requested", "customer_risk_rating", id, row);
+        // Central maker-checker: the checker decides in the workflow inbox; RatingOverrideApprovalHandler applies it.
+        String fingerprint = overrideFingerprint(row);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("customer_id", Db.str(row, "customer_id"));
+        payload.put("calculated_rating", Db.str(row, "rating"));
+        payload.put("score", row.path("score").asInt());
+        payload.put("effective_rating", Db.str(row, "effective_rating"));
+        payload.put("override_rating", rating);
+        payload.put("override_reason", reason);
+        payload.put("fingerprint", fingerprint);
+        approvals.request(ApprovalSpec.of(OVERRIDE_APPROVAL, id, OVERRIDE_ACTION,
+                        "Risk rating override to " + rating + " for customer " + Db.str(row, "customer_id"), payload)
+                        .withSummary("Override the calculated " + Db.str(row, "rating") + " AML risk rating with " + rating),
+                "override:" + id + ":" + row.get("row_version").asInt());
         return db.text(row);
+    }
+
+    /** True while an override is PENDING_APPROVAL with the submitted content (fingerprint) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean overrideAwaitsApproval(UUID id, String fingerprint) {
+        return db.one("select row_to_json(r)::text from customer_risk_rating r where id = ?", id)
+                .filter(r -> "PENDING_APPROVAL".equals(Db.str(r, "override_status")))
+                .filter(r -> fingerprint == null || fingerprint.equals(overrideFingerprint(r)))
+                .isPresent();
+    }
+
+    /** Content fingerprint of the pending override (rating, justification and maker). */
+    static String overrideFingerprint(JsonNode r) {
+        String content = Db.str(r, "override_rating") + "|" + Db.str(r, "override_reason") + "|" + Db.str(r, "override_requested_by");
+        try {
+            byte[] h = MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(h, 0, 16);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Transactional
@@ -125,6 +171,7 @@ public class RatingService {
                 TenantContext.principal(), rating, RiskRating.nextReview(rating, today()), TenantContext.principal(), id);
         JsonNode row = db.require("customer_risk_rating", id, false);
         outbox.publish("risk.customer_risk_rating.changed", "customer_risk_rating", id, row);
+        approvals.cancelOpen(OVERRIDE_APPROVAL, id, OVERRIDE_ACTION, "approved directly");
         return db.text(row);
     }
 
@@ -137,6 +184,7 @@ public class RatingService {
                 TenantContext.principal(), reason, TenantContext.principal(), id);
         JsonNode row = db.require("customer_risk_rating", id, false);
         outbox.publish("risk.customer_risk_rating.override_rejected", "customer_risk_rating", id, row);
+        approvals.cancelOpen(OVERRIDE_APPROVAL, id, OVERRIDE_ACTION, "rejected directly");
         return db.text(row);
     }
 
