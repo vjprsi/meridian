@@ -37,6 +37,14 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.party.v1
+  customer:
+    # Key for identifier hashes, OTP peppering and passkey challenges. Supply from the vault in every
+    # non-local environment (MERIDIAN_CUSTOMER_SECRET_KEY); the default is for the local stack only.
+    secret-key: ${MERIDIAN_CUSTOMER_SECRET_KEY:local-dev-only-secret-key-change-me}
+    webauthn:
+      rp-id: meridian.example
+      rp-name: Meridian Bank
+      origins: https://app.meridian.example
 
 management:
   endpoints:
