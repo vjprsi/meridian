@@ -7,6 +7,8 @@ import static io.meridian.deposit.infrastructure.Rows.str;
 import static io.meridian.deposit.infrastructure.Rows.ts;
 import static io.meridian.deposit.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.deposit.config.DepositProperties;
@@ -21,7 +23,9 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -49,9 +53,14 @@ public class DepositAccountService {
     private final DepositProperties props;
     private final ProductCatalogClient catalog;
     private final SecureRandom random = new SecureRandom();
+    private final Approvals approvals;
+
+    /** Approval resource type for account openings in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "deposit_account";
 
     public DepositAccountService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events,
-                                 DepositProperties props, ProductCatalogClient catalog) {
+                                 DepositProperties props, ProductCatalogClient catalog, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.accounts = accounts;
         this.ledger = ledger;
@@ -119,6 +128,17 @@ public class DepositAccountService {
         ObjectNode primary = rows.insert("account_holder", holder);
         events.publish("accounts.deposit_account.opened", TABLE, row);
         events.publish("accounts.account_holder.added", "account_holder", primary);
+        // Central maker-checker: opening is the maker's submission; the checker decides in the workflow inbox.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("account_number", str(row, "account_number"));
+        payload.put("account_type", type);
+        payload.put("customer_id", str(row, "customer_id"));
+        payload.put("product_id", str(row, "product_id"));
+        payload.put("product_version_id", str(row, "product_version_id"));
+        payload.put("currency", currency);
+        payload.put("iban", str(row, "iban"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Open " + type + " account " + str(row, "account_number") + " (" + currency + ")", payload), "open:" + id);
         return row;
     }
 
@@ -164,7 +184,30 @@ public class DepositAccountService {
         }
         ObjectNode extra = rows.object();
         extra.put("ledger_account_id", ensureLedgerAccount(acc).toString());
-        return accounts.transition(acc, "PENDING_FUNDING", "APPROVED", comment == null ? "Approved" : comment, extra, null);
+        ObjectNode approved = accounts.transition(acc, "PENDING_FUNDING", "APPROVED", comment == null ? "Approved" : comment,
+                extra, null);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+        return approved;
+    }
+
+    /**
+     * Declines an account opening (PENDING_APPROVAL -> REJECTED). The API has no reject endpoint for accounts; this
+     * applies a rejection decided in workflow-service (G11).
+     */
+    @Transactional
+    public ObjectNode reject(UUID id, String reason) {
+        ObjectNode acc = accounts.lock(id);
+        io.meridian.deposit.domain.Lifecycle.DEPOSIT_ACCOUNT.require(str(acc, "status"), "REJECTED");
+        return accounts.transition(acc, "REJECTED", "REJECTED", reason, null, null);
+    }
+
+    /** True while the account still awaits opening approval for the same account number. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String accountNumber) {
+        return rows.find(TABLE, id)
+                .filter(a -> "PENDING_APPROVAL".equals(str(a, "status")))
+                .filter(a -> accountNumber == null || accountNumber.equals(str(a, "account_number")))
+                .isPresent();
     }
 
     @Transactional

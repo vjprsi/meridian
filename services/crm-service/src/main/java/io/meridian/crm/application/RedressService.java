@@ -2,6 +2,8 @@ package io.meridian.crm.application;
 
 import static io.meridian.crm.application.Json.text;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.error.ApiException.FieldError;
 import io.meridian.common.tenancy.TenantContext;
@@ -12,6 +14,7 @@ import io.meridian.crm.infrastructure.Rows;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +34,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class RedressService {
     static final String T = "complaint_redress";
+    /** Approval resource type for redress proposals in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "complaint_redress";
 
     private final Rows rows;
     private final CrudEngine crud;
@@ -39,10 +44,13 @@ public class RedressService {
     private final TimelineService timeline;
     private final String defaultLedger;
     private final String defaultFunding;
+    private final Approvals approvals;
 
     public RedressService(Rows rows, CrudEngine crud, Events events, ExternalServices external, TimelineService timeline,
                           @Value("${meridian.crm.redress.ledger-id:}") String defaultLedger,
-                          @Value("${meridian.crm.redress.funding-account-id:}") String defaultFunding) {
+                          @Value("${meridian.crm.redress.funding-account-id:}") String defaultFunding,
+                          Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.crud = crud;
         this.events = events;
@@ -90,6 +98,24 @@ public class RedressService {
         v.put("status", "PROPOSED");
         ObjectNode row = rows.insert(T, v);
         events.publish("servicing.complaint_redress.proposed", T, row, ComplaintRedress.class);
+        // Central maker-checker: the proposal is the maker's submission; monetary redress is routed by amount.
+        UUID id = Json.uuid(row, "id");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("complaint_id", complaintId.toString());
+        payload.put("complaint_number", text(complaint, "complaint_number"));
+        payload.put("customer_id", text(complaint, "customer_id"));
+        payload.put("redress_type", type);
+        payload.put("amount", text(row, "amount"));
+        payload.put("currency", text(row, "currency"));
+        payload.put("target_account_id", text(row, "target_account_id"));
+        payload.put("description", text(row, "description"));
+        ApprovalSpec spec = ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Redress " + type + (text(row, "amount") == null ? "" : " " + text(row, "amount") + " " + text(row, "currency"))
+                        + " for complaint " + text(complaint, "complaint_number"), payload);
+        if (text(row, "amount") != null && text(row, "currency") != null) {
+            spec = spec.withAmount(new BigDecimal(text(row, "amount")), text(row, "currency"));
+        }
+        approvals.request(spec, "propose:" + id);
         return row;
     }
 
@@ -110,6 +136,7 @@ public class RedressService {
         }
         ObjectNode row = rows.update(T, id, v);
         events.publish("servicing.complaint_redress.approved", T, row, ComplaintRedress.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return row;
     }
 
@@ -121,7 +148,14 @@ public class RedressService {
         v.put("rejection_reason", Json.truncate(reason, 255));
         ObjectNode row = rows.update(T, id, v);
         events.publish("servicing.complaint_redress.rejected", T, row, ComplaintRedress.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row;
+    }
+
+    /** True while the redress is still a proposal awaiting its checker. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id) {
+        return rows.find(T, id).filter(r -> "PROPOSED".equals(text(r, "status"))).isPresent();
     }
 
     /** Pays approved (or previously failed) redress; the answer carries PAID or FAILED with the ledger's reason. */

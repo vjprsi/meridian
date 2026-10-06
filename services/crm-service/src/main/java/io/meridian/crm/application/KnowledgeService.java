@@ -2,6 +2,8 @@ package io.meridian.crm.application;
 
 import static io.meridian.crm.application.Json.text;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.error.ApiException.FieldError;
 import io.meridian.common.page.Cursor;
@@ -12,10 +14,12 @@ import io.meridian.crm.infrastructure.Rows;
 import io.meridian.web.crud.CrudEngine;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -33,6 +37,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class KnowledgeService {
     static final String T = "knowledge_article";
+    /** Approval resource type for article reviews in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "knowledge_article";
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
     private static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$");
     private static final Set<String> CASE_TYPES = Set.of("SERVICE_REQUEST", "INQUIRY", "CARD_ISSUE", "PAYMENT_ISSUE",
@@ -42,8 +48,10 @@ public class KnowledgeService {
     private final Rows rows;
     private final CrudEngine crud;
     private final Events events;
+    private final Approvals approvals;
 
-    public KnowledgeService(Rows rows, CrudEngine crud, Events events) {
+    public KnowledgeService(Rows rows, CrudEngine crud, Events events, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.crud = crud;
         this.events = events;
@@ -125,7 +133,27 @@ public class KnowledgeService {
         ObjectNode v = rows.object();
         v.put("status", Lifecycles.ARTICLE.apply("submit-review", text(a, "status")));
         v.put("submitted_by", Json.truncate(TenantContext.principal(), 64));
-        return rows.update(T, id, v);
+        ObjectNode row = rows.update(T, id, v);
+        // Central maker-checker: the reviewer decides in the workflow inbox; the version identifies the content.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("slug", text(row, "slug"));
+        payload.put("title", text(row, "title"));
+        payload.put("language", text(row, "language"));
+        payload.put("audience", text(row, "audience"));
+        payload.put("version", row.path("version").asInt());
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "publish",
+                "Knowledge article " + text(row, "slug") + " v" + row.path("version").asInt(), payload),
+                "review:" + id + ":" + row.path("version").asInt());
+        return row;
+    }
+
+    /** True while the article is IN_REVIEW with the submitted version. */
+    @Transactional(readOnly = true)
+    public boolean awaitsReview(UUID id, Integer version) {
+        return rows.find(T, id)
+                .filter(a -> "IN_REVIEW".equals(text(a, "status")))
+                .filter(a -> version == null || version == a.path("version").asInt())
+                .isPresent();
     }
 
     @Transactional
@@ -146,6 +174,7 @@ public class KnowledgeService {
         }
         ObjectNode row = rows.update(T, id, v);
         events.publish("servicing.knowledge_article.published", T, row, KnowledgeArticle.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "published directly");
         return row;
     }
 
@@ -157,6 +186,9 @@ public class KnowledgeService {
         v.put("archived_at", rows.now().toString());
         ObjectNode row = rows.update(T, id, v);
         events.publish("servicing.knowledge_article.archived", T, row, KnowledgeArticle.class);
+        if ("IN_REVIEW".equals(text(a, "status"))) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "archived");
+        }
         return row;
     }
 

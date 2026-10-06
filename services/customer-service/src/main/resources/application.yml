@@ -37,6 +37,10 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.party.v1
+  approvals:
+    # KYC tier upgrades have no local approve endpoint: their checker always decides in workflow-service, so this
+    # service defaults to central approvals (override with MERIDIAN_APPROVALS_MODE).
+    mode: workflow
   customer:
     # Key for identifier hashes, OTP peppering and passkey challenges. Supply from the vault in every
     # non-local environment (MERIDIAN_CUSTOMER_SECRET_KEY); the default is for the local stack only.

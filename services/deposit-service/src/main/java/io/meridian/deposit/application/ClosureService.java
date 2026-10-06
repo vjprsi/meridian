@@ -4,6 +4,8 @@ import static io.meridian.deposit.infrastructure.Rows.decOr0;
 import static io.meridian.deposit.infrastructure.Rows.str;
 import static io.meridian.deposit.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.deposit.config.DepositProperties;
 import io.meridian.deposit.domain.ClosureCalculator;
@@ -41,9 +43,14 @@ public class ClosureService {
     private final InterestService interest;
     private final FeeService fees;
     private final DepositProperties props;
+    private final Approvals approvals;
+
+    /** Approval resource type for account closures in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "account_closure";
 
     public ClosureService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events, InterestService interest,
-                          FeeService fees, DepositProperties props) {
+                          FeeService fees, DepositProperties props, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.accounts = accounts;
         this.ledger = ledger;
@@ -173,6 +180,22 @@ public class ClosureService {
         v.put("final_balance", payout.toPlainString());
         ObjectNode closure = rows.insert("account_closure", v);
         accounts.transition(acc, "CLOSING", str(v, "reason_code"), "Closure requested: " + str(closure, "id"), null, null);
+        // Central maker-checker: the checker decides in the workflow inbox; routed by the payout amount.
+        UUID closureId = uuid(closure, "id");
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("deposit_account_id", accountId.toString());
+        payload.put("account_number", str(acc, "account_number"));
+        payload.put("reason_code", str(closure, "reason_code"));
+        payload.put("final_balance", payout.toPlainString());
+        payload.put("final_interest", str(closure, "final_interest"));
+        payload.put("final_fees", str(closure, "final_fees"));
+        payload.put("currency", str(acc, "currency"));
+        payload.put("transfer_to_account_id", str(closure, "transfer_to_account_id"));
+        payload.put("transfer_to_payee_id", str(closure, "transfer_to_payee_id"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, closureId, "approve",
+                "Close account " + str(acc, "account_number") + " (payout " + payout.toPlainString() + " "
+                        + str(acc, "currency") + ")", payload).withAmount(payout, str(acc, "currency")),
+                "request:" + closureId);
         return closure;
     }
 
@@ -259,17 +282,31 @@ public class ClosureService {
         v.put("final_balance", paid.toPlainString());
         v.put("completed_at", accounts.now().toString());
         Lifecycle.ACCOUNT_CLOSURE.require("SETTLING", "COMPLETED"); // settled within this transaction
-        return rows.update("account_closure", closureId, v);
+        ObjectNode completed = rows.update("account_closure", closureId, v);
+        approvals.cancelOpen(APPROVAL_RESOURCE, closureId, null, "approved directly");
+        return completed;
     }
 
     @Transactional
     public ObjectNode reject(UUID closureId, String reason) {
-        return end(closureId, "REJECTED", reason);
+        ObjectNode r = end(closureId, "REJECTED", reason);
+        approvals.cancelOpen(APPROVAL_RESOURCE, closureId, null, "rejected directly");
+        return r;
     }
 
     @Transactional
     public ObjectNode cancel(UUID closureId, String reason) {
-        return end(closureId, "CANCELLED", reason);
+        ObjectNode r = end(closureId, "CANCELLED", reason);
+        approvals.cancelOpen(APPROVAL_RESOURCE, closureId, null, reason == null ? "cancelled" : reason);
+        return r;
+    }
+
+    /** True while the closure still awaits approval (it is not edited after the request). */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID closureId) {
+        return rows.find("account_closure", closureId)
+                .filter(c -> "PENDING_APPROVAL".equals(str(c, "status")))
+                .isPresent();
     }
 
     private ObjectNode end(UUID closureId, String status, String reason) {

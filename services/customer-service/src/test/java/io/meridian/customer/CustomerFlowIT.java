@@ -8,7 +8,8 @@ import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.when;
 
 import io.meridian.customer.application.CustomerService;
-import io.meridian.customer.infrastructure.ApprovalEventsListener;
+import io.meridian.approvals.ApprovalEventsDispatcher;
+import io.meridian.customer.application.CustomerTierApprovalHandler;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
 import java.net.URI;
@@ -112,11 +113,12 @@ class CustomerFlowIT {
     private void deliverApproval(JsonNode approval, String outcome) throws Exception {
         ObjectNode decided = (ObjectNode) approval.deepCopy();
         decided.put("status", outcome.toUpperCase(java.util.Locale.ROOT));
+        decided.put("updated_by", "checker");
         ConsumerRecord<String, String> record = new ConsumerRecord<>("meridian.platform.v1", 0, 0L,
                 decided.get("id").asString(), json.writeValueAsString(decided));
         record.headers().add("ce_type", ("platform.approval_request." + outcome).getBytes(StandardCharsets.UTF_8));
         record.headers().add("ce_tenantid", TENANT.getBytes(StandardCharsets.UTF_8));
-        new ApprovalEventsListener(customerService, json).onEvent(record);
+        new ApprovalEventsDispatcher(List.of(new CustomerTierApprovalHandler(customerService)), json).onEvent(record);
     }
 
     // ------------------------------------------------------------------ lifecycle, OTP and tier maker-checker

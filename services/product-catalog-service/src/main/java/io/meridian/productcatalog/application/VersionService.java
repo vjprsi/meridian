@@ -1,5 +1,7 @@
 package io.meridian.productcatalog.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -32,6 +34,8 @@ public class VersionService {
     static final String VERSION = "product_version";
     static final Set<String> MIGRATION_POLICIES = Set.of("PIN", "MIGRATE_ON_RENEWAL", "FORCE_MIGRATE");
     static final String MIGRATION_EVENT = "product.product_version.migration_requested";
+    /** Approval resource type for product versions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "product_version";
 
     private final CatalogStore store;
     private final CrudEngine crud;
@@ -39,9 +43,11 @@ public class VersionService {
     private final ProductService products;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
     public VersionService(CatalogStore store, CrudEngine crud, DefinitionService definitions, ProductService products,
-                          OutboxWriter outbox, JsonMapper json) {
+                          OutboxWriter outbox, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.definitions = definitions;
@@ -124,6 +130,17 @@ public class VersionService {
         }
         JsonNode row = store.update(VERSION, id, values);
         outbox.publish("product.product_version.submitted", VERSION, id, row);
+        // Central maker-checker: the checker decides in the workflow inbox; ProductVersionApprovalHandler applies it.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("product_id", product.get("id").asString());
+        payload.put("product_code", product.path("code").asString(null));
+        payload.put("version_no", row.path("version_no").asInt());
+        payload.put("checksum", row.path("checksum").asString(null));
+        payload.put("submitted_at", row.path("submitted_at").asString(null));
+        payload.put("comment", comment);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Product " + product.path("code").asString("") + " v" + row.path("version_no").asInt(), payload),
+                "submit:" + id + ":" + row.path("checksum").asString("") + ":" + row.path("submitted_at").asString(""));
         return row.toString();
     }
 
@@ -141,6 +158,7 @@ public class VersionService {
         values.put("approved_at", io.meridian.common.time.Clocks.now().toString());
         JsonNode row = store.update(VERSION, id, values);
         outbox.publish("product.product_version.approved", VERSION, id, withNote(row, "comment", comment));
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return row.toString();
     }
 
@@ -158,7 +176,18 @@ public class VersionService {
         values.put("rejection_reason", reason);
         JsonNode row = store.update(VERSION, id, values);
         outbox.publish("product.product_version.rejected", VERSION, id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row.toString();
+    }
+
+    /** True while the version is PENDING_APPROVAL for the same submission (checksum and submission time). */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String checksum, String submittedAt) {
+        return store.find(VERSION, id)
+                .filter(v -> "PENDING_APPROVAL".equals(v.path("status").asString()))
+                .filter(v -> checksum == null || checksum.equals(v.path("checksum").asString(null)))
+                .filter(v -> Submissions.sameInstant(submittedAt, v.path("submitted_at").asString(null)))
+                .isPresent();
     }
 
     /**

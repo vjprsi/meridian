@@ -6,6 +6,8 @@ import static io.meridian.customer.application.Json.text;
 import static io.meridian.customer.application.Json.today;
 import static io.meridian.customer.application.Json.truncate;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.error.ApiException.FieldError;
 import io.meridian.common.tenancy.TenantContext;
@@ -14,7 +16,6 @@ import io.meridian.customer.api.generated.model.CustomerKycTierHistory;
 import io.meridian.customer.domain.KycTierPolicy;
 import io.meridian.customer.domain.Lifecycles;
 import io.meridian.customer.infrastructure.Rows;
-import io.meridian.customer.infrastructure.WorkflowGateway;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
 import java.time.Period;
@@ -38,19 +39,21 @@ public class CustomerService {
     private static final int AGE_OF_MAJORITY = 18;
     /** resource_type of KYC tier upgrade approval requests in workflow-service. */
     public static final String TIER_APPROVAL_RESOURCE = "customer_kyc_tier";
+    /** action of KYC tier upgrade approval requests. */
+    public static final String TIER_APPROVAL_ACTION = "change_tier";
 
     private final Rows rows;
     private final CrudEngine crud;
     private final Events events;
     private final JsonMapper json;
-    private final WorkflowGateway workflow;
+    private final Approvals approvals;
 
-    public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json, WorkflowGateway workflow) {
+    public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json, Approvals approvals) {
         this.rows = rows;
         this.crud = crud;
         this.events = events;
         this.json = json;
-        this.workflow = workflow;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ create / update
@@ -340,7 +343,12 @@ public class CustomerService {
             ObjectNode v = rows.object();
             v.putNull("pending_tier");
             v.putNull("tier_approval_request_id");
-            return new TierResult(applyTier(id, c, v, toTier, reason), false);
+            ObjectNode row = applyTier(id, c, v, toTier, reason);
+            if (pending != null) {
+                // the parked upgrade is superseded: close its inbox item (after commit)
+                approvals.cancelOpen(TIER_APPROVAL_RESOURCE, id, TIER_APPROVAL_ACTION, "superseded by downgrade to " + toTier);
+            }
+            return new TierResult(row, false);
         }
         if (pending != null) {
             throw ApiException.conflict("tier_change_pending", "A change to " + pending
@@ -355,10 +363,16 @@ public class CustomerService {
         payload.put("from_tier", from);
         payload.put("to_tier", toTier);
         payload.put("reason", truncate(reason, 255));
-        JsonNode approval = workflow.requestApproval(TIER_APPROVAL_RESOURCE, id, "change_tier",
-                "KYC tier " + from + " -> " + toTier + " for " + text(c, "customer_number"), truncate(reason, 255),
-                payload, "tier:" + id + ":" + idempotencyKey);
-        String approvalId = text(approval, "id");
+        payload.put("requested_by", TenantContext.principal());
+        if (!approvals.centralised()) {
+            throw new ApiException(503, "approvals_unavailable",
+                    "KYC tier upgrades are approved in workflow-service; set meridian.approvals.mode=workflow");
+        }
+        JsonNode approval = approvals.request(ApprovalSpec.of(TIER_APPROVAL_RESOURCE, id, TIER_APPROVAL_ACTION,
+                "KYC tier " + from + " -> " + toTier + " for " + text(c, "customer_number"), payload)
+                .withSummary(truncate(reason, 255)), "tier:" + id + ":" + idempotencyKey);
+        UUID requestId = Approvals.idOf(approval);
+        String approvalId = requestId == null ? null : requestId.toString();
         if (approvalId == null) {
             throw new ApiException(502, "upstream_error", "workflow-service did not return an approval request id");
         }
@@ -371,13 +385,18 @@ public class CustomerService {
     }
 
     /**
-     * Applies ({@code approved}) or drops ({@code rejected}, {@code expired}, {@code cancelled}) the pending tier
-     * upgrade linked to the approval request. Returns false when the request is not (or no longer) the pending one,
-     * which makes redelivered events harmless. The evidence is re-checked at execution time: an approved upgrade the
-     * evidence no longer supports (or for a customer closed meanwhile) is dropped instead of applied.
+     * Applies ({@code approved}) or drops ({@code rejected}, {@code changes_requested}, {@code expired},
+     * {@code cancelled}) the pending tier upgrade linked to the approval request. Returns false when the request is
+     * not (or no longer) the pending one, which makes redelivered events harmless. The evidence is re-checked at
+     * execution time: an approved upgrade the evidence no longer supports, for a customer closed meanwhile, or
+     * approved by the principal who requested it (four-eyes) is dropped instead of applied.
+     *
+     * @param approval the approval request row (id, resource_id, payload)
+     * @param outcome  lower-case outcome ({@code approved}, {@code rejected}, ...)
+     * @param decidedBy the deciding approver
      */
     @Transactional
-    public boolean onTierApprovalDecided(JsonNode approval, String outcome) {
+    public boolean onTierApprovalDecided(JsonNode approval, String outcome, String decidedBy) {
         UUID customerId = Json.uuid(approval, "resource_id");
         String approvalId = text(approval, "id");
         if (customerId == null || approvalId == null || rows.find(T, customerId).isEmpty()) {
@@ -392,7 +411,9 @@ public class CustomerService {
         clear.putNull("pending_tier");
         clear.putNull("tier_approval_request_id");
         String requestedTo = text(approval.path("payload"), "to_tier");
-        boolean applicable = "approved".equals(outcome) && (requestedTo == null || requestedTo.equals(toTier))
+        String requestedBy = text(approval.path("payload"), "requested_by");
+        boolean fourEyes = requestedBy == null || decidedBy == null || !requestedBy.equals(decidedBy);
+        boolean applicable = "approved".equals(outcome) && fourEyes && (requestedTo == null || requestedTo.equals(toTier))
                 && Lifecycles.CUSTOMER_OPEN.contains(text(c, "status"))
                 && KycTierPolicy.unmet(toTier, evidence(customerId, c)).isEmpty();
         if (!applicable) {

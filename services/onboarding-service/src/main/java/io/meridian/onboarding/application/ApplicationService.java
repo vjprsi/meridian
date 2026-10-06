@@ -1,5 +1,7 @@
 package io.meridian.onboarding.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.error.ApiException.FieldError;
 import io.meridian.common.tenancy.TenantContext;
@@ -43,6 +45,8 @@ public class ApplicationService {
     static final String T_APP = "onboarding_application";
     static final String T_STEP = "onboarding_step";
     static final String T_JOURNEY = "onboarding_journey";
+    /** Approval resource type for referred applications in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "onboarding_application";
 
     private final Rows rows;
     private final CrudEngine crud;
@@ -50,8 +54,9 @@ public class ApplicationService {
     private final ServiceClient client;
     private final String resumeSecret;
     private final String resumeBaseUrl;
+    private final Approvals approvals;
 
-    public ApplicationService(Rows rows, CrudEngine crud, Events events, ServiceClient client,
+    public ApplicationService(Rows rows, CrudEngine crud, Events events, ServiceClient client, Approvals approvals,
                               @Value("${meridian.onboarding.resume-token-secret:dev-only-resume-secret}") String resumeSecret,
                               @Value("${meridian.onboarding.resume-base-url:https://onboarding.meridian.example/resume}")
                               String resumeBaseUrl) {
@@ -61,6 +66,7 @@ public class ApplicationService {
         this.client = client;
         this.resumeSecret = resumeSecret;
         this.resumeBaseUrl = resumeBaseUrl;
+        this.approvals = approvals;
     }
 
     /** Loaded application with its journey, step graph, step rows (by code) and collected data. */
@@ -338,6 +344,7 @@ public class ApplicationService {
                 out.put("status", "REFERRED");
                 app = rows.update(T_APP, id, out);
                 events.publish("party.onboarding_application.referred", T_APP, app, OnboardingApplication.class);
+                requestReview(app, ctx.journey());
             }
             default -> {
                 out.put("status", "REJECTED");
@@ -363,7 +370,49 @@ public class ApplicationService {
         ensureCustomer(ctx, ctx.app(), v);
         ObjectNode app = rows.update(T_APP, id, v);
         events.publish("party.onboarding_application.approved", T_APP, app, OnboardingApplication.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return app;
+    }
+
+    /** Central maker-checker: a referred application is reviewed from the workflow inbox. */
+    private void requestReview(ObjectNode app, ObjectNode journey) {
+        UUID id = Events.uuid(app, "id");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("application_number", app.path("application_number").asString(null));
+        payload.put("journey_code", journey.path("code").asString(null));
+        payload.put("journey_version", journey.path("version").asInt());
+        payload.put("channel", app.path("channel").asString(null));
+        payload.put("risk_score", app.path("risk_score").asInt());
+        payload.put("risk_level", app.path("risk_level").asString(null));
+        payload.put("decision_reasons", app.get("decision_reasons"));
+        payload.put("submitted_at", app.path("submitted_at").asString(null));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "review",
+                "Onboarding application " + app.path("application_number").asString("") + " (risk "
+                        + app.path("risk_level").asString("") + ")", payload),
+                "review:" + id + ":" + app.path("submitted_at").asString(""));
+    }
+
+    /** True while the application is in review for the same submission (submission time unchanged). */
+    @Transactional(readOnly = true)
+    public boolean awaitsReview(UUID id, String submittedAt) {
+        return rows.find(T_APP, id)
+                .filter(a -> Lifecycles.APP_IN_REVIEW.contains(a.path("status").asString()))
+                .filter(a -> sameInstant(submittedAt, a.path("submitted_at").asString(null)))
+                .isPresent();
+    }
+
+    private static boolean sameInstant(String expected, String actual) {
+        if (expected == null) {
+            return true;
+        }
+        if (actual == null) {
+            return false;
+        }
+        try {
+            return OffsetDateTime.parse(expected).toInstant().equals(OffsetDateTime.parse(actual).toInstant());
+        } catch (java.time.format.DateTimeParseException e) {
+            return expected.equals(actual);
+        }
     }
 
     @Transactional
@@ -383,6 +432,7 @@ public class ApplicationService {
         v.put("completed_at", Events.now());
         ObjectNode updated = rows.update(T_APP, id, v);
         events.publish("party.onboarding_application.rejected", T_APP, updated, OnboardingApplication.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return updated;
     }
 
@@ -419,6 +469,7 @@ public class ApplicationService {
         v.set("info_requests", requests);
         ObjectNode updated = rows.update(T_APP, id, v);
         events.publish("party.onboarding_application.info_requested", T_APP, updated, OnboardingApplication.class);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "information requested");
         return updated;
     }
 
