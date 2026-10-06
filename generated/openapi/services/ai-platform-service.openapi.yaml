@@ -1,0 +1,4734 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AiCopilotFeedback:
+      description: User rating and comment on a copilot interaction. Append-only.
+      properties:
+        comment:
+          description: Comment
+          type:
+          - string
+          - 'null'
+        copilot_interaction_id:
+          description: Interaction
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        given_by:
+          description: User
+          maxLength: 64
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        rating:
+          description: 1-5
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - copilot_interaction_id
+      - rating
+      - given_by
+      type: object
+    AiCopilotFeedbackPage:
+      description: One page of AiCopilotFeedback results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AiCopilotFeedback'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CopilotDefinition:
+      description: A copilot configuration (purpose, tools, model, guardrails, human-approval rules)
+      properties:
+        allowed_tools:
+          additionalProperties: true
+          description: Read / write tools the copilot may call
+          type: object
+        code:
+          description: Copilot code
+          maxLength: 64
+          type: string
+        copilot_type:
+          description: Use case
+          enum:
+          - OPERATIONS
+          - DISPUTES
+          - AML_INVESTIGATION
+          - COLLECTIONS
+          - RECONCILIATION
+          - PRODUCT_STUDIO
+          - CUSTOMER_ASSISTANT
+          - DEVELOPER
+          - SERVICING
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_scopes:
+          additionalProperties: true
+          description: Data the copilot may read
+          type:
+          - object
+          - 'null'
+        description:
+          description: Description
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        llm_gateway_policy_id:
+          description: Gateway policy applied
+          format: uuid
+          type:
+          - string
+          - 'null'
+        model_alias:
+          description: Model alias resolved by the LLM gateway
+          maxLength: 64
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        requires_human_approval:
+          description: Any write action needs a human approval
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - DISABLED
+          type: string
+        system_prompt_ref:
+          description: Versioned prompt reference
+          maxLength: 255
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - copilot_type
+      - system_prompt_ref
+      - model_alias
+      - allowed_tools
+      - requires_human_approval
+      - status
+      type: object
+    CopilotDefinitionCreate:
+      properties:
+        allowed_tools:
+          additionalProperties: true
+          description: Read / write tools the copilot may call
+          type: object
+        code:
+          description: Copilot code
+          maxLength: 64
+          type: string
+        copilot_type:
+          description: Use case
+          enum:
+          - OPERATIONS
+          - DISPUTES
+          - AML_INVESTIGATION
+          - COLLECTIONS
+          - RECONCILIATION
+          - PRODUCT_STUDIO
+          - CUSTOMER_ASSISTANT
+          - DEVELOPER
+          - SERVICING
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_scopes:
+          additionalProperties: true
+          description: Data the copilot may read
+          type: object
+        description:
+          description: Description
+          type: string
+        llm_gateway_policy_id:
+          description: Gateway policy applied
+          format: uuid
+          type: string
+        model_alias:
+          description: Model alias resolved by the LLM gateway
+          maxLength: 64
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        requires_human_approval:
+          description: Any write action needs a human approval
+          type: boolean
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - DISABLED
+          type: string
+        system_prompt_ref:
+          description: Versioned prompt reference
+          maxLength: 255
+          type: string
+      required:
+      - code
+      - name
+      - copilot_type
+      - system_prompt_ref
+      - model_alias
+      - allowed_tools
+      type: object
+    CopilotDefinitionPage:
+      description: One page of CopilotDefinition results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CopilotDefinition'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CopilotDefinitionUpdate:
+      properties:
+        allowed_tools:
+          additionalProperties: true
+          description: Read / write tools the copilot may call
+          type: object
+        code:
+          description: Copilot code
+          maxLength: 64
+          type: string
+        copilot_type:
+          description: Use case
+          enum:
+          - OPERATIONS
+          - DISPUTES
+          - AML_INVESTIGATION
+          - COLLECTIONS
+          - RECONCILIATION
+          - PRODUCT_STUDIO
+          - CUSTOMER_ASSISTANT
+          - DEVELOPER
+          - SERVICING
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_scopes:
+          additionalProperties: true
+          description: Data the copilot may read
+          type: object
+        description:
+          description: Description
+          type: string
+        llm_gateway_policy_id:
+          description: Gateway policy applied
+          format: uuid
+          type: string
+        model_alias:
+          description: Model alias resolved by the LLM gateway
+          maxLength: 64
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        requires_human_approval:
+          description: Any write action needs a human approval
+          type: boolean
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - DISABLED
+          type: string
+        system_prompt_ref:
+          description: Versioned prompt reference
+          maxLength: 255
+          type: string
+      type: object
+    CopilotInteraction:
+      description: Immutable audit of one copilot turn (redacted prompt/response, hashes, tool calls, citations, outcome)
+      properties:
+        approved_by:
+          description: Human who approved a proposed action
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        citations:
+          additionalProperties: true
+          description: Sources cited (records, documents, events)
+          type:
+          - object
+          - 'null'
+        copilot_definition_id:
+          description: Copilot
+          format: uuid
+          type: string
+        cost:
+          description: Cost of the call
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        cost_currency:
+          description: Cost currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer, for the customer assistant or a customer context
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        input_tokens:
+          description: Input tokens
+          format: int32
+          type:
+          - integer
+          - 'null'
+        latency_ms:
+          description: End-to-end latency
+          format: int32
+          type:
+          - integer
+          - 'null'
+        model_name:
+          description: Model used
+          maxLength: 64
+          type: string
+        model_version:
+          description: Model version
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        outcome:
+          description: Outcome
+          enum:
+          - ANSWERED
+          - ACTION_PROPOSED
+          - ACTION_APPROVED
+          - ACTION_REJECTED
+          - REFUSED
+          - HANDED_OFF
+          - ERROR
+          type: string
+        output_tokens:
+          description: Output tokens
+          format: int32
+          type:
+          - integer
+          - 'null'
+        prompt_redacted:
+          description: Prompt after PII redaction
+          type: string
+        prompt_sha256:
+          description: Hash of the original prompt
+          maxLength: 64
+          type: string
+        response_redacted:
+          description: Response after PII redaction
+          type:
+          - string
+          - 'null'
+        response_sha256:
+          description: Hash of the original response
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        session_id:
+          description: Conversation session
+          maxLength: 64
+          type: string
+        subject_id:
+          description: Business object id
+          format: uuid
+          type:
+          - string
+          - 'null'
+        subject_type:
+          description: Business object in context, e.g. AML_CASE, DISPUTE, PAYMENT
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        tool_calls:
+          additionalProperties: true
+          description: Tools called with arguments and results summary
+          type:
+          - object
+          - 'null'
+        user_id:
+          description: Staff user (empty for customer assistant)
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - copilot_definition_id
+      - session_id
+      - prompt_redacted
+      - prompt_sha256
+      - model_name
+      - outcome
+      type: object
+    CopilotInteractionPage:
+      description: One page of CopilotInteraction results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CopilotInteraction'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CopilotInteractionsApproveActionRequest:
+      properties:
+        comment:
+          type: string
+      type: object
+    CopilotInteractionsFeedbackRequest:
+      properties:
+        comment:
+          type: string
+        rating:
+          format: int32
+          type: integer
+      required:
+      - rating
+      type: object
+    CopilotInteractionsRejectActionRequest:
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+      type: object
+    CopilotsActivateRequest:
+      properties:
+        comment:
+          type: string
+      type: object
+    CopilotsAskRequest:
+      properties:
+        prompt:
+          type: string
+        session_id:
+          maxLength: 64
+          type: string
+        subject_id:
+          format: uuid
+          type: string
+        subject_type:
+          maxLength: 40
+          type: string
+      required:
+      - prompt
+      type: object
+    CopilotsDisableRequest:
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+      type: object
+    LlmGatewayPolicy:
+      description: Tenant policy for LLM use (opt-in, allowed models, PII redaction, residency, budgets, logging)
+      properties:
+        allowed_models:
+          additionalProperties: true
+          description: Models / providers allowed
+          type: object
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_residency_region:
+          description: Region requests must stay in
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        log_prompts:
+          description: Store redacted prompts in the audit log
+          type: boolean
+        max_tokens_per_request:
+          description: Per-request token cap
+          format: int32
+          type: integer
+        monthly_token_budget:
+          description: Monthly token budget
+          format: int64
+          type:
+          - integer
+          - 'null'
+        name:
+          description: Policy name
+          maxLength: 160
+          type: string
+        pii_redaction:
+          description: Redact PII before sending
+          type: boolean
+        redaction_entities:
+          additionalProperties: true
+          description: Entity types redacted (names, account numbers, PAN, national ids)
+          type:
+          - object
+          - 'null'
+        retention_days:
+          description: Interaction retention
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        self_hosted_only:
+          description: Only self-hosted models (data cannot leave region)
+          type: boolean
+        tenant_opt_in:
+          description: Tenant has opted in to LLM features
+          type: boolean
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - tenant_opt_in
+      - allowed_models
+      - self_hosted_only
+      - pii_redaction
+      - max_tokens_per_request
+      - log_prompts
+      - retention_days
+      - is_active
+      type: object
+    LlmGatewayPolicyCreate:
+      properties:
+        allowed_models:
+          additionalProperties: true
+          description: Models / providers allowed
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_residency_region:
+          description: Region requests must stay in
+          maxLength: 32
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        log_prompts:
+          description: Store redacted prompts in the audit log
+          type: boolean
+        max_tokens_per_request:
+          description: Per-request token cap
+          format: int32
+          type: integer
+        monthly_token_budget:
+          description: Monthly token budget
+          format: int64
+          type: integer
+        name:
+          description: Policy name
+          maxLength: 160
+          type: string
+        pii_redaction:
+          description: Redact PII before sending
+          type: boolean
+        redaction_entities:
+          additionalProperties: true
+          description: Entity types redacted (names, account numbers, PAN, national ids)
+          type: object
+        retention_days:
+          description: Interaction retention
+          format: int32
+          type: integer
+        self_hosted_only:
+          description: Only self-hosted models (data cannot leave region)
+          type: boolean
+        tenant_opt_in:
+          description: Tenant has opted in to LLM features
+          type: boolean
+      required:
+      - name
+      - allowed_models
+      type: object
+    LlmGatewayPolicyPage:
+      description: One page of LlmGatewayPolicy results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LlmGatewayPolicy'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LlmGatewayPolicyUpdate:
+      properties:
+        allowed_models:
+          additionalProperties: true
+          description: Models / providers allowed
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_residency_region:
+          description: Region requests must stay in
+          maxLength: 32
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        log_prompts:
+          description: Store redacted prompts in the audit log
+          type: boolean
+        max_tokens_per_request:
+          description: Per-request token cap
+          format: int32
+          type: integer
+        monthly_token_budget:
+          description: Monthly token budget
+          format: int64
+          type: integer
+        name:
+          description: Policy name
+          maxLength: 160
+          type: string
+        pii_redaction:
+          description: Redact PII before sending
+          type: boolean
+        redaction_entities:
+          additionalProperties: true
+          description: Entity types redacted (names, account numbers, PAN, national ids)
+          type: object
+        retention_days:
+          description: Interaction retention
+          format: int32
+          type: integer
+        self_hosted_only:
+          description: Only self-hosted models (data cannot leave region)
+          type: boolean
+        tenant_opt_in:
+          description: Tenant has opted in to LLM features
+          type: boolean
+      type: object
+    MlFeatureDefinition:
+      description: Feature catalogue entry (Feast) used by fraud, credit and AML models
+      properties:
+        contains_pii:
+          description: Derived from personal data
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Definition
+          type:
+          - string
+          - 'null'
+        dtype:
+          description: INT, FLOAT, STRING, BOOL, LIST
+          maxLength: 16
+          type: string
+        entity:
+          description: CUSTOMER, ACCOUNT, CARD, DEVICE, MERCHANT
+          maxLength: 40
+          type: string
+        freshness_sla_seconds:
+          description: Maximum staleness
+          format: int32
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Feature name, e.g. customer_txn_count_24h
+          maxLength: 128
+          type: string
+        online:
+          description: Served online for real-time scoring
+          type: boolean
+        owner:
+          description: Owner
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source_dataset:
+          description: Source stream or table
+          maxLength: 128
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - entity
+      - dtype
+      - source_dataset
+      - online
+      - contains_pii
+      type: object
+    MlFeatureDefinitionCreate:
+      properties:
+        contains_pii:
+          description: Derived from personal data
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Definition
+          type: string
+        dtype:
+          description: INT, FLOAT, STRING, BOOL, LIST
+          maxLength: 16
+          type: string
+        entity:
+          description: CUSTOMER, ACCOUNT, CARD, DEVICE, MERCHANT
+          maxLength: 40
+          type: string
+        freshness_sla_seconds:
+          description: Maximum staleness
+          format: int32
+          type: integer
+        name:
+          description: Feature name, e.g. customer_txn_count_24h
+          maxLength: 128
+          type: string
+        online:
+          description: Served online for real-time scoring
+          type: boolean
+        owner:
+          description: Owner
+          maxLength: 64
+          type: string
+        source_dataset:
+          description: Source stream or table
+          maxLength: 128
+          type: string
+      required:
+      - name
+      - entity
+      - dtype
+      - source_dataset
+      type: object
+    MlFeatureDefinitionPage:
+      description: One page of MlFeatureDefinition results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MlFeatureDefinition'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    MlFeatureDefinitionUpdate:
+      properties:
+        contains_pii:
+          description: Derived from personal data
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Definition
+          type: string
+        dtype:
+          description: INT, FLOAT, STRING, BOOL, LIST
+          maxLength: 16
+          type: string
+        entity:
+          description: CUSTOMER, ACCOUNT, CARD, DEVICE, MERCHANT
+          maxLength: 40
+          type: string
+        freshness_sla_seconds:
+          description: Maximum staleness
+          format: int32
+          type: integer
+        name:
+          description: Feature name, e.g. customer_txn_count_24h
+          maxLength: 128
+          type: string
+        online:
+          description: Served online for real-time scoring
+          type: boolean
+        owner:
+          description: Owner
+          maxLength: 64
+          type: string
+        source_dataset:
+          description: Source stream or table
+          maxLength: 128
+          type: string
+      type: object
+    MlModel:
+      description: A registered ML model (fraud, credit, AML, collections, LLM, ...) under model risk governance
+      properties:
+        champion_version_id:
+          description: Version currently serving as champion
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        code:
+          description: Model code
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        intended_use:
+          description: Intended use and limitations
+          type:
+          - string
+          - 'null'
+        model_type:
+          description: Use case
+          enum:
+          - FRAUD
+          - CREDIT_SCORE
+          - AML
+          - COLLECTIONS
+          - CHURN
+          - PROPENSITY
+          - RECON_MATCHING
+          - DOCUMENT_AI
+          - LLM
+          type: string
+        name:
+          description: Model name
+          maxLength: 160
+          type: string
+        next_review_date:
+          description: Periodic model review date
+          format: date
+          type:
+          - string
+          - 'null'
+        owner_team:
+          description: Owning team
+          maxLength: 64
+          type: string
+        risk_tier:
+          description: Model risk tier
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - UNDER_REVIEW
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        validator:
+          description: Independent model validator
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - model_type
+      - risk_tier
+      - owner_team
+      - status
+      type: object
+    MlModelCreate:
+      properties:
+        code:
+          description: Model code
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        intended_use:
+          description: Intended use and limitations
+          type: string
+        model_type:
+          description: Use case
+          enum:
+          - FRAUD
+          - CREDIT_SCORE
+          - AML
+          - COLLECTIONS
+          - CHURN
+          - PROPENSITY
+          - RECON_MATCHING
+          - DOCUMENT_AI
+          - LLM
+          type: string
+        name:
+          description: Model name
+          maxLength: 160
+          type: string
+        next_review_date:
+          description: Periodic model review date
+          format: date
+          type: string
+        owner_team:
+          description: Owning team
+          maxLength: 64
+          type: string
+        risk_tier:
+          description: Model risk tier
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - UNDER_REVIEW
+          - RETIRED
+          type: string
+        validator:
+          description: Independent model validator
+          maxLength: 64
+          type: string
+      required:
+      - code
+      - name
+      - model_type
+      - owner_team
+      type: object
+    MlModelPage:
+      description: One page of MlModel results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MlModel'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    MlModelUpdate:
+      properties:
+        code:
+          description: Model code
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        intended_use:
+          description: Intended use and limitations
+          type: string
+        model_type:
+          description: Use case
+          enum:
+          - FRAUD
+          - CREDIT_SCORE
+          - AML
+          - COLLECTIONS
+          - CHURN
+          - PROPENSITY
+          - RECON_MATCHING
+          - DOCUMENT_AI
+          - LLM
+          type: string
+        name:
+          description: Model name
+          maxLength: 160
+          type: string
+        next_review_date:
+          description: Periodic model review date
+          format: date
+          type: string
+        owner_team:
+          description: Owning team
+          maxLength: 64
+          type: string
+        risk_tier:
+          description: Model risk tier
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - UNDER_REVIEW
+          - RETIRED
+          type: string
+        validator:
+          description: Independent model validator
+          maxLength: 64
+          type: string
+      type: object
+    MlModelVersion:
+      description: A trained version with metrics, bias tests, explainability and approval record
+      properties:
+        approval_request_id:
+          description: Approval workflow
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approved_at:
+          description: Approval time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Approver
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        artifact_sha256:
+          description: Artifact checksum
+          maxLength: 64
+          type: string
+        artifact_uri:
+          description: Model artifact location (MLflow)
+          maxLength: 500
+          type: string
+        bias_test_results:
+          additionalProperties: true
+          description: Fairness tests across protected attributes
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        explainability_document_id:
+          description: Explainability report (SHAP)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        features:
+          additionalProperties: true
+          description: Feature list
+          type:
+          - object
+          - 'null'
+        framework:
+          description: XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        hyperparameters:
+          additionalProperties: true
+          description: Hyperparameters
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        metrics:
+          additionalProperties: true
+          description: Offline metrics (AUC, KS, Gini, precision at k, calibration)
+          type:
+          - object
+          - 'null'
+        ml_model_id:
+          description: Model
+          format: uuid
+          type: string
+        model_version:
+          description: Version label
+          maxLength: 32
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - TRAINING
+          - VALIDATING
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - DEPLOYED
+          - RETIRED
+          type: string
+        training_dataset_ref:
+          description: Training data snapshot reference
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        training_from:
+          description: Training window start
+          format: date
+          type:
+          - string
+          - 'null'
+        training_to:
+          description: Training window end
+          format: date
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        validation_document_id:
+          description: Independent validation report
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ml_model_id
+      - model_version
+      - status
+      - artifact_uri
+      - artifact_sha256
+      type: object
+    MlModelVersionCreate:
+      properties:
+        approval_request_id:
+          description: Approval workflow
+          format: uuid
+          type: string
+        artifact_sha256:
+          description: Artifact checksum
+          maxLength: 64
+          type: string
+        artifact_uri:
+          description: Model artifact location (MLflow)
+          maxLength: 500
+          type: string
+        bias_test_results:
+          additionalProperties: true
+          description: Fairness tests across protected attributes
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        explainability_document_id:
+          description: Explainability report (SHAP)
+          format: uuid
+          type: string
+        features:
+          additionalProperties: true
+          description: Feature list
+          type: object
+        framework:
+          description: XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM
+          maxLength: 32
+          type: string
+        hyperparameters:
+          additionalProperties: true
+          description: Hyperparameters
+          type: object
+        metrics:
+          additionalProperties: true
+          description: Offline metrics (AUC, KS, Gini, precision at k, calibration)
+          type: object
+        ml_model_id:
+          description: Model
+          format: uuid
+          type: string
+        model_version:
+          description: Version label
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - TRAINING
+          - VALIDATING
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - DEPLOYED
+          - RETIRED
+          type: string
+        training_dataset_ref:
+          description: Training data snapshot reference
+          maxLength: 255
+          type: string
+        training_from:
+          description: Training window start
+          format: date
+          type: string
+        training_to:
+          description: Training window end
+          format: date
+          type: string
+        validation_document_id:
+          description: Independent validation report
+          format: uuid
+          type: string
+      required:
+      - ml_model_id
+      - model_version
+      - artifact_uri
+      - artifact_sha256
+      type: object
+    MlModelVersionPage:
+      description: One page of MlModelVersion results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MlModelVersion'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    MlModelVersionUpdate:
+      properties:
+        approval_request_id:
+          description: Approval workflow
+          format: uuid
+          type: string
+        artifact_sha256:
+          description: Artifact checksum
+          maxLength: 64
+          type: string
+        artifact_uri:
+          description: Model artifact location (MLflow)
+          maxLength: 500
+          type: string
+        bias_test_results:
+          additionalProperties: true
+          description: Fairness tests across protected attributes
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        explainability_document_id:
+          description: Explainability report (SHAP)
+          format: uuid
+          type: string
+        features:
+          additionalProperties: true
+          description: Feature list
+          type: object
+        framework:
+          description: XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM
+          maxLength: 32
+          type: string
+        hyperparameters:
+          additionalProperties: true
+          description: Hyperparameters
+          type: object
+        metrics:
+          additionalProperties: true
+          description: Offline metrics (AUC, KS, Gini, precision at k, calibration)
+          type: object
+        ml_model_id:
+          description: Model
+          format: uuid
+          type: string
+        model_version:
+          description: Version label
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - TRAINING
+          - VALIDATING
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - DEPLOYED
+          - RETIRED
+          type: string
+        training_dataset_ref:
+          description: Training data snapshot reference
+          maxLength: 255
+          type: string
+        training_from:
+          description: Training window start
+          format: date
+          type: string
+        training_to:
+          description: Training window end
+          format: date
+          type: string
+        validation_document_id:
+          description: Independent validation report
+          format: uuid
+          type: string
+      type: object
+    MlModelVersionsApproveRequest:
+      properties:
+        comment:
+          type: string
+      type: object
+    MlModelVersionsDeployRequest:
+      properties:
+        environment:
+          maxLength: 32
+          type: string
+        mode:
+          enum:
+          - SHADOW
+          - CANARY
+          - CHAMPION
+          - CHALLENGER
+          type: string
+        traffic_percent:
+          format: int32
+          type: integer
+      required:
+      - environment
+      - mode
+      - traffic_percent
+      type: object
+    MlModelVersionsRejectRequest:
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+      type: object
+    MlModelVersionsSubmitForApprovalRequest:
+      properties:
+        comment:
+          type: string
+      type: object
+    ModelDeployment:
+      description: Deployment of a model version to an environment in shadow, canary, champion or challenger mode
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deployed_at:
+          description: Deployment time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        deployed_by:
+          description: Deployer
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        endpoint:
+          description: Serving endpoint (KServe)
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        environment:
+          description: SANDBOX, STAGING, PRODUCTION
+          maxLength: 32
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ml_model_version_id:
+          description: Version deployed
+          format: uuid
+          type: string
+        mode:
+          description: Serving mode
+          enum:
+          - SHADOW
+          - CANARY
+          - CHAMPION
+          - CHALLENGER
+          type: string
+        retired_at:
+          description: Retirement time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DEPLOYING
+          - ACTIVE
+          - ROLLED_BACK
+          - RETIRED
+          readOnly: true
+          type: string
+        traffic_percent:
+          description: Share of traffic served (canary / challenger)
+          format: int32
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ml_model_version_id
+      - environment
+      - mode
+      - traffic_percent
+      - status
+      type: object
+    ModelDeploymentPage:
+      description: One page of ModelDeployment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ModelDeployment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ModelDeploymentUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        environment:
+          description: SANDBOX, STAGING, PRODUCTION
+          maxLength: 32
+          type: string
+        ml_model_version_id:
+          description: Version deployed
+          format: uuid
+          type: string
+        mode:
+          description: Serving mode
+          enum:
+          - SHADOW
+          - CANARY
+          - CHAMPION
+          - CHALLENGER
+          type: string
+        traffic_percent:
+          description: Share of traffic served (canary / challenger)
+          format: int32
+          type: integer
+      type: object
+    ModelDeploymentsPromoteRequest:
+      properties:
+        comment:
+          type: string
+      type: object
+    ModelDeploymentsRetireRequest:
+      properties:
+        reason:
+          type: string
+      type: object
+    ModelDeploymentsRollbackRequest:
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+      type: object
+    ModelMonitoringMetric:
+      description: Monitoring measurement of a deployed model (drift, stability, performance, latency). Append-only.
+      properties:
+        breached:
+          description: Threshold breached
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        metric_name:
+          description: PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE
+          maxLength: 40
+          type: string
+        metric_value:
+          description: Value
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        model_deployment_id:
+          description: Deployment
+          format: uuid
+          type: string
+        threshold:
+          description: Alert threshold
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        window_end:
+          description: Window end
+          format: date-time
+          type: string
+        window_start:
+          description: Window start
+          format: date-time
+          type: string
+      required:
+      - id
+      - created_at
+      - model_deployment_id
+      - metric_name
+      - metric_value
+      - breached
+      - window_start
+      - window_end
+      type: object
+    ModelMonitoringMetricCreate:
+      properties:
+        breached:
+          description: Threshold breached
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        metric_name:
+          description: PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE
+          maxLength: 40
+          type: string
+        metric_value:
+          description: Value
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        model_deployment_id:
+          description: Deployment
+          format: uuid
+          type: string
+        threshold:
+          description: Alert threshold
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        window_end:
+          description: Window end
+          format: date-time
+          type: string
+        window_start:
+          description: Window start
+          format: date-time
+          type: string
+      required:
+      - model_deployment_id
+      - metric_name
+      - metric_value
+      - window_start
+      - window_end
+      type: object
+    ModelMonitoringMetricPage:
+      description: One page of ModelMonitoringMetric results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ModelMonitoringMetric'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            reporting:read: Read Regulatory Reporting, Analytics and AI
+            reporting:write: Change Regulatory Reporting, Analytics and AI
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            reporting:read: Read Regulatory Reporting, Analytics and AI
+            reporting:write: Change Regulatory Reporting, Analytics and AI
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Country-pack regulatory reporting (definitions, runs, validation, submission, CRS/FATCA), self-service analytics
+    over the lakehouse (dashboards, saved queries, exports, data shares), and the AI platform: model registry and model risk
+    management, deployments and monitoring, copilots with a full audit trail, and the LLM gateway policy.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — ai-platform-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/ai/models:
+    get:
+      operationId: mlModelsList
+      summary: List ml models
+      tags:
+      - Ml Models
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: model_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - FRAUD
+          - CREDIT_SCORE
+          - AML
+          - COLLECTIONS
+          - CHURN
+          - PROPENSITY
+          - RECON_MATCHING
+          - DOCUMENT_AI
+          - LLM
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - UNDER_REVIEW
+          - RETIRED
+      - name: risk_tier
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+      - name: owner_team
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_model
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: mlModelsCreate
+      summary: Create ml model
+      tags:
+      - Ml Models
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelCreate'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_model
+      x-crud: true
+      x-crud-create: true
+  /v1/ai/models/{id}:
+    get:
+      operationId: mlModelsGet
+      summary: Retrieve ml model
+      tags:
+      - Ml Models
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_model
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: mlModelsUpdate
+      summary: Update ml model
+      tags:
+      - Ml Models
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelUpdate'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_model
+      x-crud: true
+      x-crud-update: true
+  /v1/ai/models/{id}/versions:
+    get:
+      operationId: mlModelsVersions
+      summary: Versions of the model
+      tags:
+      - Ml Models
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_model
+  /v1/ai/models/{id}/deployments:
+    get:
+      operationId: mlModelsDeployments
+      summary: Deployments across versions
+      tags:
+      - Ml Models
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeploymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_model
+  /v1/ai/model-versions:
+    get:
+      operationId: mlModelVersionsList
+      summary: List ml model versions
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ml_model_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - TRAINING
+          - VALIDATING
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - DEPLOYED
+          - RETIRED
+      - name: framework
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: mlModelVersionsCreate
+      summary: Create ml model version
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionCreate'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+      x-crud: true
+      x-crud-create: true
+  /v1/ai/model-versions/{id}:
+    get:
+      operationId: mlModelVersionsGet
+      summary: Retrieve ml model version
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: mlModelVersionsUpdate
+      summary: Update ml model version
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionUpdate'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+      x-crud: true
+      x-crud-update: true
+  /v1/ai/model-versions/{id}/submit-for-approval:
+    post:
+      operationId: mlModelVersionsSubmitForApproval
+      summary: Send to model risk for approval
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionsSubmitForApprovalRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+  /v1/ai/model-versions/{id}/approve:
+    post:
+      operationId: mlModelVersionsApprove
+      summary: Approve the version (model risk committee)
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionsApproveRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+  /v1/ai/model-versions/{id}/reject:
+    post:
+      operationId: mlModelVersionsReject
+      summary: Reject the version
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlModelVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionsRejectRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+  /v1/ai/model-versions/{id}/deploy:
+    post:
+      operationId: mlModelVersionsDeploy
+      summary: Deploy to an environment
+      tags:
+      - Ml Model Versions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeployment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlModelVersionsDeployRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: ai-platform-service
+      x-table: ml_model_version
+  /v1/ai/deployments:
+    get:
+      operationId: modelDeploymentsList
+      summary: List model deployments
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ml_model_version_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: environment
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: mode
+        in: query
+        schema:
+          type: string
+          enum:
+          - SHADOW
+          - CANARY
+          - CHAMPION
+          - CHALLENGER
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEPLOYING
+          - ACTIVE
+          - ROLLED_BACK
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeploymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+      x-crud: true
+      x-crud-list: true
+  /v1/ai/deployments/{id}:
+    get:
+      operationId: modelDeploymentsGet
+      summary: Retrieve model deployment
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeployment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: modelDeploymentsUpdate
+      summary: Update model deployment
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeployment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelDeploymentUpdate'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+      x-crud: true
+      x-crud-update: true
+  /v1/ai/deployments/{id}/promote:
+    post:
+      operationId: modelDeploymentsPromote
+      summary: Promote a challenger to champion
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeployment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelDeploymentsPromoteRequest'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+  /v1/ai/deployments/{id}/rollback:
+    post:
+      operationId: modelDeploymentsRollback
+      summary: Roll back the deployment
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeployment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelDeploymentsRollbackRequest'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+  /v1/ai/deployments/{id}/retire:
+    post:
+      operationId: modelDeploymentsRetire
+      summary: Retire the deployment
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelDeployment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelDeploymentsRetireRequest'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+  /v1/ai/deployments/{id}/metrics:
+    get:
+      operationId: modelDeploymentsMetrics
+      summary: Monitoring metrics
+      tags:
+      - Model Deployments
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelMonitoringMetricPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_deployment
+  /v1/ai/model-metrics:
+    get:
+      operationId: modelMetricsList
+      summary: List model metrics
+      tags:
+      - Model Metrics
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: model_deployment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: metric_name
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: breached
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelMonitoringMetricPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_monitoring_metric
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: modelMetricsCreate
+      summary: Create model metric
+      tags:
+      - Model Metrics
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelMonitoringMetric'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelMonitoringMetricCreate'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_monitoring_metric
+      x-crud: true
+      x-crud-create: true
+  /v1/ai/model-metrics/{id}:
+    get:
+      operationId: modelMetricsGet
+      summary: Retrieve model metric
+      tags:
+      - Model Metrics
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelMonitoringMetric'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: model_monitoring_metric
+      x-crud: true
+      x-crud-get: true
+  /v1/ai/features:
+    get:
+      operationId: mlFeaturesList
+      summary: List ml features
+      tags:
+      - Ml Features
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: entity
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: online
+        in: query
+        schema:
+          type: boolean
+      - name: contains_pii
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlFeatureDefinitionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_feature_definition
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: mlFeaturesCreate
+      summary: Create ml feature
+      tags:
+      - Ml Features
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlFeatureDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlFeatureDefinitionCreate'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_feature_definition
+      x-crud: true
+      x-crud-create: true
+  /v1/ai/features/{id}:
+    get:
+      operationId: mlFeaturesGet
+      summary: Retrieve ml feature
+      tags:
+      - Ml Features
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlFeatureDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_feature_definition
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: mlFeaturesUpdate
+      summary: Update ml feature
+      tags:
+      - Ml Features
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MlFeatureDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MlFeatureDefinitionUpdate'
+      x-requirements:
+      - AI-02
+      x-service: ai-platform-service
+      x-table: ml_feature_definition
+      x-crud: true
+      x-crud-update: true
+  /v1/ai/copilots:
+    get:
+      operationId: copilotsList
+      summary: List copilots
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: copilot_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPERATIONS
+          - DISPUTES
+          - AML_INVESTIGATION
+          - COLLECTIONS
+          - RECONCILIATION
+          - PRODUCT_STUDIO
+          - CUSTOMER_ASSISTANT
+          - DEVELOPER
+          - SERVICING
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - DISABLED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotDefinitionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: copilotsCreate
+      summary: Create copilot
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotDefinitionCreate'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+      x-crud: true
+      x-crud-create: true
+  /v1/ai/copilots/{id}:
+    get:
+      operationId: copilotsGet
+      summary: Retrieve copilot
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: copilotsUpdate
+      summary: Update copilot
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotDefinitionUpdate'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+      x-crud: true
+      x-crud-update: true
+  /v1/ai/copilots/{id}/ask:
+    post:
+      operationId: copilotsAsk
+      summary: Ask the copilot (Accept text/event-stream to stream)
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotInteraction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotsAskRequest'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+  /v1/ai/copilots/{id}/activate:
+    post:
+      operationId: copilotsActivate
+      summary: Activate the copilot
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotsActivateRequest'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+  /v1/ai/copilots/{id}/disable:
+    post:
+      operationId: copilotsDisable
+      summary: Disable the copilot
+      tags:
+      - Copilots
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotsDisableRequest'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_definition
+  /v1/ai/copilot-interactions:
+    get:
+      operationId: copilotInteractionsList
+      summary: List copilot interactions
+      tags:
+      - Copilot Interactions
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: copilot_definition_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: session_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: subject_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: subject_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: outcome
+        in: query
+        schema:
+          type: string
+          enum:
+          - ANSWERED
+          - ACTION_PROPOSED
+          - ACTION_APPROVED
+          - ACTION_REJECTED
+          - REFUSED
+          - HANDED_OFF
+          - ERROR
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotInteractionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_interaction
+      x-crud: true
+      x-crud-list: true
+  /v1/ai/copilot-interactions/{id}:
+    get:
+      operationId: copilotInteractionsGet
+      summary: Retrieve copilot interaction
+      tags:
+      - Copilot Interactions
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotInteraction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_interaction
+      x-crud: true
+      x-crud-get: true
+  /v1/ai/copilot-interactions/{id}/approve-action:
+    post:
+      operationId: copilotInteractionsApproveAction
+      summary: Approve the action proposed in this turn
+      tags:
+      - Copilot Interactions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotInteraction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotInteractionsApproveActionRequest'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_interaction
+  /v1/ai/copilot-interactions/{id}/reject-action:
+    post:
+      operationId: copilotInteractionsRejectAction
+      summary: Reject the proposed action
+      tags:
+      - Copilot Interactions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopilotInteraction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotInteractionsRejectActionRequest'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_interaction
+  /v1/ai/copilot-interactions/{id}/feedback:
+    post:
+      operationId: copilotInteractionsFeedback
+      summary: Rate the answer
+      tags:
+      - Copilot Interactions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiCopilotFeedback'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopilotInteractionsFeedbackRequest'
+      x-requirements:
+      - AI-01
+      - SRV-02
+      x-service: ai-platform-service
+      x-table: copilot_interaction
+  /v1/ai/copilot-feedback:
+    get:
+      operationId: aiCopilotFeedbackList
+      summary: List ai copilot feedback
+      tags:
+      - Ai Copilot Feedback
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: copilot_interaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: rating
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiCopilotFeedbackPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: ai_copilot_feedback
+      x-crud: true
+      x-crud-list: true
+  /v1/ai/copilot-feedback/{id}:
+    get:
+      operationId: aiCopilotFeedbackGet
+      summary: Retrieve ai copilot feedback
+      tags:
+      - Ai Copilot Feedback
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiCopilotFeedback'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: ai_copilot_feedback
+      x-crud: true
+      x-crud-get: true
+  /v1/ai/llm-policies:
+    get:
+      operationId: llmGatewayPoliciesList
+      summary: List llm gateway policies
+      tags:
+      - Llm Gateway Policies
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: tenant_opt_in
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmGatewayPolicyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: llm_gateway_policy
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: llmGatewayPoliciesCreate
+      summary: Create llm gateway policie
+      tags:
+      - Llm Gateway Policies
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmGatewayPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmGatewayPolicyCreate'
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: llm_gateway_policy
+      x-crud: true
+      x-crud-create: true
+  /v1/ai/llm-policies/{id}:
+    get:
+      operationId: llmGatewayPoliciesGet
+      summary: Retrieve llm gateway policie
+      tags:
+      - Llm Gateway Policies
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmGatewayPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: llm_gateway_policy
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: llmGatewayPoliciesUpdate
+      summary: Update llm gateway policie
+      tags:
+      - Llm Gateway Policies
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmGatewayPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmGatewayPolicyUpdate'
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: llm_gateway_policy
+      x-crud: true
+      x-crud-update: true
+  /v1/ai/llm-policies/{id}/usage:
+    get:
+      operationId: llmGatewayPoliciesUsage
+      summary: Token usage and cost against budget
+      tags:
+      - Llm Gateway Policies
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-01
+      x-service: ai-platform-service
+      x-table: llm_gateway_policy
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A registered ML model (fraud, credit, AML, collections, LLM, ...) under model risk governance
+  name: Ml Models
+- description: A trained version with metrics, bias tests, explainability and approval record
+  name: Ml Model Versions
+- description: Deployment of a model version to an environment in shadow, canary, champion or challenger mode
+  name: Model Deployments
+- description: Monitoring measurement of a deployed model (drift, stability, performance, latency). Append-only.
+  name: Model Metrics
+- description: Feature catalogue entry (Feast) used by fraud, credit and AML models
+  name: Ml Features
+- description: A copilot configuration (purpose, tools, model, guardrails, human-approval rules)
+  name: Copilots
+- description: Immutable audit of one copilot turn (redacted prompt/response, hashes, tool calls, citations, outcome)
+  name: Copilot Interactions
+- description: User rating and comment on a copilot interaction. Append-only.
+  name: Ai Copilot Feedback
+- description: Tenant policy for LLM use (opt-in, allowed models, PII redaction, residency, budgets, logging)
+  name: Llm Gateway Policies

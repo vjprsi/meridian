@@ -1,0 +1,3475 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    ApprovalRequest:
+      description: A pending sensitive operation awaiting checker approval (four-eyes)
+      properties:
+        action:
+          description: Action
+          maxLength: 40
+          type: string
+        amount:
+          description: Amount, for threshold routing
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        approval_policy_id:
+          description: Policy applied
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approvals_received:
+          description: Approvals received
+          format: int32
+          readOnly: true
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency of the amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        current_level:
+          description: Current approval level
+          format: int32
+          readOnly: true
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decided_at:
+          description: Final decision time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        diff:
+          additionalProperties: true
+          description: Before/after diff for updates
+          type:
+          - object
+          - 'null'
+        executed_at:
+          description: Execution time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        execution_result:
+          additionalProperties: true
+          description: Result or error from executing the operation
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        maker:
+          description: Requesting user
+          maxLength: 64
+          readOnly: true
+          type: string
+        payload:
+          additionalProperties: true
+          description: Operation to execute once approved
+          type: object
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        required_approvals:
+          description: Approvals required
+          format: int32
+          readOnly: true
+          type: integer
+        resource_id:
+          description: Resource id (empty for creates)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        resource_type:
+          description: Resource type
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - EXPIRED
+          - EXECUTED
+          - EXECUTION_FAILED
+          readOnly: true
+          type: string
+        summary:
+          description: Human-readable description of the change
+          type:
+          - string
+          - 'null'
+        title:
+          description: Short title shown in the approvals queue
+          maxLength: 255
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - action
+      - title
+      - payload
+      - priority
+      - status
+      - maker
+      - required_approvals
+      - approvals_received
+      - current_level
+      type: object
+    Notification:
+      description: A message sent (or to be sent) to a recipient on one channel
+      properties:
+        body:
+          description: Rendered body
+          type: string
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        cost:
+          description: Provider cost
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cost_currency:
+          description: Cost currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data:
+          additionalProperties: true
+          description: Deep-link and payload data
+          type:
+          - object
+          - 'null'
+        delivered_at:
+          description: Delivered
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        destination:
+          description: Phone, email, device token or inbox id
+          maxLength: 512
+          type: string
+        expires_at:
+          description: Do not deliver after this time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        locale:
+          description: Locale
+          maxLength: 10
+          type: string
+        notification_template_id:
+          description: Template version
+          format: uuid
+          type:
+          - string
+          - 'null'
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        provider_message_id:
+          description: Provider message id
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        read_at:
+          description: Read
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        recipient_id:
+          description: Recipient id (customer, user, agent ...)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        recipient_type:
+          description: Recipient type
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scheduled_at:
+          description: Send time (respects quiet hours)
+          format: date-time
+          type:
+          - string
+          - 'null'
+        sent_at:
+          description: Sent
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        source_event_id:
+          description: Triggering event id (dedupe)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        source_event_type:
+          description: Triggering event type
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - SCHEDULED
+          - SENT
+          - DELIVERED
+          - READ
+          - FAILED
+          - SUPPRESSED
+          - EXPIRED
+          readOnly: true
+          type: string
+        subject:
+          description: Rendered subject
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recipient_type
+      - channel
+      - destination
+      - category
+      - locale
+      - body
+      - priority
+      - status
+      type: object
+    NotificationCreate:
+      properties:
+        body:
+          description: Rendered body
+          type: string
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data:
+          additionalProperties: true
+          description: Deep-link and payload data
+          type: object
+        destination:
+          description: Phone, email, device token or inbox id
+          maxLength: 512
+          type: string
+        expires_at:
+          description: Do not deliver after this time
+          format: date-time
+          type: string
+        locale:
+          description: Locale
+          maxLength: 10
+          type: string
+        notification_template_id:
+          description: Template version
+          format: uuid
+          type: string
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        recipient_id:
+          description: Recipient id (customer, user, agent ...)
+          format: uuid
+          type: string
+        recipient_type:
+          description: Recipient type
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          type: string
+        scheduled_at:
+          description: Send time (respects quiet hours)
+          format: date-time
+          type: string
+        source_event_id:
+          description: Triggering event id (dedupe)
+          maxLength: 64
+          type: string
+        source_event_type:
+          description: Triggering event type
+          maxLength: 128
+          type: string
+        subject:
+          description: Rendered subject
+          maxLength: 255
+          type: string
+      required:
+      - recipient_type
+      - channel
+      - destination
+      - category
+      - body
+      type: object
+    NotificationDeliveryAttempt:
+      description: One attempt to deliver a notification through a provider. Append-only.
+      properties:
+        attempt_no:
+          description: Attempt number
+          format: int32
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        error_code:
+          description: Provider error code
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        latency_ms:
+          description: Provider latency
+          format: int32
+          type:
+          - integer
+          - 'null'
+        notification_id:
+          description: Notification
+          format: uuid
+          type: string
+        notification_provider_id:
+          description: Provider used
+          format: uuid
+          type: string
+        provider_response:
+          additionalProperties: true
+          description: Raw provider response
+          type:
+          - object
+          - 'null'
+        status:
+          description: ACCEPTED, REJECTED, TIMEOUT, ERROR
+          maxLength: 32
+          type: string
+      required:
+      - id
+      - created_at
+      - notification_id
+      - notification_provider_id
+      - attempt_no
+      - status
+      type: object
+    NotificationDeliveryAttemptPage:
+      description: One page of NotificationDeliveryAttempt results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/NotificationDeliveryAttempt'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NotificationPage:
+      description: One page of Notification results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Notification'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NotificationPreference:
+      description: A recipient's channel preferences and quiet hours per category
+      properties:
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_enabled:
+          description: Opted in (security and regulatory cannot be disabled)
+          type: boolean
+        locale:
+          description: Preferred language
+          maxLength: 10
+          type:
+          - string
+          - 'null'
+        quiet_hours_end:
+          description: HH:MM local
+          maxLength: 5
+          type:
+          - string
+          - 'null'
+        quiet_hours_start:
+          description: HH:MM local
+          maxLength: 5
+          type:
+          - string
+          - 'null'
+        recipient_id:
+          description: Recipient id
+          format: uuid
+          type: string
+        recipient_type:
+          description: Recipient type
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        timezone:
+          description: Timezone for quiet hours
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recipient_type
+      - recipient_id
+      - category
+      - channel
+      - is_enabled
+      type: object
+    NotificationPreferenceCreate:
+      properties:
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_enabled:
+          description: Opted in (security and regulatory cannot be disabled)
+          type: boolean
+        locale:
+          description: Preferred language
+          maxLength: 10
+          type: string
+        quiet_hours_end:
+          description: HH:MM local
+          maxLength: 5
+          type: string
+        quiet_hours_start:
+          description: HH:MM local
+          maxLength: 5
+          type: string
+        recipient_id:
+          description: Recipient id
+          format: uuid
+          type: string
+        recipient_type:
+          description: Recipient type
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          type: string
+        timezone:
+          description: Timezone for quiet hours
+          maxLength: 64
+          type: string
+      required:
+      - recipient_type
+      - recipient_id
+      - category
+      - channel
+      type: object
+    NotificationPreferencePage:
+      description: One page of NotificationPreference results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/NotificationPreference'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NotificationPreferenceUpdate:
+      properties:
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_enabled:
+          description: Opted in (security and regulatory cannot be disabled)
+          type: boolean
+        locale:
+          description: Preferred language
+          maxLength: 10
+          type: string
+        quiet_hours_end:
+          description: HH:MM local
+          maxLength: 5
+          type: string
+        quiet_hours_start:
+          description: HH:MM local
+          maxLength: 5
+          type: string
+        recipient_id:
+          description: Recipient id
+          format: uuid
+          type: string
+        recipient_type:
+          description: Recipient type
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          type: string
+        timezone:
+          description: Timezone for quiet hours
+          maxLength: 64
+          type: string
+      type: object
+    NotificationProvider:
+      description: Delivery provider per channel with priority for failover
+      properties:
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        config:
+          additionalProperties: true
+          description: Provider options
+          type:
+          - object
+          - 'null'
+        country_scope:
+          additionalProperties: true
+          description: Countries routed to this provider
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        priority:
+          description: Lower is tried first
+          format: int32
+          type: integer
+        provider_name:
+          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sender_id:
+          description: Sender id / from address
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - channel
+      - provider_name
+      - priority
+      - status
+      type: object
+    NotificationProviderCreate:
+      properties:
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        config:
+          additionalProperties: true
+          description: Provider options
+          type: object
+        country_scope:
+          additionalProperties: true
+          description: Countries routed to this provider
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        priority:
+          description: Lower is tried first
+          format: int32
+          type: integer
+        provider_name:
+          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
+          maxLength: 64
+          type: string
+        sender_id:
+          description: Sender id / from address
+          maxLength: 64
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          type: string
+      required:
+      - channel
+      - provider_name
+      type: object
+    NotificationProviderPage:
+      description: One page of NotificationProvider results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/NotificationProvider'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NotificationProviderUpdate:
+      properties:
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        config:
+          additionalProperties: true
+          description: Provider options
+          type: object
+        country_scope:
+          additionalProperties: true
+          description: Countries routed to this provider
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        priority:
+          description: Lower is tried first
+          format: int32
+          type: integer
+        provider_name:
+          description: TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP
+          maxLength: 64
+          type: string
+        sender_id:
+          description: Sender id / from address
+          maxLength: 64
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          type: string
+      type: object
+    NotificationProvidersTestRequest:
+      properties:
+        destination:
+          maxLength: 320
+          type: string
+      required:
+      - destination
+      type: object
+    NotificationRule:
+      description: Maps a domain event to notifications (template, channels, recipient, conditions)
+      properties:
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channels:
+          additionalProperties: true
+          description: Channels in preference order
+          type: object
+        conditions:
+          description: CEL condition on the event payload
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        event_type:
+          description: Domain event, e.g. ledger.balance.changed
+          maxLength: 128
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        recipient_expression:
+          description: How to resolve the recipient from the event
+          maxLength: 255
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        template_code:
+          description: Template to use
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - event_type
+      - template_code
+      - channels
+      - recipient_expression
+      - category
+      - is_active
+      type: object
+    NotificationRuleCreate:
+      properties:
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channels:
+          additionalProperties: true
+          description: Channels in preference order
+          type: object
+        conditions:
+          description: CEL condition on the event payload
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        event_type:
+          description: Domain event, e.g. ledger.balance.changed
+          maxLength: 128
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        recipient_expression:
+          description: How to resolve the recipient from the event
+          maxLength: 255
+          type: string
+        template_code:
+          description: Template to use
+          maxLength: 64
+          type: string
+      required:
+      - event_type
+      - template_code
+      - channels
+      - recipient_expression
+      - category
+      type: object
+    NotificationRulePage:
+      description: One page of NotificationRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/NotificationRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NotificationRuleUpdate:
+      properties:
+        category:
+          description: Category
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channels:
+          additionalProperties: true
+          description: Channels in preference order
+          type: object
+        conditions:
+          description: CEL condition on the event payload
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        event_type:
+          description: Domain event, e.g. ledger.balance.changed
+          maxLength: 128
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        recipient_expression:
+          description: How to resolve the recipient from the event
+          maxLength: 255
+          type: string
+        template_code:
+          description: Template to use
+          maxLength: 64
+          type: string
+      type: object
+    NotificationTemplate:
+      description: Localised message template per channel
+      properties:
+        body:
+          description: Body with placeholders
+          type: string
+        category:
+          description: Category (drives opt-out rules)
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        code:
+          description: Template code, e.g. CARD_AUTH_APPROVED
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        locale:
+          description: Locale
+          maxLength: 10
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          type: string
+        subject:
+          description: Subject / push title
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        variables_schema:
+          additionalProperties: true
+          description: Expected variables
+          type:
+          - object
+          - 'null'
+        version:
+          description: Version
+          format: int32
+          readOnly: true
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - channel
+      - locale
+      - category
+      - body
+      - version
+      - status
+      type: object
+    NotificationTemplateCreate:
+      properties:
+        body:
+          description: Body with placeholders
+          type: string
+        category:
+          description: Category (drives opt-out rules)
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        code:
+          description: Template code, e.g. CARD_AUTH_APPROVED
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        locale:
+          description: Locale
+          maxLength: 10
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          type: string
+        subject:
+          description: Subject / push title
+          maxLength: 255
+          type: string
+        variables_schema:
+          additionalProperties: true
+          description: Expected variables
+          type: object
+      required:
+      - code
+      - channel
+      - category
+      - body
+      type: object
+    NotificationTemplatePage:
+      description: One page of NotificationTemplate results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/NotificationTemplate'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NotificationTemplateUpdate:
+      properties:
+        body:
+          description: Body with placeholders
+          type: string
+        category:
+          description: Category (drives opt-out rules)
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        code:
+          description: Template code, e.g. CARD_AUTH_APPROVED
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        locale:
+          description: Locale
+          maxLength: 10
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          type: string
+        subject:
+          description: Subject / push title
+          maxLength: 255
+          type: string
+        variables_schema:
+          additionalProperties: true
+          description: Expected variables
+          type: object
+      type: object
+    NotificationTemplatesPreviewRequest:
+      properties:
+        variables:
+          additionalProperties: true
+          type: object
+      required:
+      - variables
+      type: object
+    NotificationTemplatesTestSendRequest:
+      properties:
+        destination:
+          maxLength: 320
+          type: string
+      required:
+      - destination
+      type: object
+    NotificationsProviderCallbacksEventsRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+      required:
+      - payload
+      type: object
+    NotificationsSendTemplatedRequest:
+      properties:
+        channel:
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+          type: string
+        recipient_id:
+          format: uuid
+          type: string
+        recipient_type:
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+          type: string
+        template_code:
+          maxLength: 64
+          type: string
+        variables:
+          additionalProperties: true
+          type: object
+      required:
+      - template_code
+      - recipient_type
+      - recipient_id
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — notification-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/notifications:
+    get:
+      operationId: notificationsList
+      summary: List notifications
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recipient_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+      - name: recipient_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - SCHEDULED
+          - SENT
+          - DELIVERED
+          - READ
+          - FAILED
+          - SUPPRESSED
+          - EXPIRED
+      - name: source_event_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: notificationsCreate
+      summary: Create notification
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationCreate'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+      x-crud: true
+      x-crud-create: true
+  /v1/notifications/{id}:
+    get:
+      operationId: notificationsGet
+      summary: Retrieve notification
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+      x-crud: true
+      x-crud-get: true
+  /v1/notifications/{id}/resend:
+    post:
+      operationId: notificationsResend
+      summary: Resend a failed notification
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+  /v1/notifications/{id}/cancel:
+    post:
+      operationId: notificationsCancel
+      summary: Cancel a scheduled notification
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+  /v1/notifications/{id}/mark-read:
+    post:
+      operationId: notificationsMarkRead
+      summary: Mark an in-app message as read
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+  /v1/notifications/{id}/attempts:
+    get:
+      operationId: notificationsAttempts
+      summary: Delivery attempts
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationDeliveryAttemptPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+  /v1/notifications/send-templated:
+    post:
+      operationId: notificationsSendTemplated
+      summary: Render a template and send to a recipient
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationsSendTemplatedRequest'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+  /v1/notifications/provider-callbacks/{provider}/events:
+    post:
+      operationId: notificationsProviderCallbacksEvents
+      summary: Delivery receipt webhook from a provider
+      tags:
+      - Notifications
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationsProviderCallbacksEventsRequest'
+      x-requirements:
+      - NOT-01
+      - NOT-02
+      x-service: notification-service
+      x-table: notification
+  /v1/notification-templates:
+    get:
+      operationId: notificationTemplatesList
+      summary: List notification templates
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+      - name: locale
+        in: query
+        schema:
+          type: string
+          maxLength: 10
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplatePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: notificationTemplatesCreate
+      summary: Create notification template
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplateCreate'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-create: true
+  /v1/notification-templates/{id}:
+    get:
+      operationId: notificationTemplatesGet
+      summary: Retrieve notification template
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: notificationTemplatesUpdate
+      summary: Update notification template
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTemplate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplateUpdate'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-update: true
+  /v1/notification-templates/{id}/preview:
+    post:
+      operationId: notificationTemplatesPreview
+      summary: Render with sample variables
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplatesPreviewRequest'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+  /v1/notification-templates/{id}/publish:
+    post:
+      operationId: notificationTemplatesPublish
+      summary: Submit for approval
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+  /v1/notification-templates/{id}/test-send:
+    post:
+      operationId: notificationTemplatesTestSend
+      summary: Send a test to the caller
+      tags:
+      - Notification Templates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationTemplatesTestSendRequest'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_template
+  /v1/notification-providers:
+    get:
+      operationId: notificationProvidersList
+      summary: List notification providers
+      tags:
+      - Notification Providers
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationProviderPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: notificationProvidersCreate
+      summary: Create notification provider
+      tags:
+      - Notification Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationProviderCreate'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-create: true
+  /v1/notification-providers/{id}:
+    get:
+      operationId: notificationProvidersGet
+      summary: Retrieve notification provider
+      tags:
+      - Notification Providers
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: notificationProvidersUpdate
+      summary: Update notification provider
+      tags:
+      - Notification Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationProviderUpdate'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: notificationProvidersDelete
+      summary: Delete notification provider
+      tags:
+      - Notification Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-delete: true
+  /v1/notification-providers/{id}/test:
+    post:
+      operationId: notificationProvidersTest
+      summary: Send a test message through the provider
+      tags:
+      - Notification Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationProvidersTestRequest'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_provider
+  /v1/notification-rules:
+    get:
+      operationId: notificationRulesList
+      summary: List notification rules
+      tags:
+      - Notification Rules
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: event_type
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: notificationRulesCreate
+      summary: Create notification rule
+      tags:
+      - Notification Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRuleCreate'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/notification-rules/{id}:
+    get:
+      operationId: notificationRulesGet
+      summary: Retrieve notification rule
+      tags:
+      - Notification Rules
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id009
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: notificationRulesUpdate
+      summary: Update notification rule
+      tags:
+      - Notification Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationRuleUpdate'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: notificationRulesDelete
+      summary: Delete notification rule
+      tags:
+      - Notification Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/notification-preferences:
+    get:
+      operationId: notificationPreferencesList
+      summary: List notification preferences
+      tags:
+      - Notification Preferences
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recipient_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - AGENT
+          - MERCHANT
+          - EXTERNAL
+      - name: recipient_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - WHATSAPP
+          - IN_APP
+          - USSD
+          - VOICE
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - NOT-02
+      x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: notificationPreferencesCreate
+      summary: Create notification preference
+      tags:
+      - Notification Preferences
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreference'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferenceCreate'
+      x-requirements:
+      - NOT-02
+      x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-create: true
+  /v1/notification-preferences/{id}:
+    get:
+      operationId: notificationPreferencesGet
+      summary: Retrieve notification preference
+      tags:
+      - Notification Preferences
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreference'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-02
+      x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: notificationPreferencesUpdate
+      summary: Update notification preference
+      tags:
+      - Notification Preferences
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreference'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferenceUpdate'
+      x-requirements:
+      - NOT-02
+      x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-update: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A message sent (or to be sent) to a recipient on one channel
+  name: Notifications
+- description: Localised message template per channel
+  name: Notification Templates
+- description: Delivery provider per channel with priority for failover
+  name: Notification Providers
+- description: Maps a domain event to notifications (template, channels, recipient, conditions)
+  name: Notification Rules
+- description: A recipient's channel preferences and quiet hours per category
+  name: Notification Preferences

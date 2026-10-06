@@ -216,21 +216,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Wallet'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletPage'
         '400': &id001
           $ref: '#/components/responses/BadRequest'
         '401': &id002
@@ -244,6 +230,9 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: walletsCreate
       summary: Create wallet
@@ -280,6 +269,9 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
+      x-crud: true
+      x-crud-create: true
   /v1/wallets/{id}:
     get:
       operationId: walletsGet
@@ -315,6 +307,9 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: walletsUpdate
       summary: Update wallet
@@ -354,6 +349,9 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
+      x-crud: true
+      x-crud-update: true
   /v1/wallets/lookup:
     get:
       operationId: walletsLookup
@@ -382,6 +380,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/balance:
     get:
       operationId: walletsBalance
@@ -416,6 +415,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/transactions:
     get:
       operationId: walletsTransactions
@@ -440,21 +440,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletTransaction'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletTransactionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -466,6 +452,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/limits:
     get:
       operationId: walletsLimits
@@ -490,21 +477,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletTierLimit'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletTierLimitPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -516,6 +489,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/status-history:
     get:
       operationId: walletsStatusHistory
@@ -540,21 +514,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletStatusHistory'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletStatusHistoryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -566,6 +526,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/upgrade-tier:
     post:
       operationId: walletsUpgradeTier
@@ -611,6 +572,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/activate:
     post:
       operationId: walletsActivate
@@ -656,6 +618,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/suspend:
     post:
       operationId: walletsSuspend
@@ -701,6 +664,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/block:
     post:
       operationId: walletsBlock
@@ -746,6 +710,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/reactivate:
     post:
       operationId: walletsReactivate
@@ -791,6 +756,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/close:
     post:
       operationId: walletsClose
@@ -836,6 +802,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/set-pin:
     post:
       operationId: walletsSetPin
@@ -877,6 +844,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/verify-pin:
     post:
       operationId: walletsVerifyPin
@@ -918,6 +886,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallets/{id}/statements:
     post:
       operationId: walletsStatements
@@ -959,6 +928,7 @@ paths:
       - LND-07
       - WAL-01
       x-service: wallet-service
+      x-table: wallet
   /v1/wallet-transactions:
     get:
       operationId: walletTransactionsList
@@ -1088,21 +1058,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletTransaction'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletTransactionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1116,6 +1072,9 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: walletTransactionsCreate
       summary: Create wallet transaction
@@ -1156,6 +1115,9 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
+      x-crud: true
+      x-crud-create: true
   /v1/wallet-transactions/{id}:
     get:
       operationId: walletTransactionsGet
@@ -1194,6 +1156,9 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
+      x-crud: true
+      x-crud-get: true
   /v1/wallet-transactions/quote:
     post:
       operationId: walletTransactionsQuote
@@ -1233,6 +1198,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/p2p:
     post:
       operationId: walletTransactionsP2p
@@ -1276,6 +1242,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/cash-in:
     post:
       operationId: walletTransactionsCashIn
@@ -1319,6 +1286,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/cash-out:
     post:
       operationId: walletTransactionsCashOut
@@ -1362,6 +1330,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/wallet-to-bank:
     post:
       operationId: walletTransactionsWalletToBank
@@ -1405,6 +1374,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/bank-to-wallet:
     post:
       operationId: walletTransactionsBankToWallet
@@ -1448,6 +1418,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/{id}/confirm:
     post:
       operationId: walletTransactionsConfirm
@@ -1497,6 +1468,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/{id}/cancel:
     post:
       operationId: walletTransactionsCancel
@@ -1546,6 +1518,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/{id}/reverse:
     post:
       operationId: walletTransactionsReverse
@@ -1595,6 +1568,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/{id}/legs:
     get:
       operationId: walletTransactionsLegs
@@ -1619,21 +1593,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletTransactionLeg'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletTransactionLegPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1649,6 +1609,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-transactions/{id}/receipt:
     get:
       operationId: walletTransactionsReceipt
@@ -1683,6 +1644,7 @@ paths:
       - WAL-06
       - WAL-07
       x-service: wallet-service
+      x-table: wallet_transaction
   /v1/wallet-tier-limits:
     get:
       operationId: walletTierLimitsList
@@ -1777,21 +1739,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletTierLimit'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletTierLimitPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1801,6 +1749,9 @@ paths:
       - LIM-01
       - WAL-01
       x-service: wallet-service
+      x-table: wallet_tier_limit
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: walletTierLimitsCreate
       summary: Create wallet tier limit
@@ -1837,6 +1788,9 @@ paths:
       - LIM-01
       - WAL-01
       x-service: wallet-service
+      x-table: wallet_tier_limit
+      x-crud: true
+      x-crud-create: true
   /v1/wallet-tier-limits/{id}:
     get:
       operationId: walletTierLimitsGet
@@ -1872,6 +1826,9 @@ paths:
       - LIM-01
       - WAL-01
       x-service: wallet-service
+      x-table: wallet_tier_limit
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: walletTierLimitsUpdate
       summary: Update wallet tier limit
@@ -1911,6 +1868,9 @@ paths:
       - LIM-01
       - WAL-01
       x-service: wallet-service
+      x-table: wallet_tier_limit
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: walletTierLimitsDelete
       summary: Delete wallet tier limit
@@ -1934,6 +1894,9 @@ paths:
       - LIM-01
       - WAL-01
       x-service: wallet-service
+      x-table: wallet_tier_limit
+      x-crud: true
+      x-crud-delete: true
   /v1/wallet-bank-links:
     get:
       operationId: walletBankLinksList
@@ -1998,21 +1961,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletBankLink'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletBankLinkPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2021,6 +1970,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: wallet-service
+      x-table: wallet_bank_link
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: walletBankLinksCreate
       summary: Create wallet bank link
@@ -2056,6 +2008,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: wallet-service
+      x-table: wallet_bank_link
+      x-crud: true
+      x-crud-create: true
   /v1/wallet-bank-links/{id}:
     get:
       operationId: walletBankLinksGet
@@ -2090,6 +2045,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: wallet-service
+      x-table: wallet_bank_link
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: walletBankLinksUpdate
       summary: Update wallet bank link
@@ -2128,6 +2086,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: wallet-service
+      x-table: wallet_bank_link
+      x-crud: true
+      x-crud-update: true
   /v1/wallet-bank-links/{id}/verify:
     post:
       operationId: walletBankLinksVerify
@@ -2172,6 +2133,7 @@ paths:
       - PAY-01
       - WAL-08
       x-service: wallet-service
+      x-table: wallet_bank_link
   /v1/wallet-bank-links/{id}/remove:
     post:
       operationId: walletBankLinksRemove
@@ -2216,6 +2178,7 @@ paths:
       - PAY-01
       - WAL-08
       x-service: wallet-service
+      x-table: wallet_bank_link
   /v1/wallet-pin-resets:
     get:
       operationId: walletPinResetsList
@@ -2281,21 +2244,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletPinReset'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletPinResetPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2303,6 +2252,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: wallet-service
+      x-table: wallet_pin_reset
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: walletPinResetsCreate
       summary: Create wallet pin reset
@@ -2337,6 +2289,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: wallet-service
+      x-table: wallet_pin_reset
+      x-crud: true
+      x-crud-create: true
   /v1/wallet-pin-resets/{id}:
     get:
       operationId: walletPinResetsGet
@@ -2369,6 +2324,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: wallet-service
+      x-table: wallet_pin_reset
+      x-crud: true
+      x-crud-get: true
   /v1/wallet-pin-resets/{id}/verify:
     post:
       operationId: walletPinResetsVerify
@@ -2412,6 +2370,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: wallet-service
+      x-table: wallet_pin_reset
   /v1/wallet-pin-resets/{id}/complete:
     post:
       operationId: walletPinResetsComplete
@@ -2455,6 +2414,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: wallet-service
+      x-table: wallet_pin_reset
   /v1/wallet-pin-resets/{id}/reject:
     post:
       operationId: walletPinResetsReject
@@ -2498,6 +2458,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: wallet-service
+      x-table: wallet_pin_reset
   /v1/wallet-favorites:
     get:
       operationId: walletFavoritesList
@@ -2553,21 +2514,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletFavorite'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletFavoritePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2576,6 +2523,9 @@ paths:
       - PAY-01
       - WAL-05
       x-service: wallet-service
+      x-table: wallet_favorite
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: walletFavoritesCreate
       summary: Create wallet favorite
@@ -2611,6 +2561,9 @@ paths:
       - PAY-01
       - WAL-05
       x-service: wallet-service
+      x-table: wallet_favorite
+      x-crud: true
+      x-crud-create: true
   /v1/wallet-favorites/{id}:
     get:
       operationId: walletFavoritesGet
@@ -2645,6 +2598,9 @@ paths:
       - PAY-01
       - WAL-05
       x-service: wallet-service
+      x-table: wallet_favorite
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: walletFavoritesUpdate
       summary: Update wallet favorite
@@ -2683,6 +2639,9 @@ paths:
       - PAY-01
       - WAL-05
       x-service: wallet-service
+      x-table: wallet_favorite
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: walletFavoritesDelete
       summary: Delete wallet favorite
@@ -2705,6 +2664,9 @@ paths:
       - PAY-01
       - WAL-05
       x-service: wallet-service
+      x-table: wallet_favorite
+      x-crud: true
+      x-crud-delete: true
   /v1/agents:
     get:
       operationId: agentsList
@@ -2792,21 +2754,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Agent'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2816,6 +2764,9 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentsCreate
       summary: Create agent
@@ -2852,6 +2803,9 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-create: true
   /v1/agents/{id}:
     get:
       operationId: agentsGet
@@ -2887,6 +2841,9 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: agentsUpdate
       summary: Update agent
@@ -2926,6 +2883,9 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-update: true
   /v1/agents/{id}/activate:
     post:
       operationId: agentsActivate
@@ -2971,6 +2931,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/suspend:
     post:
       operationId: agentsSuspend
@@ -3016,6 +2977,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/terminate:
     post:
       operationId: agentsTerminate
@@ -3061,6 +3023,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/assign-commission-plan:
     post:
       operationId: agentsAssignCommissionPlan
@@ -3106,6 +3069,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/sub-agents:
     get:
       operationId: agentsSubAgents
@@ -3130,21 +3094,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Agent'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3156,6 +3106,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/outlets:
     get:
       operationId: agentsOutlets
@@ -3180,21 +3131,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentOutlet'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentOutletPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3206,6 +3143,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/float:
     get:
       operationId: agentsFloat
@@ -3230,21 +3168,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentFloat'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentFloatPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3256,6 +3180,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agents/{id}/performance:
     get:
       operationId: agentsPerformance
@@ -3280,21 +3205,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentPerformanceDaily'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentPerformanceDailyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3306,6 +3217,7 @@ paths:
       - WAL-01
       - WAL-02
       x-service: agent-network-service
+      x-table: agent
   /v1/agent-territories:
     get:
       operationId: agentTerritoriesList
@@ -3371,21 +3283,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentTerritory'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentTerritoryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3393,6 +3291,9 @@ paths:
       x-requirements:
       - WAL-01
       x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentTerritoriesCreate
       summary: Create agent territorie
@@ -3427,6 +3328,9 @@ paths:
       x-requirements:
       - WAL-01
       x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-create: true
   /v1/agent-territories/{id}:
     get:
       operationId: agentTerritoriesGet
@@ -3460,6 +3364,9 @@ paths:
       x-requirements:
       - WAL-01
       x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: agentTerritoriesUpdate
       summary: Update agent territorie
@@ -3497,6 +3404,9 @@ paths:
       x-requirements:
       - WAL-01
       x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-update: true
   /v1/agent-outlets:
     get:
       operationId: agentOutletsList
@@ -3570,21 +3480,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentOutlet'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentOutletPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3593,6 +3489,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentOutletsCreate
       summary: Create agent outlet
@@ -3628,6 +3527,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-create: true
   /v1/agent-outlets/{id}:
     get:
       operationId: agentOutletsGet
@@ -3662,6 +3564,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: agentOutletsUpdate
       summary: Update agent outlet
@@ -3700,6 +3605,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-update: true
   /v1/agent-outlets/nearby:
     get:
       operationId: agentOutletsNearby
@@ -3718,21 +3626,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentOutlet'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentOutletPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3743,6 +3637,7 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_outlet
   /v1/agent-outlets/{id}/close:
     post:
       operationId: agentOutletsClose
@@ -3787,6 +3682,7 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_outlet
   /v1/agent-floats:
     get:
       operationId: agentFloatsList
@@ -3847,21 +3743,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentFloat'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentFloatPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3869,6 +3751,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentFloatsCreate
       summary: Create agent float
@@ -3903,6 +3788,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-create: true
   /v1/agent-floats/{id}:
     get:
       operationId: agentFloatsGet
@@ -3936,6 +3824,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: agentFloatsUpdate
       summary: Update agent float
@@ -3973,6 +3864,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-update: true
   /v1/agent-float-requests:
     get:
       operationId: agentFloatRequestsList
@@ -4047,21 +3941,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentFloatRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentFloatRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4069,6 +3949,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float_request
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentFloatRequestsCreate
       summary: Create agent float request
@@ -4103,6 +3986,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float_request
+      x-crud: true
+      x-crud-create: true
   /v1/agent-float-requests/{id}:
     get:
       operationId: agentFloatRequestsGet
@@ -4135,6 +4021,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float_request
+      x-crud: true
+      x-crud-get: true
   /v1/agent-float-requests/{id}/approve:
     post:
       operationId: agentFloatRequestsApprove
@@ -4178,6 +4067,7 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float_request
   /v1/agent-float-requests/{id}/reject:
     post:
       operationId: agentFloatRequestsReject
@@ -4221,6 +4111,7 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float_request
   /v1/agent-float-requests/{id}/cancel:
     post:
       operationId: agentFloatRequestsCancel
@@ -4264,6 +4155,7 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_float_request
   /v1/agent-tills:
     get:
       operationId: agentTillsList
@@ -4327,21 +4219,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentTill'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentTillPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4349,6 +4227,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_till
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentTillsCreate
       summary: Create agent till
@@ -4383,6 +4264,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_till
+      x-crud: true
+      x-crud-create: true
   /v1/agent-tills/{id}:
     get:
       operationId: agentTillsGet
@@ -4415,6 +4299,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_till
+      x-crud: true
+      x-crud-get: true
   /v1/agent-tills/{id}/open:
     post:
       operationId: agentTillsOpen
@@ -4458,6 +4345,7 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_till
   /v1/agent-tills/{id}/close:
     post:
       operationId: agentTillsClose
@@ -4501,6 +4389,7 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_till
   /v1/agent-devices:
     get:
       operationId: agentDevicesList
@@ -4579,21 +4468,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentDevice'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentDevicePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4602,6 +4477,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentDevicesCreate
       summary: Create agent device
@@ -4637,6 +4515,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-create: true
   /v1/agent-devices/{id}:
     get:
       operationId: agentDevicesGet
@@ -4671,6 +4552,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: agentDevicesUpdate
       summary: Update agent device
@@ -4709,6 +4593,9 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-update: true
   /v1/agent-devices/{id}/report-lost:
     post:
       operationId: agentDevicesReportLost
@@ -4753,6 +4640,7 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_device
   /v1/agent-devices/{id}/retire:
     post:
       operationId: agentDevicesRetire
@@ -4791,6 +4679,7 @@ paths:
       - ONB-07
       - WAL-02
       x-service: agent-network-service
+      x-table: agent_device
   /v1/agent-kyc-documents:
     get:
       operationId: agentKycDocumentsList
@@ -4850,21 +4739,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentKycDocument'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AgentKycDocumentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4873,6 +4748,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: agentKycDocumentsCreate
       summary: Create agent kyc document
@@ -4908,6 +4786,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-create: true
   /v1/agent-kyc-documents/{id}:
     get:
       operationId: agentKycDocumentsGet
@@ -4941,6 +4822,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-get: true
     delete:
       operationId: agentKycDocumentsDelete
       summary: Delete agent kyc document
@@ -4963,6 +4847,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-delete: true
   /v1/agent-kyc-documents/{id}/verify:
     post:
       operationId: agentKycDocumentsVerify
@@ -5007,6 +4894,7 @@ paths:
       - ONB-04
       - ONB-06
       x-service: agent-network-service
+      x-table: agent_kyc_document
   /v1/cash-management-requests:
     get:
       operationId: cashManagementRequestsList
@@ -5074,21 +4962,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CashManagementRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CashManagementRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5096,6 +4970,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: cashManagementRequestsCreate
       summary: Create cash management request
@@ -5130,6 +5007,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-create: true
   /v1/cash-management-requests/{id}:
     get:
       operationId: cashManagementRequestsGet
@@ -5163,6 +5043,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: cashManagementRequestsUpdate
       summary: Update cash management request
@@ -5200,6 +5083,9 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-update: true
   /v1/cash-management-requests/{id}/complete:
     post:
       operationId: cashManagementRequestsComplete
@@ -5243,6 +5129,7 @@ paths:
       x-requirements:
       - WAL-02
       x-service: agent-network-service
+      x-table: cash_management_request
   /v1/commission-plans:
     get:
       operationId: commissionPlansList
@@ -5312,21 +5199,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionPlan'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionPlanPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5334,6 +5207,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: commissionPlansCreate
       summary: Create commission plan
@@ -5368,6 +5244,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-create: true
   /v1/commission-plans/{id}:
     get:
       operationId: commissionPlansGet
@@ -5401,6 +5280,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: commissionPlansUpdate
       summary: Update commission plan
@@ -5438,6 +5320,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-update: true
   /v1/commission-plans/{id}/rules:
     get:
       operationId: commissionPlansRules
@@ -5462,21 +5347,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionRule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionRulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5486,6 +5357,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
   /v1/commission-plans/{id}/submit:
     post:
       operationId: commissionPlansSubmit
@@ -5523,6 +5395,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
   /v1/commission-plans/{id}/approve:
     post:
       operationId: commissionPlansApprove
@@ -5566,6 +5439,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
   /v1/commission-plans/{id}/retire:
     post:
       operationId: commissionPlansRetire
@@ -5609,6 +5483,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
   /v1/commission-plans/{id}/clone:
     post:
       operationId: commissionPlansClone
@@ -5646,6 +5521,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
   /v1/commission-plans/{id}/simulate:
     post:
       operationId: commissionPlansSimulate
@@ -5671,21 +5547,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionEarning'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionEarningPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5705,6 +5567,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_plan
   /v1/commission-rules:
     get:
       operationId: commissionRulesList
@@ -5796,21 +5659,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionRule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionRulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5818,6 +5667,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: commissionRulesCreate
       summary: Create commission rule
@@ -5852,6 +5704,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-create: true
   /v1/commission-rules/{id}:
     get:
       operationId: commissionRulesGet
@@ -5885,6 +5740,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: commissionRulesUpdate
       summary: Update commission rule
@@ -5922,6 +5780,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: commissionRulesDelete
       summary: Delete commission rule
@@ -5943,6 +5804,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-delete: true
   /v1/commission-earnings:
     get:
       operationId: commissionEarningsList
@@ -6025,21 +5889,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionEarning'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionEarningPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6047,6 +5897,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_earning
+      x-crud: true
+      x-crud-list: true
   /v1/commission-earnings/{id}:
     get:
       operationId: commissionEarningsGet
@@ -6079,6 +5932,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_earning
+      x-crud: true
+      x-crud-get: true
   /v1/commission-payout-runs:
     get:
       operationId: commissionPayoutRunsList
@@ -6144,21 +6000,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionPayoutRun'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionPayoutRunPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6166,6 +6008,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_payout_run
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: commissionPayoutRunsCreate
       summary: Create commission payout run
@@ -6200,6 +6045,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_payout_run
+      x-crud: true
+      x-crud-create: true
   /v1/commission-payout-runs/{id}:
     get:
       operationId: commissionPayoutRunsGet
@@ -6232,6 +6080,9 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_payout_run
+      x-crud: true
+      x-crud-get: true
   /v1/commission-payout-runs/{id}/approve:
     post:
       operationId: commissionPayoutRunsApprove
@@ -6275,6 +6126,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_payout_run
   /v1/commission-payout-runs/{id}/retry-failed:
     post:
       operationId: commissionPayoutRunsRetryFailed
@@ -6312,6 +6164,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_payout_run
   /v1/commission-payout-runs/{id}/lines:
     get:
       operationId: commissionPayoutRunsLines
@@ -6336,21 +6189,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CommissionPayoutLine'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CommissionPayoutLinePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6360,6 +6199,7 @@ paths:
       x-requirements:
       - WAL-04
       x-service: commission-service
+      x-table: commission_payout_run
   /v1/billers:
     get:
       operationId: billersList
@@ -6451,21 +6291,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Biller'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillerPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6473,6 +6299,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: billersCreate
       summary: Create biller
@@ -6507,6 +6336,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-create: true
   /v1/billers/{id}:
     get:
       operationId: billersGet
@@ -6540,6 +6372,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: billersUpdate
       summary: Update biller
@@ -6577,6 +6412,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-update: true
   /v1/billers/{id}/products:
     get:
       operationId: billersProducts
@@ -6601,21 +6439,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BillerProduct'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillerProductPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6625,6 +6449,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
   /v1/billers/{id}/validate-reference:
     post:
       operationId: billersValidateReference
@@ -6668,6 +6493,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
   /v1/billers/{id}/activate:
     post:
       operationId: billersActivate
@@ -6705,6 +6531,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
   /v1/billers/{id}/suspend:
     post:
       operationId: billersSuspend
@@ -6748,6 +6575,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller
   /v1/biller-products:
     get:
       operationId: billerProductsList
@@ -6807,21 +6635,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BillerProduct'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillerProductPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6829,6 +6643,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: billerProductsCreate
       summary: Create biller product
@@ -6863,6 +6680,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-create: true
   /v1/biller-products/{id}:
     get:
       operationId: billerProductsGet
@@ -6896,6 +6716,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: billerProductsUpdate
       summary: Update biller product
@@ -6933,6 +6756,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-update: true
   /v1/bill-inquiries:
     get:
       operationId: billInquiriesList
@@ -6988,21 +6814,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BillInquiry'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillInquiryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7010,6 +6822,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_inquiry
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: billInquiriesCreate
       summary: Create bill inquirie
@@ -7044,6 +6859,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_inquiry
+      x-crud: true
+      x-crud-create: true
   /v1/bill-inquiries/{id}:
     get:
       operationId: billInquiriesGet
@@ -7076,6 +6894,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_inquiry
+      x-crud: true
+      x-crud-get: true
   /v1/bill-payments:
     get:
       operationId: billPaymentsList
@@ -7158,21 +6979,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BillPayment'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillPaymentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7180,6 +6987,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_payment
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: billPaymentsCreate
       summary: Create bill payment
@@ -7214,6 +7024,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_payment
+      x-crud: true
+      x-crud-create: true
   /v1/bill-payments/{id}:
     get:
       operationId: billPaymentsGet
@@ -7246,6 +7059,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_payment
+      x-crud: true
+      x-crud-get: true
   /v1/bill-payments/{id}/retry:
     post:
       operationId: billPaymentsRetry
@@ -7283,6 +7099,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_payment
   /v1/bill-payments/{id}/reverse:
     post:
       operationId: billPaymentsReverse
@@ -7326,6 +7143,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_payment
   /v1/bill-payments/{id}/receipt:
     get:
       operationId: billPaymentsReceipt
@@ -7354,6 +7172,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: bill_payment
   /v1/airtime-topups:
     get:
       operationId: airtimeTopupsList
@@ -7426,21 +7245,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AirtimeTopup'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AirtimeTopupPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7448,6 +7253,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: airtime_topup
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: airtimeTopupsCreate
       summary: Create airtime topup
@@ -7482,6 +7290,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: airtime_topup
+      x-crud: true
+      x-crud-create: true
   /v1/airtime-topups/{id}:
     get:
       operationId: airtimeTopupsGet
@@ -7514,6 +7325,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: airtime_topup
+      x-crud: true
+      x-crud-get: true
   /v1/airtime-topups/{id}/retry:
     post:
       operationId: airtimeTopupsRetry
@@ -7551,6 +7365,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: airtime_topup
   /v1/biller-settlements:
     get:
       operationId: billerSettlementsList
@@ -7611,21 +7426,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BillerSettlement'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillerSettlementPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7633,6 +7434,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_settlement
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: billerSettlementsCreate
       summary: Create biller settlement
@@ -7667,6 +7471,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_settlement
+      x-crud: true
+      x-crud-create: true
   /v1/biller-settlements/{id}:
     get:
       operationId: billerSettlementsGet
@@ -7699,6 +7506,9 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_settlement
+      x-crud: true
+      x-crud-get: true
   /v1/biller-settlements/{id}/approve:
     post:
       operationId: billerSettlementsApprove
@@ -7742,6 +7552,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_settlement
   /v1/biller-settlements/{id}/mark-paid:
     post:
       operationId: billerSettlementsMarkPaid
@@ -7785,6 +7596,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_settlement
   /v1/biller-settlements/{id}/payments:
     get:
       operationId: billerSettlementsPayments
@@ -7809,21 +7621,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BillPayment'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BillPaymentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7833,6 +7631,7 @@ paths:
       x-requirements:
       - WAL-05
       x-service: biller-service
+      x-table: biller_settlement
   /v1/merchants:
     get:
       operationId: merchantsList
@@ -7922,21 +7721,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Merchant'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7945,6 +7730,9 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantsCreate
       summary: Create merchant
@@ -7980,6 +7768,9 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
+      x-crud: true
+      x-crud-create: true
   /v1/merchants/{id}:
     get:
       operationId: merchantsGet
@@ -8014,6 +7805,9 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: merchantsUpdate
       summary: Update merchant
@@ -8052,6 +7846,9 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
+      x-crud: true
+      x-crud-update: true
   /v1/merchants/{id}/activate:
     post:
       operationId: merchantsActivate
@@ -8096,6 +7893,7 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
   /v1/merchants/{id}/suspend:
     post:
       operationId: merchantsSuspend
@@ -8140,6 +7938,7 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
   /v1/merchants/{id}/terminate:
     post:
       operationId: merchantsTerminate
@@ -8184,6 +7983,7 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
   /v1/merchants/{id}/stores:
     get:
       operationId: merchantsStores
@@ -8208,21 +8008,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantStore'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantStorePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8233,6 +8019,7 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
   /v1/merchants/{id}/transactions:
     get:
       operationId: merchantsTransactions
@@ -8257,21 +8044,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WalletTransaction'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WalletTransactionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8282,6 +8055,7 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
   /v1/merchants/{id}/settlements:
     get:
       operationId: merchantsSettlements
@@ -8306,21 +8080,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantSettlement'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantSettlementPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8331,6 +8091,7 @@ paths:
       - ONB-04
       - WAL-06
       x-service: merchant-service
+      x-table: merchant
   /v1/merchant-stores:
     get:
       operationId: merchantStoresList
@@ -8394,21 +8155,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantStore'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantStorePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8416,6 +8163,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_store
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantStoresCreate
       summary: Create merchant store
@@ -8450,6 +8200,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_store
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-stores/{id}:
     get:
       operationId: merchantStoresGet
@@ -8483,6 +8236,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_store
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: merchantStoresUpdate
       summary: Update merchant store
@@ -8520,6 +8276,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_store
+      x-crud: true
+      x-crud-update: true
   /v1/merchant-terminals:
     get:
       operationId: merchantTerminalsList
@@ -8589,21 +8348,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantTerminal'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantTerminalPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8611,6 +8356,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_terminal
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantTerminalsCreate
       summary: Create merchant terminal
@@ -8645,6 +8393,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_terminal
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-terminals/{id}:
     get:
       operationId: merchantTerminalsGet
@@ -8678,6 +8429,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_terminal
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: merchantTerminalsUpdate
       summary: Update merchant terminal
@@ -8715,6 +8469,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_terminal
+      x-crud: true
+      x-crud-update: true
   /v1/merchant-terminals/{id}/deactivate:
     post:
       operationId: merchantTerminalsDeactivate
@@ -8758,6 +8515,7 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_terminal
   /v1/merchant-qr-codes:
     get:
       operationId: merchantQrCodesList
@@ -8824,21 +8582,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantQr'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantQrPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8847,6 +8591,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_qr
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantQrCodesCreate
       summary: Create merchant qr code
@@ -8882,6 +8629,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_qr
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-qr-codes/{id}:
     get:
       operationId: merchantQrCodesGet
@@ -8915,6 +8665,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_qr
+      x-crud: true
+      x-crud-get: true
   /v1/merchant-qr-codes/{id}/deactivate:
     post:
       operationId: merchantQrCodesDeactivate
@@ -8953,6 +8706,7 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_qr
   /v1/merchant-qr-codes/decode:
     post:
       operationId: merchantQrCodesDecode
@@ -8991,6 +8745,7 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_qr
   /v1/merchant-qr-codes/pay:
     post:
       operationId: merchantQrCodesPay
@@ -9029,6 +8784,7 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_qr
   /v1/merchant-payment-links:
     get:
       operationId: merchantPaymentLinksList
@@ -9088,21 +8844,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantPaymentLink'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantPaymentLinkPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9111,6 +8853,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_payment_link
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantPaymentLinksCreate
       summary: Create merchant payment link
@@ -9146,6 +8891,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_payment_link
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-payment-links/{id}:
     get:
       operationId: merchantPaymentLinksGet
@@ -9180,6 +8928,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_payment_link
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: merchantPaymentLinksUpdate
       summary: Update merchant payment link
@@ -9218,6 +8969,9 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_payment_link
+      x-crud: true
+      x-crud-update: true
   /v1/merchant-payment-links/{id}/deactivate:
     post:
       operationId: merchantPaymentLinksDeactivate
@@ -9256,6 +9010,7 @@ paths:
       - PAY-07
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_payment_link
   /v1/merchant-fee-plans:
     get:
       operationId: merchantFeePlansList
@@ -9310,21 +9065,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantFeePlan'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantFeePlanPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9333,6 +9074,9 @@ paths:
       - PRC-02
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_fee_plan
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantFeePlansCreate
       summary: Create merchant fee plan
@@ -9368,6 +9112,9 @@ paths:
       - PRC-02
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_fee_plan
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-fee-plans/{id}:
     get:
       operationId: merchantFeePlansGet
@@ -9402,6 +9149,9 @@ paths:
       - PRC-02
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_fee_plan
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: merchantFeePlansUpdate
       summary: Update merchant fee plan
@@ -9440,6 +9190,9 @@ paths:
       - PRC-02
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_fee_plan
+      x-crud: true
+      x-crud-update: true
   /v1/merchant-settlements:
     get:
       operationId: merchantSettlementsList
@@ -9500,21 +9253,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantSettlement'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantSettlementPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9522,6 +9261,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_settlement
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantSettlementsCreate
       summary: Create merchant settlement
@@ -9556,6 +9298,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_settlement
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-settlements/{id}:
     get:
       operationId: merchantSettlementsGet
@@ -9588,6 +9333,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_settlement
+      x-crud: true
+      x-crud-get: true
   /v1/merchant-settlements/{id}/approve:
     post:
       operationId: merchantSettlementsApprove
@@ -9631,6 +9379,7 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_settlement
   /v1/merchant-settlements/{id}/pay:
     post:
       operationId: merchantSettlementsPay
@@ -9668,6 +9417,7 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_settlement
   /v1/merchant-settlements/{id}/report:
     get:
       operationId: merchantSettlementsReport
@@ -9696,6 +9446,7 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_settlement
   /v1/merchant-refunds:
     get:
       operationId: merchantRefundsList
@@ -9761,21 +9512,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MerchantRefund'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MerchantRefundPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9783,6 +9520,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_refund
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: merchantRefundsCreate
       summary: Create merchant refund
@@ -9817,6 +9557,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_refund
+      x-crud: true
+      x-crud-create: true
   /v1/merchant-refunds/{id}:
     get:
       operationId: merchantRefundsGet
@@ -9849,6 +9592,9 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_refund
+      x-crud: true
+      x-crud-get: true
   /v1/merchant-refunds/{id}/approve:
     post:
       operationId: merchantRefundsApprove
@@ -9892,6 +9638,7 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_refund
   /v1/merchant-refunds/{id}/reject:
     post:
       operationId: merchantRefundsReject
@@ -9935,6 +9682,7 @@ paths:
       x-requirements:
       - WAL-06
       x-service: merchant-service
+      x-table: merchant_refund
   /v1/ussd-menus:
     get:
       operationId: ussdMenusList
@@ -10003,21 +9751,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UssdMenu'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UssdMenuPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10025,6 +9759,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: ussdMenusCreate
       summary: Create ussd menu
@@ -10059,6 +9796,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-create: true
   /v1/ussd-menus/{id}:
     get:
       operationId: ussdMenusGet
@@ -10092,6 +9832,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: ussdMenusUpdate
       summary: Update ussd menu
@@ -10129,6 +9872,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-update: true
   /v1/ussd-menus/{id}/nodes:
     get:
       operationId: ussdMenusNodes
@@ -10153,21 +9899,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UssdMenuNode'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UssdMenuNodePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10177,6 +9909,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
   /v1/ussd-menus/{id}/publish:
     post:
       operationId: ussdMenusPublish
@@ -10220,6 +9953,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
   /v1/ussd-menus/{id}/clone:
     post:
       operationId: ussdMenusClone
@@ -10257,6 +9991,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
   /v1/ussd-menus/{id}/simulate:
     post:
       operationId: ussdMenusSimulate
@@ -10296,6 +10031,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu
   /v1/ussd-menu-nodes:
     get:
       operationId: ussdMenuNodesList
@@ -10361,21 +10097,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UssdMenuNode'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UssdMenuNodePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10383,6 +10105,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: ussdMenuNodesCreate
       summary: Create ussd menu node
@@ -10417,6 +10142,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-create: true
   /v1/ussd-menu-nodes/{id}:
     get:
       operationId: ussdMenuNodesGet
@@ -10450,6 +10178,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: ussdMenuNodesUpdate
       summary: Update ussd menu node
@@ -10487,6 +10218,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: ussdMenuNodesDelete
       summary: Delete ussd menu node
@@ -10508,6 +10242,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-delete: true
   /v1/ussd-sessions:
     get:
       operationId: ussdSessionsList
@@ -10583,21 +10320,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UssdSession'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UssdSessionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10605,6 +10328,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_session
+      x-crud: true
+      x-crud-list: true
   /v1/ussd-sessions/{id}:
     get:
       operationId: ussdSessionsGet
@@ -10637,6 +10363,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_session
+      x-crud: true
+      x-crud-get: true
   /v1/ussd-sessions/{id}/steps:
     get:
       operationId: ussdSessionsSteps
@@ -10661,21 +10390,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UssdSessionStep'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UssdSessionStepPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10685,6 +10400,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_session
   /v1/ussd-sessions/callback:
     post:
       operationId: ussdSessionsCallback
@@ -10718,6 +10434,7 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: ussd_session
   /v1/sms-commands:
     get:
       operationId: smsCommandsList
@@ -10777,21 +10494,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SmsCommand'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/SmsCommandPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10799,6 +10502,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: smsCommandsCreate
       summary: Create sms command
@@ -10833,6 +10539,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-create: true
   /v1/sms-commands/{id}:
     get:
       operationId: smsCommandsGet
@@ -10866,6 +10575,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: smsCommandsUpdate
       summary: Update sms command
@@ -10903,6 +10615,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: smsCommandsDelete
       summary: Delete sms command
@@ -10924,6 +10639,9 @@ paths:
       x-requirements:
       - WAL-03
       x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-delete: true
   /v1/sms-messages:
     get:
       operationId: smsMessagesList
@@ -11001,21 +10719,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SmsMessage'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/SmsMessagePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11024,6 +10728,9 @@ paths:
       - NOT-01
       - WAL-03
       x-service: channel-service
+      x-table: sms_message
+      x-crud: true
+      x-crud-list: true
   /v1/sms-messages/{id}:
     get:
       operationId: smsMessagesGet
@@ -11057,6 +10764,9 @@ paths:
       - NOT-01
       - WAL-03
       x-service: channel-service
+      x-table: sms_message
+      x-crud: true
+      x-crud-get: true
   /v1/sms-messages/inbound:
     post:
       operationId: smsMessagesInbound
@@ -11091,6 +10801,7 @@ paths:
       - NOT-01
       - WAL-03
       x-service: channel-service
+      x-table: sms_message
   /v1/sms-messages/delivery-reports:
     post:
       operationId: smsMessagesDeliveryReports
@@ -11125,6 +10836,7 @@ paths:
       - NOT-01
       - WAL-03
       x-service: channel-service
+      x-table: sms_message
   /v1/disbursement-programs:
     get:
       operationId: disbursementProgramsList
@@ -11189,21 +10901,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DisbursementProgram'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DisbursementProgramPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11211,6 +10909,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: disbursementProgramsCreate
       summary: Create disbursement program
@@ -11245,6 +10946,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
+      x-crud: true
+      x-crud-create: true
   /v1/disbursement-programs/{id}:
     get:
       operationId: disbursementProgramsGet
@@ -11278,6 +10982,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: disbursementProgramsUpdate
       summary: Update disbursement program
@@ -11315,6 +11022,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
+      x-crud: true
+      x-crud-update: true
   /v1/disbursement-programs/{id}/activate:
     post:
       operationId: disbursementProgramsActivate
@@ -11352,6 +11062,7 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
   /v1/disbursement-programs/{id}/suspend:
     post:
       operationId: disbursementProgramsSuspend
@@ -11395,6 +11106,7 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
   /v1/disbursement-programs/{id}/close:
     post:
       operationId: disbursementProgramsClose
@@ -11432,6 +11144,7 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
   /v1/disbursement-programs/{id}/batches:
     get:
       operationId: disbursementProgramsBatches
@@ -11456,21 +11169,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DisbursementBatch'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DisbursementBatchPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11480,6 +11179,7 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_program
   /v1/disbursement-batches:
     get:
       operationId: disbursementBatchesList
@@ -11550,21 +11250,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DisbursementBatch'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DisbursementBatchPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11573,6 +11259,9 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: disbursementBatchesCreate
       summary: Create disbursement batche
@@ -11608,6 +11297,9 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
+      x-crud: true
+      x-crud-create: true
   /v1/disbursement-batches/{id}:
     get:
       operationId: disbursementBatchesGet
@@ -11641,6 +11333,9 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
+      x-crud: true
+      x-crud-get: true
   /v1/disbursement-batches/{id}/upload:
     post:
       operationId: disbursementBatchesUpload
@@ -11685,6 +11380,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/validate:
     post:
       operationId: disbursementBatchesValidate
@@ -11723,6 +11419,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/submit:
     post:
       operationId: disbursementBatchesSubmit
@@ -11761,6 +11458,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/approve:
     post:
       operationId: disbursementBatchesApprove
@@ -11805,6 +11503,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/reject:
     post:
       operationId: disbursementBatchesReject
@@ -11849,6 +11548,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/cancel:
     post:
       operationId: disbursementBatchesCancel
@@ -11893,6 +11593,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/retry-failed:
     post:
       operationId: disbursementBatchesRetryFailed
@@ -11931,6 +11632,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/beneficiaries:
     get:
       operationId: disbursementBatchesBeneficiaries
@@ -11955,21 +11657,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DisbursementBeneficiary'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DisbursementBeneficiaryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11980,6 +11668,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-batches/{id}/report:
     get:
       operationId: disbursementBatchesReport
@@ -12009,6 +11698,7 @@ paths:
       - PAY-01
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_batch
   /v1/disbursement-beneficiaries:
     get:
       operationId: disbursementBeneficiariesList
@@ -12089,21 +11779,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DisbursementBeneficiary'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DisbursementBeneficiaryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12111,6 +11787,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_beneficiary
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: disbursementBeneficiariesCreate
       summary: Create disbursement beneficiarie
@@ -12145,6 +11824,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_beneficiary
+      x-crud: true
+      x-crud-create: true
   /v1/disbursement-beneficiaries/{id}:
     get:
       operationId: disbursementBeneficiariesGet
@@ -12178,6 +11860,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_beneficiary
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: disbursementBeneficiariesUpdate
       summary: Update disbursement beneficiarie
@@ -12215,6 +11900,9 @@ paths:
       x-requirements:
       - WAL-07
       x-service: disbursement-service
+      x-table: disbursement_beneficiary
+      x-crud: true
+      x-crud-update: true
   /v1/interop-switches:
     get:
       operationId: interopSwitchesList
@@ -12278,21 +11966,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/InteropSwitch'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/InteropSwitchPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12300,6 +11974,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: interopSwitchesCreate
       summary: Create interop switche
@@ -12334,6 +12011,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-create: true
   /v1/interop-switches/{id}:
     get:
       operationId: interopSwitchesGet
@@ -12367,6 +12047,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: interopSwitchesUpdate
       summary: Update interop switche
@@ -12404,6 +12087,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-update: true
   /v1/interop-switches/{id}/participants:
     get:
       operationId: interopSwitchesParticipants
@@ -12428,21 +12114,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/InteropParticipant'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/InteropParticipantPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12452,6 +12124,7 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
   /v1/interop-switches/{id}/sync-participants:
     post:
       operationId: interopSwitchesSyncParticipants
@@ -12489,6 +12162,7 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
   /v1/interop-switches/{id}/position:
     get:
       operationId: interopSwitchesPosition
@@ -12517,6 +12191,7 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_switch
   /v1/interop-participants:
     get:
       operationId: interopParticipantsList
@@ -12581,21 +12256,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/InteropParticipant'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/InteropParticipantPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12603,6 +12264,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: interopParticipantsCreate
       summary: Create interop participant
@@ -12637,6 +12301,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-create: true
   /v1/interop-participants/{id}:
     get:
       operationId: interopParticipantsGet
@@ -12670,6 +12337,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: interopParticipantsUpdate
       summary: Update interop participant
@@ -12707,6 +12377,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-update: true
   /v1/interop-quotes:
     get:
       operationId: interopQuotesList
@@ -12778,21 +12451,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/InteropQuote'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/InteropQuotePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12800,6 +12459,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_quote
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: interopQuotesCreate
       summary: Create interop quote
@@ -12834,6 +12496,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_quote
+      x-crud: true
+      x-crud-create: true
   /v1/interop-quotes/{id}:
     get:
       operationId: interopQuotesGet
@@ -12866,6 +12531,9 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_quote
+      x-crud: true
+      x-crud-get: true
   /v1/interop-quotes/lookup-party:
     post:
       operationId: interopQuotesLookupParty
@@ -12899,6 +12567,7 @@ paths:
       x-requirements:
       - WAL-08
       x-service: interop-service
+      x-table: interop_quote
   /v1/interop-transfers:
     get:
       operationId: interopTransfersList
@@ -12983,21 +12652,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/InteropTransfer'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/InteropTransferPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13006,6 +12661,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: interop-service
+      x-table: interop_transfer
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: interopTransfersCreate
       summary: Create interop transfer
@@ -13041,6 +12699,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: interop-service
+      x-table: interop_transfer
+      x-crud: true
+      x-crud-create: true
   /v1/interop-transfers/{id}:
     get:
       operationId: interopTransfersGet
@@ -13074,6 +12735,9 @@ paths:
       - PAY-01
       - WAL-08
       x-service: interop-service
+      x-table: interop_transfer
+      x-crud: true
+      x-crud-get: true
   /v1/interop-transfers/{id}/abort:
     post:
       operationId: interopTransfersAbort
@@ -13118,6 +12782,7 @@ paths:
       - PAY-01
       - WAL-08
       x-service: interop-service
+      x-table: interop_transfer
   /v1/interop-transfers/callbacks/quotes:
     post:
       operationId: interopTransfersCallbacksQuotes
@@ -13152,6 +12817,7 @@ paths:
       - PAY-01
       - WAL-08
       x-service: interop-service
+      x-table: interop_transfer
   /v1/interop-transfers/callbacks/transfers:
     post:
       operationId: interopTransfersCallbacksTransfers
@@ -13186,6 +12852,7 @@ paths:
       - PAY-01
       - WAL-08
       x-service: interop-service
+      x-table: interop_transfer
 components:
   parameters:
     CreatedAfter:
@@ -13308,6 +12975,78 @@ components:
       - status
       - code
       type: object
+    WalletPage:
+      type: object
+      description: One page of Wallet results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Wallet'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTransactionPage:
+      type: object
+      description: One page of WalletTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTierLimitPage:
+      type: object
+      description: One page of WalletTierLimit results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTierLimit'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletStatusHistoryPage:
+      type: object
+      description: One page of WalletStatusHistory results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletStatusHistory'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     WalletsUpgradeTierRequest:
       type: object
       properties:
@@ -13424,7 +13163,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13473,7 +13213,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13501,7 +13242,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13523,7 +13265,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13545,7 +13288,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13570,7 +13314,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13604,9 +13349,46 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
       required:
       - reason
+    WalletTransactionLegPage:
+      type: object
+      description: One page of WalletTransactionLeg results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransactionLeg'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletBankLinkPage:
+      type: object
+      description: One page of WalletBankLink results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletBankLink'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     WalletBankLinksVerifyRequest:
       type: object
       properties:
@@ -13619,6 +13401,24 @@ components:
         reason:
           type: string
           maxLength: 255
+    WalletPinResetPage:
+      type: object
+      description: One page of WalletPinReset results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletPinReset'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     WalletPinResetsVerifyRequest:
       type: object
       properties:
@@ -13644,6 +13444,42 @@ components:
           maxLength: 255
       required:
       - reason
+    WalletFavoritePage:
+      type: object
+      description: One page of WalletFavorite results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletFavorite'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AgentPage:
+      type: object
+      description: One page of Agent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AgentsActivateRequest:
       type: object
       properties:
@@ -13681,6 +13517,78 @@ components:
       required:
       - commission_plan_id
       - effective_from
+    AgentOutletPage:
+      type: object
+      description: One page of AgentOutlet results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentOutlet'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AgentFloatPage:
+      type: object
+      description: One page of AgentFloat results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentFloat'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AgentPerformanceDailyPage:
+      type: object
+      description: One page of AgentPerformanceDaily results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentPerformanceDaily'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AgentTerritoryPage:
+      type: object
+      description: One page of AgentTerritory results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentTerritory'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AgentOutletsCloseRequest:
       type: object
       properties:
@@ -13689,6 +13597,24 @@ components:
           maxLength: 255
       required:
       - reason
+    AgentFloatRequestPage:
+      type: object
+      description: One page of AgentFloatRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentFloatRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AgentFloatRequestsApproveRequest:
       type: object
       properties:
@@ -13709,6 +13635,24 @@ components:
         reason:
           type: string
           maxLength: 255
+    AgentTillPage:
+      type: object
+      description: One page of AgentTill results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentTill'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AgentTillsOpenRequest:
       type: object
       properties:
@@ -13718,7 +13662,8 @@ components:
         opening_cash:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         denominations:
           type: object
           additionalProperties: true
@@ -13731,30 +13676,121 @@ components:
         declared_cash:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         denominations:
           type: object
           additionalProperties: true
       required:
       - declared_cash
+    AgentDevicePage:
+      type: object
+      description: One page of AgentDevice results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentDevice'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AgentDevicesReportLostRequest:
       type: object
       properties:
         reason:
           type: string
           maxLength: 255
+    AgentKycDocumentPage:
+      type: object
+      description: One page of AgentKycDocument results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentKycDocument'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AgentKycDocumentsVerifyRequest:
       type: object
       properties:
         comment:
           type: string
           maxLength: 500
+    CashManagementRequestPage:
+      type: object
+      description: One page of CashManagementRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashManagementRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CashManagementRequestsCompleteRequest:
       type: object
       properties:
         cit_reference:
           type: string
           maxLength: 64
+    CommissionPlanPage:
+      type: object
+      description: One page of CommissionPlan results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionPlan'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionRulePage:
+      type: object
+      description: One page of CommissionRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CommissionPlansApproveRequest:
       type: object
       properties:
@@ -13796,7 +13832,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         channel:
           type: string
           enum:
@@ -13819,12 +13856,102 @@ components:
       required:
       - txn_type
       - amount
+    CommissionEarningPage:
+      type: object
+      description: One page of CommissionEarning results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionEarning'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CommissionPayoutRunPage:
+      type: object
+      description: One page of CommissionPayoutRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionPayoutRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CommissionPayoutRunsApproveRequest:
       type: object
       properties:
         comment:
           type: string
           maxLength: 500
+    CommissionPayoutLinePage:
+      type: object
+      description: One page of CommissionPayoutLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommissionPayoutLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BillerPage:
+      type: object
+      description: One page of Biller results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Biller'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BillerProductPage:
+      type: object
+      description: One page of BillerProduct results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillerProduct'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     BillersValidateReferenceRequest:
       type: object
       properties:
@@ -13841,6 +13968,42 @@ components:
           maxLength: 255
       required:
       - reason
+    BillInquiryPage:
+      type: object
+      description: One page of BillInquiry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillInquiry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BillPaymentPage:
+      type: object
+      description: One page of BillPayment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillPayment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     BillPaymentsReverseRequest:
       type: object
       properties:
@@ -13849,6 +14012,42 @@ components:
           maxLength: 255
       required:
       - reason
+    AirtimeTopupPage:
+      type: object
+      description: One page of AirtimeTopup results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AirtimeTopup'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BillerSettlementPage:
+      type: object
+      description: One page of BillerSettlement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillerSettlement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     BillerSettlementsApproveRequest:
       type: object
       properties:
@@ -13863,6 +14062,24 @@ components:
           maxLength: 64
       required:
       - payment_reference
+    MerchantPage:
+      type: object
+      description: One page of Merchant results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Merchant'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     MerchantsActivateRequest:
       type: object
       properties:
@@ -13885,12 +14102,84 @@ components:
           maxLength: 255
       required:
       - reason
+    MerchantStorePage:
+      type: object
+      description: One page of MerchantStore results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantStore'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantSettlementPage:
+      type: object
+      description: One page of MerchantSettlement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantSettlement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantTerminalPage:
+      type: object
+      description: One page of MerchantTerminal results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantTerminal'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     MerchantTerminalsDeactivateRequest:
       type: object
       properties:
         reason:
           type: string
           maxLength: 255
+    MerchantQrPage:
+      type: object
+      description: One page of MerchantQr results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantQr'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     MerchantQrCodesDecodeRequest:
       type: object
       properties:
@@ -13909,7 +14198,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -13920,12 +14210,66 @@ components:
       required:
       - payload
       - payer_wallet_id
+    MerchantPaymentLinkPage:
+      type: object
+      description: One page of MerchantPaymentLink results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantPaymentLink'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantFeePlanPage:
+      type: object
+      description: One page of MerchantFeePlan results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantFeePlan'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     MerchantSettlementsApproveRequest:
       type: object
       properties:
         comment:
           type: string
           maxLength: 500
+    MerchantRefundPage:
+      type: object
+      description: One page of MerchantRefund results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantRefund'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     MerchantRefundsApproveRequest:
       type: object
       properties:
@@ -13940,6 +14284,42 @@ components:
           maxLength: 255
       required:
       - reason
+    UssdMenuPage:
+      type: object
+      description: One page of UssdMenu results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UssdMenu'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    UssdMenuNodePage:
+      type: object
+      description: One page of UssdMenuNode results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UssdMenuNode'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     UssdMenusPublishRequest:
       type: object
       properties:
@@ -13959,6 +14339,42 @@ components:
       required:
       - msisdn
       - inputs
+    UssdSessionPage:
+      type: object
+      description: One page of UssdSession results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UssdSession'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    UssdSessionStepPage:
+      type: object
+      description: One page of UssdSessionStep results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UssdSessionStep'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     UssdSessionsCallbackRequest:
       type: object
       properties:
@@ -13982,6 +14398,42 @@ components:
       - session_id
       - msisdn
       - short_code
+    SmsCommandPage:
+      type: object
+      description: One page of SmsCommand results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SmsCommand'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SmsMessagePage:
+      type: object
+      description: One page of SmsMessage results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SmsMessage'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     SmsMessagesInboundRequest:
       type: object
       properties:
@@ -14024,6 +14476,24 @@ components:
       required:
       - provider_message_id
       - status
+    DisbursementProgramPage:
+      type: object
+      description: One page of DisbursementProgram results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisbursementProgram'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     DisbursementProgramsSuspendRequest:
       type: object
       properties:
@@ -14032,6 +14502,24 @@ components:
           maxLength: 255
       required:
       - reason
+    DisbursementBatchPage:
+      type: object
+      description: One page of DisbursementBatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisbursementBatch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     DisbursementBatchesUploadRequest:
       type: object
       properties:
@@ -14060,6 +14548,78 @@ components:
         reason:
           type: string
           maxLength: 255
+    DisbursementBeneficiaryPage:
+      type: object
+      description: One page of DisbursementBeneficiary results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DisbursementBeneficiary'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InteropSwitchPage:
+      type: object
+      description: One page of InteropSwitch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InteropSwitch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InteropParticipantPage:
+      type: object
+      description: One page of InteropParticipant results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InteropParticipant'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InteropQuotePage:
+      type: object
+      description: One page of InteropQuote results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InteropQuote'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     InteropQuotesLookupPartyRequest:
       type: object
       properties:
@@ -14076,6 +14636,24 @@ components:
       - interop_switch_id
       - party_type
       - party_id
+    InteropTransferPage:
+      type: object
+      description: One page of InteropTransfer results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InteropTransfer'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     InteropTransfersAbortRequest:
       type: object
       properties:
@@ -14149,37 +14727,43 @@ components:
         posted_debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Lifetime posted debits
           readOnly: true
         posted_credits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Lifetime posted credits
           readOnly: true
         posted_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Posted (ledger) balance in normal-balance terms
           readOnly: true
         pending_debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Active holds and pending debits
           readOnly: true
         pending_credits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Pending credits not yet available
           readOnly: true
         available_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Posted - pending debits + overdraft limit
           readOnly: true
         account_version:
@@ -14405,7 +14989,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum float the agent may hold
         kyc_status:
           type:
@@ -14570,7 +15155,8 @@ components:
         max_float_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum float the agent may hold
         kyc_status:
           type: string
@@ -14707,7 +15293,8 @@ components:
         max_float_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum float the agent may hold
         kyc_status:
           type: string
@@ -14857,7 +15444,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Last known latitude
           readOnly: true
         last_longitude:
@@ -14865,7 +15453,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Last known longitude
           readOnly: true
         custom_field_1:
@@ -15122,21 +15711,24 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Balance below which cash-in is refused
         max_balance:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum float
         low_float_alert_threshold:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Alert threshold
         auto_rebalance:
           type: boolean
@@ -15215,17 +15807,20 @@ components:
         min_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Balance below which cash-in is refused
         max_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum float
         low_float_alert_threshold:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Alert threshold
         auto_rebalance:
           type: boolean
@@ -15280,17 +15875,20 @@ components:
         min_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Balance below which cash-in is refused
         max_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum float
         low_float_alert_threshold:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Alert threshold
         auto_rebalance:
           type: boolean
@@ -15388,7 +15986,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -15521,7 +16120,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -15810,14 +16410,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         agent_territory_id:
           type:
@@ -15944,12 +16546,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         agent_territory_id:
           type: string
@@ -16049,12 +16653,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         agent_territory_id:
           type: string
@@ -16153,7 +16759,8 @@ components:
         cash_in_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Cash-in value
         cash_out_count:
           type: integer
@@ -16162,7 +16769,8 @@ components:
         cash_out_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Cash-out value
         onboarding_count:
           type: integer
@@ -16175,7 +16783,8 @@ components:
         commission_earned:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Commission earned
         active_customers:
           type: integer
@@ -16526,7 +17135,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared cash at opening
           readOnly: true
         expected_cash:
@@ -16534,7 +17144,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Opening cash + cash-in - cash-out
           readOnly: true
         declared_cash:
@@ -16542,7 +17153,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared cash at closing
           readOnly: true
         variance:
@@ -16550,7 +17162,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared minus expected
           readOnly: true
         denominations:
@@ -16708,7 +17321,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -16751,6 +17365,7 @@ components:
           type: string
           maxLength: 128
           description: Client key
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -16815,16 +17430,13 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key
         custom_field_1:
           type: string
           maxLength: 500
@@ -16851,7 +17463,6 @@ components:
       - target_msisdn
       - amount
       - currency
-      - idempotency_key
     BillInquiry:
       type: object
       description: A bill lookup at the biller returning the customer name and amount due
@@ -16910,7 +17521,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount due
           readOnly: true
         currency:
@@ -17097,7 +17709,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount paid
         currency:
           type: string
@@ -17106,7 +17719,8 @@ components:
         fee_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee
           readOnly: true
         status:
@@ -17172,6 +17786,7 @@ components:
           type: string
           maxLength: 128
           description: Client key
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -17246,16 +17861,13 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount paid
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key
         custom_field_1:
           type: string
           maxLength: 500
@@ -17282,7 +17894,6 @@ components:
       - account_reference
       - amount
       - currency
-      - idempotency_key
     Biller:
       type: object
       description: A company or agency that customers can pay bills to
@@ -17383,14 +17994,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum payment
         max_amount:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum payment
         account_reference_label:
           type:
@@ -17550,12 +18163,14 @@ components:
         min_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum payment
         max_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum payment
         account_reference_label:
           type: string
@@ -17685,12 +18300,14 @@ components:
         min_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum payment
         max_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum payment
         account_reference_label:
           type: string
@@ -17811,7 +18428,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed price (empty = open amount)
         currency:
           type: string
@@ -17895,7 +18513,8 @@ components:
         denomination:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed price (empty = open amount)
         currency:
           type: string
@@ -17960,7 +18579,8 @@ components:
         denomination:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed price (empty = open amount)
         currency:
           type: string
@@ -18063,7 +18683,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Collected
           readOnly: true
         fee_amount:
@@ -18071,7 +18692,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fees retained
           readOnly: true
         commission_amount:
@@ -18079,7 +18701,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Commissions retained
           readOnly: true
         net_amount:
@@ -18087,7 +18710,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net payable to the biller
           readOnly: true
         status:
@@ -18256,7 +18880,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -18358,7 +18983,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -18430,7 +19056,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -18544,22 +19171,26 @@ components:
         base_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Base the commission was computed on
         commission_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Gross commission (negative for clawback)
         tax_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Withholding tax
         net_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net commission
         currency:
           type: string
@@ -18664,17 +19295,20 @@ components:
         gross_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Gross commission
         tax_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Tax withheld
         net_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net paid
         currency:
           type: string
@@ -18818,7 +19452,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Total net paid
           readOnly: true
         approved_by:
@@ -19343,14 +19978,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Applies from this transaction amount
         max_amount:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Applies up to this transaction amount
         basis:
           type: string
@@ -19365,14 +20002,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Flat commission
         percentage:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Percentage of the base (0.005 = 0.5%)
         tiers:
           type:
@@ -19385,7 +20024,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum commission per transaction
         base:
           type: string
@@ -19405,7 +20045,8 @@ components:
         beneficiary_share:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Share of the computed commission for this beneficiary
         funded_by:
           type: string
@@ -19416,7 +20057,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Withholding tax on commission
         is_active:
           type: boolean
@@ -19541,12 +20183,14 @@ components:
         min_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Applies from this transaction amount
         max_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Applies up to this transaction amount
         basis:
           type: string
@@ -19559,12 +20203,14 @@ components:
         flat_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Flat commission
         percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Percentage of the base (0.005 = 0.5%)
         tiers:
           type: object
@@ -19573,7 +20219,8 @@ components:
         cap_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum commission per transaction
         base:
           type: string
@@ -19593,7 +20240,8 @@ components:
         beneficiary_share:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Share of the computed commission for this beneficiary
         funded_by:
           type: string
@@ -19602,7 +20250,8 @@ components:
         tax_withholding_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Withholding tax on commission
         is_active:
           type: boolean
@@ -19708,12 +20357,14 @@ components:
         min_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Applies from this transaction amount
         max_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Applies up to this transaction amount
         basis:
           type: string
@@ -19726,12 +20377,14 @@ components:
         flat_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Flat commission
         percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Percentage of the base (0.005 = 0.5%)
         tiers:
           type: object
@@ -19740,7 +20393,8 @@ components:
         cap_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum commission per transaction
         base:
           type: string
@@ -19760,7 +20414,8 @@ components:
         beneficiary_share:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Share of the computed commission for this beneficiary
         funded_by:
           type: string
@@ -19769,7 +20424,8 @@ components:
         tax_withholding_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Withholding tax on commission
         is_active:
           type: boolean
@@ -19889,7 +20545,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Total amount
           readOnly: true
         valid_count:
@@ -19925,7 +20582,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount paid
           readOnly: true
         fee_amount:
@@ -19933,7 +20591,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fees
           readOnly: true
         approval_request_id:
@@ -20133,7 +20792,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -20275,7 +20935,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -20344,7 +21005,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -20441,7 +21103,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Cap per beneficiary per batch
         require_name_match:
           type: boolean
@@ -20554,7 +21217,8 @@ components:
         max_amount_per_beneficiary:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Cap per beneficiary per batch
         require_name_match:
           type: boolean
@@ -20643,7 +21307,8 @@ components:
         max_amount_per_beneficiary:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Cap per beneficiary per batch
         require_name_match:
           type: boolean
@@ -20987,7 +21652,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -20998,7 +21664,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount the payee receives
           readOnly: true
         fee_amount:
@@ -21006,7 +21673,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fees
           readOnly: true
         ilp_condition:
@@ -21111,7 +21779,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -21236,14 +21905,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Prefunded liquidity
         net_debit_cap:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net debit cap set by the switch
         is_active:
           type: boolean
@@ -21335,12 +22006,14 @@ components:
         liquidity_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Prefunded liquidity
         net_debit_cap:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net debit cap set by the switch
         is_active:
           type: boolean
@@ -21417,12 +22090,14 @@ components:
         liquidity_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Prefunded liquidity
         net_debit_cap:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net debit cap set by the switch
         is_active:
           type: boolean
@@ -21530,7 +22205,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -21594,6 +22270,7 @@ components:
           type: string
           maxLength: 128
           description: Client key
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -21677,16 +22354,13 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key
         custom_field_1:
           type: string
           maxLength: 500
@@ -21714,7 +22388,6 @@ components:
       - counterparty_fsp_id
       - amount
       - currency
-      - idempotency_key
     Merchant:
       type: object
       description: A business accepting wallet payments
@@ -21875,7 +22548,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum daily collections
         status:
           type: string
@@ -22050,7 +22724,8 @@ components:
         daily_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum daily collections
         status:
           type: string
@@ -22196,7 +22871,8 @@ components:
         daily_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum daily collections
         status:
           type: string
@@ -22291,40 +22967,46 @@ components:
         mdr_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Merchant discount rate (0.01 = 1%)
         fixed_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed fee per payment
         min_fee:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum fee per payment
         max_fee:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum fee per payment
         refund_fee:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee per refund
         settlement_fee:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee per settlement
         valid_from:
           type: string
@@ -22399,32 +23081,38 @@ components:
         mdr_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Merchant discount rate (0.01 = 1%)
         fixed_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed fee per payment
         min_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum fee per payment
         max_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum fee per payment
         refund_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee per refund
         settlement_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee per settlement
         valid_from:
           type: string
@@ -22480,32 +23168,38 @@ components:
         mdr_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Merchant discount rate (0.01 = 1%)
         fixed_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed fee per payment
         min_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum fee per payment
         max_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum fee per payment
         refund_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee per refund
         settlement_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee per settlement
         valid_from:
           type: string
@@ -22596,7 +23290,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed amount (empty = payer enters it)
         currency:
           type: string
@@ -22688,7 +23383,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed amount (empty = payer enters it)
         currency:
           type: string
@@ -22751,7 +23447,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed amount (empty = payer enters it)
         currency:
           type: string
@@ -22867,7 +23564,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed amount for dynamic QR
         currency:
           type: string
@@ -22957,7 +23655,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed amount for dynamic QR
         currency:
           type: string
@@ -23047,7 +23746,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Refund amount
         currency:
           type: string
@@ -23092,6 +23792,7 @@ components:
           type: string
           maxLength: 128
           description: Client key
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -23148,7 +23849,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Refund amount
         currency:
           type: string
@@ -23158,10 +23860,6 @@ components:
           type: string
           maxLength: 255
           description: Reason
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key
         custom_field_1:
           type: string
           maxLength: 500
@@ -23188,7 +23886,6 @@ components:
       - amount
       - currency
       - reason
-      - idempotency_key
     MerchantSettlement:
       type: object
       description: Periodic settlement of merchant collections net of fees and refunds
@@ -23255,7 +23952,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Gross collections
           readOnly: true
         mdr_amount:
@@ -23263,7 +23961,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Merchant discount fees
           readOnly: true
         refund_amount:
@@ -23271,7 +23970,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Refunds
           readOnly: true
         net_amount:
@@ -23279,7 +23979,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Net payable
           readOnly: true
         status:
@@ -23491,14 +24192,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         contact_msisdn:
           type:
@@ -23587,12 +24290,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         contact_msisdn:
           type: string
@@ -23664,12 +24369,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         contact_msisdn:
           type: string
@@ -24278,7 +24985,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Cost
         currency:
           type:
@@ -26575,28 +27283,32 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum wallet balance
         per_txn_min:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum amount per transaction
         per_txn_max:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per transaction
         daily_amount:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per day
         daily_count:
           type:
@@ -26609,7 +27321,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per month
         monthly_count:
           type:
@@ -26717,22 +27430,26 @@ components:
         max_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum wallet balance
         per_txn_min:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum amount per transaction
         per_txn_max:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per transaction
         daily_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per day
         daily_count:
           type: integer
@@ -26741,7 +27458,8 @@ components:
         monthly_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per month
         monthly_count:
           type: integer
@@ -26831,22 +27549,26 @@ components:
         max_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum wallet balance
         per_txn_min:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum amount per transaction
         per_txn_max:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per transaction
         daily_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per day
         daily_count:
           type: integer
@@ -26855,7 +27577,8 @@ components:
         monthly_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount per month
         monthly_count:
           type: integer
@@ -27017,7 +27740,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Principal amount
         currency:
           type: string
@@ -27026,19 +27750,22 @@ components:
         fee_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fee charged to the payer
           readOnly: true
         tax_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Tax on the fee
           readOnly: true
         commission_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Total commission generated
           readOnly: true
         total_debit_amount:
@@ -27046,7 +27773,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount + fee + tax debited from the payer
           readOnly: true
         fx_rate:
@@ -27054,7 +27782,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: FX rate applied for cross-currency transfers
           readOnly: true
         settlement_amount:
@@ -27062,7 +27791,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount credited in the payee currency
           readOnly: true
         settlement_currency:
@@ -27154,6 +27884,7 @@ components:
           type: string
           maxLength: 128
           description: Client key
+          readOnly: true
         description:
           type:
           - string
@@ -27199,7 +27930,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fraud score 0..1
           readOnly: true
         device_id:
@@ -27218,14 +27950,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude at initiation
         geo_lon:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude at initiation
         metadata:
           type:
@@ -27343,7 +28077,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Principal amount
         currency:
           type: string
@@ -27393,10 +28128,6 @@ components:
           type: string
           format: uuid
           description: Transaction reversed or refunded
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key
         description:
           type: string
           maxLength: 255
@@ -27415,12 +28146,14 @@ components:
         geo_lat:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude at initiation
         geo_lon:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude at initiation
         metadata:
           type: object
@@ -27453,7 +28186,6 @@ components:
       - amount
       - currency
       - initiator_type
-      - idempotency_key
     WalletTransactionLeg:
       type: object
       description: One debit or credit leg of a wallet transaction (principal, fee, tax, commission). Append-only.
@@ -27512,7 +28244,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string

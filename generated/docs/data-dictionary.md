@@ -1884,6 +1884,990 @@ API: internal only · Requirements: CRD-08
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+## Engagement: Rewards, Insights and Campaigns (`engagement`)
+
+Customer engagement: loyalty rewards, points and cashback, referral programs, transaction enrichment and personal finance insights (PFM), targeted campaigns and personalised offers, and secure customer messaging.
+
+
+### Service `rewards-service` — database `rewards_db`
+
+Loyalty programs: earn rules on spend and behaviour, points accounts with an append-only points ledger, cashback, tiers, a redemption catalogue, and referral programs with qualification and payouts.
+
+
+#### `rewards_program`
+
+A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+
+API: /v1/rewards/programs · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no | UQ | code | Program code |
+| name | varchar(120) | no |  | name | Display name |
+| program_type | varchar(40) (RewardProgramType) | no |  | program_type | Points, cashback, miles or hybrid |
+| status | varchar(40) (RewardProgramStatus) | no |  | status | Lifecycle status |
+| points_name | varchar(40) | yes |  | points_name | Branded name of the points currency, e.g. Stars |
+| point_value | numeric(28,8) | yes |  | point_value | Monetary value of one point for redemption |
+| value_currency | char(3) | yes |  | value_currency | Currency of point_value and cashback |
+| points_expiry_months | integer | yes |  | points_expiry_months | Months until earned points expire (empty = never) |
+| funding_ledger_account_id | uuid | yes | ref → ledger_account | funding_ledger_account_id | Ledger account funding rewards liability |
+| liability_ledger_account_id | uuid | yes | ref → ledger_account | liability_ledger_account_id | Ledger account holding outstanding rewards liability |
+| eligible_product_ids | jsonb | yes |  | eligible_product_ids | Products whose customers can enrol (empty = all) |
+| auto_enrol | boolean | no |  | auto_enrol | Enrol eligible customers automatically |
+| terms_document_id | uuid | yes | ref → document | terms_document_id | Program terms and conditions |
+| starts_on | date | no |  | starts_on | Start date |
+| ends_on | date | yes |  | ends_on | End date |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved activation |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `reward_tier`
+
+Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
+
+API: /v1/rewards/tiers · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
+| code | varchar(32) | no |  | code | Tier code |
+| name | varchar(80) | no |  | name | Display name |
+| rank | integer | no |  | rank | Order, 1 = lowest |
+| qualify_spend | numeric(28,8) | yes |  | qualify_spend | Annual spend needed to reach the tier |
+| qualify_points | bigint | yes |  | qualify_points | Points earned in the period needed to reach the tier |
+| earn_multiplier | numeric(18,10) | no |  | earn_multiplier | Multiplier applied to base earn |
+| benefits | jsonb | yes |  | benefits | Tier benefits (fee waivers, lounge access, FX discounts) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `reward_rule`
+
+Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
+
+API: /v1/rewards/rules · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
+| name | varchar(120) | no |  | name | Rule name |
+| trigger | varchar(40) (RewardRuleTrigger) | no |  | trigger | Event that earns |
+| status | varchar(40) (RewardRuleStatus) | no |  | status | Status |
+| priority | integer | no |  | priority | Lower evaluates first |
+| stackable | boolean | no |  | stackable | Can combine with other matching rules |
+| mcc_include | jsonb | yes |  | mcc_include | MCC codes that qualify (empty = any) |
+| mcc_exclude | jsonb | yes |  | mcc_exclude | MCC codes excluded (e.g. gambling, quasi-cash) |
+| merchant_ids | jsonb | yes |  | merchant_ids | Specific merchants (partner offers) |
+| product_ids | jsonb | yes |  | product_ids | Products that qualify |
+| channels | jsonb | yes |  | channels | Channels that qualify (POS, ECOM, CONTACTLESS, WALLET) |
+| countries | jsonb | yes |  | countries | Merchant countries that qualify |
+| min_amount | numeric(28,8) | yes |  | min_amount | Minimum transaction amount |
+| points_per_unit | numeric(18,10) | yes |  | points_per_unit | Points earned per unit of currency spent |
+| cashback_rate | numeric(18,10) | yes |  | cashback_rate | Cashback as a fraction of the amount |
+| fixed_award | numeric(28,8) | yes |  | fixed_award | Fixed points or cashback per qualifying event |
+| multiplier | numeric(18,10) | no |  | multiplier | Promotional multiplier |
+| cap_amount | numeric(28,8) | yes |  | cap_amount | Maximum award per cap period |
+| cap_period | varchar(40) (RewardCapPeriod) | yes |  | cap_period | Period the cap applies to |
+| valid_days_of_week | jsonb | yes |  | valid_days_of_week | Days of week the rule applies (e.g. weekend boosts) |
+| valid_from | timestamptz | no |  | valid_from | Effective from |
+| valid_to | timestamptz | yes |  | valid_to | Effective to |
+| settle_after_days | integer | no |  | settle_after_days | Days before pending awards confirm (dispute window) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `points_account`
+
+A customer's points account within a program with running balances and tier
+
+API: /v1/rewards/points-accounts · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| status | varchar(40) (PointsAccountStatus) | no |  | status | Status |
+| reward_tier_id | uuid | yes | FK → reward_tier | reward_tier_id | Current tier |
+| tier_qualified_until | date | yes |  | tier_qualified_until | Tier valid until |
+| available_points | bigint | no |  | available_points (read-only) | Redeemable points |
+| pending_points | bigint | no |  | pending_points (read-only) | Points awaiting confirmation |
+| lifetime_earned | bigint | no |  | lifetime_earned (read-only) | All points ever earned |
+| lifetime_redeemed | bigint | no |  | lifetime_redeemed (read-only) | All points ever redeemed |
+| expiring_points | bigint | no |  | expiring_points (read-only) | Points expiring in the next 30 days |
+| next_expiry_date | date | yes |  | next_expiry_date (read-only) | Next expiry date |
+| enrolled_at | timestamptz | no |  | enrolled_at | Enrolment time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `points_ledger_entry` (append-only)
+
+Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
+
+API: /v1/rewards/points-entries · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| points_account_id | uuid | no | FK → points_account | points_account_id | Points account |
+| entry_type | varchar(40) (PointsEntryType) | no |  | entry_type | Movement type |
+| points | bigint | no |  | points | Signed points (positive earn, negative redeem/expire) |
+| balance_after | bigint | no |  | balance_after (read-only) | Available balance after the entry |
+| is_pending | boolean | no |  | is_pending | Earned but not yet confirmed |
+| reward_rule_id | uuid | yes | FK → reward_rule | reward_rule_id | Rule that produced an earn |
+| source_type | varchar(40) | yes |  | source_type | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL |
+| source_id | uuid | yes |  | source_id | Source object id |
+| expires_on | date | yes |  | expires_on | Expiry date of earned points |
+| reversal_of_id | uuid | yes | FK → points_ledger_entry | reversal_of_id | Entry this one reverses |
+| reason | varchar(255) | yes |  | reason | Adjustment reason |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Prevents double awards |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `cashback_transaction`
+
+A cashback award for a qualifying transaction, paid to the customer's account after settlement
+
+API: /v1/rewards/cashback · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
+| reward_rule_id | uuid | yes | FK → reward_rule | reward_rule_id | Rule applied |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| source_type | varchar(40) | no |  | source_type | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION |
+| source_id | uuid | no |  | source_id | Qualifying transaction |
+| transaction_amount | numeric(28,8) | no |  | transaction_amount | Qualifying amount |
+| cashback_amount | numeric(28,8) | no |  | cashback_amount | Cashback awarded |
+| currency | char(3) | no |  | currency | Currency |
+| status | varchar(40) (CashbackStatus) | no |  | status | Status |
+| confirm_after | timestamptz | yes |  | confirm_after | When the award confirms (after dispute window) |
+| credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account credited |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting of the payout |
+| paid_at | timestamptz | yes |  | paid_at (read-only) | Payout time |
+| reversal_reason | varchar(255) | yes |  | reversal_reason | Why reversed (refund, chargeback) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `reward_catalog_item`
+
+Something points can be redeemed for (statement credit, voucher, partner miles, merchandise)
+
+API: /v1/rewards/catalog · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
+| sku | varchar(64) | no |  | sku | Catalogue SKU |
+| name | varchar(160) | no |  | name | Display name |
+| item_type | varchar(40) (RewardCatalogItemType) | no |  | item_type | Redemption type |
+| points_cost | bigint | no |  | points_cost | Points required |
+| cash_value | numeric(28,8) | yes |  | cash_value | Monetary value delivered |
+| currency | char(3) | yes |  | currency | Currency of cash_value |
+| partner_name | varchar(120) | yes |  | partner_name | Fulfilment partner (airline, voucher provider) |
+| partner_sku | varchar(64) | yes |  | partner_sku | Partner's product code |
+| image_document_id | uuid | yes | ref → document | image_document_id | Image |
+| stock | integer | yes |  | stock | Remaining stock (empty = unlimited) |
+| min_tier_rank | integer | yes |  | min_tier_rank | Minimum tier rank required |
+| is_active | boolean | no |  | is_active | Available for redemption |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `redemption`
+
+A customer's redemption of points for a catalogue item or statement credit
+
+API: /v1/rewards/redemptions · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| points_account_id | uuid | no | FK → points_account | points_account_id | Points account |
+| reward_catalog_item_id | uuid | no | FK → reward_catalog_item | reward_catalog_item_id | Item redeemed |
+| quantity | integer | no |  | quantity | Quantity |
+| points_spent | bigint | no |  | points_spent | Points debited |
+| cash_value | numeric(28,8) | yes |  | cash_value | Value delivered |
+| currency | char(3) | yes |  | currency | Currency |
+| status | varchar(40) (RedemptionStatus) | no |  | status | Status |
+| credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account for statement credit |
+| partner_member_id | varchar(64) | yes |  | partner_member_id | Loyalty number at the partner (airline miles) PII |
+| voucher_code | varchar(128) | yes |  | — | Issued voucher code secret |
+| partner_reference | varchar(128) | yes |  | partner_reference | Fulfilment reference |
+| points_ledger_entry_id | uuid | yes | FK → points_ledger_entry | points_ledger_entry_id | Debit entry |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting for statement credit |
+| fulfilled_at | timestamptz | yes |  | fulfilled_at (read-only) | Fulfilment time |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `referral_program`
+
+Refer-a-friend program with qualification criteria and rewards for referrer and referee
+
+API: /v1/referrals/programs · Requirements: ENG-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no | UQ | code | Program code |
+| name | varchar(120) | no |  | name | Display name |
+| status | varchar(40) (ReferralProgramStatus) | no |  | status | Status |
+| qualification_rules | jsonb | no |  | qualification_rules | E.g. account opened + first deposit >= X within N days |
+| qualify_within_days | integer | no |  | qualify_within_days | Days the referee has to qualify |
+| referrer_reward | numeric(28,8) | yes |  | referrer_reward | Cash reward to the referrer |
+| referee_reward | numeric(28,8) | yes |  | referee_reward | Cash reward to the referee |
+| referrer_points | bigint | yes |  | referrer_points | Points reward to the referrer |
+| referee_points | bigint | yes |  | referee_points | Points reward to the referee |
+| currency | char(3) | yes |  | currency | Reward currency |
+| max_referrals_per_customer | integer | yes |  | max_referrals_per_customer | Cap per referrer |
+| budget_amount | numeric(28,8) | yes |  | budget_amount | Total program budget |
+| funding_ledger_account_id | uuid | yes | ref → ledger_account | funding_ledger_account_id | Account funding payouts |
+| starts_on | date | no |  | starts_on | Start |
+| ends_on | date | yes |  | ends_on | End |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `referral`
+
+One referral from a referrer to a referee, tracked through qualification to payout
+
+API: /v1/referrals · Requirements: ENG-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| referral_program_id | uuid | no | FK → referral_program | referral_program_id | Program |
+| referrer_customer_id | uuid | no | ref → customer | referrer_customer_id | Referrer |
+| referral_code | varchar(32) | no |  | referral_code | Code shared by the referrer |
+| referee_customer_id | uuid | yes | ref → customer | referee_customer_id | Referee once signed up |
+| referee_contact | varchar(320) | yes |  | referee_contact | Invited phone or email PII |
+| status | varchar(40) (ReferralStatus) | no |  | status | Status |
+| signed_up_at | timestamptz | yes |  | signed_up_at | Referee sign-up time |
+| qualify_by | timestamptz | yes |  | qualify_by | Deadline to qualify |
+| qualified_at | timestamptz | yes |  | qualified_at (read-only) | Qualification time |
+| referrer_payout_journal_entry_id | uuid | yes | ref → journal_entry | referrer_payout_journal_entry_id | Referrer reward posting |
+| referee_payout_journal_entry_id | uuid | yes | ref → journal_entry | referee_payout_journal_entry_id | Referee reward posting |
+| rejection_reason | varchar(255) | yes |  | rejection_reason | Why rejected (self-referral, fraud) |
+| fraud_score | numeric(18,10) | yes |  | fraud_score | Fraud score at qualification |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `insights-service` — database `insights_db`
+
+Personal finance management: transaction enrichment (clean merchant names, logos, categories, geo, recurring flags), category taxonomy and customer overrides, budgets, subscription detection, insight cards and cash-flow forecasts.
+
+
+#### `spend_category`
+
+Spending category taxonomy (group, category, subcategory) used for enrichment and budgets
+
+API: /v1/insights/categories · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Category code, e.g. FOOD.GROCERIES |
+| name | varchar(120) | no |  | name | Display name |
+| level | varchar(40) (InsightCategoryLevel) | no |  | level | Taxonomy level |
+| parent_id | uuid | yes | FK → spend_category | parent_id | Parent category |
+| icon | varchar(64) | yes |  | icon | Icon key |
+| color | varchar(16) | yes |  | color | Display colour |
+| mcc_codes | jsonb | yes |  | mcc_codes | MCC codes mapped by default |
+| translations | jsonb | yes |  | translations | Names per language |
+| is_income | boolean | no |  | is_income | Income category (salary, refunds) |
+| is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `transaction_enrichment` (append-only)
+
+Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+
+API: /v1/insights/enrichments · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| source_type | varchar(40) (InsightSourceType) | no |  | source_type | Transaction source |
+| source_id | uuid | no |  | source_id | Source transaction id |
+| account_ref | uuid | yes |  | account_ref | Account / card / wallet the transaction belongs to |
+| transaction_at | timestamptz | no |  | transaction_at | Transaction time |
+| amount | numeric(28,8) | no |  | amount | Signed amount (negative = spend) |
+| currency | char(3) | no |  | currency | Currency |
+| raw_description | varchar(500) | yes |  | raw_description | Original descriptor |
+| merchant_id | uuid | yes | ref → merchant | merchant_id | Internal merchant when known |
+| merchant_clean_name | varchar(160) | yes |  | merchant_clean_name | Cleaned merchant name |
+| merchant_logo_url | varchar(500) | yes |  | merchant_logo_url | Logo URL |
+| merchant_website | varchar(255) | yes |  | merchant_website | Merchant website |
+| mcc | varchar(4) | yes |  | mcc | Merchant category code |
+| spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Assigned category |
+| category_confidence | numeric(18,10) | yes |  | category_confidence | Model confidence 0..1 |
+| is_recurring | boolean | no |  | is_recurring | Part of a recurring series |
+| recurring_payment_id | uuid | yes | FK → recurring_payment | recurring_payment_id | Detected recurring series |
+| geo_city | varchar(100) | yes |  | geo_city | City |
+| geo_country | char(2) | yes |  | geo_country | Country |
+| geo_lat | numeric(18,10) | yes |  | geo_lat | Latitude |
+| geo_lon | numeric(18,10) | yes |  | geo_lon | Longitude |
+| enrichment_provider | varchar(40) | yes |  | enrichment_provider | INTERNAL or external provider |
+| model_version | varchar(32) | yes |  | model_version | Categorisation model version |
+| supersedes_id | uuid | yes | FK → transaction_enrichment | supersedes_id | Earlier enrichment this one replaces |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `category_override_rule`
+
+Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
+
+API: /v1/insights/category-rules · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| match_merchant_name | varchar(160) | yes |  | match_merchant_name | Merchant name to match |
+| match_description_pattern | varchar(255) | yes |  | match_description_pattern | Regex on raw descriptor |
+| match_amount_min | numeric(28,8) | yes |  | match_amount_min | Minimum amount |
+| match_amount_max | numeric(28,8) | yes |  | match_amount_max | Maximum amount |
+| spend_category_id | uuid | no | FK → spend_category | spend_category_id | Category to apply |
+| apply_to_past | boolean | no |  | apply_to_past | Re-categorise historical transactions |
+| is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `budget`
+
+A customer budget, overall or per category, with alert thresholds
+
+API: /v1/insights/budgets · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| name | varchar(120) | no |  | name | Budget name |
+| spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Category (empty = all spending) |
+| period_type | varchar(40) (BudgetPeriodType) | no |  | period_type | Budget period |
+| amount | numeric(28,8) | no |  | amount | Budget amount per period |
+| currency | char(3) | no |  | currency | Currency |
+| rollover | boolean | no |  | rollover | Carry unspent amount to next period |
+| alert_threshold_pct | numeric(18,10) | no |  | alert_threshold_pct | Alert when spend reaches this share |
+| status | varchar(40) (BudgetStatus) | no |  | status | Status |
+| starts_on | date | no |  | starts_on | First period start |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `budget_period`
+
+Actuals for one period of a budget
+
+API: /v1/insights/budget-periods, /v1/insights/spending · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| budget_id | uuid | no | FK → budget | budget_id | Budget |
+| period_start | date | no |  | period_start | Period start |
+| period_end | date | no |  | period_end | Period end |
+| budget_amount | numeric(28,8) | no |  | budget_amount | Budget incl. rollover |
+| spent_amount | numeric(28,8) | no |  | spent_amount (read-only) | Spent so far |
+| remaining_amount | numeric(28,8) | no |  | remaining_amount (read-only) | Remaining |
+| transaction_count | integer | no |  | transaction_count (read-only) | Transactions counted |
+| alert_sent_at | timestamptz | yes |  | alert_sent_at (read-only) | Threshold alert time |
+| exceeded_at | timestamptz | yes |  | exceeded_at (read-only) | Time the budget was exceeded |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `recurring_payment`
+
+Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+
+API: /v1/insights/recurring-payments · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| merchant_clean_name | varchar(160) | no |  | merchant_clean_name | Merchant |
+| merchant_id | uuid | yes | ref → merchant | merchant_id | Internal merchant when known |
+| spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Category |
+| frequency | varchar(40) (RecurringFrequency) | no |  | frequency | Detected frequency |
+| typical_amount | numeric(28,8) | no |  | typical_amount | Typical amount |
+| last_amount | numeric(28,8) | yes |  | last_amount | Most recent amount |
+| currency | char(3) | no |  | currency | Currency |
+| first_seen_at | timestamptz | no |  | first_seen_at | First charge |
+| last_seen_at | timestamptz | no |  | last_seen_at | Latest charge |
+| next_expected_at | timestamptz | yes |  | next_expected_at | Predicted next charge |
+| occurrences | integer | no |  | occurrences | Charges matched |
+| status | varchar(40) (RecurringPaymentStatus) | no |  | status | Status |
+| card_id | uuid | yes | ref → card | card_id | Card the subscription charges |
+| detection_confidence | numeric(18,10) | yes |  | detection_confidence | Confidence 0..1 |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `financial_insight`
+
+An insight card for a customer (spend spike, low-balance forecast, new subscription) and its delivery
+
+API: /v1/insights/cards · Requirements: ENG-03, NOT-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| insight_type | varchar(40) (InsightType) | no |  | insight_type | Insight type |
+| severity | varchar(40) (InsightSeverity) | no |  | severity | Severity |
+| title | varchar(160) | no |  | title | Card title |
+| body | varchar(1000) | no |  | body | Card text |
+| data | jsonb | yes |  | data | Supporting figures (amounts, categories, dates) |
+| action_label | varchar(60) | yes |  | action_label | Call-to-action label |
+| action_deeplink | varchar(500) | yes |  | action_deeplink | App deep link |
+| related_type | varchar(40) | yes |  | related_type | BUDGET, RECURRING_PAYMENT, ACCOUNT, CARD |
+| related_id | uuid | yes |  | related_id | Related object |
+| delivery_status | varchar(40) (InsightDeliveryStatus) | no |  | delivery_status | Delivery status |
+| notification_id | uuid | yes | ref → notification | notification_id | Push or in-app notification sent |
+| generated_at | timestamptz | no |  | generated_at | Generation time |
+| seen_at | timestamptz | yes |  | seen_at | Seen time |
+| acted_at | timestamptz | yes |  | acted_at | Action time |
+| expires_at | timestamptz | yes |  | expires_at | Expiry |
+| model_version | varchar(32) | yes |  | model_version | Generating model / rule version |
+| feedback_useful | boolean | yes |  | feedback_useful | Customer feedback |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `cash_flow_forecast` (append-only)
+
+Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+
+API: /v1/insights/forecasts · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| deposit_account_id | uuid | yes | ref → deposit_account | deposit_account_id | Account forecast |
+| as_of | timestamptz | no |  | as_of | Forecast generation time |
+| horizon_days | integer | no |  | horizon_days | Horizon |
+| currency | char(3) | no |  | currency | Currency |
+| starting_balance | numeric(28,8) | no |  | starting_balance | Balance at as_of |
+| lowest_balance | numeric(28,8) | no |  | lowest_balance | Lowest projected balance |
+| lowest_balance_date | date | yes |  | lowest_balance_date | Date of lowest balance |
+| projected_points | jsonb | no |  | projected_points | Daily projected balances with expected inflows/outflows |
+| expected_income | numeric(28,8) | yes |  | expected_income | Expected income in the horizon |
+| expected_bills | numeric(28,8) | yes |  | expected_bills | Expected recurring outflows |
+| model_version | varchar(32) | no |  | model_version | Model version |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `campaign-service` — database `campaign_db`
+
+Targeted marketing campaigns across channels with A/B variants, schedules and budgets; personalised offers (pre-approved loans, card upgrades, rate promotions) with eligibility, consent checks and response tracking.
+
+
+#### `campaign`
+
+A marketing campaign targeting one or more customer segments across channels
+
+API: /v1/campaigns · Requirements: ENG-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no | UQ | code | Campaign code |
+| name | varchar(160) | no |  | name | Name |
+| objective | varchar(255) | yes |  | objective | Business objective |
+| status | varchar(40) (CampaignStatus) | no |  | status | Status |
+| segment_ids | jsonb | no |  | segment_ids | Target customer_segment ids |
+| exclusion_segment_ids | jsonb | yes |  | exclusion_segment_ids | Segments excluded |
+| channels | jsonb | no |  | channels | Channels used (CampaignChannel values) |
+| start_at | timestamptz | no |  | start_at | Start |
+| end_at | timestamptz | yes |  | end_at | End |
+| send_window | jsonb | yes |  | send_window | Allowed send hours per channel and timezone |
+| frequency_cap | integer | yes |  | frequency_cap | Max messages per customer per week |
+| budget_amount | numeric(28,8) | yes |  | budget_amount | Budget |
+| currency | char(3) | yes |  | currency | Budget currency |
+| control_group_pct | numeric(18,10) | no |  | control_group_pct | Hold-out share for uplift measurement |
+| requires_marketing_consent | boolean | no |  | requires_marketing_consent | Only customers with marketing consent |
+| owner_user_id | uuid | yes | ref → app_user | owner_user_id | Campaign owner |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `campaign_variant`
+
+A/B variant of a campaign with its message content per channel
+
+API: /v1/campaigns/variants · Requirements: ENG-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| campaign_id | uuid | no | FK → campaign | campaign_id | Campaign |
+| code | varchar(16) | no |  | code | Variant code (A, B, ...) |
+| traffic_share | numeric(18,10) | no |  | traffic_share | Share of the audience |
+| channel | varchar(40) (CampaignChannel) | no |  | channel | Channel |
+| notification_template_code | varchar(64) | yes |  | notification_template_code | Notification template used |
+| subject | varchar(200) | yes |  | subject | Subject / title |
+| body | text | yes |  | body | Message body with placeholders |
+| image_document_id | uuid | yes | ref → document | image_document_id | Creative |
+| deeplink | varchar(500) | yes |  | deeplink | Call-to-action deep link |
+| offer_id | uuid | yes | FK → campaign_offer | offer_id | Offer promoted (campaign_offer) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `campaign_offer`
+
+A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
+
+API: /v1/offers · Requirements: ENG-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no | UQ | code | Offer code |
+| name | varchar(160) | no |  | name | Name |
+| offer_type | varchar(40) (OfferType) | no |  | offer_type | Offer type |
+| status | varchar(40) (OfferStatus) | no |  | status | Status |
+| product_id | uuid | yes | ref → product | product_id | Product offered |
+| product_version_id | uuid | yes | ref → product_version | product_version_id | Product version |
+| eligibility_rules | jsonb | yes |  | eligibility_rules | Eligibility (segments, scores, balances) |
+| terms | jsonb | no |  | terms | Offer terms (amount, rate, fee waiver, duration) |
+| max_amount | numeric(28,8) | yes |  | max_amount | Maximum amount for credit offers |
+| currency | char(3) | yes |  | currency | Currency |
+| valid_from | timestamptz | no |  | valid_from | Valid from |
+| valid_to | timestamptz | no |  | valid_to | Valid to |
+| acceptance_flow | varchar(40) | yes |  | acceptance_flow | IN_APP_ONE_TAP, APPLICATION, BRANCH |
+| disclosure_document_id | uuid | yes | ref → document | disclosure_document_id | Regulatory disclosure |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `offer_assignment`
+
+An offer assigned to a specific customer, tracked from shown to accepted or expired
+
+API: /v1/offers/assignments · Requirements: ENG-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| campaign_offer_id | uuid | no | FK → campaign_offer | campaign_offer_id | Offer |
+| campaign_id | uuid | yes | FK → campaign | campaign_id | Campaign that assigned it |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| status | varchar(40) (OfferAssignmentStatus) | no |  | status | Response status |
+| personalised_terms | jsonb | yes |  | personalised_terms | Customer-specific terms (approved amount, rate) |
+| score | numeric(18,10) | yes |  | score | Propensity / risk score at assignment |
+| model_version | varchar(32) | yes |  | model_version | Model used |
+| consent_snapshot_id | uuid | yes | FK → marketing_consent_snapshot | consent_snapshot_id | Marketing consent snapshot proving permission |
+| assigned_at | timestamptz | no |  | assigned_at | Assignment time |
+| shown_at | timestamptz | yes |  | shown_at | First shown |
+| clicked_at | timestamptz | yes |  | clicked_at | First clicked |
+| responded_at | timestamptz | yes |  | responded_at | Accept or decline time |
+| expires_at | timestamptz | no |  | expires_at | Expiry |
+| resulting_object_type | varchar(40) | yes |  | resulting_object_type | LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT |
+| resulting_object_id | uuid | yes |  | resulting_object_id | Object created on acceptance |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `marketing_consent_snapshot` (append-only)
+
+Immutable record of the customer's marketing consent at the time a campaign targeted them
+
+API: /v1/campaigns/consent-snapshots · Requirements: ENG-04, CIF-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| consent_id | uuid | yes | ref → consent | consent_id | Consent record evaluated |
+| campaign_id | uuid | yes | FK → campaign | campaign_id | Campaign |
+| channel | varchar(40) (CampaignChannel) | no |  | channel | Channel checked |
+| is_permitted | boolean | no |  | is_permitted | Whether contact was allowed |
+| reason | varchar(255) | yes |  | reason | Why not permitted (opt-out, quiet hours, frequency cap) |
+| checked_at | timestamptz | no |  | checked_at | Check time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `campaign_audience_member`
+
+Customer selected into a campaign run with variant or control-group allocation
+
+API: /v1/campaigns/audience · Requirements: ENG-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| campaign_id | uuid | no | FK → campaign | campaign_id | Campaign |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| campaign_variant_id | uuid | yes | FK → campaign_variant | campaign_variant_id | Variant (empty = control group) |
+| is_control | boolean | no |  | is_control | Hold-out member |
+| marketing_consent_snapshot_id | uuid | yes | FK → marketing_consent_snapshot | marketing_consent_snapshot_id | Consent evidence |
+| notification_id | uuid | yes | ref → notification | notification_id | Message sent |
+| sent_at | timestamptz | yes |  | sent_at | Send time |
+| opened_at | timestamptz | yes |  | opened_at | Open time |
+| clicked_at | timestamptz | yes |  | clicked_at | Click time |
+| converted_at | timestamptz | yes |  | converted_at | Conversion time |
+| unsubscribed_at | timestamptz | yes |  | unsubscribed_at | Opt-out from this campaign |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `campaign_metric` (append-only)
+
+Daily performance metrics per campaign and variant. Append-only.
+
+API: /v1/campaigns/metrics · Requirements: ENG-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| campaign_id | uuid | no | FK → campaign | campaign_id | Campaign |
+| campaign_variant_id | uuid | yes | FK → campaign_variant | campaign_variant_id | Variant (empty = total) |
+| metric_date | date | no |  | metric_date | Day |
+| audience | integer | no |  | audience | Members targeted |
+| sent | integer | no |  | sent | Messages sent |
+| delivered | integer | no |  | delivered | Delivered |
+| opened | integer | no |  | opened | Opened |
+| clicked | integer | no |  | clicked | Clicked |
+| converted | integer | no |  | converted | Converted |
+| unsubscribed | integer | no |  | unsubscribed | Opt-outs |
+| revenue | numeric(28,8) | no |  | revenue | Attributed revenue |
+| cost | numeric(28,8) | no |  | cost | Spend |
+| uplift_pct | numeric(18,10) | yes |  | uplift_pct | Conversion uplift vs control group |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `inbox-service` — database `inbox_db`
+
+Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts, plus in-app announcements and banners.
+
+
+#### `secure_message_thread`
+
+A secure conversation between a customer and the bank
+
+API: /v1/inbox/threads · Requirements: ENG-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| subject | varchar(200) | no |  | subject | Subject |
+| topic | varchar(64) | yes |  | topic | Topic code (CARDS, PAYMENTS, LOANS, GENERAL) |
+| status | varchar(40) (SecureThreadStatus) | no |  | status | Status |
+| assigned_user_id | uuid | yes | ref → app_user | assigned_user_id | Staff member handling it |
+| related_type | varchar(40) | yes |  | related_type | Related object (SERVICE_CASE, ACCOUNT, CARD, LOAN) |
+| related_id | uuid | yes |  | related_id | Related object id |
+| last_message_at | timestamptz | yes |  | last_message_at (read-only) | Last message time |
+| unread_customer | integer | no |  | unread_customer (read-only) | Messages unread by the customer |
+| unread_staff | integer | no |  | unread_staff (read-only) | Messages unread by staff |
+| closed_at | timestamptz | yes |  | closed_at (read-only) | Close time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `secure_message` (append-only)
+
+One message in a secure thread with attachments and read receipt. Append-only.
+
+API: /v1/inbox/messages · Requirements: ENG-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| secure_message_thread_id | uuid | no | FK → secure_message_thread | secure_message_thread_id | Thread |
+| sender_type | varchar(40) (SecureMessageSender) | no |  | sender_type | Who sent it |
+| sender_user_id | uuid | yes | ref → app_user | sender_user_id | Staff sender |
+| body | text | no |  | body | Message text PII |
+| attachment_document_ids | jsonb | yes |  | attachment_document_ids | Attached documents |
+| is_internal_note | boolean | no |  | is_internal_note | Staff-only note, hidden from the customer |
+| notification_id | uuid | yes | ref → notification | notification_id | Push/email alert sent about it |
+| client_message_id | varchar(64) | yes |  | client_message_id | Client-side id for de-duplication |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `secure_message_receipt` (append-only)
+
+Read receipt for a secure message by a party
+
+API: internal only · Requirements: ENG-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| secure_message_id | uuid | no | FK → secure_message | secure_message_id | Message |
+| reader_type | varchar(40) (SecureMessageSender) | no |  | reader_type | Customer or staff |
+| reader_user_id | uuid | yes | ref → app_user | reader_user_id | Staff reader |
+| read_at | timestamptz | no |  | read_at | Read time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `announcement`
+
+In-app banner or announcement targeted to all customers or segments
+
+API: /v1/inbox/announcements · Requirements: ENG-05, NOT-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| title | varchar(160) | no |  | title | Title |
+| body | varchar(2000) | no |  | body | Body |
+| placement | varchar(40) | no |  | placement | HOME_BANNER, LOGIN, INBOX, MODAL |
+| status | varchar(40) (AnnouncementStatus) | no |  | status | Status |
+| segment_ids | jsonb | yes |  | segment_ids | Target segments (empty = everyone) |
+| apps | jsonb | yes |  | apps | Target apps (customer-mobile, customer-web, business-portal) |
+| languages | jsonb | yes |  | languages | Translations per language |
+| image_document_id | uuid | yes | ref → document | image_document_id | Image |
+| deeplink | varchar(500) | yes |  | deeplink | Call to action |
+| priority | integer | no |  | priority | Display priority |
+| dismissible | boolean | no |  | dismissible | Customer can dismiss |
+| starts_at | timestamptz | no |  | starts_at | Start |
+| ends_at | timestamptz | yes |  | ends_at | End |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ## Ledger and Accounting (`ledger`)
 
 The single source of truth for money. A real-time, append-only double-entry ledger that every other service posts through, the general ledger and period close, and automated reconciliation.
@@ -1973,14 +2957,14 @@ API: /v1/journal-entries · Requirements: LED-01, LED-05, LED-06, LED-07
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | ledger_id | uuid | no | FK → ledger | ledger_id | Ledger book |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key; a replay returns the original entry |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Taken from the Idempotency-Key header; a replay returns the original entry |
 | entry_type | varchar(40) (JournalEntryType) | no |  | entry_type | Business classification |
 | description | varchar(500) | yes |  | description | Narrative shown on statements |
-| effective_at | timestamptz | no |  | effective_at | Economic time of the transaction |
-| value_date | date | no |  | value_date | Date interest starts or stops counting |
+| effective_at | timestamptz | no |  | effective_at | Economic time of the transaction (default: now) |
+| value_date | date | no |  | value_date | Date interest starts or stops counting (default: today) |
 | booked_at | timestamptz | no |  | booked_at (read-only) | Time the ledger committed the entry |
-| reversal_of_id | uuid | yes | FK → journal_entry | reversal_of_id | Entry this one reverses |
-| source_service | varchar(64) | no |  | source_service | Service that requested the posting |
+| reversal_of_id | uuid | yes | FK → journal_entry | reversal_of_id (read-only) | Entry this one reverses (set by POST /{id}/reverse) |
+| source_service | varchar(64) | no |  | source_service (read-only) | Service or client that requested the posting (from the caller identity) |
 | source_type | varchar(64) | yes |  | source_type | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION |
 | source_id | uuid | yes |  | source_id | Business object id |
 | correlation_id | varchar(128) | yes |  | correlation_id | Trace / saga correlation id |
@@ -2007,15 +2991,15 @@ API: /v1/ledger-entries · Requirements: LED-01, LED-02, LED-03
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
-| journal_entry_id | uuid | no | FK → journal_entry | journal_entry_id | Parent journal entry |
+| journal_entry_id | uuid | no | FK → journal_entry | journal_entry_id (read-only) | Parent journal entry |
 | ledger_account_id | uuid | no | FK → ledger_account | ledger_account_id | Account posted to |
-| line_no | integer | no |  | line_no | Line number within the journal entry |
+| line_no | integer | no |  | line_no (read-only) | Line number within the journal entry (order sent) |
 | direction | varchar(40) (EntryDirection) | no |  | direction | Debit or credit |
 | amount | numeric(28,8) | no |  | amount | Positive amount in the account currency |
 | currency | char(3) | no |  | currency | Account currency |
 | fx_rate | numeric(18,10) | yes |  | fx_rate | Rate to ledger base currency at posting time |
-| base_amount | numeric(28,8) | no |  | base_amount | Amount in ledger base currency |
-| effective_at | timestamptz | no |  | effective_at | Copied from the journal entry for range queries |
+| base_amount | numeric(28,8) | no |  | base_amount (read-only) | Amount in ledger base currency (amount x fx_rate) |
+| effective_at | timestamptz | no |  | effective_at (read-only) | Copied from the journal entry for range queries |
 | account_version | bigint | no |  | account_version (read-only) | Account balance version after this entry (gapless per account) |
 | balance_after | numeric(28,8) | no |  | balance_after (read-only) | Posted balance of the account after this entry |
 | description | varchar(500) | yes |  | description | Line narrative |
@@ -2079,7 +3063,7 @@ API: /v1/holds · Requirements: LED-04
 | status | varchar(40) (HoldStatus) | no |  | status (read-only) | Lifecycle status |
 | source_type | varchar(64) | yes |  | source_type | Business object type, e.g. CARD_AUTHORIZATION |
 | source_id | uuid | yes |  | source_id | Business object id |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Taken from the Idempotency-Key header |
 | description | varchar(500) | yes |  | description | Narrative |
 | expires_at | timestamptz | yes |  | expires_at | Automatic release time |
 | released_at | timestamptz | yes |  | released_at (read-only) | Time released or expired |
@@ -3150,7 +4134,7 @@ API: /v1/loan-disbursements · Requirements: LND-01
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | disbursed_at | timestamptz | yes |  | disbursed_at (read-only) | Completion time |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -3288,7 +4272,7 @@ API: /v1/loan-repayments · Requirements: LND-04, COL-02
 | promise_to_pay_id | uuid | yes |  | promise_to_pay_id | Promise this repayment fulfils |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
 | external_reference | varchar(128) | yes |  | external_reference | Payer reference |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -3614,7 +4598,7 @@ API: /v1/credit-line-drawdowns · Requirements: LND-03
 | status | varchar(40) (DrawdownStatus) | no |  | status (read-only) | Status |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | posted_at | timestamptz | yes |  | posted_at (read-only) | Posting time |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -4391,6 +5375,812 @@ API: /v1/open-banking/access-logs · Requirements: OBK-02, ADM-03
 | interaction_id | varchar(64) | yes |  | interaction_id | x-fapi-interaction-id |
 | latency_ms | integer | yes |  | latency_ms | Response time |
 | records_returned | integer | yes |  | records_returned | Records returned |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+## Operations: Batch, Files, Search and Archive (`operations`)
+
+Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners, enterprise search across all entities, and data retention, archival, legal hold and certified purge.
+
+
+### Service `business-day-service` — database `business_day_db`
+
+Owns the business date per legal entity, orchestrates EOD/EOM/EOQ/EOY job graphs with dependencies, parallelism, retries and restart-from-failure, performs the date roll, and schedules non-EOD batch jobs with distributed locks. Jobs execute in the owning services; this service coordinates them (Temporal).
+
+
+#### `business_day`
+
+Current and historical business date per legal entity with its processing state
+
+API: /v1/operations/business-days · Requirements: OPS-01, GL-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
+| business_date | date | no |  | business_date | Business date |
+| state | varchar(40) (BusinessDayState) | no |  | state | Processing state |
+| holiday_calendar_id | uuid | yes | ref → holiday_calendar | holiday_calendar_id | Calendar used to compute the next business date |
+| is_current | boolean | no |  | is_current | True for the open business date of the entity |
+| opened_at | timestamptz | no |  | opened_at (read-only) | When the date was opened |
+| cut_off_at | timestamptz | yes |  | cut_off_at (read-only) | When transaction cut-off was applied |
+| closed_at | timestamptz | yes |  | closed_at (read-only) | When the date was closed |
+| next_business_date | date | yes |  | next_business_date (read-only) | Next business date after the date roll |
+| is_month_end | boolean | no |  | is_month_end (read-only) | EOM processing applies |
+| is_quarter_end | boolean | no |  | is_quarter_end (read-only) | EOQ processing applies |
+| is_year_end | boolean | no |  | is_year_end (read-only) | EOY processing applies |
+| notes | varchar(500) | yes |  | notes | Operator notes |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `eod_job_definition`
+
+A step in an end-of-period job graph, executed by an owning service
+
+API: /v1/operations/eod-jobs · Requirements: OPS-01, GL-03, DEP-06
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity (empty = all entities) |
+| code | varchar(64) | no | UQ | code | Job code, e.g. DEP_INTEREST_ACCRUAL |
+| name | varchar(160) | no |  | name | Display name |
+| job_type | varchar(40) (EodJobType) | no |  | job_type | Kind of job |
+| cycle_types | jsonb | no |  | cycle_types | Cycles the job runs in, e.g. [EOD, EOM] |
+| owning_service | varchar(64) | no |  | owning_service | Service that executes the job, e.g. deposit-service |
+| endpoint | varchar(255) | no |  | endpoint | Internal command/topic the orchestrator invokes |
+| depends_on | jsonb | yes |  | depends_on | Codes of jobs that must finish first |
+| sequence | integer | no |  | sequence | Ordering hint within the same dependency level |
+| parallelism | integer | no |  | parallelism | Number of partitions run in parallel |
+| partition_key | varchar(64) | yes |  | partition_key | Partitioning key, e.g. ACCOUNT_ID_HASH |
+| timeout_minutes | integer | no |  | timeout_minutes | Maximum run time per attempt |
+| max_retries | integer | no |  | max_retries | Automatic retries before the failure policy applies |
+| failure_policy | varchar(40) (EodFailurePolicy) | no |  | failure_policy | What happens on final failure |
+| is_critical | boolean | no |  | is_critical | Blocks the date roll when it fails |
+| is_active | boolean | no |  | is_active | Active |
+| parameters | jsonb | yes |  | parameters | Default parameters passed to the job |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `eod_run`
+
+Execution of a full end-of-period cycle for one legal entity and business date
+
+API: /v1/operations/eod-runs · Requirements: OPS-01, GL-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| business_day_id | uuid | no | FK → business_day | business_day_id | Business date being processed |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
+| cycle_type | varchar(40) (EodCycleType) | no |  | cycle_type | Cycle |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
+| triggered_by | varchar(64) | yes |  | triggered_by | User or SCHEDULER |
+| workflow_id | varchar(128) | yes |  | workflow_id (read-only) | Temporal workflow id |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start time |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End time |
+| jobs_total | integer | yes |  | jobs_total (read-only) | Jobs in the plan |
+| jobs_succeeded | integer | yes |  | jobs_succeeded (read-only) | Jobs succeeded |
+| jobs_failed | integer | yes |  | jobs_failed (read-only) | Jobs failed |
+| is_restart | boolean | no |  | is_restart | Restarted from a failed run |
+| restart_of_id | uuid | yes | FK → eod_run | restart_of_id | Failed run this one restarts |
+| error | text | yes |  | error (read-only) | Summary of the failure |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `eod_job_run`
+
+Execution of one job (or partition) inside an EOD run
+
+API: /v1/operations/eod-job-runs · Requirements: OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| eod_run_id | uuid | no | FK → eod_run | eod_run_id | Parent run |
+| eod_job_definition_id | uuid | no | FK → eod_job_definition | eod_job_definition_id | Job definition |
+| partition_no | integer | no |  | partition_no | Partition number |
+| attempt | integer | no |  | attempt | Attempt number |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start time |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End time |
+| duration_ms | bigint | yes |  | duration_ms (read-only) | Duration |
+| records_processed | bigint | yes |  | records_processed (read-only) | Records processed |
+| records_failed | bigint | yes |  | records_failed (read-only) | Records failed |
+| checkpoint | jsonb | yes |  | checkpoint (read-only) | Last checkpoint for restart |
+| error_code | varchar(64) | yes |  | error_code (read-only) | Error code |
+| error | text | yes |  | error (read-only) | Error details |
+| skipped_by | varchar(64) | yes |  | skipped_by | User who manually skipped the job |
+| skip_reason | varchar(500) | yes |  | skip_reason | Why the job was skipped |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `date_roll` (append-only)
+
+Record of moving a legal entity from one business date to the next. Append-only.
+
+API: /v1/operations/date-rolls · Requirements: OPS-01, GL-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
+| from_business_date | date | no |  | from_business_date | Date closed |
+| to_business_date | date | no |  | to_business_date | Date opened |
+| eod_run_id | uuid | yes | FK → eod_run | eod_run_id | EOD run that completed before the roll |
+| forced | boolean | no |  | forced | Rolled despite failed non-critical jobs |
+| approved_by | varchar(64) | yes |  | approved_by | Checker for a forced roll |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval for a forced roll |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `job_schedule`
+
+Cron schedule for non-EOD batch jobs (sweeps, report generation, file pulls, reindexing)
+
+API: /v1/operations/job-schedules · Requirements: OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Schedule code |
+| name | varchar(160) | no |  | name | Display name |
+| owning_service | varchar(64) | no |  | owning_service | Service that runs the job |
+| endpoint | varchar(255) | no |  | endpoint | Command/topic invoked |
+| cron_expression | varchar(64) | no |  | cron_expression | Cron expression |
+| time_zone | varchar(64) | no |  | time_zone | IANA time zone |
+| business_days_only | boolean | no |  | business_days_only | Skip non-business days |
+| holiday_calendar_id | uuid | yes | ref → holiday_calendar | holiday_calendar_id | Calendar for business-day checks |
+| status | varchar(40) (JobScheduleStatus) | no |  | status | Status |
+| parameters | jsonb | yes |  | parameters | Parameters passed to the job |
+| last_run_at | timestamptz | yes |  | last_run_at (read-only) | Last execution start |
+| last_run_status | varchar(40) (RunStatus) | yes |  | last_run_status (read-only) | Last execution status |
+| next_run_at | timestamptz | yes |  | next_run_at (read-only) | Next planned execution |
+| misfire_policy | varchar(32) | no |  | misfire_policy | RUN_ONCE, SKIP or RUN_ALL after downtime |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `job_schedule_run` (append-only)
+
+One execution of a scheduled batch job. Append-only.
+
+API: internal only · Requirements: OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| job_schedule_id | uuid | no | FK → job_schedule | job_schedule_id | Schedule |
+| scheduled_for | timestamptz | no |  | scheduled_for | Planned time |
+| started_at | timestamptz | yes |  | started_at | Start time |
+| finished_at | timestamptz | yes |  | finished_at | End time |
+| status | varchar(40) (RunStatus) | no |  | status | Outcome |
+| records_processed | bigint | yes |  | records_processed | Records processed |
+| error | text | yes |  | error | Error details |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `batch_job_lock`
+
+Distributed lock preventing concurrent execution of the same batch job or partition
+
+API: /v1/operations/batch-locks · Requirements: OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| lock_key | varchar(160) | no | UQ | lock_key | Job / partition key |
+| holder | varchar(128) | no |  | holder | Instance id holding the lock |
+| acquired_at | timestamptz | no |  | acquired_at | Acquired |
+| expires_at | timestamptz | no |  | expires_at | Lease expiry |
+| fencing_token | bigint | no |  | fencing_token | Monotonic token to reject stale holders |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `file-gateway-service` — database `file_gateway_db`
+
+Managed file transfer with banks, schemes, bureaus, regulators and partners over SFTP, FTPS, S3, AS2 and APIs: PGP encryption, virus scanning, format validation, routing of inbound files to consumer services, generation and delivery of outbound files, acknowledgements and a complete transfer audit trail.
+
+
+#### `file_channel`
+
+A configured endpoint for exchanging files with a counterparty
+
+API: /v1/files/channels · Requirements: OPS-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Channel code |
+| name | varchar(160) | no |  | name | Display name |
+| counterparty_type | varchar(40) (FileChannelCounterpartyType) | no |  | counterparty_type | Counterparty kind |
+| counterparty_name | varchar(160) | yes |  | counterparty_name | Counterparty name |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity |
+| protocol | varchar(40) (FileChannelProtocol) | no |  | protocol | Transfer protocol |
+| direction | varchar(40) (FileChannelDirection) | no |  | direction | Inbound, outbound or both |
+| host | varchar(255) | yes |  | host | Host / bucket / base URL |
+| port | integer | yes |  | port | Port |
+| remote_inbound_path | varchar(500) | yes |  | remote_inbound_path | Remote folder to pull from |
+| remote_outbound_path | varchar(500) | yes |  | remote_outbound_path | Remote folder to push to |
+| username | varchar(128) | yes |  | username | Login user |
+| credential_secret_ref | varchar(255) | no |  | — | Vault path of password or private key secret |
+| host_key_fingerprint | varchar(128) | yes |  | host_key_fingerprint | Expected SFTP host key fingerprint |
+| pgp_encrypt_key_ref | varchar(255) | yes |  | — | Vault ref of counterparty public key for outbound encryption secret |
+| pgp_decrypt_key_ref | varchar(255) | yes |  | — | Vault ref of our private key for inbound decryption secret |
+| pgp_sign | boolean | no |  | pgp_sign | Sign outbound files |
+| poll_cron | varchar(64) | yes |  | poll_cron | Polling schedule for inbound files |
+| file_name_pattern | varchar(255) | yes |  | file_name_pattern | Regex of inbound file names to pick up |
+| delete_after_download | boolean | no |  | delete_after_download | Remove remote file after successful download |
+| ip_allowlist | jsonb | yes |  | ip_allowlist | Allowed source IPs for push channels |
+| is_active | boolean | no |  | is_active | Active |
+| last_connected_at | timestamptz | yes |  | last_connected_at (read-only) | Last successful connection |
+| health_status | varchar(32) | yes |  | health_status (read-only) | UP, DEGRADED or DOWN |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `file_format_definition`
+
+Layout of a file type (record types, fields, positions, validation) used to parse or generate files
+
+API: /v1/files/formats · Requirements: OPS-02, DEP-06
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(64) | no | UQ | code | Format code, e.g. NACHA_PPD, CAMT053_V08 |
+| name | varchar(160) | no |  | name | Display name |
+| format_kind | varchar(40) (FileFormatKind) | no |  | format_kind | Format family |
+| version | varchar(32) | no |  | version | Layout version |
+| encoding | varchar(32) | no |  | encoding | Character encoding |
+| record_length | integer | yes |  | record_length | Fixed record length (fixed-width formats) |
+| delimiter | varchar(4) | yes |  | delimiter | Field delimiter (CSV) |
+| has_header | boolean | no |  | has_header | First line is a header |
+| schema_definition | jsonb | no |  | schema_definition | Record types, fields, positions, types and validation rules |
+| xsd_document_id | uuid | yes | ref → document | xsd_document_id | XSD for XML formats |
+| sample_document_id | uuid | yes | ref → document | sample_document_id | Sample file |
+| is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `file_route`
+
+Routing rule sending matching inbound files to a consumer service
+
+API: /v1/files/routes · Requirements: OPS-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| file_channel_id | uuid | yes | FK → file_channel | file_channel_id | Channel (empty = any) |
+| name | varchar(160) | no |  | name | Rule name |
+| priority | integer | no |  | priority | Lower wins |
+| file_name_pattern | varchar(255) | no |  | file_name_pattern | Regex on file name |
+| file_format_definition_id | uuid | yes | FK → file_format_definition | file_format_definition_id | Expected format |
+| target_service | varchar(64) | no |  | target_service | Consumer service, e.g. reconciliation-service |
+| target_topic | varchar(160) | no |  | target_topic | Kafka topic or command endpoint |
+| require_virus_scan | boolean | no |  | require_virus_scan | Scan before routing |
+| is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `inbound_file`
+
+A file received from a counterparty
+
+API: /v1/files/inbound · Requirements: OPS-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| file_channel_id | uuid | no | FK → file_channel | file_channel_id | Channel received on |
+| file_route_id | uuid | yes | FK → file_route | file_route_id | Route applied |
+| file_format_definition_id | uuid | yes | FK → file_format_definition | file_format_definition_id | Detected format |
+| original_file_name | varchar(255) | no |  | original_file_name | Name as received |
+| remote_path | varchar(500) | yes |  | remote_path | Remote location |
+| storage_uri | varchar(500) | no |  | storage_uri (read-only) | Object-store location of the raw file |
+| size_bytes | bigint | no |  | size_bytes (read-only) | Size |
+| checksum_sha256 | varchar(64) | no |  | checksum_sha256 (read-only) | SHA-256 of the raw file |
+| received_at | timestamptz | no |  | received_at (read-only) | Receipt time |
+| was_encrypted | boolean | no |  | was_encrypted (read-only) | PGP-encrypted on receipt |
+| signature_valid | boolean | yes |  | signature_valid (read-only) | PGP signature check result |
+| virus_scan_status | varchar(40) (VirusScanStatus) | no |  | virus_scan_status (read-only) | Antivirus result |
+| virus_scan_detail | varchar(500) | yes |  | virus_scan_detail (read-only) | Signature name when infected |
+| status | varchar(40) (InboundFileStatus) | no |  | status (read-only) | Processing status |
+| record_count | integer | yes |  | record_count (read-only) | Records detected |
+| consumer_reference | varchar(128) | yes |  | consumer_reference (read-only) | Id assigned by the consuming service |
+| processed_at | timestamptz | yes |  | processed_at (read-only) | Processing completed |
+| error | text | yes |  | error (read-only) | Error details |
+| document_id | uuid | yes | ref → document | document_id | Document record for retention |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `outbound_file`
+
+A file generated for and delivered to a counterparty
+
+API: /v1/files/outbound · Requirements: OPS-02, DEP-06
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| file_channel_id | uuid | no | FK → file_channel | file_channel_id | Delivery channel |
+| file_format_definition_id | uuid | yes | FK → file_format_definition | file_format_definition_id | Format |
+| requested_by_service | varchar(64) | no |  | requested_by_service | Service that requested the file |
+| source_reference | varchar(128) | yes |  | source_reference | Batch / run id in the requesting service |
+| file_name | varchar(255) | no |  | file_name | File name to deliver |
+| storage_uri | varchar(500) | yes |  | storage_uri (read-only) | Object-store location |
+| size_bytes | bigint | yes |  | size_bytes (read-only) | Size |
+| checksum_sha256 | varchar(64) | yes |  | checksum_sha256 (read-only) | SHA-256 |
+| record_count | integer | yes |  | record_count (read-only) | Records |
+| control_totals | jsonb | yes |  | control_totals (read-only) | Control totals (count, sum) written in the trailer |
+| encrypt | boolean | no |  | encrypt | PGP-encrypt before delivery |
+| status | varchar(40) (OutboundFileStatus) | no |  | status (read-only) | Status |
+| scheduled_for | timestamptz | yes |  | scheduled_for | Earliest delivery time (e.g. scheme window) |
+| delivered_at | timestamptz | yes |  | delivered_at (read-only) | Delivered |
+| delivery_attempts | integer | no |  | delivery_attempts (read-only) | Attempts |
+| acknowledged_at | timestamptz | yes |  | acknowledged_at (read-only) | Counterparty acknowledgement time |
+| ack_reference | varchar(128) | yes |  | ack_reference (read-only) | Acknowledgement reference |
+| error | text | yes |  | error (read-only) | Last error |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `file_transfer_log` (append-only)
+
+Immutable audit of every action on a file or channel
+
+API: /v1/files/transfer-logs · Requirements: OPS-02, ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| file_channel_id | uuid | yes | FK → file_channel | file_channel_id | Channel |
+| inbound_file_id | uuid | yes | FK → inbound_file | inbound_file_id | Inbound file |
+| outbound_file_id | uuid | yes | FK → outbound_file | outbound_file_id | Outbound file |
+| action | varchar(40) (FileTransferAction) | no |  | action | Action |
+| success | boolean | no |  | success | Outcome |
+| remote_address | varchar(64) | yes |  | remote_address | Remote IP / host |
+| bytes_transferred | bigint | yes |  | bytes_transferred | Bytes |
+| duration_ms | integer | yes |  | duration_ms | Duration |
+| message | varchar(1000) | yes |  | message | Detail |
+| actor | varchar(64) | yes |  | actor | System or user |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `search-service` — database `search_db`
+
+Enterprise search across customers, accounts, wallets, cards, loans, payments and cases. Maintains OpenSearch indices fed by domain events (CDC), with versioned mappings, zero-downtime reindexing via alias swaps, synonyms, field-level masking by role, and saved searches per user.
+
+
+#### `search_index`
+
+Definition of a searchable index for one entity type
+
+API: /v1/search, /v1/search/indexes · Requirements: OPS-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| entity_type | varchar(40) (SearchEntityType) | no | UQ | entity_type | Entity indexed |
+| alias_name | varchar(128) | no |  | alias_name | Read alias used by queries |
+| physical_index | varchar(160) | no |  | physical_index (read-only) | Current physical index behind the alias |
+| mapping_version | integer | no |  | mapping_version | Version of the field mapping |
+| mapping | jsonb | no |  | mapping | OpenSearch mapping and analysers |
+| source_topics | jsonb | no |  | source_topics | Event topics feeding the index |
+| searchable_fields | jsonb | no |  | searchable_fields | Fields matched by free-text search with boosts |
+| masked_fields | jsonb | yes |  | masked_fields | Fields masked unless the caller holds a PII permission |
+| status | varchar(40) (SearchIndexStatus) | no |  | status (read-only) | Status |
+| document_count | bigint | yes |  | document_count (read-only) | Documents indexed |
+| lag_seconds | integer | yes |  | lag_seconds (read-only) | Event-to-index lag |
+| last_indexed_at | timestamptz | yes |  | last_indexed_at (read-only) | Last document indexed |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `search_index_job`
+
+A reindex, incremental catch-up or alias swap job
+
+API: /v1/search/jobs · Requirements: OPS-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| search_index_id | uuid | no | FK → search_index | search_index_id | Index |
+| job_type | varchar(40) (SearchIndexJobType) | no |  | job_type | Job type |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
+| target_index | varchar(160) | yes |  | target_index (read-only) | Physical index being built |
+| from_timestamp | timestamptz | yes |  | from_timestamp | Start of the range for incremental jobs |
+| documents_processed | bigint | yes |  | documents_processed (read-only) | Documents processed |
+| documents_failed | bigint | yes |  | documents_failed (read-only) | Documents failed |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| error | text | yes |  | error (read-only) | Error details |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `search_synonym`
+
+Synonym set applied to search analysers (e.g. abbreviations, transliterations)
+
+API: /v1/search/synonyms · Requirements: OPS-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| search_index_id | uuid | yes | FK → search_index | search_index_id | Index (empty = all) |
+| language_code | varchar(8) | yes |  | language_code | Language |
+| terms | jsonb | no |  | terms | Equivalent terms, e.g. [mohammed, muhammad, mohamed] |
+| is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `saved_search`
+
+A saved search query of a staff user, optionally shared with a role
+
+API: /v1/search/saved · Requirements: OPS-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| app_user_id | uuid | no | ref → app_user | app_user_id | Owner |
+| name | varchar(160) | no |  | name | Name |
+| entity_types | jsonb | no |  | entity_types | Entity types searched |
+| query_text | varchar(500) | yes |  | query_text | Free text |
+| filters | jsonb | yes |  | filters | Structured filters |
+| sort | jsonb | yes |  | sort | Sort order |
+| shared_with_role_id | uuid | yes | ref → role | shared_with_role_id | Role it is shared with |
+| is_pinned | boolean | no |  | is_pinned | Pinned in the console |
+| last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last use |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `archive-service` — database `archive_db`
+
+Data lifecycle management: data classification catalogue, retention policies per data class and jurisdiction, archival of aged records to immutable object storage with manifests, legal holds that override retention, anonymisation, and approved purges with certificates of destruction.
+
+
+#### `data_classification`
+
+Catalogue entry classifying a table (or column set) by sensitivity and data class
+
+API: /v1/archive/classifications · Requirements: OPS-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| data_class | varchar(64) | no |  | data_class | Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT |
+| service_name | varchar(64) | no |  | service_name | Owning service |
+| database_name | varchar(64) | no |  | database_name | Database |
+| table_name | varchar(64) | no |  | table_name | Table |
+| sensitivity | varchar(40) (DataSensitivity) | no |  | sensitivity | Sensitivity |
+| pii_columns | jsonb | yes |  | pii_columns | Columns holding personal data |
+| owner | varchar(120) | yes |  | owner | Data owner (business) |
+| steward | varchar(120) | yes |  | steward | Data steward |
+| description | varchar(500) | yes |  | description | Notes |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `retention_policy`
+
+How long a data class is kept per jurisdiction and what happens after
+
+API: /v1/archive/retention-policies · Requirements: OPS-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| data_class | varchar(64) | no |  | data_class | Data class covered |
+| country_code | char(2) | yes |  | country_code | Jurisdiction (empty = default) |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity (empty = all) |
+| retention_trigger | varchar(40) (RetentionTrigger) | no |  | retention_trigger | Event that starts the retention clock |
+| online_days | integer | no |  | online_days | Days kept in the operational database |
+| retention_years | integer | no |  | retention_years | Total years kept (online + archive) |
+| action | varchar(40) (RetentionAction) | no |  | action | Action at end of each phase |
+| regulation_reference | varchar(255) | yes |  | regulation_reference | Law or regulation, e.g. AML record keeping |
+| requires_approval | boolean | no |  | requires_approval | Purge needs maker-checker |
+| is_active | boolean | no |  | is_active | Active |
+| valid_from | date | no |  | valid_from | Effective from |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `archive_job`
+
+A run moving aged records from a service database to the archive store
+
+API: /v1/archive/jobs · Requirements: OPS-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| retention_policy_id | uuid | no | FK → retention_policy | retention_policy_id | Policy applied |
+| data_classification_id | uuid | no | FK → data_classification | data_classification_id | Table archived |
+| cutoff_date | date | no |  | cutoff_date | Records older than this date are archived |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
+| records_archived | bigint | yes |  | records_archived (read-only) | Records archived |
+| records_skipped_hold | bigint | yes |  | records_skipped_hold (read-only) | Records skipped because of legal holds |
+| bytes_archived | bigint | yes |  | bytes_archived (read-only) | Bytes written |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| error | text | yes |  | error (read-only) | Error details |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `archived_object` (append-only)
+
+Manifest of an archived batch in immutable (WORM) object storage. Append-only.
+
+API: /v1/archive/objects · Requirements: OPS-04, ADM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| archive_job_id | uuid | no | FK → archive_job | archive_job_id | Job that produced it |
+| database_name | varchar(64) | no |  | database_name | Source database |
+| table_name | varchar(64) | no |  | table_name | Source table |
+| first_record_id | uuid | no |  | first_record_id | First record id in the batch |
+| last_record_id | uuid | no |  | last_record_id | Last record id in the batch |
+| record_count | bigint | no |  | record_count | Records in the object |
+| min_created_at | timestamptz | no |  | min_created_at | Oldest record time |
+| max_created_at | timestamptz | no |  | max_created_at | Newest record time |
+| storage_uri | varchar(500) | no |  | storage_uri | Object-store URI (Parquet) |
+| storage_class | varchar(32) | no |  | storage_class | Storage tier, e.g. ARCHIVE, DEEP_ARCHIVE |
+| checksum_sha256 | varchar(64) | no |  | checksum_sha256 | Integrity checksum |
+| encryption_key_ref | varchar(255) | no |  | — | KMS key reference secret |
+| worm_retain_until | date | no |  | worm_retain_until | Object-lock retention date |
+| restorable | boolean | no |  | restorable | Can be restored for queries |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `legal_hold`
+
+A legal or regulatory hold that suspends archival purge and deletion for its scope
+
+API: /v1/archive/legal-holds · Requirements: OPS-04, CIF-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| name | varchar(160) | no |  | name | Hold name / matter |
+| scope_type | varchar(40) (LegalHoldScope) | no |  | scope_type | What the hold covers |
+| scope_ids | jsonb | no |  | scope_ids | Ids covered (customers, accounts, cases, tables...) |
+| customer_id | uuid | yes | ref → customer | customer_id | Customer, when scope is a customer |
+| reason | text | no |  | reason | Legal basis |
+| requested_by | varchar(120) | no |  | requested_by | Legal / compliance requester |
+| case_reference | varchar(128) | yes |  | case_reference | External matter or court reference |
+| status | varchar(40) (LegalHoldStatus) | no |  | status | Status |
+| starts_on | date | no |  | starts_on | Start |
+| review_on | date | yes |  | review_on | Next review date |
+| released_at | timestamptz | yes |  | released_at (read-only) | Release time |
+| released_by | varchar(64) | yes |  | released_by (read-only) | Who released it |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval for placing or releasing |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `purge_request`
+
+Request to permanently delete or anonymise data that reached end of retention
+
+API: /v1/archive/purge-requests · Requirements: OPS-04, CIF-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| retention_policy_id | uuid | yes | FK → retention_policy | retention_policy_id | Policy that triggered it |
+| data_classification_id | uuid | yes | FK → data_classification | data_classification_id | Table affected |
+| scope_description | varchar(500) | no |  | scope_description | What will be purged |
+| record_selector | jsonb | no |  | record_selector | Selection criteria / id ranges |
+| action | varchar(40) (RetentionAction) | no |  | action | PURGE or ANONYMISE |
+| estimated_records | bigint | yes |  | estimated_records (read-only) | Records selected |
+| status | varchar(40) (PurgeRequestStatus) | no |  | status (read-only) | Status |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| blocked_by_hold_id | uuid | yes | FK → legal_hold | blocked_by_hold_id | Hold blocking execution |
+| executed_at | timestamptz | yes |  | executed_at (read-only) | Execution time |
+| records_purged | bigint | yes |  | records_purged (read-only) | Records purged |
+| certificate_document_id | uuid | yes | ref → document | certificate_document_id (read-only) | Certificate of destruction |
+| certificate_hash | varchar(64) | yes |  | certificate_hash (read-only) | Hash of the certificate |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -5313,7 +7103,7 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | status | varchar(40) (PaymentStatus) | no |  | status (read-only) | Lifecycle status |
 | channel | varchar(40) (PaymentChannel) | no |  | channel | Channel that initiated the payment |
 | priority | varchar(40) (PaymentPriority) | no |  | priority | Requested priority |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key; a replay returns the original payment |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key; a replay returns the original payment |
 | customer_id | uuid | yes | ref → customer | customer_id | Initiating or receiving customer |
 | debtor_account_id | uuid | yes | ref → deposit_account | debtor_account_id | Internal source account (outbound / internal) |
 | debtor_wallet_id | uuid | yes | ref → wallet | debtor_wallet_id | Internal source wallet |
@@ -8445,7 +10235,7 @@ API: /v1/billing/usage · Requirements: ADM-05
 | quantity | bigint | no |  | quantity | Quantity |
 | service_name | varchar(64) | no |  | service_name | Reporting service |
 | dimensions | jsonb | yes |  | dimensions | Breakdown, e.g. by legal entity or environment |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Dedupe key from the reporting service |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Dedupe key from the reporting service |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -11234,7 +13024,7 @@ API: /v1/risk/limits/checks · Requirements: LIM-01
 | evaluated_rule_ids | jsonb | no |  | evaluated_rule_ids | Rules evaluated |
 | breached_rule_ids | jsonb | yes |  | breached_rule_ids | Rules breached |
 | remaining | jsonb | yes |  | remaining | Remaining amount/count per rule and period |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | correlation_id | varchar(128) | yes |  | correlation_id | Business transaction / saga id |
 | expires_at | timestamptz | yes |  | expires_at | Reservation expiry (auto-release) |
 | latency_ms | integer | yes |  | latency_ms | Evaluation time |
@@ -11749,6 +13539,918 @@ API: internal only · Requirements: SRV-02, AI-01
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+## Treasury and ALM (`treasury`)
+
+Front-to-back treasury: money market, FX and securities deals with confirmations and settlement, counterparty limits, liquidity positions and Basel III ratios (LCR/NSFR) with stress testing, and asset-liability management (repricing gap, NII/EVE sensitivity) with funds transfer pricing.
+
+
+### Service `treasury-deal-service` — database `treasury_deal_db`
+
+Front and middle office for treasury: counterparties and limits, money market, FX and securities deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement.
+
+
+#### `treasury_counterparty`
+
+Treasury counterparty (bank, central bank, broker, corporate) with identifiers and rating
+
+API: /v1/treasury/counterparties · Requirements: TRY-01, TRY-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Our legal entity dealing with the counterparty |
+| code | varchar(32) | no | UQ | code | Short code |
+| name | varchar(200) | no |  | name | Legal name |
+| counterparty_type | varchar(40) (TreasuryCounterpartyType) | no |  | counterparty_type | Type |
+| bic | varchar(11) | yes |  | bic | SWIFT BIC |
+| lei | varchar(20) | yes |  | lei | Legal Entity Identifier |
+| country_code | char(2) | no |  | country_code | Country of incorporation |
+| parent_counterparty_id | uuid | yes | FK → treasury_counterparty | parent_counterparty_id | Group parent for aggregated limits |
+| external_rating | varchar(10) | yes |  | external_rating | External credit rating, e.g. AA- |
+| rating_agency | varchar(32) | yes |  | rating_agency | Agency for the rating |
+| internal_rating | varchar(10) | yes |  | internal_rating | Internal rating grade |
+| isda_signed | boolean | no |  | isda_signed | ISDA master agreement in place |
+| csa_signed | boolean | no |  | csa_signed | Credit support annex in place |
+| gmra_signed | boolean | no |  | gmra_signed | GMRA in place (repos) |
+| status | varchar(40) (TreasuryCounterpartyStatus) | no |  | status | Status |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Onboarding approval |
+| notes | text | yes |  | notes | Notes |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_ssi`
+
+Standing settlement instructions per counterparty and currency
+
+API: /v1/treasury/ssis · Requirements: TRY-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
+| currency | char(3) | no |  | currency | Currency |
+| beneficiary_bic | varchar(11) | no |  | beneficiary_bic | Beneficiary bank BIC |
+| beneficiary_account | varchar(64) | no |  | beneficiary_account | Beneficiary account / IBAN |
+| intermediary_bic | varchar(11) | yes |  | intermediary_bic | Intermediary bank BIC |
+| our_nostro_account_id | uuid | yes | ref → nostro_account | our_nostro_account_id | Our nostro used to settle |
+| valid_from | date | no |  | valid_from | Effective from |
+| valid_to | date | yes |  | valid_to | Effective to |
+| is_default | boolean | no |  | is_default | Default SSI for the currency |
+| verified_by | varchar(64) | yes |  | verified_by | Four-eyes verification |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_counterparty_limit`
+
+Credit / settlement / tenor limit on a counterparty (or its group)
+
+API: /v1/treasury/limits · Requirements: TRY-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
+| limit_type | varchar(40) (TreasuryLimitType) | no |  | limit_type | Limit type |
+| currency | char(3) | no |  | currency | Limit currency |
+| limit_amount | numeric(28,8) | no |  | limit_amount | Approved limit |
+| max_tenor_days | integer | yes |  | max_tenor_days | Maximum tenor allowed |
+| utilised_amount | numeric(28,8) | no |  | utilised_amount (read-only) | Current utilisation |
+| available_amount | numeric(28,8) | no |  | available_amount (read-only) | Limit minus utilisation |
+| warning_threshold_pct | numeric(18,10) | no |  | warning_threshold_pct | Warn at this share of the limit |
+| valid_from | date | no |  | valid_from | Effective from |
+| valid_to | date | yes |  | valid_to | Expiry |
+| status | varchar(40) (TreasuryLimitStatus) | no |  | status | Status |
+| approved_by | varchar(64) | yes |  | approved_by | Credit approver |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_limit_utilisation` (append-only)
+
+Immutable record of a deal consuming or releasing a counterparty limit
+
+API: /v1/treasury/limit-utilisations · Requirements: TRY-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| treasury_counterparty_limit_id | uuid | no | FK → treasury_counterparty_limit | treasury_counterparty_limit_id | Limit |
+| deal_type | varchar(32) | no |  | deal_type | MONEY_MARKET, FX, SECURITY |
+| deal_id | uuid | no |  | deal_id | Deal consuming the limit |
+| amount | numeric(28,8) | no |  | amount | Utilisation change (negative releases) |
+| currency | char(3) | no |  | currency | Currency |
+| utilised_after | numeric(28,8) | no |  | utilised_after | Utilisation after this change |
+| breach | boolean | no |  | breach | Change breached the limit |
+| override_approval_id | uuid | yes | ref → approval_request | override_approval_id | Approval for a breach |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `money_market_deal`
+
+Money market placement, borrowing, call, repo or CD with full lifecycle
+
+API: /v1/treasury/money-market-deals · Requirements: TRY-01, GL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| deal_ref | varchar(32) | no | UQ | deal_ref | Deal reference |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Booking entity |
+| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
+| deal_type | varchar(40) (TreasuryMmDealType) | no |  | deal_type | Placement, borrowing, repo, ... |
+| currency | char(3) | no |  | currency | Currency |
+| principal | numeric(28,8) | no |  | principal | Principal amount |
+| trade_date | date | no |  | trade_date | Trade date |
+| value_date | date | no |  | value_date | Value (start) date |
+| maturity_date | date | yes |  | maturity_date | Maturity date (empty for call deals) |
+| is_call | boolean | no |  | is_call | Call (open-ended) deal |
+| notice_days | integer | yes |  | notice_days | Notice period for call deals |
+| rate_type | varchar(40) (TreasuryRateType) | no |  | rate_type | Fixed or floating |
+| interest_rate | numeric(18,10) | no |  | interest_rate | All-in rate |
+| rate_index | varchar(32) | yes |  | rate_index | Index for floating deals, e.g. SOFR |
+| spread | numeric(18,10) | yes |  | spread | Spread over index |
+| day_count | varchar(40) (DayCountBasis) | no |  | day_count | Day-count basis |
+| interest_amount | numeric(28,8) | yes |  | interest_amount (read-only) | Interest to maturity |
+| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued interest to date |
+| rollover_type | varchar(40) (TreasuryRolloverType) | no |  | rollover_type | Rollover instruction |
+| rolled_from_deal_id | uuid | yes | FK → money_market_deal | rolled_from_deal_id | Previous deal when rolled |
+| collateral_description | text | yes |  | collateral_description | Repo collateral details |
+| dealer_id | uuid | no | ref → app_user | dealer_id | Dealer |
+| verified_by | varchar(64) | yes |  | verified_by (read-only) | Back-office verifier |
+| status | varchar(40) (TreasuryDealStatus) | no |  | status (read-only) | Lifecycle status |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Ledger account carrying the deal |
+| settlement_journal_entry_id | uuid | yes | ref → journal_entry | settlement_journal_entry_id | Posting on settlement |
+| maturity_journal_entry_id | uuid | yes | ref → journal_entry | maturity_journal_entry_id | Posting on maturity |
+| cancel_reason | varchar(255) | yes |  | cancel_reason | Cancellation reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_fx_deal`
+
+Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+
+API: /v1/treasury/fx-deals · Requirements: TRY-01, GL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| deal_ref | varchar(32) | no | UQ | deal_ref | Deal reference |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Booking entity |
+| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
+| deal_type | varchar(40) (TreasuryFxDealType) | no |  | deal_type | Spot, forward, swap or NDF |
+| trade_date | date | no |  | trade_date | Trade date |
+| dealer_id | uuid | no | ref → app_user | dealer_id | Dealer |
+| fixing_date | date | yes |  | fixing_date | NDF fixing date |
+| fixing_source | varchar(64) | yes |  | fixing_source | NDF fixing source |
+| status | varchar(40) (TreasuryDealStatus) | no |  | status (read-only) | Lifecycle status |
+| verified_by | varchar(64) | yes |  | verified_by (read-only) | Back-office verifier |
+| mtm_value | numeric(28,8) | yes |  | mtm_value (read-only) | Latest mark-to-market in base currency |
+| mtm_date | date | yes |  | mtm_date (read-only) | Valuation date |
+| cancel_reason | varchar(255) | yes |  | cancel_reason | Cancellation reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_fx_deal_leg`
+
+A leg of a treasury FX deal (one for spot/forward, two for swaps)
+
+API: /v1/treasury/fx-deal-legs · Requirements: TRY-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| treasury_fx_deal_id | uuid | no | FK → treasury_fx_deal | treasury_fx_deal_id | Deal |
+| leg_type | varchar(40) (TreasuryFxLegType) | no |  | leg_type | Near or far leg |
+| buy_sell | varchar(40) (TreasuryBuySell) | no |  | buy_sell | Our direction on the base currency |
+| base_currency | char(3) | no |  | base_currency | Base currency |
+| base_amount | numeric(28,8) | no |  | base_amount | Base amount |
+| quote_currency | char(3) | no |  | quote_currency | Quote currency |
+| quote_amount | numeric(28,8) | no |  | quote_amount | Quote amount |
+| deal_rate | numeric(18,10) | no |  | deal_rate | All-in rate |
+| spot_rate | numeric(18,10) | yes |  | spot_rate | Spot component |
+| forward_points | numeric(18,10) | yes |  | forward_points | Forward points |
+| value_date | date | no |  | value_date | Settlement date |
+| settlement_status | varchar(40) (TreasurySettlementStatus) | no |  | settlement_status (read-only) | Settlement status |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Settlement posting |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_security`
+
+Security master record (bonds, bills, CP, CDs)
+
+API: /v1/treasury/securities · Requirements: TRY-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| isin | varchar(12) | no | UQ | isin | ISIN |
+| name | varchar(200) | no |  | name | Security name |
+| security_type | varchar(40) (TreasurySecurityType) | no |  | security_type | Type |
+| issuer_name | varchar(200) | no |  | issuer_name | Issuer |
+| issuer_counterparty_id | uuid | yes | FK → treasury_counterparty | issuer_counterparty_id | Issuer as counterparty (issuer limits) |
+| currency | char(3) | no |  | currency | Currency |
+| coupon_rate | numeric(18,10) | yes |  | coupon_rate | Coupon rate (empty for discount instruments) |
+| coupon_frequency | integer | yes |  | coupon_frequency | Coupons per year |
+| issue_date | date | yes |  | issue_date | Issue date |
+| maturity_date | date | no |  | maturity_date | Maturity |
+| day_count | varchar(40) (DayCountBasis) | no |  | day_count | Day count |
+| hqla_level | varchar(10) | yes |  | hqla_level | Basel HQLA level: L1, L2A, L2B or NONE |
+| last_price | numeric(18,10) | yes |  | last_price (read-only) | Last clean price (% of nominal) |
+| last_price_date | date | yes |  | last_price_date (read-only) | Price date |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `securities_holding`
+
+Position in a security by portfolio and accounting classification
+
+API: /v1/treasury/holdings · Requirements: TRY-01, GL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| treasury_security_id | uuid | no | FK → treasury_security | treasury_security_id | Security |
+| portfolio | varchar(64) | no |  | portfolio | Portfolio / book |
+| accounting_class | varchar(40) (TreasuryAccountingClass) | no |  | accounting_class | HTM, AFS, FVTPL, ... |
+| nominal | numeric(28,8) | no |  | nominal (read-only) | Face value held |
+| book_value | numeric(28,8) | no |  | book_value (read-only) | Amortised book value |
+| market_value | numeric(28,8) | yes |  | market_value (read-only) | Market value |
+| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued coupon |
+| unrealised_pnl | numeric(28,8) | yes |  | unrealised_pnl (read-only) | Unrealised gain / loss |
+| is_encumbered | boolean | no |  | is_encumbered | Pledged as collateral |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Ledger account |
+| valuation_date | date | yes |  | valuation_date (read-only) | Valuation date |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `securities_trade`
+
+Purchase or sale of a security that changes a holding
+
+API: /v1/treasury/securities-trades · Requirements: TRY-01, GL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| deal_ref | varchar(32) | no | UQ | deal_ref | Trade reference |
+| securities_holding_id | uuid | no | FK → securities_holding | securities_holding_id | Holding affected |
+| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty / broker |
+| buy_sell | varchar(40) (TreasuryBuySell) | no |  | buy_sell | Buy or sell |
+| nominal | numeric(28,8) | no |  | nominal | Nominal traded |
+| clean_price | numeric(18,10) | no |  | clean_price | Clean price (% of nominal) |
+| accrued_interest | numeric(28,8) | no |  | accrued_interest | Accrued interest paid / received |
+| settlement_amount | numeric(28,8) | no |  | settlement_amount | Dirty settlement amount |
+| currency | char(3) | no |  | currency | Currency |
+| trade_date | date | no |  | trade_date | Trade date |
+| settlement_date | date | no |  | settlement_date | Settlement date |
+| dealer_id | uuid | no | ref → app_user | dealer_id | Dealer |
+| status | varchar(40) (TreasuryTradeStatus) | no |  | status (read-only) | Status |
+| realised_pnl | numeric(28,8) | yes |  | realised_pnl (read-only) | Realised P&L on sale |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Settlement posting |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_deal_confirmation`
+
+Confirmation of a treasury deal (SWIFT MT300 FX, MT320 MM, MT541/543 securities) and matching
+
+API: /v1/treasury/confirmations · Requirements: TRY-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| deal_type | varchar(32) | no |  | deal_type | MONEY_MARKET, FX, SECURITY |
+| deal_id | uuid | no |  | deal_id | Deal confirmed |
+| channel | varchar(40) (TreasuryConfirmationChannel) | no |  | channel | Channel |
+| message_type | varchar(16) | yes |  | message_type | MT300, MT320, MT541, MT543, ... |
+| our_reference | varchar(35) | no |  | our_reference | Our SWIFT reference (field 20) |
+| their_reference | varchar(35) | yes |  | their_reference | Counterparty reference |
+| direction | varchar(10) | no |  | direction | OUTBOUND or INBOUND |
+| status | varchar(40) (TreasuryConfirmationStatus) | no |  | status | Matching status |
+| mismatch_fields | jsonb | yes |  | mismatch_fields (read-only) | Fields that did not match |
+| sent_at | timestamptz | yes |  | sent_at (read-only) | Sent time |
+| matched_at | timestamptz | yes |  | matched_at (read-only) | Match time |
+| raw_message_document_id | uuid | yes | ref → document | raw_message_document_id | Stored raw message |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_settlement`
+
+Settlement instruction generated for a treasury deal cash flow
+
+API: /v1/treasury/settlements · Requirements: TRY-01, GL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| deal_type | varchar(32) | no |  | deal_type | MONEY_MARKET, FX, SECURITY |
+| deal_id | uuid | no |  | deal_id | Deal |
+| flow_type | varchar(32) | no |  | flow_type | PRINCIPAL_OUT, PRINCIPAL_IN, INTEREST, FX_PAY, FX_RECEIVE, SECURITY_CASH |
+| direction | varchar(40) (EntryDirection) | no |  | direction | Pay (CREDIT nostro) or receive (DEBIT nostro) |
+| amount | numeric(28,8) | no |  | amount | Amount |
+| currency | char(3) | no |  | currency | Currency |
+| value_date | date | no |  | value_date | Settlement date |
+| treasury_ssi_id | uuid | yes | FK → treasury_ssi | treasury_ssi_id | Counterparty SSI used |
+| nostro_account_id | uuid | yes | ref → nostro_account | nostro_account_id | Our nostro |
+| payment_id | uuid | yes | ref → payment | payment_id | Outgoing payment created |
+| status | varchar(40) (TreasurySettlementStatus) | no |  | status | Status |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
+| failure_reason | varchar(255) | yes |  | failure_reason | Failure reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `liquidity-service` — database `liquidity_db`
+
+Real-time and projected cash positions by currency and nostro, maturity ladders, Basel III LCR and NSFR calculations, intraday liquidity monitoring and liquidity stress testing.
+
+
+#### `liquidity_cash_position`
+
+Actual or projected cash position by currency, nostro and day
+
+API: /v1/treasury/liquidity/positions · Requirements: TRY-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| position_date | date | no |  | position_date | Business date |
+| currency | char(3) | no |  | currency | Currency |
+| nostro_account_id | uuid | yes | ref → nostro_account | nostro_account_id | Nostro (empty = all accounts in the currency) |
+| position_type | varchar(40) (LiquidityPositionType) | no |  | position_type | Actual, projected or forecast |
+| opening_balance | numeric(28,8) | no |  | opening_balance | Opening balance |
+| expected_inflows | numeric(28,8) | no |  | expected_inflows | Expected inflows |
+| expected_outflows | numeric(28,8) | no |  | expected_outflows | Expected outflows |
+| closing_balance | numeric(28,8) | no |  | closing_balance | Closing (projected) balance |
+| minimum_buffer | numeric(28,8) | yes |  | minimum_buffer | Minimum buffer required |
+| shortfall | numeric(28,8) | yes |  | shortfall (read-only) | Buffer shortfall, if any |
+| flows_by_category | jsonb | yes |  | flows_by_category (read-only) | Inflows/outflows by LiquidityFlowCategory |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `liquidity_ladder_run`
+
+A maturity ladder (liquidity gap) computation at an as-of date
+
+API: /v1/treasury/liquidity/ladders · Requirements: TRY-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| as_of_date | date | no |  | as_of_date | As-of date |
+| currency | char(3) | yes |  | currency | Currency (empty = all, in base currency) |
+| behavioural | boolean | no |  | behavioural | Apply behavioural assumptions |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `liquidity_bucket` (append-only)
+
+One time bucket of a maturity ladder with inflows, outflows and cumulative gap
+
+API: internal only · Requirements: TRY-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| liquidity_ladder_run_id | uuid | no | FK → liquidity_ladder_run | liquidity_ladder_run_id | Ladder run |
+| bucket_code | varchar(16) | no |  | bucket_code | O/N, 2-7D, 8-30D, 1-3M, 3-6M, 6-12M, 1-5Y, >5Y |
+| bucket_order | integer | no |  | bucket_order | Display order |
+| start_day | integer | no |  | start_day | First day of the bucket |
+| end_day | integer | yes |  | end_day | Last day (empty = open) |
+| inflows | numeric(28,8) | no |  | inflows | Contractual / behavioural inflows |
+| outflows | numeric(28,8) | no |  | outflows | Outflows |
+| net_gap | numeric(28,8) | no |  | net_gap | Inflows minus outflows |
+| cumulative_gap | numeric(28,8) | no |  | cumulative_gap | Cumulative gap |
+| breakdown | jsonb | yes |  | breakdown | Amounts by flow category |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `lcr_calculation`
+
+Basel III Liquidity Coverage Ratio snapshot
+
+API: /v1/treasury/liquidity/lcr · Requirements: TRY-03, REG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| as_of_date | date | no |  | as_of_date | As-of date |
+| currency | char(3) | no |  | currency | Reporting currency |
+| hqla_level1 | numeric(28,8) | no |  | hqla_level1 | Level 1 HQLA after haircuts |
+| hqla_level2a | numeric(28,8) | no |  | hqla_level2a | Level 2A HQLA after haircuts |
+| hqla_level2b | numeric(28,8) | no |  | hqla_level2b | Level 2B HQLA after haircuts |
+| total_hqla | numeric(28,8) | no |  | total_hqla | Total HQLA after caps |
+| outflows_30d | numeric(28,8) | no |  | outflows_30d | Weighted 30-day outflows |
+| inflows_30d | numeric(28,8) | no |  | inflows_30d | Weighted inflows (capped at 75% of outflows) |
+| net_outflows | numeric(28,8) | no |  | net_outflows | Net cash outflows |
+| lcr_ratio | numeric(18,10) | no |  | lcr_ratio | LCR = HQLA / net outflows |
+| regulatory_minimum | numeric(18,10) | no |  | regulatory_minimum | Minimum ratio |
+| components | jsonb | no |  | components | Line-level components with run-off / inflow factors |
+| status | varchar(40) (LiquidityRatioStatus) | no |  | status | Status |
+| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `nsfr_calculation`
+
+Basel III Net Stable Funding Ratio snapshot
+
+API: /v1/treasury/liquidity/nsfr · Requirements: TRY-03, REG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| as_of_date | date | no |  | as_of_date | As-of date |
+| currency | char(3) | no |  | currency | Reporting currency |
+| available_stable_funding | numeric(28,8) | no |  | available_stable_funding | ASF |
+| required_stable_funding | numeric(28,8) | no |  | required_stable_funding | RSF |
+| nsfr_ratio | numeric(18,10) | no |  | nsfr_ratio | ASF / RSF |
+| regulatory_minimum | numeric(18,10) | no |  | regulatory_minimum | Minimum ratio |
+| components | jsonb | no |  | components | ASF/RSF factors per balance-sheet line |
+| status | varchar(40) (LiquidityRatioStatus) | no |  | status | Status |
+| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `liquidity_stress_scenario`
+
+Definition of a liquidity stress scenario (run-off rates, haircuts, horizon)
+
+API: /v1/treasury/liquidity/stress-scenarios · Requirements: TRY-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no | UQ | code | Scenario code |
+| name | varchar(160) | no |  | name | Name |
+| severity | varchar(40) (LiquidityStressSeverity) | no |  | severity | Severity / type |
+| horizon_days | integer | no |  | horizon_days | Survival horizon |
+| assumptions | jsonb | no |  | assumptions | Deposit run-off, drawdown, haircut and market assumptions |
+| is_active | boolean | no |  | is_active | Active |
+| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `liquidity_stress_result` (append-only)
+
+Outcome of running a stress scenario at an as-of date
+
+API: /v1/treasury/liquidity/stress-results · Requirements: TRY-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| liquidity_stress_scenario_id | uuid | no | FK → liquidity_stress_scenario | liquidity_stress_scenario_id | Scenario |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| as_of_date | date | no |  | as_of_date | As-of date |
+| currency | char(3) | no |  | currency | Currency |
+| stressed_outflows | numeric(28,8) | no |  | stressed_outflows | Stressed outflows over the horizon |
+| counterbalancing_capacity | numeric(28,8) | no |  | counterbalancing_capacity | Liquidity available to cover them |
+| net_position | numeric(28,8) | no |  | net_position | Surplus / shortfall |
+| survival_days | integer | no |  | survival_days | Days until the buffer is exhausted |
+| daily_profile | jsonb | no |  | daily_profile | Day-by-day stressed position |
+| breach | boolean | no |  | breach | Breaches the risk appetite |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `intraday_liquidity_snapshot` (append-only)
+
+Intraday liquidity monitoring per currency and settlement account (BCBS 248)
+
+API: /v1/treasury/liquidity/intraday · Requirements: TRY-03, REG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| snapshot_at | timestamptz | no |  | snapshot_at | Snapshot time |
+| currency | char(3) | no |  | currency | Currency |
+| nostro_account_id | uuid | yes | ref → nostro_account | nostro_account_id | Settlement account |
+| available_liquidity | numeric(28,8) | no |  | available_liquidity | Available intraday liquidity |
+| used_liquidity | numeric(28,8) | no |  | used_liquidity | Liquidity used so far today |
+| largest_negative_position | numeric(28,8) | no |  | largest_negative_position | Largest net negative position so far |
+| payments_sent | numeric(28,8) | no |  | payments_sent | Gross payments sent |
+| payments_received | numeric(28,8) | no |  | payments_received | Gross payments received |
+| throughput_pct | numeric(18,10) | yes |  | throughput_pct | Share of payments settled by this time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+### Service `alm-service` — database `alm_db`
+
+Interest rate risk in the banking book: repricing gap, NII and EVE sensitivity under rate shocks, behavioural assumptions, and funds transfer pricing curves and assignments.
+
+
+#### `alm_behavioural_assumption`
+
+Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+
+API: /v1/treasury/alm/assumptions · Requirements: TRY-04, TRY-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| assumption_type | varchar(40) (AlmAssumptionType) | no |  | assumption_type | Assumption type |
+| product_id | uuid | yes | ref → product | product_id | Product (empty = all products of the segment) |
+| segment | varchar(64) | yes |  | segment | Customer / product segment |
+| currency | char(3) | yes |  | currency | Currency |
+| parameters | jsonb | no |  | parameters | Model parameters, e.g. CPR curve, decay rates, core/volatile split |
+| valid_from | date | no |  | valid_from | Effective from |
+| valid_to | date | yes |  | valid_to | Effective to |
+| model_version | varchar(32) | no |  | model_version | Model version |
+| approved_by | varchar(64) | yes |  | approved_by | Model approver |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `alm_gap_run`
+
+Repricing gap report run at an as-of date
+
+API: /v1/treasury/alm/gap-runs · Requirements: TRY-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| as_of_date | date | no |  | as_of_date | As-of date |
+| currency | char(3) | yes |  | currency | Currency (empty = all, in base currency) |
+| behavioural | boolean | no |  | behavioural | Apply behavioural assumptions |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `alm_gap_bucket` (append-only)
+
+Repricing gap per time bucket (rate-sensitive assets minus liabilities)
+
+API: internal only · Requirements: TRY-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| alm_gap_run_id | uuid | no | FK → alm_gap_run | alm_gap_run_id | Gap run |
+| bucket_code | varchar(16) | no |  | bucket_code | Bucket, e.g. 0-1M, 1-3M, 3-6M, 6-12M, 1-2Y, 2-5Y, >5Y |
+| bucket_order | integer | no |  | bucket_order | Display order |
+| rate_sensitive_assets | numeric(28,8) | no |  | rate_sensitive_assets | Assets repricing in the bucket |
+| rate_sensitive_liabilities | numeric(28,8) | no |  | rate_sensitive_liabilities | Liabilities repricing in the bucket |
+| off_balance_net | numeric(28,8) | no |  | off_balance_net | Off-balance-sheet net position |
+| gap | numeric(28,8) | no |  | gap | Net repricing gap |
+| cumulative_gap | numeric(28,8) | no |  | cumulative_gap | Cumulative gap |
+| breakdown | jsonb | yes |  | breakdown | Amounts by product |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `alm_sensitivity_run`
+
+NII / EVE / EaR sensitivity simulation under a rate shock
+
+API: /v1/treasury/alm/sensitivity-runs · Requirements: TRY-04, REG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
+| as_of_date | date | no |  | as_of_date | As-of date |
+| measure | varchar(40) (AlmMeasure) | no |  | measure | NII, EVE or EaR |
+| shock_type | varchar(40) (AlmShockType) | no |  | shock_type | Shock scenario |
+| shock_bps | integer | yes |  | shock_bps | Parallel shock size in basis points |
+| custom_shock | jsonb | yes |  | custom_shock | Tenor-by-tenor shocks for CUSTOM |
+| horizon_months | integer | no |  | horizon_months | NII horizon |
+| currency | char(3) | no |  | currency | Reporting currency |
+| base_value | numeric(28,8) | yes |  | base_value (read-only) | Base-case NII or EVE |
+| shocked_value | numeric(28,8) | yes |  | shocked_value (read-only) | Shocked NII or EVE |
+| delta | numeric(28,8) | yes |  | delta (read-only) | Change versus base |
+| delta_pct_tier1 | numeric(18,10) | yes |  | delta_pct_tier1 (read-only) | Change as share of Tier 1 capital (EVE outlier test) |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
+| results | jsonb | yes |  | results (read-only) | Detail by product and bucket |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `ftp_curve`
+
+Funds transfer pricing curve per currency, type and effective date
+
+API: /v1/treasury/ftp/curves · Requirements: TRY-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no |  | code | Curve code |
+| currency | char(3) | no |  | currency | Currency |
+| curve_type | varchar(40) (FtpCurveType) | no |  | curve_type | Base, liquidity premium, ... |
+| effective_date | date | no |  | effective_date | Effective date |
+| source | varchar(64) | yes |  | source | Market source / construction method |
+| is_published | boolean | no |  | is_published | Published for use |
+| approved_by | varchar(64) | yes |  | approved_by | ALCO approver |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `ftp_curve_point`
+
+Tenor point on an FTP curve
+
+API: /v1/treasury/ftp/curve-points · Requirements: TRY-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| ftp_curve_id | uuid | no | FK → ftp_curve | ftp_curve_id | Curve |
+| tenor_days | integer | no |  | tenor_days | Tenor in days |
+| tenor_label | varchar(8) | no |  | tenor_label | Tenor label, e.g. 3M |
+| rate | numeric(18,10) | no |  | rate | Rate at the tenor |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `ftp_rule`
+
+Rule assigning an FTP method and curves to products / segments
+
+API: /v1/treasury/ftp/rules · Requirements: TRY-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| product_id | uuid | yes | ref → product | product_id | Product (empty = default) |
+| segment | varchar(64) | yes |  | segment | Segment |
+| currency | char(3) | yes |  | currency | Currency |
+| method | varchar(40) (FtpMethod) | no |  | method | Pricing method |
+| base_curve_code | varchar(32) | no |  | base_curve_code | Base curve code |
+| liquidity_curve_code | varchar(32) | yes |  | liquidity_curve_code | Liquidity premium curve code |
+| fixed_spread | numeric(18,10) | yes |  | fixed_spread | Spread for FIXED_SPREAD method |
+| priority | integer | no |  | priority | Lower wins |
+| valid_from | date | no |  | valid_from | Effective from |
+| valid_to | date | yes |  | valid_to | Effective to |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `ftp_assignment` (append-only)
+
+FTP rate and margin assigned to an account or loan for a period
+
+API: /v1/treasury/ftp/assignments · Requirements: TRY-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| period_start | date | no |  | period_start | Period start |
+| period_end | date | no |  | period_end | Period end |
+| exposure_type | varchar(32) | no |  | exposure_type | DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE |
+| exposure_id | uuid | no |  | exposure_id | Account or loan id |
+| deposit_account_id | uuid | yes | ref → deposit_account | deposit_account_id | Deposit account, when applicable |
+| loan_id | uuid | yes | ref → loan | loan_id | Loan, when applicable |
+| product_id | uuid | yes | ref → product | product_id | Product |
+| ftp_rule_id | uuid | yes | FK → ftp_rule | ftp_rule_id | Rule applied |
+| average_balance | numeric(28,8) | no |  | average_balance | Average balance for the period |
+| currency | char(3) | no |  | currency | Currency |
+| customer_rate | numeric(18,10) | no |  | customer_rate | Rate paid / earned with the customer |
+| ftp_rate | numeric(18,10) | no |  | ftp_rate | Transfer price |
+| net_margin | numeric(18,10) | no |  | net_margin | Customer rate minus FTP (sign by side) |
+| ftp_charge_credit | numeric(28,8) | no |  | ftp_charge_credit | FTP charge (loans) or credit (deposits) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ## Wallets, Agents and Merchants (`wallets`)
 
 Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue, bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P and bulk disbursements; interoperability with national switches and other wallets. Every money movement posts through the ledger.
@@ -11887,7 +14589,7 @@ API: /v1/wallet-transactions · Requirements: WAL-01, WAL-02, WAL-05, WAL-06, WA
 | original_transaction_id | uuid | yes | FK → wallet_transaction | original_transaction_id | Transaction reversed or refunded |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
 | hold_id | uuid | yes | ref → hold | hold_id (read-only) | Funds hold while pending confirmation |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | description | varchar(255) | yes |  | description | Narrative |
 | customer_note | varchar(160) | yes |  | customer_note | Note from payer to payee |
 | confirmation_expires_at | timestamptz | yes |  | confirmation_expires_at (read-only) | Deadline for PIN/OTP confirmation |
@@ -12746,7 +15448,7 @@ API: /v1/bill-payments · Requirements: WAL-05
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
 | biller_settlement_id | uuid | yes | FK → biller_settlement | biller_settlement_id (read-only) | Settlement that paid it out |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12779,7 +15481,7 @@ API: /v1/airtime-topups · Requirements: WAL-05
 | provider_reference | varchar(64) | yes |  | provider_reference (read-only) | Operator reference |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13056,7 +15758,7 @@ API: /v1/merchant-refunds · Requirements: WAL-06
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
 | wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id (read-only) | Refund transaction |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13513,7 +16215,7 @@ API: /v1/interop-transfers · Requirements: WAL-08, PAY-01
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | error_code | varchar(32) | yes |  | error_code (read-only) | Switch error code |
 | error_description | varchar(255) | yes |  | error_description (read-only) | Error description |
-| idempotency_key | varchar(128) | no |  | idempotency_key | Client key |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

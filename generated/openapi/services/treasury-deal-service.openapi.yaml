@@ -1,0 +1,7084 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    MoneyMarketDeal:
+      description: Money market placement, borrowing, call, repo or CD with full lifecycle
+      properties:
+        accrued_interest:
+          description: Accrued interest to date
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        cancel_reason:
+          description: Cancellation reason
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        collateral_description:
+          description: Repo collateral details
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        day_count:
+          description: Day-count basis
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+          type: string
+        deal_ref:
+          description: Deal reference
+          maxLength: 32
+          type: string
+        deal_type:
+          description: Placement, borrowing, repo, ...
+          enum:
+          - PLACEMENT
+          - BORROWING
+          - CALL_PLACEMENT
+          - CALL_BORROWING
+          - REPO
+          - REVERSE_REPO
+          - CD_ISSUED
+          - CD_PURCHASED
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interest_amount:
+          description: Interest to maturity
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        interest_rate:
+          description: All-in rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        is_call:
+          description: Call (open-ended) deal
+          type: boolean
+        ledger_account_id:
+          description: Ledger account carrying the deal
+          format: uuid
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Booking entity
+          format: uuid
+          type: string
+        maturity_date:
+          description: Maturity date (empty for call deals)
+          format: date
+          type:
+          - string
+          - 'null'
+        maturity_journal_entry_id:
+          description: Posting on maturity
+          format: uuid
+          type:
+          - string
+          - 'null'
+        notice_days:
+          description: Notice period for call deals
+          format: int32
+          type:
+          - integer
+          - 'null'
+        principal:
+          description: Principal amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rate_index:
+          description: Index for floating deals, e.g. SOFR
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        rate_type:
+          description: Fixed or floating
+          enum:
+          - FIXED
+          - FLOATING
+          type: string
+        rolled_from_deal_id:
+          description: Previous deal when rolled
+          format: uuid
+          type:
+          - string
+          - 'null'
+        rollover_type:
+          description: Rollover instruction
+          enum:
+          - NONE
+          - PRINCIPAL_ONLY
+          - PRINCIPAL_AND_INTEREST
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        settlement_journal_entry_id:
+          description: Posting on settlement
+          format: uuid
+          type:
+          - string
+          - 'null'
+        spread:
+          description: Spread over index
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        status:
+          description: Lifecycle status
+          enum:
+          - CAPTURED
+          - VERIFIED
+          - CONFIRMED
+          - SETTLED
+          - MATURED
+          - CANCELLED
+          - AMENDED
+          readOnly: true
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value_date:
+          description: Value (start) date
+          format: date
+          type: string
+        verified_by:
+          description: Back-office verifier
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deal_ref
+      - legal_entity_id
+      - treasury_counterparty_id
+      - deal_type
+      - currency
+      - principal
+      - trade_date
+      - value_date
+      - is_call
+      - rate_type
+      - interest_rate
+      - day_count
+      - accrued_interest
+      - rollover_type
+      - dealer_id
+      - status
+      type: object
+    MoneyMarketDealCreate:
+      properties:
+        cancel_reason:
+          description: Cancellation reason
+          maxLength: 255
+          type: string
+        collateral_description:
+          description: Repo collateral details
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        day_count:
+          description: Day-count basis
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+          type: string
+        deal_ref:
+          description: Deal reference
+          maxLength: 32
+          type: string
+        deal_type:
+          description: Placement, borrowing, repo, ...
+          enum:
+          - PLACEMENT
+          - BORROWING
+          - CALL_PLACEMENT
+          - CALL_BORROWING
+          - REPO
+          - REVERSE_REPO
+          - CD_ISSUED
+          - CD_PURCHASED
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        interest_rate:
+          description: All-in rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        is_call:
+          description: Call (open-ended) deal
+          type: boolean
+        ledger_account_id:
+          description: Ledger account carrying the deal
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Booking entity
+          format: uuid
+          type: string
+        maturity_date:
+          description: Maturity date (empty for call deals)
+          format: date
+          type: string
+        maturity_journal_entry_id:
+          description: Posting on maturity
+          format: uuid
+          type: string
+        notice_days:
+          description: Notice period for call deals
+          format: int32
+          type: integer
+        principal:
+          description: Principal amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rate_index:
+          description: Index for floating deals, e.g. SOFR
+          maxLength: 32
+          type: string
+        rate_type:
+          description: Fixed or floating
+          enum:
+          - FIXED
+          - FLOATING
+          type: string
+        rolled_from_deal_id:
+          description: Previous deal when rolled
+          format: uuid
+          type: string
+        rollover_type:
+          description: Rollover instruction
+          enum:
+          - NONE
+          - PRINCIPAL_ONLY
+          - PRINCIPAL_AND_INTEREST
+          type: string
+        settlement_journal_entry_id:
+          description: Posting on settlement
+          format: uuid
+          type: string
+        spread:
+          description: Spread over index
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        value_date:
+          description: Value (start) date
+          format: date
+          type: string
+      required:
+      - deal_ref
+      - legal_entity_id
+      - treasury_counterparty_id
+      - deal_type
+      - currency
+      - principal
+      - trade_date
+      - value_date
+      - interest_rate
+      - dealer_id
+      type: object
+    MoneyMarketDealPage:
+      description: One page of MoneyMarketDeal results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MoneyMarketDeal'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    MoneyMarketDealUpdate:
+      properties:
+        cancel_reason:
+          description: Cancellation reason
+          maxLength: 255
+          type: string
+        collateral_description:
+          description: Repo collateral details
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        day_count:
+          description: Day-count basis
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+          type: string
+        deal_ref:
+          description: Deal reference
+          maxLength: 32
+          type: string
+        deal_type:
+          description: Placement, borrowing, repo, ...
+          enum:
+          - PLACEMENT
+          - BORROWING
+          - CALL_PLACEMENT
+          - CALL_BORROWING
+          - REPO
+          - REVERSE_REPO
+          - CD_ISSUED
+          - CD_PURCHASED
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        interest_rate:
+          description: All-in rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        is_call:
+          description: Call (open-ended) deal
+          type: boolean
+        ledger_account_id:
+          description: Ledger account carrying the deal
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Booking entity
+          format: uuid
+          type: string
+        maturity_date:
+          description: Maturity date (empty for call deals)
+          format: date
+          type: string
+        maturity_journal_entry_id:
+          description: Posting on maturity
+          format: uuid
+          type: string
+        notice_days:
+          description: Notice period for call deals
+          format: int32
+          type: integer
+        principal:
+          description: Principal amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rate_index:
+          description: Index for floating deals, e.g. SOFR
+          maxLength: 32
+          type: string
+        rate_type:
+          description: Fixed or floating
+          enum:
+          - FIXED
+          - FLOATING
+          type: string
+        rolled_from_deal_id:
+          description: Previous deal when rolled
+          format: uuid
+          type: string
+        rollover_type:
+          description: Rollover instruction
+          enum:
+          - NONE
+          - PRINCIPAL_ONLY
+          - PRINCIPAL_AND_INTEREST
+          type: string
+        settlement_journal_entry_id:
+          description: Posting on settlement
+          format: uuid
+          type: string
+        spread:
+          description: Spread over index
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        value_date:
+          description: Value (start) date
+          format: date
+          type: string
+      type: object
+    MoneyMarketDealsAccrueRequest:
+      properties:
+        as_of:
+          format: date
+          type: string
+      required:
+      - as_of
+      type: object
+    MoneyMarketDealsCallRequest:
+      properties:
+        call_date:
+          format: date
+          type: string
+      required:
+      - call_date
+      type: object
+    MoneyMarketDealsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    MoneyMarketDealsRolloverRequest:
+      properties:
+        new_maturity_date:
+          format: date
+          type: string
+        new_rate:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rollover_type:
+          enum:
+          - NONE
+          - PRINCIPAL_ONLY
+          - PRINCIPAL_AND_INTEREST
+          type: string
+      required:
+      - new_rate
+      - rollover_type
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    SecuritiesHolding:
+      description: Position in a security by portfolio and accounting classification
+      properties:
+        accounting_class:
+          description: HTM, AFS, FVTPL, ...
+          enum:
+          - HTM
+          - AFS
+          - FVTPL
+          - AMORTISED_COST
+          - FVOCI
+          type: string
+        accrued_interest:
+          description: Accrued coupon
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        book_value:
+          description: Amortised book value
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_encumbered:
+          description: Pledged as collateral
+          type: boolean
+        ledger_account_id:
+          description: Ledger account
+          format: uuid
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Entity
+          format: uuid
+          type: string
+        market_value:
+          description: Market value
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        nominal:
+          description: Face value held
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        portfolio:
+          description: Portfolio / book
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        treasury_security_id:
+          description: Security
+          format: uuid
+          type: string
+        unrealised_pnl:
+          description: Unrealised gain / loss
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valuation_date:
+          description: Valuation date
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - treasury_security_id
+      - portfolio
+      - accounting_class
+      - nominal
+      - book_value
+      - accrued_interest
+      - is_encumbered
+      type: object
+    SecuritiesHoldingPage:
+      description: One page of SecuritiesHolding results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SecuritiesHolding'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SecuritiesHoldingsEncumberRequest:
+      properties:
+        is_encumbered:
+          type: boolean
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - is_encumbered
+      type: object
+    SecuritiesHoldingsRevalueRequest:
+      properties:
+        legal_entity_id:
+          format: uuid
+          type: string
+        valuation_date:
+          format: date
+          type: string
+      required:
+      - valuation_date
+      - legal_entity_id
+      type: object
+    SecuritiesTrade:
+      description: Purchase or sale of a security that changes a holding
+      properties:
+        accrued_interest:
+          description: Accrued interest paid / received
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        buy_sell:
+          description: Buy or sell
+          enum:
+          - BUY
+          - SELL
+          type: string
+        clean_price:
+          description: Clean price (% of nominal)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deal_ref:
+          description: Trade reference
+          maxLength: 32
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Settlement posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        nominal:
+          description: Nominal traded
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        realised_pnl:
+          description: Realised P&L on sale
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        securities_holding_id:
+          description: Holding affected
+          format: uuid
+          type: string
+        settlement_amount:
+          description: Dirty settlement amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        settlement_date:
+          description: Settlement date
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - SETTLED
+          - MATURED
+          - SOLD
+          - CANCELLED
+          readOnly: true
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty / broker
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deal_ref
+      - securities_holding_id
+      - treasury_counterparty_id
+      - buy_sell
+      - nominal
+      - clean_price
+      - accrued_interest
+      - settlement_amount
+      - currency
+      - trade_date
+      - settlement_date
+      - dealer_id
+      - status
+      type: object
+    SecuritiesTradeCreate:
+      properties:
+        accrued_interest:
+          description: Accrued interest paid / received
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        buy_sell:
+          description: Buy or sell
+          enum:
+          - BUY
+          - SELL
+          type: string
+        clean_price:
+          description: Clean price (% of nominal)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        deal_ref:
+          description: Trade reference
+          maxLength: 32
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        journal_entry_id:
+          description: Settlement posting
+          format: uuid
+          type: string
+        nominal:
+          description: Nominal traded
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        securities_holding_id:
+          description: Holding affected
+          format: uuid
+          type: string
+        settlement_amount:
+          description: Dirty settlement amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        settlement_date:
+          description: Settlement date
+          format: date
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty / broker
+          format: uuid
+          type: string
+      required:
+      - deal_ref
+      - securities_holding_id
+      - treasury_counterparty_id
+      - buy_sell
+      - nominal
+      - clean_price
+      - accrued_interest
+      - settlement_amount
+      - currency
+      - trade_date
+      - settlement_date
+      - dealer_id
+      type: object
+    SecuritiesTradePage:
+      description: One page of SecuritiesTrade results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SecuritiesTrade'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SecuritiesTradesCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    TreasuryConfirmationsDisputeRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    TreasuryConfirmationsMatchRequest:
+      properties:
+        deal_id:
+          format: uuid
+          type: string
+      required:
+      - deal_id
+      type: object
+    TreasuryCounterpartiesApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    TreasuryCounterpartiesSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    TreasuryCounterparty:
+      description: Treasury counterparty (bank, central bank, broker, corporate) with identifiers and rating
+      properties:
+        approval_request_id:
+          description: Onboarding approval
+          format: uuid
+          type:
+          - string
+          - 'null'
+        bic:
+          description: SWIFT BIC
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        code:
+          description: Short code
+          maxLength: 32
+          type: string
+        counterparty_type:
+          description: Type
+          enum:
+          - BANK
+          - CENTRAL_BANK
+          - BROKER
+          - CORPORATE
+          - FUND
+          - SOVEREIGN
+          - SUPRANATIONAL
+          - INTERNAL
+          type: string
+        country_code:
+          description: Country of incorporation (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        csa_signed:
+          description: Credit support annex in place
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        external_rating:
+          description: External credit rating, e.g. AA-
+          maxLength: 10
+          type:
+          - string
+          - 'null'
+        gmra_signed:
+          description: GMRA in place (repos)
+          type: boolean
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        internal_rating:
+          description: Internal rating grade
+          maxLength: 10
+          type:
+          - string
+          - 'null'
+        isda_signed:
+          description: ISDA master agreement in place
+          type: boolean
+        legal_entity_id:
+          description: Our legal entity dealing with the counterparty
+          format: uuid
+          type: string
+        lei:
+          description: Legal Entity Identifier
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        name:
+          description: Legal name
+          maxLength: 200
+          type: string
+        notes:
+          description: Notes
+          type:
+          - string
+          - 'null'
+        parent_counterparty_id:
+          description: Group parent for aggregated limits
+          format: uuid
+          type:
+          - string
+          - 'null'
+        rating_agency:
+          description: Agency for the rating
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - code
+      - name
+      - counterparty_type
+      - country_code
+      - isda_signed
+      - csa_signed
+      - gmra_signed
+      - status
+      type: object
+    TreasuryCounterpartyCreate:
+      properties:
+        approval_request_id:
+          description: Onboarding approval
+          format: uuid
+          type: string
+        bic:
+          description: SWIFT BIC
+          maxLength: 11
+          type: string
+        code:
+          description: Short code
+          maxLength: 32
+          type: string
+        counterparty_type:
+          description: Type
+          enum:
+          - BANK
+          - CENTRAL_BANK
+          - BROKER
+          - CORPORATE
+          - FUND
+          - SOVEREIGN
+          - SUPRANATIONAL
+          - INTERNAL
+          type: string
+        country_code:
+          description: Country of incorporation (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        csa_signed:
+          description: Credit support annex in place
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        external_rating:
+          description: External credit rating, e.g. AA-
+          maxLength: 10
+          type: string
+        gmra_signed:
+          description: GMRA in place (repos)
+          type: boolean
+        internal_rating:
+          description: Internal rating grade
+          maxLength: 10
+          type: string
+        isda_signed:
+          description: ISDA master agreement in place
+          type: boolean
+        legal_entity_id:
+          description: Our legal entity dealing with the counterparty
+          format: uuid
+          type: string
+        lei:
+          description: Legal Entity Identifier
+          maxLength: 20
+          type: string
+        name:
+          description: Legal name
+          maxLength: 200
+          type: string
+        notes:
+          description: Notes
+          type: string
+        parent_counterparty_id:
+          description: Group parent for aggregated limits
+          format: uuid
+          type: string
+        rating_agency:
+          description: Agency for the rating
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+      required:
+      - legal_entity_id
+      - code
+      - name
+      - counterparty_type
+      - country_code
+      type: object
+    TreasuryCounterpartyLimit:
+      description: Credit / settlement / tenor limit on a counterparty (or its group)
+      properties:
+        approved_by:
+          description: Credit approver
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        available_amount:
+          description: Limit minus utilisation
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Limit currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        limit_amount:
+          description: Approved limit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        limit_type:
+          description: Limit type
+          enum:
+          - SETTLEMENT
+          - PRE_SETTLEMENT
+          - MONEY_MARKET
+          - FX
+          - ISSUER
+          - COUNTRY
+          - TENOR
+          type: string
+        max_tenor_days:
+          description: Maximum tenor allowed
+          format: int32
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - EXPIRED
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        utilised_amount:
+          description: Current utilisation
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Expiry
+          format: date
+          type:
+          - string
+          - 'null'
+        warning_threshold_pct:
+          description: Warn at this share of the limit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - treasury_counterparty_id
+      - limit_type
+      - currency
+      - limit_amount
+      - utilised_amount
+      - available_amount
+      - warning_threshold_pct
+      - valid_from
+      - status
+      type: object
+    TreasuryCounterpartyLimitCreate:
+      properties:
+        approved_by:
+          description: Credit approver
+          maxLength: 64
+          type: string
+        currency:
+          description: Limit currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        limit_amount:
+          description: Approved limit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        limit_type:
+          description: Limit type
+          enum:
+          - SETTLEMENT
+          - PRE_SETTLEMENT
+          - MONEY_MARKET
+          - FX
+          - ISSUER
+          - COUNTRY
+          - TENOR
+          type: string
+        max_tenor_days:
+          description: Maximum tenor allowed
+          format: int32
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - EXPIRED
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Expiry
+          format: date
+          type: string
+        warning_threshold_pct:
+          description: Warn at this share of the limit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - treasury_counterparty_id
+      - limit_type
+      - currency
+      - limit_amount
+      - valid_from
+      type: object
+    TreasuryCounterpartyLimitPage:
+      description: One page of TreasuryCounterpartyLimit results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasuryCounterpartyLimit'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasuryCounterpartyLimitUpdate:
+      properties:
+        approved_by:
+          description: Credit approver
+          maxLength: 64
+          type: string
+        currency:
+          description: Limit currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        limit_amount:
+          description: Approved limit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        limit_type:
+          description: Limit type
+          enum:
+          - SETTLEMENT
+          - PRE_SETTLEMENT
+          - MONEY_MARKET
+          - FX
+          - ISSUER
+          - COUNTRY
+          - TENOR
+          type: string
+        max_tenor_days:
+          description: Maximum tenor allowed
+          format: int32
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - EXPIRED
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Expiry
+          format: date
+          type: string
+        warning_threshold_pct:
+          description: Warn at this share of the limit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      type: object
+    TreasuryCounterpartyLimitsCheckRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+        limit_type:
+          enum:
+          - SETTLEMENT
+          - PRE_SETTLEMENT
+          - MONEY_MARKET
+          - FX
+          - ISSUER
+          - COUNTRY
+          - TENOR
+          type: string
+        tenor_days:
+          format: int32
+          type: integer
+        treasury_counterparty_id:
+          format: uuid
+          type: string
+      required:
+      - treasury_counterparty_id
+      - limit_type
+      - amount
+      - currency
+      type: object
+    TreasuryCounterpartyPage:
+      description: One page of TreasuryCounterparty results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasuryCounterparty'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasuryCounterpartyUpdate:
+      properties:
+        approval_request_id:
+          description: Onboarding approval
+          format: uuid
+          type: string
+        bic:
+          description: SWIFT BIC
+          maxLength: 11
+          type: string
+        code:
+          description: Short code
+          maxLength: 32
+          type: string
+        counterparty_type:
+          description: Type
+          enum:
+          - BANK
+          - CENTRAL_BANK
+          - BROKER
+          - CORPORATE
+          - FUND
+          - SOVEREIGN
+          - SUPRANATIONAL
+          - INTERNAL
+          type: string
+        country_code:
+          description: Country of incorporation (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        csa_signed:
+          description: Credit support annex in place
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        external_rating:
+          description: External credit rating, e.g. AA-
+          maxLength: 10
+          type: string
+        gmra_signed:
+          description: GMRA in place (repos)
+          type: boolean
+        internal_rating:
+          description: Internal rating grade
+          maxLength: 10
+          type: string
+        isda_signed:
+          description: ISDA master agreement in place
+          type: boolean
+        legal_entity_id:
+          description: Our legal entity dealing with the counterparty
+          format: uuid
+          type: string
+        lei:
+          description: Legal Entity Identifier
+          maxLength: 20
+          type: string
+        name:
+          description: Legal name
+          maxLength: 200
+          type: string
+        notes:
+          description: Notes
+          type: string
+        parent_counterparty_id:
+          description: Group parent for aggregated limits
+          format: uuid
+          type: string
+        rating_agency:
+          description: Agency for the rating
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+      type: object
+    TreasuryDealConfirmation:
+      description: Confirmation of a treasury deal (SWIFT MT300 FX, MT320 MM, MT541/543 securities) and matching
+      properties:
+        channel:
+          description: Channel
+          enum:
+          - SWIFT
+          - EMAIL
+          - PLATFORM
+          - MANUAL
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deal_id:
+          description: Deal confirmed
+          format: uuid
+          type: string
+        deal_type:
+          description: MONEY_MARKET, FX, SECURITY
+          maxLength: 32
+          type: string
+        direction:
+          description: OUTBOUND or INBOUND
+          maxLength: 10
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        matched_at:
+          description: Match time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        message_type:
+          description: MT300, MT320, MT541, MT543, ...
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        mismatch_fields:
+          additionalProperties: true
+          description: Fields that did not match
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        our_reference:
+          description: Our SWIFT reference (field 20)
+          maxLength: 35
+          type: string
+        raw_message_document_id:
+          description: Stored raw message
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sent_at:
+          description: Sent time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Matching status
+          enum:
+          - PENDING
+          - SENT
+          - RECEIVED
+          - MATCHED
+          - UNMATCHED
+          - DISPUTED
+          - CANCELLED
+          type: string
+        their_reference:
+          description: Counterparty reference
+          maxLength: 35
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deal_type
+      - deal_id
+      - channel
+      - our_reference
+      - direction
+      - status
+      type: object
+    TreasuryDealConfirmationCreate:
+      properties:
+        channel:
+          description: Channel
+          enum:
+          - SWIFT
+          - EMAIL
+          - PLATFORM
+          - MANUAL
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        deal_id:
+          description: Deal confirmed
+          format: uuid
+          type: string
+        deal_type:
+          description: MONEY_MARKET, FX, SECURITY
+          maxLength: 32
+          type: string
+        direction:
+          description: OUTBOUND or INBOUND
+          maxLength: 10
+          type: string
+        message_type:
+          description: MT300, MT320, MT541, MT543, ...
+          maxLength: 16
+          type: string
+        our_reference:
+          description: Our SWIFT reference (field 20)
+          maxLength: 35
+          type: string
+        raw_message_document_id:
+          description: Stored raw message
+          format: uuid
+          type: string
+        status:
+          description: Matching status
+          enum:
+          - PENDING
+          - SENT
+          - RECEIVED
+          - MATCHED
+          - UNMATCHED
+          - DISPUTED
+          - CANCELLED
+          type: string
+        their_reference:
+          description: Counterparty reference
+          maxLength: 35
+          type: string
+      required:
+      - deal_type
+      - deal_id
+      - our_reference
+      - direction
+      type: object
+    TreasuryDealConfirmationPage:
+      description: One page of TreasuryDealConfirmation results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasuryDealConfirmation'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasuryFxDeal:
+      description: Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+      properties:
+        cancel_reason:
+          description: Cancellation reason
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deal_ref:
+          description: Deal reference
+          maxLength: 32
+          type: string
+        deal_type:
+          description: Spot, forward, swap or NDF
+          enum:
+          - SPOT
+          - FORWARD
+          - SWAP
+          - NDF
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        fixing_date:
+          description: NDF fixing date
+          format: date
+          type:
+          - string
+          - 'null'
+        fixing_source:
+          description: NDF fixing source
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Booking entity
+          format: uuid
+          type: string
+        mtm_date:
+          description: Valuation date
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        mtm_value:
+          description: Latest mark-to-market in base currency
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Lifecycle status
+          enum:
+          - CAPTURED
+          - VERIFIED
+          - CONFIRMED
+          - SETTLED
+          - MATURED
+          - CANCELLED
+          - AMENDED
+          readOnly: true
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified_by:
+          description: Back-office verifier
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deal_ref
+      - legal_entity_id
+      - treasury_counterparty_id
+      - deal_type
+      - trade_date
+      - dealer_id
+      - status
+      type: object
+    TreasuryFxDealCreate:
+      properties:
+        cancel_reason:
+          description: Cancellation reason
+          maxLength: 255
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        deal_ref:
+          description: Deal reference
+          maxLength: 32
+          type: string
+        deal_type:
+          description: Spot, forward, swap or NDF
+          enum:
+          - SPOT
+          - FORWARD
+          - SWAP
+          - NDF
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        fixing_date:
+          description: NDF fixing date
+          format: date
+          type: string
+        fixing_source:
+          description: NDF fixing source
+          maxLength: 64
+          type: string
+        legal_entity_id:
+          description: Booking entity
+          format: uuid
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+      required:
+      - deal_ref
+      - legal_entity_id
+      - treasury_counterparty_id
+      - deal_type
+      - trade_date
+      - dealer_id
+      type: object
+    TreasuryFxDealLeg:
+      description: A leg of a treasury FX deal (one for spot/forward, two for swaps)
+      properties:
+        base_amount:
+          description: Base amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        base_currency:
+          description: Base currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        buy_sell:
+          description: Our direction on the base currency
+          enum:
+          - BUY
+          - SELL
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deal_rate:
+          description: All-in rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        forward_points:
+          description: Forward points
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Settlement posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        leg_type:
+          description: Near or far leg
+          enum:
+          - NEAR
+          - FAR
+          type: string
+        quote_amount:
+          description: Quote amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        quote_currency:
+          description: Quote currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        settlement_status:
+          description: Settlement status
+          enum:
+          - PENDING
+          - INSTRUCTED
+          - SETTLED
+          - FAILED
+          - CANCELLED
+          readOnly: true
+          type: string
+        spot_rate:
+          description: Spot component
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        treasury_fx_deal_id:
+          description: Deal
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value_date:
+          description: Settlement date
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - treasury_fx_deal_id
+      - leg_type
+      - buy_sell
+      - base_currency
+      - base_amount
+      - quote_currency
+      - quote_amount
+      - deal_rate
+      - value_date
+      - settlement_status
+      type: object
+    TreasuryFxDealLegPage:
+      description: One page of TreasuryFxDealLeg results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasuryFxDealLeg'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasuryFxDealPage:
+      description: One page of TreasuryFxDeal results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasuryFxDeal'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasuryFxDealUpdate:
+      properties:
+        cancel_reason:
+          description: Cancellation reason
+          maxLength: 255
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        deal_ref:
+          description: Deal reference
+          maxLength: 32
+          type: string
+        deal_type:
+          description: Spot, forward, swap or NDF
+          enum:
+          - SPOT
+          - FORWARD
+          - SWAP
+          - NDF
+          type: string
+        dealer_id:
+          description: Dealer
+          format: uuid
+          type: string
+        fixing_date:
+          description: NDF fixing date
+          format: date
+          type: string
+        fixing_source:
+          description: NDF fixing source
+          maxLength: 64
+          type: string
+        legal_entity_id:
+          description: Booking entity
+          format: uuid
+          type: string
+        trade_date:
+          description: Trade date
+          format: date
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+      type: object
+    TreasuryFxDealsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    TreasuryFxDealsRevalueRequest:
+      properties:
+        valuation_date:
+          format: date
+          type: string
+      required:
+      - valuation_date
+      type: object
+    TreasuryFxDealsSettleRequest:
+      properties:
+        leg_type:
+          enum:
+          - NEAR
+          - FAR
+          type: string
+      required:
+      - leg_type
+      type: object
+    TreasuryLimitUtilisation:
+      description: Immutable record of a deal consuming or releasing a counterparty limit
+      properties:
+        amount:
+          description: Utilisation change (negative releases)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        breach:
+          description: Change breached the limit
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deal_id:
+          description: Deal consuming the limit
+          format: uuid
+          type: string
+        deal_type:
+          description: MONEY_MARKET, FX, SECURITY
+          maxLength: 32
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        override_approval_id:
+          description: Approval for a breach
+          format: uuid
+          type:
+          - string
+          - 'null'
+        treasury_counterparty_limit_id:
+          description: Limit
+          format: uuid
+          type: string
+        utilised_after:
+          description: Utilisation after this change
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - treasury_counterparty_limit_id
+      - deal_type
+      - deal_id
+      - amount
+      - currency
+      - utilised_after
+      - breach
+      type: object
+    TreasuryLimitUtilisationPage:
+      description: One page of TreasuryLimitUtilisation results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasuryLimitUtilisation'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasurySecuritiesPricesRequest:
+      properties:
+        price:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        price_date:
+          format: date
+          type: string
+      required:
+      - price
+      - price_date
+      type: object
+    TreasurySecurity:
+      description: Security master record (bonds, bills, CP, CDs)
+      properties:
+        coupon_frequency:
+          description: Coupons per year
+          format: int32
+          type:
+          - integer
+          - 'null'
+        coupon_rate:
+          description: Coupon rate (empty for discount instruments)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        day_count:
+          description: Day count
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+          type: string
+        hqla_level:
+          description: 'Basel HQLA level: L1, L2A, L2B or NONE'
+          maxLength: 10
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        isin:
+          description: ISIN
+          maxLength: 12
+          type: string
+        issue_date:
+          description: Issue date
+          format: date
+          type:
+          - string
+          - 'null'
+        issuer_counterparty_id:
+          description: Issuer as counterparty (issuer limits)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        issuer_name:
+          description: Issuer
+          maxLength: 200
+          type: string
+        last_price:
+          description: Last clean price (% of nominal)
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        last_price_date:
+          description: Price date
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        maturity_date:
+          description: Maturity
+          format: date
+          type: string
+        name:
+          description: Security name
+          maxLength: 200
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        security_type:
+          description: Type
+          enum:
+          - GOVERNMENT_BOND
+          - TREASURY_BILL
+          - CORPORATE_BOND
+          - COVERED_BOND
+          - SUPRANATIONAL_BOND
+          - COMMERCIAL_PAPER
+          - CERTIFICATE_OF_DEPOSIT
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - isin
+      - name
+      - security_type
+      - issuer_name
+      - currency
+      - maturity_date
+      - day_count
+      type: object
+    TreasurySecurityCreate:
+      properties:
+        coupon_frequency:
+          description: Coupons per year
+          format: int32
+          type: integer
+        coupon_rate:
+          description: Coupon rate (empty for discount instruments)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        day_count:
+          description: Day count
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+          type: string
+        hqla_level:
+          description: 'Basel HQLA level: L1, L2A, L2B or NONE'
+          maxLength: 10
+          type: string
+        isin:
+          description: ISIN
+          maxLength: 12
+          type: string
+        issue_date:
+          description: Issue date
+          format: date
+          type: string
+        issuer_counterparty_id:
+          description: Issuer as counterparty (issuer limits)
+          format: uuid
+          type: string
+        issuer_name:
+          description: Issuer
+          maxLength: 200
+          type: string
+        maturity_date:
+          description: Maturity
+          format: date
+          type: string
+        name:
+          description: Security name
+          maxLength: 200
+          type: string
+        security_type:
+          description: Type
+          enum:
+          - GOVERNMENT_BOND
+          - TREASURY_BILL
+          - CORPORATE_BOND
+          - COVERED_BOND
+          - SUPRANATIONAL_BOND
+          - COMMERCIAL_PAPER
+          - CERTIFICATE_OF_DEPOSIT
+          type: string
+      required:
+      - isin
+      - name
+      - security_type
+      - issuer_name
+      - currency
+      - maturity_date
+      type: object
+    TreasurySecurityPage:
+      description: One page of TreasurySecurity results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasurySecurity'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasurySecurityUpdate:
+      properties:
+        coupon_frequency:
+          description: Coupons per year
+          format: int32
+          type: integer
+        coupon_rate:
+          description: Coupon rate (empty for discount instruments)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        day_count:
+          description: Day count
+          enum:
+          - ACT_360
+          - ACT_365
+          - ACT_365L
+          - ACT_ACT_ISDA
+          - THIRTY_360
+          - THIRTY_E_360
+          type: string
+        hqla_level:
+          description: 'Basel HQLA level: L1, L2A, L2B or NONE'
+          maxLength: 10
+          type: string
+        isin:
+          description: ISIN
+          maxLength: 12
+          type: string
+        issue_date:
+          description: Issue date
+          format: date
+          type: string
+        issuer_counterparty_id:
+          description: Issuer as counterparty (issuer limits)
+          format: uuid
+          type: string
+        issuer_name:
+          description: Issuer
+          maxLength: 200
+          type: string
+        maturity_date:
+          description: Maturity
+          format: date
+          type: string
+        name:
+          description: Security name
+          maxLength: 200
+          type: string
+        security_type:
+          description: Type
+          enum:
+          - GOVERNMENT_BOND
+          - TREASURY_BILL
+          - CORPORATE_BOND
+          - COVERED_BOND
+          - SUPRANATIONAL_BOND
+          - COMMERCIAL_PAPER
+          - CERTIFICATE_OF_DEPOSIT
+          type: string
+      type: object
+    TreasurySettlement:
+      description: Settlement instruction generated for a treasury deal cash flow
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deal_id:
+          description: Deal
+          format: uuid
+          type: string
+        deal_type:
+          description: MONEY_MARKET, FX, SECURITY
+          maxLength: 32
+          type: string
+        direction:
+          description: Pay (CREDIT nostro) or receive (DEBIT nostro)
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        flow_type:
+          description: PRINCIPAL_OUT, PRINCIPAL_IN, INTEREST, FX_PAY, FX_RECEIVE, SECURITY_CASH
+          maxLength: 32
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Ledger posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        nostro_account_id:
+          description: Our nostro
+          format: uuid
+          type:
+          - string
+          - 'null'
+        payment_id:
+          description: Outgoing payment created
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - INSTRUCTED
+          - SETTLED
+          - FAILED
+          - CANCELLED
+          type: string
+        treasury_ssi_id:
+          description: Counterparty SSI used
+          format: uuid
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value_date:
+          description: Settlement date
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - deal_type
+      - deal_id
+      - flow_type
+      - direction
+      - amount
+      - currency
+      - value_date
+      - status
+      type: object
+    TreasurySettlementPage:
+      description: One page of TreasurySettlement results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasurySettlement'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasurySettlementsFailRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    TreasurySettlementsMarkSettledRequest:
+      properties:
+        reference:
+          maxLength: 64
+          type: string
+      type: object
+    TreasurySsi:
+      description: Standing settlement instructions per counterparty and currency
+      properties:
+        beneficiary_account:
+          description: Beneficiary account / IBAN
+          maxLength: 64
+          type: string
+        beneficiary_bic:
+          description: Beneficiary bank BIC
+          maxLength: 11
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        intermediary_bic:
+          description: Intermediary bank BIC
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        is_default:
+          description: Default SSI for the currency
+          type: boolean
+        our_nostro_account_id:
+          description: Our nostro used to settle
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type:
+          - string
+          - 'null'
+        verified_by:
+          description: Four-eyes verification
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - treasury_counterparty_id
+      - currency
+      - beneficiary_bic
+      - beneficiary_account
+      - valid_from
+      - is_default
+      type: object
+    TreasurySsiCreate:
+      properties:
+        beneficiary_account:
+          description: Beneficiary account / IBAN
+          maxLength: 64
+          type: string
+        beneficiary_bic:
+          description: Beneficiary bank BIC
+          maxLength: 11
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        intermediary_bic:
+          description: Intermediary bank BIC
+          maxLength: 11
+          type: string
+        is_default:
+          description: Default SSI for the currency
+          type: boolean
+        our_nostro_account_id:
+          description: Our nostro used to settle
+          format: uuid
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+        verified_by:
+          description: Four-eyes verification
+          maxLength: 64
+          type: string
+      required:
+      - treasury_counterparty_id
+      - currency
+      - beneficiary_bic
+      - beneficiary_account
+      - valid_from
+      type: object
+    TreasurySsiPage:
+      description: One page of TreasurySsi results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TreasurySsi'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TreasurySsiUpdate:
+      properties:
+        beneficiary_account:
+          description: Beneficiary account / IBAN
+          maxLength: 64
+          type: string
+        beneficiary_bic:
+          description: Beneficiary bank BIC
+          maxLength: 11
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        intermediary_bic:
+          description: Intermediary bank BIC
+          maxLength: 11
+          type: string
+        is_default:
+          description: Default SSI for the currency
+          type: boolean
+        our_nostro_account_id:
+          description: Our nostro used to settle
+          format: uuid
+          type: string
+        treasury_counterparty_id:
+          description: Counterparty
+          format: uuid
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+        verified_by:
+          description: Four-eyes verification
+          maxLength: 64
+          type: string
+      type: object
+    TreasurySsisVerifyRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            treasury:read: Read Treasury and ALM
+            treasury:write: Change Treasury and ALM
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            treasury:read: Read Treasury and ALM
+            treasury:write: Change Treasury and ALM
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Front-to-back treasury: money market, FX and securities deals with confirmations and settlement, counterparty
+    limits, liquidity positions and Basel III ratios (LCR/NSFR) with stress testing, and asset-liability management (repricing
+    gap, NII/EVE sensitivity) with funds transfer pricing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — treasury-deal-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/treasury/counterparties:
+    get:
+      operationId: treasuryCounterpartiesList
+      summary: List treasury counterparties
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: counterparty_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - BANK
+          - CENTRAL_BANK
+          - BROKER
+          - CORPORATE
+          - FUND
+          - SOVEREIGN
+          - SUPRANATIONAL
+          - INTERNAL
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+      - name: country_code
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: bic
+        in: query
+        schema:
+          type: string
+          maxLength: 11
+      - name: lei
+        in: query
+        schema:
+          type: string
+          maxLength: 20
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: treasuryCounterpartiesCreate
+      summary: Create treasury counterpartie
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterparty'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartyCreate'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/counterparties/{id}:
+    get:
+      operationId: treasuryCounterpartiesGet
+      summary: Retrieve treasury counterpartie
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterparty'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: treasuryCounterpartiesUpdate
+      summary: Update treasury counterpartie
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterparty'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartyUpdate'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+      x-crud: true
+      x-crud-update: true
+  /v1/treasury/counterparties/{id}/approve:
+    post:
+      operationId: treasuryCounterpartiesApprove
+      summary: Approve counterparty onboarding (checker)
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterparty'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartiesApproveRequest'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+  /v1/treasury/counterparties/{id}/suspend:
+    post:
+      operationId: treasuryCounterpartiesSuspend
+      summary: Suspend dealing with a counterparty
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterparty'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartiesSuspendRequest'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+  /v1/treasury/counterparties/{id}/exposure:
+    get:
+      operationId: treasuryCounterpartiesExposure
+      summary: Aggregated exposure across deals and limits
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyLimitPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty
+  /v1/treasury/ssis:
+    get:
+      operationId: treasurySsisList
+      summary: List treasury ssis
+      tags:
+      - Treasury Ssis
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_counterparty_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: is_default
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySsiPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_ssi
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: treasurySsisCreate
+      summary: Create treasury ssi
+      tags:
+      - Treasury Ssis
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySsi'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySsiCreate'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_ssi
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/ssis/{id}:
+    get:
+      operationId: treasurySsisGet
+      summary: Retrieve treasury ssi
+      tags:
+      - Treasury Ssis
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySsi'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_ssi
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: treasurySsisUpdate
+      summary: Update treasury ssi
+      tags:
+      - Treasury Ssis
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySsi'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySsiUpdate'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_ssi
+      x-crud: true
+      x-crud-update: true
+  /v1/treasury/ssis/{id}/verify:
+    post:
+      operationId: treasurySsisVerify
+      summary: Four-eyes verification of an SSI
+      tags:
+      - Treasury Ssis
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySsi'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySsisVerifyRequest'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_ssi
+  /v1/treasury/limits:
+    get:
+      operationId: treasuryCounterpartyLimitsList
+      summary: List treasury counterparty limits
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_counterparty_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: limit_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SETTLEMENT
+          - PRE_SETTLEMENT
+          - MONEY_MARKET
+          - FX
+          - ISSUER
+          - COUNTRY
+          - TENOR
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - EXPIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyLimitPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty_limit
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: treasuryCounterpartyLimitsCreate
+      summary: Create treasury counterparty limit
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartyLimitCreate'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty_limit
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/limits/{id}:
+    get:
+      operationId: treasuryCounterpartyLimitsGet
+      summary: Retrieve treasury counterparty limit
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty_limit
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: treasuryCounterpartyLimitsUpdate
+      summary: Update treasury counterparty limit
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartyLimitUpdate'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty_limit
+      x-crud: true
+      x-crud-update: true
+  /v1/treasury/limits/check:
+    post:
+      operationId: treasuryCounterpartyLimitsCheck
+      summary: Pre-deal limit check
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartyLimitsCheckRequest'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty_limit
+  /v1/treasury/limits/{id}/utilisations:
+    get:
+      operationId: treasuryCounterpartyLimitsUtilisations
+      summary: Utilisation history
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryLimitUtilisationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_counterparty_limit
+  /v1/treasury/limit-utilisations:
+    get:
+      operationId: treasuryLimitUtilisationsList
+      summary: List treasury limit utilisations
+      tags:
+      - Treasury Limit Utilisations
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_counterparty_limit_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: deal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: breach
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryLimitUtilisationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_limit_utilisation
+      x-crud: true
+      x-crud-list: true
+  /v1/treasury/limit-utilisations/{id}:
+    get:
+      operationId: treasuryLimitUtilisationsGet
+      summary: Retrieve treasury limit utilisation
+      tags:
+      - Treasury Limit Utilisations
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryLimitUtilisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-table: treasury_limit_utilisation
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/money-market-deals:
+    get:
+      operationId: moneyMarketDealsList
+      summary: List money market deals
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_counterparty_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: deal_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - PLACEMENT
+          - BORROWING
+          - CALL_PLACEMENT
+          - CALL_BORROWING
+          - REPO
+          - REVERSE_REPO
+          - CD_ISSUED
+          - CD_PURCHASED
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - CAPTURED
+          - VERIFIED
+          - CONFIRMED
+          - SETTLED
+          - MATURED
+          - CANCELLED
+          - AMENDED
+      - name: value_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: maturity_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDealPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: moneyMarketDealsCreate
+      summary: Create money market deal
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealCreate'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/money-market-deals/{id}:
+    get:
+      operationId: moneyMarketDealsGet
+      summary: Retrieve money market deal
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: moneyMarketDealsUpdate
+      summary: Update money market deal
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealUpdate'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+      x-crud: true
+      x-crud-update: true
+  /v1/treasury/money-market-deals/{id}/verify:
+    post:
+      operationId: moneyMarketDealsVerify
+      summary: Back-office verification (checker)
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/confirm:
+    post:
+      operationId: moneyMarketDealsConfirm
+      summary: Mark confirmed after confirmation matching
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/settle:
+    post:
+      operationId: moneyMarketDealsSettle
+      summary: Settle the start leg and post to the ledger
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/rollover:
+    post:
+      operationId: moneyMarketDealsRollover
+      summary: Roll over at maturity into a new deal
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealsRolloverRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/mature:
+    post:
+      operationId: moneyMarketDealsMature
+      summary: 'Process maturity: repay principal and interest'
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/call:
+    post:
+      operationId: moneyMarketDealsCall
+      summary: Call an open-ended deal with notice
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealsCallRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/cancel:
+    post:
+      operationId: moneyMarketDealsCancel
+      summary: Cancel a deal before settlement
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealsCancelRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/accrue:
+    post:
+      operationId: moneyMarketDealsAccrue
+      summary: Recalculate accrued interest to a date
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneyMarketDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealsAccrueRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: money_market_deal
+  /v1/treasury/fx-deals:
+    get:
+      operationId: treasuryFxDealsList
+      summary: List treasury fx deals
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_counterparty_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: deal_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SPOT
+          - FORWARD
+          - SWAP
+          - NDF
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - CAPTURED
+          - VERIFIED
+          - CONFIRMED
+          - SETTLED
+          - MATURED
+          - CANCELLED
+          - AMENDED
+      - name: trade_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDealPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: treasuryFxDealsCreate
+      summary: Create treasury fx deal
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealCreate'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/fx-deals/{id}:
+    get:
+      operationId: treasuryFxDealsGet
+      summary: Retrieve treasury fx deal
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: treasuryFxDealsUpdate
+      summary: Update treasury fx deal
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealUpdate'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+      x-crud: true
+      x-crud-update: true
+  /v1/treasury/fx-deals/{id}/legs:
+    get:
+      operationId: treasuryFxDealsLegs
+      summary: Legs of the deal
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDealLegPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/verify:
+    post:
+      operationId: treasuryFxDealsVerify
+      summary: Back-office verification
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/confirm:
+    post:
+      operationId: treasuryFxDealsConfirm
+      summary: Mark confirmed
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/settle:
+    post:
+      operationId: treasuryFxDealsSettle
+      summary: Settle the due leg
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealsSettleRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/revalue:
+    post:
+      operationId: treasuryFxDealsRevalue
+      summary: Mark to market
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealsRevalueRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/cancel:
+    post:
+      operationId: treasuryFxDealsCancel
+      summary: Cancel the deal
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealsCancelRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deal-legs:
+    get:
+      operationId: treasuryFxDealLegsList
+      summary: List treasury fx deal legs
+      tags:
+      - Treasury Fx Deal Legs
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_fx_deal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: value_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: settlement_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - INSTRUCTED
+          - SETTLED
+          - FAILED
+          - CANCELLED
+      - name: base_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: quote_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDealLegPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal_leg
+      x-crud: true
+      x-crud-list: true
+  /v1/treasury/fx-deal-legs/{id}:
+    get:
+      operationId: treasuryFxDealLegsGet
+      summary: Retrieve treasury fx deal leg
+      tags:
+      - Treasury Fx Deal Legs
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDealLeg'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_fx_deal_leg
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/securities:
+    get:
+      operationId: treasurySecuritiesList
+      summary: List treasury securities
+      tags:
+      - Treasury Securities
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: isin
+        in: query
+        schema:
+          type: string
+          maxLength: 12
+      - name: security_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - GOVERNMENT_BOND
+          - TREASURY_BILL
+          - CORPORATE_BOND
+          - COVERED_BOND
+          - SUPRANATIONAL_BOND
+          - COMMERCIAL_PAPER
+          - CERTIFICATE_OF_DEPOSIT
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: hqla_level
+        in: query
+        schema:
+          type: string
+          maxLength: 10
+      - name: maturity_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySecurityPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_security
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: treasurySecuritiesCreate
+      summary: Create treasury securitie
+      tags:
+      - Treasury Securities
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySecurity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySecurityCreate'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_security
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/securities/{id}:
+    get:
+      operationId: treasurySecuritiesGet
+      summary: Retrieve treasury securitie
+      tags:
+      - Treasury Securities
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySecurity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_security
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: treasurySecuritiesUpdate
+      summary: Update treasury securitie
+      tags:
+      - Treasury Securities
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySecurity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySecurityUpdate'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_security
+      x-crud: true
+      x-crud-update: true
+  /v1/treasury/securities/{id}/prices:
+    post:
+      operationId: treasurySecuritiesPrices
+      summary: Record a market price
+      tags:
+      - Treasury Securities
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySecurity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySecuritiesPricesRequest'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_security
+  /v1/treasury/holdings:
+    get:
+      operationId: securitiesHoldingsList
+      summary: List securities holdings
+      tags:
+      - Securities Holdings
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: treasury_security_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: portfolio
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: accounting_class
+        in: query
+        schema:
+          type: string
+          enum:
+          - HTM
+          - AFS
+          - FVTPL
+          - AMORTISED_COST
+          - FVOCI
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_encumbered
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesHoldingPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_holding
+      x-crud: true
+      x-crud-list: true
+  /v1/treasury/holdings/{id}:
+    get:
+      operationId: securitiesHoldingsGet
+      summary: Retrieve securities holding
+      tags:
+      - Securities Holdings
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesHolding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_holding
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/holdings/revalue:
+    post:
+      operationId: securitiesHoldingsRevalue
+      summary: Revalue holdings at a valuation date
+      tags:
+      - Securities Holdings
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecuritiesHoldingsRevalueRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_holding
+  /v1/treasury/holdings/{id}/encumber:
+    post:
+      operationId: securitiesHoldingsEncumber
+      summary: Pledge or release as collateral
+      tags:
+      - Securities Holdings
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesHolding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecuritiesHoldingsEncumberRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_holding
+  /v1/treasury/securities-trades:
+    get:
+      operationId: securitiesTradesList
+      summary: List securities trades
+      tags:
+      - Securities Trades
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: securities_holding_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: treasury_counterparty_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: buy_sell
+        in: query
+        schema:
+          type: string
+          enum:
+          - BUY
+          - SELL
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - SETTLED
+          - MATURED
+          - SOLD
+          - CANCELLED
+      - name: trade_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesTradePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_trade
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: securitiesTradesCreate
+      summary: Create securities trade
+      tags:
+      - Securities Trades
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesTrade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecuritiesTradeCreate'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_trade
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/securities-trades/{id}:
+    get:
+      operationId: securitiesTradesGet
+      summary: Retrieve securities trade
+      tags:
+      - Securities Trades
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesTrade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_trade
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/securities-trades/{id}/settle:
+    post:
+      operationId: securitiesTradesSettle
+      summary: Settle the trade and update the holding
+      tags:
+      - Securities Trades
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesTrade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_trade
+  /v1/treasury/securities-trades/{id}/cancel:
+    post:
+      operationId: securitiesTradesCancel
+      summary: Cancel before settlement
+      tags:
+      - Securities Trades
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecuritiesTrade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecuritiesTradesCancelRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: securities_trade
+  /v1/treasury/confirmations:
+    get:
+      operationId: treasuryConfirmationsList
+      summary: List treasury confirmations
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: deal_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: deal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - SENT
+          - RECEIVED
+          - MATCHED
+          - UNMATCHED
+          - DISPUTED
+          - CANCELLED
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - SWIFT
+          - EMAIL
+          - PLATFORM
+          - MANUAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryDealConfirmationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_deal_confirmation
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: treasuryConfirmationsCreate
+      summary: Create treasury confirmation
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryDealConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryDealConfirmationCreate'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_deal_confirmation
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/confirmations/{id}:
+    get:
+      operationId: treasuryConfirmationsGet
+      summary: Retrieve treasury confirmation
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryDealConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_deal_confirmation
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/confirmations/{id}/match:
+    post:
+      operationId: treasuryConfirmationsMatch
+      summary: Match an inbound confirmation to a deal
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryDealConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryConfirmationsMatchRequest'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_deal_confirmation
+  /v1/treasury/confirmations/{id}/dispute:
+    post:
+      operationId: treasuryConfirmationsDispute
+      summary: Flag a confirmation mismatch
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryDealConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryConfirmationsDisputeRequest'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_deal_confirmation
+  /v1/treasury/settlements:
+    get:
+      operationId: treasurySettlementsList
+      summary: List treasury settlements
+      tags:
+      - Treasury Settlements
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: deal_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: deal_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - INSTRUCTED
+          - SETTLED
+          - FAILED
+          - CANCELLED
+      - name: value_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySettlementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_settlement
+      x-crud: true
+      x-crud-list: true
+  /v1/treasury/settlements/{id}:
+    get:
+      operationId: treasurySettlementsGet
+      summary: Retrieve treasury settlement
+      tags:
+      - Treasury Settlements
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_settlement
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/settlements/{id}/instruct:
+    post:
+      operationId: treasurySettlementsInstruct
+      summary: Release the settlement as a payment
+      tags:
+      - Treasury Settlements
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_settlement
+  /v1/treasury/settlements/{id}/mark-settled:
+    post:
+      operationId: treasurySettlementsMarkSettled
+      summary: Confirm settlement from nostro statement
+      tags:
+      - Treasury Settlements
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySettlementsMarkSettledRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_settlement
+  /v1/treasury/settlements/{id}/fail:
+    post:
+      operationId: treasurySettlementsFail
+      summary: Mark settlement failed
+      tags:
+      - Treasury Settlements
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasurySettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasurySettlementsFailRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-table: treasury_settlement
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Treasury counterparty (bank, central bank, broker, corporate) with identifiers and rating
+  name: Treasury Counterparties
+- description: Standing settlement instructions per counterparty and currency
+  name: Treasury Ssis
+- description: Credit / settlement / tenor limit on a counterparty (or its group)
+  name: Treasury Counterparty Limits
+- description: Immutable record of a deal consuming or releasing a counterparty limit
+  name: Treasury Limit Utilisations
+- description: Money market placement, borrowing, call, repo or CD with full lifecycle
+  name: Money Market Deals
+- description: Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+  name: Treasury Fx Deals
+- description: A leg of a treasury FX deal (one for spot/forward, two for swaps)
+  name: Treasury Fx Deal Legs
+- description: Security master record (bonds, bills, CP, CDs)
+  name: Treasury Securities
+- description: Position in a security by portfolio and accounting classification
+  name: Securities Holdings
+- description: Purchase or sale of a security that changes a holding
+  name: Securities Trades
+- description: Confirmation of a treasury deal (SWIFT MT300 FX, MT320 MM, MT541/543 securities) and matching
+  name: Treasury Confirmations
+- description: Settlement instruction generated for a treasury deal cash flow
+  name: Treasury Settlements

@@ -1,0 +1,634 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    ThreedsAuthentication:
+      description: One 3DS authentication request and its outcome
+      properties:
+        acs_transaction_id:
+          description: ACS transaction id
+          maxLength: 64
+          type: string
+        amount:
+          description: Purchase amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        attempts:
+          description: Challenge attempts
+          format: int32
+          readOnly: true
+          type: integer
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        challenge_type:
+          description: Challenge method used
+          enum:
+          - FRICTIONLESS
+          - OTP_SMS
+          - OTP_EMAIL
+          - APP_PUSH
+          - BIOMETRIC
+          - DECOUPLED
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        device_channel:
+          description: APP, BROWSER, 3RI
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        ds_transaction_id:
+          description: Directory server transaction id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        eci:
+          description: ECI returned
+          maxLength: 2
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        mcc:
+          description: MCC
+          maxLength: 4
+          type:
+          - string
+          - 'null'
+        merchant_country:
+          description: Merchant country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        merchant_name:
+          description: Merchant
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        protocol_version:
+          description: 2.1.0, 2.2.0, 2.3.1
+          maxLength: 8
+          type: string
+        result:
+          description: Outcome
+          enum:
+          - AUTHENTICATED
+          - ATTEMPTED
+          - FAILED
+          - REJECTED
+          - UNAVAILABLE
+          - CHALLENGE_PENDING
+          readOnly: true
+          type: string
+        risk_score:
+          description: Issuer risk score
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        threeds_server_transaction_id:
+          description: 3DS server transaction id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - acs_transaction_id
+      - protocol_version
+      - result
+      - attempts
+      type: object
+    ThreedsAuthenticationPage:
+      description: One page of ThreedsAuthentication results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ThreedsAuthentication'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ThreedsAuthenticationsApproveRequest:
+      properties:
+        biometric_assertion:
+          type: string
+      type: object
+    ThreedsAuthenticationsDeclineRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    ThreedsAuthenticationsVerifyOtpRequest:
+      properties:
+        otp:
+          maxLength: 10
+          type: string
+      required:
+      - otp
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
+    vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
+    clearing and settlement, interchange and fees, and scheme disputes.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — card-threeds-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/threeds-authentications:
+    get:
+      operationId: threedsAuthenticationsList
+      summary: List threeds authentications
+      tags:
+      - Threeds Authentications
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: result
+        in: query
+        schema:
+          type: string
+          enum:
+          - AUTHENTICATED
+          - ATTEMPTED
+          - FAILED
+          - REJECTED
+          - UNAVAILABLE
+          - CHALLENGE_PENDING
+      - name: challenge_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - FRICTIONLESS
+          - OTP_SMS
+          - OTP_EMAIL
+          - APP_PUSH
+          - BIOMETRIC
+          - DECOUPLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthenticationPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-table: threeds_authentication
+      x-crud: true
+      x-crud-list: true
+  /v1/threeds-authentications/{id}:
+    get:
+      operationId: threedsAuthenticationsGet
+      summary: Retrieve threeds authentication
+      tags:
+      - Threeds Authentications
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-table: threeds_authentication
+      x-crud: true
+      x-crud-get: true
+  /v1/threeds-authentications/{id}/approve:
+    post:
+      operationId: threedsAuthenticationsApprove
+      summary: Cardholder approves an app-push / decoupled challenge
+      tags:
+      - Threeds Authentications
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreedsAuthenticationsApproveRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-table: threeds_authentication
+  /v1/threeds-authentications/{id}/decline:
+    post:
+      operationId: threedsAuthenticationsDecline
+      summary: Cardholder declines the challenge
+      tags:
+      - Threeds Authentications
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreedsAuthenticationsDeclineRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-table: threeds_authentication
+  /v1/threeds-authentications/{id}/verify-otp:
+    post:
+      operationId: threedsAuthenticationsVerifyOtp
+      summary: Verify an OTP challenge
+      tags:
+      - Threeds Authentications
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreedsAuthentication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreedsAuthenticationsVerifyOtpRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-threeds-service
+      x-table: threeds_authentication
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: One 3DS authentication request and its outcome
+  name: Threeds Authentications

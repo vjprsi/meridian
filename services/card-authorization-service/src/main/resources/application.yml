@@ -1,0 +1,59 @@
+# card-authorization-service (Card Issuing and Processing). Defaults target the local stack in infra/local; override with env vars in
+# other environments (e.g. SPRING_DATASOURCE_URL, MERIDIAN_SECURITY_MODE=jwt).
+server:
+  port: 9105
+  shutdown: graceful
+
+spring:
+  application:
+    name: card-authorization-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:15432/card_auth_db?currentSchema=card_auth
+    username: meridian_app
+    password: meridian_app
+    hikari:
+      maximum-pool-size: 20
+  flyway:
+    user: meridian
+    password: meridian
+    schemas: card_auth
+    default-schema: card_auth
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:15180/realms/meridian
+
+meridian:
+  security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
+  events:
+    topic: meridian.cards.v1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  opentelemetry:
+    resource-attributes:
+      service.name: card-authorization-service
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:14318/v1/metrics
+  tracing:
+    sampling:
+      probability: 1.0

@@ -1,0 +1,3538 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    BatchJobLock:
+      description: Distributed lock preventing concurrent execution of the same batch job or partition
+      properties:
+        acquired_at:
+          description: Acquired
+          format: date-time
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Lease expiry
+          format: date-time
+          type: string
+        fencing_token:
+          description: Monotonic token to reject stale holders
+          format: int64
+          type: integer
+        holder:
+          description: Instance id holding the lock
+          maxLength: 128
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        lock_key:
+          description: Job / partition key
+          maxLength: 160
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - lock_key
+      - holder
+      - acquired_at
+      - expires_at
+      - fencing_token
+      type: object
+    BatchJobLockPage:
+      description: One page of BatchJobLock results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BatchJobLock'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BatchJobLocksForceReleaseRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    BusinessDay:
+      description: Current and historical business date per legal entity with its processing state
+      properties:
+        business_date:
+          description: Business date
+          format: date
+          type: string
+        closed_at:
+          description: When the date was closed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cut_off_at:
+          description: When transaction cut-off was applied
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        holiday_calendar_id:
+          description: Calendar used to compute the next business date
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_current:
+          description: True for the open business date of the entity
+          type: boolean
+        is_month_end:
+          description: EOM processing applies
+          readOnly: true
+          type: boolean
+        is_quarter_end:
+          description: EOQ processing applies
+          readOnly: true
+          type: boolean
+        is_year_end:
+          description: EOY processing applies
+          readOnly: true
+          type: boolean
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        next_business_date:
+          description: Next business date after the date roll
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        notes:
+          description: Operator notes
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        opened_at:
+          description: When the date was opened
+          format: date-time
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        state:
+          description: Processing state
+          enum:
+          - OPEN
+          - CUT_OFF
+          - EOD_RUNNING
+          - EOD_FAILED
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - business_date
+      - state
+      - is_current
+      - opened_at
+      - is_month_end
+      - is_quarter_end
+      - is_year_end
+      type: object
+    BusinessDayPage:
+      description: One page of BusinessDay results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BusinessDay'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BusinessDaysCutOffRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    BusinessDaysReopenRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    BusinessDaysRollRequest:
+      properties:
+        forced:
+          type: boolean
+        reason:
+          maxLength: 500
+          type: string
+      type: object
+    BusinessDaysStartEodRequest:
+      properties:
+        cycle_type:
+          enum:
+          - EOD
+          - EOM
+          - EOQ
+          - EOY
+          - INTRADAY
+          type: string
+      type: object
+    DateRoll:
+      description: Record of moving a legal entity from one business date to the next. Append-only.
+      properties:
+        approval_request_id:
+          description: Approval for a forced roll
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Checker for a forced roll
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        eod_run_id:
+          description: EOD run that completed before the roll
+          format: uuid
+          type:
+          - string
+          - 'null'
+        forced:
+          description: Rolled despite failed non-critical jobs
+          type: boolean
+        from_business_date:
+          description: Date closed
+          format: date
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        to_business_date:
+          description: Date opened
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - legal_entity_id
+      - from_business_date
+      - to_business_date
+      - forced
+      type: object
+    DateRollPage:
+      description: One page of DateRoll results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DateRoll'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    EodJobDefinition:
+      description: A step in an end-of-period job graph, executed by an owning service
+      properties:
+        code:
+          description: Job code, e.g. DEP_INTEREST_ACCRUAL
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cycle_types:
+          additionalProperties: true
+          description: Cycles the job runs in, e.g. [EOD, EOM]
+          type: object
+        depends_on:
+          additionalProperties: true
+          description: Codes of jobs that must finish first
+          type:
+          - object
+          - 'null'
+        endpoint:
+          description: Internal command/topic the orchestrator invokes
+          maxLength: 255
+          type: string
+        failure_policy:
+          description: What happens on final failure
+          enum:
+          - STOP_CYCLE
+          - CONTINUE
+          - RETRY_THEN_STOP
+          - RETRY_THEN_CONTINUE
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_critical:
+          description: Blocks the date roll when it fails
+          type: boolean
+        job_type:
+          description: Kind of job
+          enum:
+          - INTEREST_ACCRUAL
+          - INTEREST_CAPITALISATION
+          - FEE_CHARGING
+          - DORMANCY
+          - STATEMENTS
+          - LOAN_ACCRUAL
+          - DELINQUENCY_AGEING
+          - ECL_PROVISION
+          - RECONCILIATION
+          - FX_REVALUATION
+          - GL_CLOSE
+          - REGULATORY_REPORTS
+          - BALANCE_SNAPSHOT
+          - STANDING_ORDERS
+          - TERM_DEPOSIT_MATURITY
+          - CARD_STATEMENT_CYCLE
+          - ARCHIVAL
+          - CUSTOM
+          type: string
+        legal_entity_id:
+          description: Legal entity (empty = all entities)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        max_retries:
+          description: Automatic retries before the failure policy applies
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        owning_service:
+          description: Service that executes the job, e.g. deposit-service
+          maxLength: 64
+          type: string
+        parallelism:
+          description: Number of partitions run in parallel
+          format: int32
+          type: integer
+        parameters:
+          additionalProperties: true
+          description: Default parameters passed to the job
+          type:
+          - object
+          - 'null'
+        partition_key:
+          description: Partitioning key, e.g. ACCOUNT_ID_HASH
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sequence:
+          description: Ordering hint within the same dependency level
+          format: int32
+          type: integer
+        timeout_minutes:
+          description: Maximum run time per attempt
+          format: int32
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - job_type
+      - cycle_types
+      - owning_service
+      - endpoint
+      - sequence
+      - parallelism
+      - timeout_minutes
+      - max_retries
+      - failure_policy
+      - is_critical
+      - is_active
+      type: object
+    EodJobDefinitionCreate:
+      properties:
+        code:
+          description: Job code, e.g. DEP_INTEREST_ACCRUAL
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cycle_types:
+          additionalProperties: true
+          description: Cycles the job runs in, e.g. [EOD, EOM]
+          type: object
+        depends_on:
+          additionalProperties: true
+          description: Codes of jobs that must finish first
+          type: object
+        endpoint:
+          description: Internal command/topic the orchestrator invokes
+          maxLength: 255
+          type: string
+        failure_policy:
+          description: What happens on final failure
+          enum:
+          - STOP_CYCLE
+          - CONTINUE
+          - RETRY_THEN_STOP
+          - RETRY_THEN_CONTINUE
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_critical:
+          description: Blocks the date roll when it fails
+          type: boolean
+        job_type:
+          description: Kind of job
+          enum:
+          - INTEREST_ACCRUAL
+          - INTEREST_CAPITALISATION
+          - FEE_CHARGING
+          - DORMANCY
+          - STATEMENTS
+          - LOAN_ACCRUAL
+          - DELINQUENCY_AGEING
+          - ECL_PROVISION
+          - RECONCILIATION
+          - FX_REVALUATION
+          - GL_CLOSE
+          - REGULATORY_REPORTS
+          - BALANCE_SNAPSHOT
+          - STANDING_ORDERS
+          - TERM_DEPOSIT_MATURITY
+          - CARD_STATEMENT_CYCLE
+          - ARCHIVAL
+          - CUSTOM
+          type: string
+        legal_entity_id:
+          description: Legal entity (empty = all entities)
+          format: uuid
+          type: string
+        max_retries:
+          description: Automatic retries before the failure policy applies
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        owning_service:
+          description: Service that executes the job, e.g. deposit-service
+          maxLength: 64
+          type: string
+        parallelism:
+          description: Number of partitions run in parallel
+          format: int32
+          type: integer
+        parameters:
+          additionalProperties: true
+          description: Default parameters passed to the job
+          type: object
+        partition_key:
+          description: Partitioning key, e.g. ACCOUNT_ID_HASH
+          maxLength: 64
+          type: string
+        sequence:
+          description: Ordering hint within the same dependency level
+          format: int32
+          type: integer
+        timeout_minutes:
+          description: Maximum run time per attempt
+          format: int32
+          type: integer
+      required:
+      - code
+      - name
+      - job_type
+      - cycle_types
+      - owning_service
+      - endpoint
+      type: object
+    EodJobDefinitionPage:
+      description: One page of EodJobDefinition results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EodJobDefinition'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    EodJobDefinitionUpdate:
+      properties:
+        code:
+          description: Job code, e.g. DEP_INTEREST_ACCRUAL
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cycle_types:
+          additionalProperties: true
+          description: Cycles the job runs in, e.g. [EOD, EOM]
+          type: object
+        depends_on:
+          additionalProperties: true
+          description: Codes of jobs that must finish first
+          type: object
+        endpoint:
+          description: Internal command/topic the orchestrator invokes
+          maxLength: 255
+          type: string
+        failure_policy:
+          description: What happens on final failure
+          enum:
+          - STOP_CYCLE
+          - CONTINUE
+          - RETRY_THEN_STOP
+          - RETRY_THEN_CONTINUE
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_critical:
+          description: Blocks the date roll when it fails
+          type: boolean
+        job_type:
+          description: Kind of job
+          enum:
+          - INTEREST_ACCRUAL
+          - INTEREST_CAPITALISATION
+          - FEE_CHARGING
+          - DORMANCY
+          - STATEMENTS
+          - LOAN_ACCRUAL
+          - DELINQUENCY_AGEING
+          - ECL_PROVISION
+          - RECONCILIATION
+          - FX_REVALUATION
+          - GL_CLOSE
+          - REGULATORY_REPORTS
+          - BALANCE_SNAPSHOT
+          - STANDING_ORDERS
+          - TERM_DEPOSIT_MATURITY
+          - CARD_STATEMENT_CYCLE
+          - ARCHIVAL
+          - CUSTOM
+          type: string
+        legal_entity_id:
+          description: Legal entity (empty = all entities)
+          format: uuid
+          type: string
+        max_retries:
+          description: Automatic retries before the failure policy applies
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        owning_service:
+          description: Service that executes the job, e.g. deposit-service
+          maxLength: 64
+          type: string
+        parallelism:
+          description: Number of partitions run in parallel
+          format: int32
+          type: integer
+        parameters:
+          additionalProperties: true
+          description: Default parameters passed to the job
+          type: object
+        partition_key:
+          description: Partitioning key, e.g. ACCOUNT_ID_HASH
+          maxLength: 64
+          type: string
+        sequence:
+          description: Ordering hint within the same dependency level
+          format: int32
+          type: integer
+        timeout_minutes:
+          description: Maximum run time per attempt
+          format: int32
+          type: integer
+      type: object
+    EodJobRun:
+      description: Execution of one job (or partition) inside an EOD run
+      properties:
+        attempt:
+          description: Attempt number
+          format: int32
+          type: integer
+        checkpoint:
+          additionalProperties: true
+          description: Last checkpoint for restart
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        duration_ms:
+          description: Duration
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        eod_job_definition_id:
+          description: Job definition
+          format: uuid
+          type: string
+        eod_run_id:
+          description: Parent run
+          format: uuid
+          type: string
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        error_code:
+          description: Error code
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        partition_no:
+          description: Partition number
+          format: int32
+          type: integer
+        records_failed:
+          description: Records failed
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        records_processed:
+          description: Records processed
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        skip_reason:
+          description: Why the job was skipped
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        skipped_by:
+          description: User who manually skipped the job
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        started_at:
+          description: Start time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - eod_run_id
+      - eod_job_definition_id
+      - partition_no
+      - attempt
+      - status
+      type: object
+    EodJobRunPage:
+      description: One page of EodJobRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EodJobRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    EodJobRunsSkipRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    EodRun:
+      description: Execution of a full end-of-period cycle for one legal entity and business date
+      properties:
+        business_day_id:
+          description: Business date being processed
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cycle_type:
+          description: Cycle
+          enum:
+          - EOD
+          - EOM
+          - EOQ
+          - EOY
+          - INTRADAY
+          type: string
+        error:
+          description: Summary of the failure
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_restart:
+          description: Restarted from a failed run
+          type: boolean
+        jobs_failed:
+          description: Jobs failed
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        jobs_succeeded:
+          description: Jobs succeeded
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        jobs_total:
+          description: Jobs in the plan
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        restart_of_id:
+          description: Failed run this one restarts
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Start time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Run status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        triggered_by:
+          description: User or SCHEDULER
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        workflow_id:
+          description: Temporal workflow id
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - business_day_id
+      - legal_entity_id
+      - cycle_type
+      - status
+      - is_restart
+      type: object
+    EodRunPage:
+      description: One page of EodRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EodRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    EodRunsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    JobSchedule:
+      description: Cron schedule for non-EOD batch jobs (sweeps, report generation, file pulls, reindexing)
+      properties:
+        business_days_only:
+          description: Skip non-business days
+          type: boolean
+        code:
+          description: Schedule code
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cron_expression:
+          description: Cron expression
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        endpoint:
+          description: Command/topic invoked
+          maxLength: 255
+          type: string
+        holiday_calendar_id:
+          description: Calendar for business-day checks
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_run_at:
+          description: Last execution start
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        last_run_status:
+          description: Last execution status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        misfire_policy:
+          description: RUN_ONCE, SKIP or RUN_ALL after downtime
+          maxLength: 32
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        next_run_at:
+          description: Next planned execution
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        owning_service:
+          description: Service that runs the job
+          maxLength: 64
+          type: string
+        parameters:
+          additionalProperties: true
+          description: Parameters passed to the job
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - PAUSED
+          - DISABLED
+          type: string
+        time_zone:
+          description: IANA time zone
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - owning_service
+      - endpoint
+      - cron_expression
+      - time_zone
+      - business_days_only
+      - status
+      - misfire_policy
+      type: object
+    JobScheduleCreate:
+      properties:
+        business_days_only:
+          description: Skip non-business days
+          type: boolean
+        code:
+          description: Schedule code
+          maxLength: 64
+          type: string
+        cron_expression:
+          description: Cron expression
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        endpoint:
+          description: Command/topic invoked
+          maxLength: 255
+          type: string
+        holiday_calendar_id:
+          description: Calendar for business-day checks
+          format: uuid
+          type: string
+        misfire_policy:
+          description: RUN_ONCE, SKIP or RUN_ALL after downtime
+          maxLength: 32
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        owning_service:
+          description: Service that runs the job
+          maxLength: 64
+          type: string
+        parameters:
+          additionalProperties: true
+          description: Parameters passed to the job
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - PAUSED
+          - DISABLED
+          type: string
+        time_zone:
+          description: IANA time zone
+          maxLength: 64
+          type: string
+      required:
+      - code
+      - name
+      - owning_service
+      - endpoint
+      - cron_expression
+      type: object
+    JobSchedulePage:
+      description: One page of JobSchedule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/JobSchedule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    JobScheduleRun:
+      description: One execution of a scheduled batch job. Append-only.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        error:
+          description: Error details
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        job_schedule_id:
+          description: Schedule
+          format: uuid
+          type: string
+        records_processed:
+          description: Records processed
+          format: int64
+          type:
+          - integer
+          - 'null'
+        scheduled_for:
+          description: Planned time
+          format: date-time
+          type: string
+        started_at:
+          description: Start time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        status:
+          description: Outcome
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          type: string
+      required:
+      - id
+      - created_at
+      - job_schedule_id
+      - scheduled_for
+      - status
+      type: object
+    JobScheduleRunPage:
+      description: One page of JobScheduleRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/JobScheduleRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    JobScheduleUpdate:
+      properties:
+        business_days_only:
+          description: Skip non-business days
+          type: boolean
+        code:
+          description: Schedule code
+          maxLength: 64
+          type: string
+        cron_expression:
+          description: Cron expression
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        endpoint:
+          description: Command/topic invoked
+          maxLength: 255
+          type: string
+        holiday_calendar_id:
+          description: Calendar for business-day checks
+          format: uuid
+          type: string
+        misfire_policy:
+          description: RUN_ONCE, SKIP or RUN_ALL after downtime
+          maxLength: 32
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        owning_service:
+          description: Service that runs the job
+          maxLength: 64
+          type: string
+        parameters:
+          additionalProperties: true
+          description: Parameters passed to the job
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - PAUSED
+          - DISABLED
+          type: string
+        time_zone:
+          description: IANA time zone
+          maxLength: 64
+          type: string
+      type: object
+    JobSchedulesRunNowRequest:
+      properties:
+        parameters:
+          additionalProperties: true
+          type: object
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners, enterprise
+    search across all entities, and data retention, archival, legal hold and certified purge.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — business-day-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/operations/business-days:
+    get:
+      operationId: businessDaysList
+      summary: List business days
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: state
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - CUT_OFF
+          - EOD_RUNNING
+          - EOD_FAILED
+          - CLOSED
+      - name: is_current
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDayPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+      x-crud: true
+      x-crud-list: true
+  /v1/operations/business-days/{id}:
+    get:
+      operationId: businessDaysGet
+      summary: Retrieve business day
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDay'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+      x-crud: true
+      x-crud-get: true
+  /v1/operations/business-days/current:
+    get:
+      operationId: businessDaysCurrent
+      summary: Current business date per legal entity (?legal_entity_id=)
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDay'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+  /v1/operations/business-days/{id}/cut-off:
+    post:
+      operationId: businessDaysCutOff
+      summary: Apply transaction cut-off for the business date
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDay'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessDaysCutOffRequest'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+  /v1/operations/business-days/{id}/start-eod:
+    post:
+      operationId: businessDaysStartEod
+      summary: Start the end-of-day cycle
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessDaysStartEodRequest'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+  /v1/operations/business-days/{id}/roll:
+    post:
+      operationId: businessDaysRoll
+      summary: Roll to the next business date after EOD
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DateRoll'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessDaysRollRequest'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+  /v1/operations/business-days/{id}/reopen:
+    post:
+      operationId: businessDaysReopen
+      summary: Reopen a closed business date (requires approval)
+      tags:
+      - Business Days
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessDay'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessDaysReopenRequest'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: business_day
+  /v1/operations/eod-jobs:
+    get:
+      operationId: eodJobDefinitionsList
+      summary: List eod job definitions
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: job_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - INTEREST_ACCRUAL
+          - INTEREST_CAPITALISATION
+          - FEE_CHARGING
+          - DORMANCY
+          - STATEMENTS
+          - LOAN_ACCRUAL
+          - DELINQUENCY_AGEING
+          - ECL_PROVISION
+          - RECONCILIATION
+          - FX_REVALUATION
+          - GL_CLOSE
+          - REGULATORY_REPORTS
+          - BALANCE_SNAPSHOT
+          - STANDING_ORDERS
+          - TERM_DEPOSIT_MATURITY
+          - CARD_STATEMENT_CYCLE
+          - ARCHIVAL
+          - CUSTOM
+      - name: owning_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobDefinitionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: eodJobDefinitionsCreate
+      summary: Create eod job definition
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodJobDefinitionCreate'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+      x-crud: true
+      x-crud-create: true
+  /v1/operations/eod-jobs/{id}:
+    get:
+      operationId: eodJobDefinitionsGet
+      summary: Retrieve eod job definition
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:read
+      parameters: &id006
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: eodJobDefinitionsUpdate
+      summary: Update eod job definition
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodJobDefinitionUpdate'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: eodJobDefinitionsDelete
+      summary: Delete eod job definition
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:write
+      parameters: *id006
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+      x-crud: true
+      x-crud-delete: true
+  /v1/operations/eod-jobs/graph:
+    get:
+      operationId: eodJobDefinitionsGraph
+      summary: Dependency graph of jobs for a cycle (?cycle_type=)
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+  /v1/operations/eod-jobs/validate:
+    post:
+      operationId: eodJobDefinitionsValidate
+      summary: Validate the graph for cycles and missing dependencies
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_definition
+  /v1/operations/eod-runs:
+    get:
+      operationId: eodRunsList
+      summary: List eod runs
+      tags:
+      - Eod Runs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: business_day_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: cycle_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - EOD
+          - EOM
+          - EOQ
+          - EOY
+          - INTRADAY
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/operations/eod-runs/{id}:
+    get:
+      operationId: eodRunsGet
+      summary: Retrieve eod run
+      tags:
+      - Eod Runs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_run
+      x-crud: true
+      x-crud-get: true
+  /v1/operations/eod-runs/{id}/jobs:
+    get:
+      operationId: eodRunsJobs
+      summary: Job executions of the run
+      tags:
+      - Eod Runs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_run
+  /v1/operations/eod-runs/{id}/restart:
+    post:
+      operationId: eodRunsRestart
+      summary: Restart from the failed jobs
+      tags:
+      - Eod Runs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_run
+  /v1/operations/eod-runs/{id}/cancel:
+    post:
+      operationId: eodRunsCancel
+      summary: Cancel a running cycle
+      tags:
+      - Eod Runs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodRunsCancelRequest'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_run
+  /v1/operations/eod-job-runs:
+    get:
+      operationId: eodJobRunsList
+      summary: List eod job runs
+      tags:
+      - Eod Job Runs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: eod_run_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: eod_job_definition_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_run
+      x-crud: true
+      x-crud-list: true
+  /v1/operations/eod-job-runs/{id}:
+    get:
+      operationId: eodJobRunsGet
+      summary: Retrieve eod job run
+      tags:
+      - Eod Job Runs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_run
+      x-crud: true
+      x-crud-get: true
+  /v1/operations/eod-job-runs/{id}/retry:
+    post:
+      operationId: eodJobRunsRetry
+      summary: Retry a failed job
+      tags:
+      - Eod Job Runs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_run
+  /v1/operations/eod-job-runs/{id}/skip:
+    post:
+      operationId: eodJobRunsSkip
+      summary: Skip a failed non-critical job (maker-checker)
+      tags:
+      - Eod Job Runs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodJobRunsSkipRequest'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: eod_job_run
+  /v1/operations/date-rolls:
+    get:
+      operationId: dateRollsList
+      summary: List date rolls
+      tags:
+      - Date Rolls
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: from_business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DateRollPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: date_roll
+      x-crud: true
+      x-crud-list: true
+  /v1/operations/date-rolls/{id}:
+    get:
+      operationId: dateRollsGet
+      summary: Retrieve date roll
+      tags:
+      - Date Rolls
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DateRoll'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-table: date_roll
+      x-crud: true
+      x-crud-get: true
+  /v1/operations/job-schedules:
+    get:
+      operationId: jobSchedulesList
+      summary: List job schedules
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: owning_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - PAUSED
+          - DISABLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSchedulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: jobSchedulesCreate
+      summary: Create job schedule
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSchedule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobScheduleCreate'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+      x-crud: true
+      x-crud-create: true
+  /v1/operations/job-schedules/{id}:
+    get:
+      operationId: jobSchedulesGet
+      summary: Retrieve job schedule
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:read
+      parameters: &id008
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSchedule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: jobSchedulesUpdate
+      summary: Update job schedule
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSchedule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobScheduleUpdate'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: jobSchedulesDelete
+      summary: Delete job schedule
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:write
+      parameters: *id008
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+      x-crud: true
+      x-crud-delete: true
+  /v1/operations/job-schedules/{id}/run-now:
+    post:
+      operationId: jobSchedulesRunNow
+      summary: Trigger an immediate run
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobScheduleRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobSchedulesRunNowRequest'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+  /v1/operations/job-schedules/{id}/pause:
+    post:
+      operationId: jobSchedulesPause
+      summary: Pause the schedule
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSchedule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+  /v1/operations/job-schedules/{id}/resume:
+    post:
+      operationId: jobSchedulesResume
+      summary: Resume the schedule
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobSchedule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+  /v1/operations/job-schedules/{id}/runs:
+    get:
+      operationId: jobSchedulesRuns
+      summary: Execution history
+      tags:
+      - Job Schedules
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobScheduleRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: job_schedule
+  /v1/operations/batch-locks:
+    get:
+      operationId: batchJobLocksList
+      summary: List batch job locks
+      tags:
+      - Batch Job Locks
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: lock_key
+        in: query
+        schema:
+          type: string
+          maxLength: 160
+      - name: holder
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobLockPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: batch_job_lock
+      x-crud: true
+      x-crud-list: true
+  /v1/operations/batch-locks/{id}:
+    get:
+      operationId: batchJobLocksGet
+      summary: Retrieve batch job lock
+      tags:
+      - Batch Job Locks
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchJobLock'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: batch_job_lock
+      x-crud: true
+      x-crud-get: true
+  /v1/operations/batch-locks/{id}/force-release:
+    post:
+      operationId: batchJobLocksForceRelease
+      summary: Force-release a stale lock
+      tags:
+      - Batch Job Locks
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchJobLocksForceReleaseRequest'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-table: batch_job_lock
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Current and historical business date per legal entity with its processing state
+  name: Business Days
+- description: A step in an end-of-period job graph, executed by an owning service
+  name: Eod Job Definitions
+- description: Execution of a full end-of-period cycle for one legal entity and business date
+  name: Eod Runs
+- description: Execution of one job (or partition) inside an EOD run
+  name: Eod Job Runs
+- description: Record of moving a legal entity from one business date to the next. Append-only.
+  name: Date Rolls
+- description: Cron schedule for non-EOD batch jobs (sweeps, report generation, file pulls, reindexing)
+  name: Job Schedules
+- description: Distributed lock preventing concurrent execution of the same batch job or partition
+  name: Batch Job Locks

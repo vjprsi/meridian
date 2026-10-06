@@ -494,7 +494,7 @@ services:
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "disbursed_at ts ro | Completion time"
           - "failure_reason string(255) ro | Failure reason"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
       - name: repayment_schedule
@@ -580,7 +580,7 @@ services:
           - "promise_to_pay_id uuid | Promise this repayment fulfils"
           - "journal_entry_id uuid ref=journal_entry | Ledger posting"
           - "external_reference string(128) | Payer reference"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
       - name: loan_accrual
@@ -774,7 +774,7 @@ services:
           - "status enum:DrawdownStatus nn default=PENDING ro | Status"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "posted_at ts ro | Posting time"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
       - name: credit_line_statement

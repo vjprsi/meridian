@@ -1,0 +1,2676 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    FxDeal:
+      description: A booked FX conversion (from an accepted quote)
+      properties:
+        buy_amount:
+          description: Bought amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        buy_currency:
+          description: Bought currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fx_quote_id:
+          description: Quote accepted
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Ledger posting
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        liquidity_provider:
+          description: Cover counterparty
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        payment_id:
+          description: Payment funded by the deal
+          format: uuid
+          type:
+          - string
+          - 'null'
+        rate:
+          description: Deal rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sell_amount:
+          description: Sold amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        sell_currency:
+          description: Sold currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        side:
+          description: Buy or sell from the bank's view
+          enum:
+          - BUY
+          - SELL
+          type: string
+        status:
+          description: Status
+          enum:
+          - BOOKED
+          - SETTLED
+          - CANCELLED
+          - FAILED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value_date:
+          description: Settlement value date
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - fx_quote_id
+      - side
+      - sell_currency
+      - sell_amount
+      - buy_currency
+      - buy_amount
+      - rate
+      - value_date
+      - status
+      type: object
+    FxDealPage:
+      description: One page of FxDeal results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FxDeal'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FxDealsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    FxMarginRule:
+      description: Margin rules per currency pair, segment and amount band
+      properties:
+        channel:
+          description: Channel (empty = all)
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency_pair:
+          description: e.g. USD/EUR (or */EUR)
+          maxLength: 7
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        margin_bps:
+          description: Margin in basis points
+          format: int32
+          type: integer
+        max_amount:
+          description: Amount band end
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        min_amount:
+          description: Amount band start
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        min_fee:
+          description: Minimum fee
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        priority:
+          description: Lower wins
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        segment:
+          description: Customer segment (empty = all)
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - currency_pair
+      - margin_bps
+      - priority
+      - valid_from
+      type: object
+    FxMarginRuleCreate:
+      properties:
+        channel:
+          description: Channel (empty = all)
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          type: string
+        currency_pair:
+          description: e.g. USD/EUR (or */EUR)
+          maxLength: 7
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        margin_bps:
+          description: Margin in basis points
+          format: int32
+          type: integer
+        max_amount:
+          description: Amount band end
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Amount band start
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_fee:
+          description: Minimum fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        priority:
+          description: Lower wins
+          format: int32
+          type: integer
+        segment:
+          description: Customer segment (empty = all)
+          maxLength: 32
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+      required:
+      - currency_pair
+      - margin_bps
+      - valid_from
+      type: object
+    FxMarginRulePage:
+      description: One page of FxMarginRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FxMarginRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FxMarginRuleUpdate:
+      properties:
+        channel:
+          description: Channel (empty = all)
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          type: string
+        currency_pair:
+          description: e.g. USD/EUR (or */EUR)
+          maxLength: 7
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        margin_bps:
+          description: Margin in basis points
+          format: int32
+          type: integer
+        max_amount:
+          description: Amount band end
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Amount band start
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_fee:
+          description: Minimum fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        priority:
+          description: Lower wins
+          format: int32
+          type: integer
+        segment:
+          description: Customer segment (empty = all)
+          maxLength: 32
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+      type: object
+    FxQuote:
+      description: A firm FX quote valid until expiry
+      properties:
+        buy_amount:
+          description: Amount bought (fix one side)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        buy_currency:
+          description: Currency the customer buys (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer (pricing segment)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        customer_rate:
+          description: Rate offered to the customer
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type: string
+        fee_amount:
+          description: Fee
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        fee_currency:
+          description: Fee currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        margin_bps:
+          description: Margin in basis points
+          format: int32
+          readOnly: true
+          type: integer
+        mid_rate:
+          description: Market mid rate
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        rate_source:
+          description: Rate provider
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        remittance_corridor_id:
+          description: Corridor (remittances)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sell_amount:
+          description: Amount sold (fix one side)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        sell_currency:
+          description: Currency the customer sells (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - ACCEPTED
+          - EXPIRED
+          - CANCELLED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - sell_currency
+      - buy_currency
+      - mid_rate
+      - customer_rate
+      - margin_bps
+      - fee_amount
+      - expires_at
+      - status
+      type: object
+    FxQuoteCreate:
+      properties:
+        buy_amount:
+          description: Amount bought (fix one side)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        buy_currency:
+          description: Currency the customer buys (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer (pricing segment)
+          format: uuid
+          type: string
+        fee_currency:
+          description: Fee currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        remittance_corridor_id:
+          description: Corridor (remittances)
+          format: uuid
+          type: string
+        sell_amount:
+          description: Amount sold (fix one side)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        sell_currency:
+          description: Currency the customer sells (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+      required:
+      - sell_currency
+      - buy_currency
+      type: object
+    FxQuotePage:
+      description: One page of FxQuote results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FxQuote'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FxQuotesAcceptRequest:
+      properties:
+        payment_id:
+          format: uuid
+          type: string
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    RemittanceCorridor:
+      description: Send-receive corridor with limits, pricing and partner routing
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        delivery_eta_minutes:
+          description: Typical delivery time
+          format: int32
+          type:
+          - integer
+          - 'null'
+        destination_country:
+          description: Receive country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        destination_currency:
+          description: Receive currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        fallback_partner_id:
+          description: Fallback partner
+          format: uuid
+          type:
+          - string
+          - 'null'
+        fixed_fee:
+          description: Fixed fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        max_amount:
+          description: Maximum send amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Minimum send amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        payout_method:
+          description: Payout method
+          enum:
+          - BANK_ACCOUNT
+          - MOBILE_WALLET
+          - CASH_PICKUP
+          - CARD
+          - HOME_DELIVERY
+          type: string
+        percent_fee:
+          description: Percentage fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        remittance_partner_id:
+          description: Primary partner
+          format: uuid
+          type: string
+        required_fields:
+          additionalProperties: true
+          description: Beneficiary fields required by the destination
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source_country:
+          description: Send country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        source_currency:
+          description: Send currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - source_country
+      - destination_country
+      - source_currency
+      - destination_currency
+      - payout_method
+      - remittance_partner_id
+      - min_amount
+      - max_amount
+      - fixed_fee
+      - percent_fee
+      - status
+      type: object
+    RemittanceCorridorCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        delivery_eta_minutes:
+          description: Typical delivery time
+          format: int32
+          type: integer
+        destination_country:
+          description: Receive country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        destination_currency:
+          description: Receive currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        fallback_partner_id:
+          description: Fallback partner
+          format: uuid
+          type: string
+        fixed_fee:
+          description: Fixed fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        max_amount:
+          description: Maximum send amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Minimum send amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        payout_method:
+          description: Payout method
+          enum:
+          - BANK_ACCOUNT
+          - MOBILE_WALLET
+          - CASH_PICKUP
+          - CARD
+          - HOME_DELIVERY
+          type: string
+        percent_fee:
+          description: Percentage fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        remittance_partner_id:
+          description: Primary partner
+          format: uuid
+          type: string
+        required_fields:
+          additionalProperties: true
+          description: Beneficiary fields required by the destination
+          type: object
+        source_country:
+          description: Send country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        source_currency:
+          description: Send currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+      required:
+      - source_country
+      - destination_country
+      - source_currency
+      - destination_currency
+      - payout_method
+      - remittance_partner_id
+      - max_amount
+      type: object
+    RemittanceCorridorPage:
+      description: One page of RemittanceCorridor results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RemittanceCorridor'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RemittanceCorridorUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        delivery_eta_minutes:
+          description: Typical delivery time
+          format: int32
+          type: integer
+        destination_country:
+          description: Receive country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        destination_currency:
+          description: Receive currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        fallback_partner_id:
+          description: Fallback partner
+          format: uuid
+          type: string
+        fixed_fee:
+          description: Fixed fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        max_amount:
+          description: Maximum send amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Minimum send amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        payout_method:
+          description: Payout method
+          enum:
+          - BANK_ACCOUNT
+          - MOBILE_WALLET
+          - CASH_PICKUP
+          - CARD
+          - HOME_DELIVERY
+          type: string
+        percent_fee:
+          description: Percentage fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        remittance_partner_id:
+          description: Primary partner
+          format: uuid
+          type: string
+        required_fields:
+          additionalProperties: true
+          description: Beneficiary fields required by the destination
+          type: object
+        source_country:
+          description: Send country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        source_currency:
+          description: Send currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          type: string
+      type: object
+    RemittanceCorridorsQuoteRequest:
+      properties:
+        customer_id:
+          format: uuid
+          type: string
+        receive_amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        send_amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      type: object
+    RemittanceCorridorsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    RemittancePartner:
+      description: Payout / correspondent partner used for cross-border remittances
+      properties:
+        api_endpoint:
+          description: API endpoint
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        countries:
+          additionalProperties: true
+          description: Payout countries
+          type: object
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Partner name
+          maxLength: 140
+          type: string
+        partner_type:
+          description: BANK, MTO, WALLET_OPERATOR, AGGREGATOR
+          maxLength: 32
+          type: string
+        payout_methods:
+          additionalProperties: true
+          description: Supported payout methods
+          type: object
+        prefunding_account_id:
+          description: Prefunded account at the partner
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sla_minutes:
+          description: Promised delivery time
+          format: int32
+          type:
+          - integer
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - partner_type
+      - countries
+      - payout_methods
+      - is_active
+      type: object
+    RemittancePartnerCreate:
+      properties:
+        api_endpoint:
+          description: API endpoint
+          maxLength: 500
+          type: string
+        countries:
+          additionalProperties: true
+          description: Payout countries
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Partner name
+          maxLength: 140
+          type: string
+        partner_type:
+          description: BANK, MTO, WALLET_OPERATOR, AGGREGATOR
+          maxLength: 32
+          type: string
+        payout_methods:
+          additionalProperties: true
+          description: Supported payout methods
+          type: object
+        prefunding_account_id:
+          description: Prefunded account at the partner
+          format: uuid
+          type: string
+        sla_minutes:
+          description: Promised delivery time
+          format: int32
+          type: integer
+      required:
+      - name
+      - partner_type
+      - countries
+      - payout_methods
+      type: object
+    RemittancePartnerPage:
+      description: One page of RemittancePartner results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RemittancePartner'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RemittancePartnerUpdate:
+      properties:
+        api_endpoint:
+          description: API endpoint
+          maxLength: 500
+          type: string
+        countries:
+          additionalProperties: true
+          description: Payout countries
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Partner name
+          maxLength: 140
+          type: string
+        partner_type:
+          description: BANK, MTO, WALLET_OPERATOR, AGGREGATOR
+          maxLength: 32
+          type: string
+        payout_methods:
+          additionalProperties: true
+          description: Supported payout methods
+          type: object
+        prefunding_account_id:
+          description: Prefunded account at the partner
+          format: uuid
+          type: string
+        sla_minutes:
+          description: Promised delivery time
+          format: int32
+          type: integer
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'ISO 20022-native payments hub. Initiates, screens, approves, routes, submits and settles payments on every
+    rail (instant, batch, RTGS, mobile money, cross-border); manages payees, aliases, bulk files, direct-debit mandates, request-to-pay,
+    payment links and QR codes; runs rail routing, settlement, liquidity and FX.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — fx-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/fx/quotes:
+    get:
+      operationId: fxQuotesList
+      summary: List fx quotes
+      tags:
+      - Fx Quotes
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: sell_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: buy_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - ACCEPTED
+          - EXPIRED
+          - CANCELLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuotePage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_quote
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fxQuotesCreate
+      summary: Create fx quote
+      tags:
+      - Fx Quotes
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxQuoteCreate'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_quote
+      x-crud: true
+      x-crud-create: true
+  /v1/fx/quotes/{id}:
+    get:
+      operationId: fxQuotesGet
+      summary: Retrieve fx quote
+      tags:
+      - Fx Quotes
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_quote
+      x-crud: true
+      x-crud-get: true
+  /v1/fx/quotes/{id}/accept:
+    post:
+      operationId: fxQuotesAccept
+      summary: Accept the quote and book the deal
+      tags:
+      - Fx Quotes
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxQuotesAcceptRequest'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_quote
+  /v1/fx/quotes/{id}/cancel:
+    post:
+      operationId: fxQuotesCancel
+      summary: Cancel an unused quote
+      tags:
+      - Fx Quotes
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_quote
+  /v1/fx/deals:
+    get:
+      operationId: fxDealsList
+      summary: List fx deals
+      tags:
+      - Fx Deals
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: payment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - BOOKED
+          - SETTLED
+          - CANCELLED
+          - FAILED
+      - name: sell_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: buy_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: value_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxDealPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_deal
+      x-crud: true
+      x-crud-list: true
+  /v1/fx/deals/{id}:
+    get:
+      operationId: fxDealsGet
+      summary: Retrieve fx deal
+      tags:
+      - Fx Deals
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_deal
+      x-crud: true
+      x-crud-get: true
+  /v1/fx/deals/{id}/cancel:
+    post:
+      operationId: fxDealsCancel
+      summary: Cancel a deal before settlement
+      tags:
+      - Fx Deals
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxDealsCancelRequest'
+      x-requirements:
+      - LED-03
+      - PAY-06
+      x-service: fx-service
+      x-table: fx_deal
+  /v1/fx/margin-rules:
+    get:
+      operationId: fxMarginRulesList
+      summary: List fx margin rules
+      tags:
+      - Fx Margin Rules
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: currency_pair
+        in: query
+        schema:
+          type: string
+          maxLength: 7
+      - name: segment
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxMarginRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-06
+      - PRC-04
+      x-service: fx-service
+      x-table: fx_margin_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fxMarginRulesCreate
+      summary: Create fx margin rule
+      tags:
+      - Fx Margin Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxMarginRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxMarginRuleCreate'
+      x-requirements:
+      - PAY-06
+      - PRC-04
+      x-service: fx-service
+      x-table: fx_margin_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/fx/margin-rules/{id}:
+    get:
+      operationId: fxMarginRulesGet
+      summary: Retrieve fx margin rule
+      tags:
+      - Fx Margin Rules
+      security:
+      - oauth2:
+        - payments:read
+      parameters: &id006
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxMarginRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-06
+      - PRC-04
+      x-service: fx-service
+      x-table: fx_margin_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: fxMarginRulesUpdate
+      summary: Update fx margin rule
+      tags:
+      - Fx Margin Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxMarginRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxMarginRuleUpdate'
+      x-requirements:
+      - PAY-06
+      - PRC-04
+      x-service: fx-service
+      x-table: fx_margin_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: fxMarginRulesDelete
+      summary: Delete fx margin rule
+      tags:
+      - Fx Margin Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters: *id006
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-06
+      - PRC-04
+      x-service: fx-service
+      x-table: fx_margin_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/remittance/partners:
+    get:
+      operationId: remittancePartnersList
+      summary: List remittance partners
+      tags:
+      - Remittance Partners
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: partner_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittancePartnerPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-06
+      x-service: fx-service
+      x-table: remittance_partner
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: remittancePartnersCreate
+      summary: Create remittance partner
+      tags:
+      - Remittance Partners
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittancePartner'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittancePartnerCreate'
+      x-requirements:
+      - PAY-06
+      x-service: fx-service
+      x-table: remittance_partner
+      x-crud: true
+      x-crud-create: true
+  /v1/remittance/partners/{id}:
+    get:
+      operationId: remittancePartnersGet
+      summary: Retrieve remittance partner
+      tags:
+      - Remittance Partners
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittancePartner'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-06
+      x-service: fx-service
+      x-table: remittance_partner
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: remittancePartnersUpdate
+      summary: Update remittance partner
+      tags:
+      - Remittance Partners
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittancePartner'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittancePartnerUpdate'
+      x-requirements:
+      - PAY-06
+      x-service: fx-service
+      x-table: remittance_partner
+      x-crud: true
+      x-crud-update: true
+  /v1/remittance/corridors:
+    get:
+      operationId: remittanceCorridorsList
+      summary: List remittance corridors
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: source_country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: destination_country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: payout_method
+        in: query
+        schema:
+          type: string
+          enum:
+          - BANK_ACCOUNT
+          - MOBILE_WALLET
+          - CASH_PICKUP
+          - CARD
+          - HOME_DELIVERY
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+      - name: remittance_partner_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittanceCorridorPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-table: remittance_corridor
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: remittanceCorridorsCreate
+      summary: Create remittance corridor
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittanceCorridor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceCorridorCreate'
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-table: remittance_corridor
+      x-crud: true
+      x-crud-create: true
+  /v1/remittance/corridors/{id}:
+    get:
+      operationId: remittanceCorridorsGet
+      summary: Retrieve remittance corridor
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittanceCorridor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-table: remittance_corridor
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: remittanceCorridorsUpdate
+      summary: Update remittance corridor
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittanceCorridor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceCorridorUpdate'
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-table: remittance_corridor
+      x-crud: true
+      x-crud-update: true
+  /v1/remittance/corridors/{id}/quote:
+    post:
+      operationId: remittanceCorridorsQuote
+      summary: Price a remittance in this corridor
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceCorridorsQuoteRequest'
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-table: remittance_corridor
+  /v1/remittance/corridors/{id}/suspend:
+    post:
+      operationId: remittanceCorridorsSuspend
+      summary: Suspend the corridor
+      tags:
+      - Remittance Corridors
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemittanceCorridor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemittanceCorridorsSuspendRequest'
+      x-requirements:
+      - PAY-06
+      - PAY-08
+      x-service: fx-service
+      x-table: remittance_corridor
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A firm FX quote valid until expiry
+  name: Fx Quotes
+- description: A booked FX conversion (from an accepted quote)
+  name: Fx Deals
+- description: Margin rules per currency pair, segment and amount band
+  name: Fx Margin Rules
+- description: Payout / correspondent partner used for cross-border remittances
+  name: Remittance Partners
+- description: Send-receive corridor with limits, pricing and partner routing
+  name: Remittance Corridors

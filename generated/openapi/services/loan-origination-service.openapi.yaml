@@ -1,0 +1,6454 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AffordabilityAssessment:
+      description: Affordability calculation (income, commitments, stressed instalment). Append-only.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        debt_to_income:
+          description: Debt-to-income ratio
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        disposable_income:
+          description: Disposable income after the new loan
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        living_costs:
+          description: Living costs (declared or statistical floor)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        max_affordable_amount:
+          description: Largest affordable amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        monthly_commitments:
+          description: Existing monthly commitments
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        policy_version:
+          description: Affordability policy version
+          maxLength: 32
+          type: string
+        proposed_instalment:
+          description: Instalment of the requested loan
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        result:
+          description: Outcome
+          enum:
+          - PASS
+          - FAIL
+          - MARGINAL
+          type: string
+        stressed_instalment:
+          description: Instalment at stressed rate
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        verified_monthly_income:
+          description: Verified monthly income
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - loan_application_id
+      - verified_monthly_income
+      - monthly_commitments
+      - living_costs
+      - proposed_instalment
+      - debt_to_income
+      - disposable_income
+      - result
+      - currency
+      - policy_version
+      type: object
+    AffordabilityAssessmentPage:
+      description: One page of AffordabilityAssessment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AffordabilityAssessment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BureauReport:
+      description: A credit bureau pull for an applicant
+      properties:
+        bureau_reference:
+          description: Provider reference
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        bureau_score:
+          description: Score returned by the bureau
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        consent_reference:
+          description: Consent captured for this pull
+          maxLength: 128
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Subject of the report
+          format: uuid
+          type: string
+        delinquent_accounts:
+          description: Accounts in delinquency
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inquiries_6m:
+          description: Inquiries in the last 6 months
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        loan_application_id:
+          description: Application (empty for periodic reviews)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        open_accounts:
+          description: Open credit accounts
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        provider:
+          description: Bureau provider, e.g. EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA
+          maxLength: 40
+          type: string
+        pull_type:
+          description: HARD or SOFT inquiry
+          maxLength: 16
+          type: string
+        raw_document_id:
+          description: Raw report stored as an encrypted document
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        received_at:
+          description: Response time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        requested_at:
+          description: Request time
+          format: date-time
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        score_band:
+          description: Band returned by the bureau
+          maxLength: 16
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - RECEIVED
+          - NO_HIT
+          - FAILED
+          - EXPIRED
+          readOnly: true
+          type: string
+        summary:
+          additionalProperties: true
+          description: Normalised summary of the report
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        total_debt:
+          description: Total outstanding debt reported
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_until:
+          description: Report reuse expiry
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        worst_dpd_24m:
+          description: Worst days past due in 24 months
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - provider
+      - pull_type
+      - status
+      - consent_reference
+      - requested_at
+      type: object
+    BureauReportPage:
+      description: One page of BureauReport results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BureauReport'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CreditDecision:
+      description: The credit decision for an application. Append-only; a new decision supersedes the last.
+      properties:
+        approval_request_id:
+          description: Maker-checker approval for overrides
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approved_amount:
+          description: Approved amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        approved_rate:
+          description: Approved nominal annual rate
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        approved_term_months:
+          description: Approved term
+          format: int32
+          type:
+          - integer
+          - 'null'
+        conditions:
+          additionalProperties: true
+          description: Conditions precedent (documents, collateral, guarantor)
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decided_by:
+          description: Underwriter for manual decisions
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        decline_reasons:
+          additionalProperties: true
+          description: Adverse action reasons communicated to the applicant
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        method:
+          description: Automatic or manual
+          enum:
+          - AUTOMATIC
+          - MANUAL
+          type: string
+        notes:
+          description: Underwriter notes
+          type:
+          - string
+          - 'null'
+        outcome:
+          description: Decision
+          enum:
+          - APPROVED
+          - DECLINED
+          - REFER
+          - COUNTER_OFFER
+          type: string
+        policy_rules_fired:
+          additionalProperties: true
+          description: Policy rules evaluated and their results
+          type:
+          - object
+          - 'null'
+        risk_grade:
+          description: Risk grade at decision
+          maxLength: 8
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - loan_application_id
+      - outcome
+      - method
+      type: object
+    CreditDecisionPage:
+      description: One page of CreditDecision results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CreditDecision'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CreditScore:
+      description: A score produced for an application with explainable reason codes. Append-only.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inputs_hash:
+          description: Hash of feature inputs for reproducibility
+          maxLength: 64
+          type: string
+        latency_ms:
+          description: Scoring latency
+          format: int32
+          type:
+          - integer
+          - 'null'
+        loan_applicant_id:
+          description: Applicant scored
+          format: uuid
+          type:
+          - string
+          - 'null'
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        probability_of_default:
+          description: Estimated PD
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        reason_codes:
+          additionalProperties: true
+          description: Top adverse-action reason codes with contribution
+          type: object
+        risk_grade:
+          description: Risk grade, e.g. A1..E5
+          maxLength: 8
+          type: string
+        score:
+          description: Score
+          format: int32
+          type: integer
+        scorecard_version_id:
+          description: Scorecard version used
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - loan_application_id
+      - scorecard_version_id
+      - score
+      - risk_grade
+      - reason_codes
+      - inputs_hash
+      type: object
+    CreditScorePage:
+      description: One page of CreditScore results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CreditScore'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ESignatureRequest:
+      description: E-signature envelope for the loan agreement
+      properties:
+        agreement_document_id:
+          description: Agreement to sign
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        loan_offer_id:
+          description: Offer being signed
+          format: uuid
+          type: string
+        provider:
+          description: DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER
+          maxLength: 40
+          type: string
+        provider_envelope_id:
+          description: Provider reference
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        signed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        signed_document_id:
+          description: Signed agreement
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        signers:
+          additionalProperties: true
+          description: Signers and their order
+          type: object
+        status:
+          description: Status
+          enum:
+          - CREATED
+          - SENT
+          - VIEWED
+          - SIGNED
+          - DECLINED
+          - EXPIRED
+          - VOIDED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - loan_offer_id
+      - provider
+      - status
+      - signers
+      type: object
+    ESignatureRequestPage:
+      description: One page of ESignatureRequest results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ESignatureRequest'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ESignatureRequestsCallbackRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+        provider_status:
+          maxLength: 40
+          type: string
+      required:
+      - provider_status
+      type: object
+    ESignatureRequestsVoidRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    LoanApplicant:
+      description: A person or business on an application (primary, co-applicant, guarantor)
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Applicant customer
+          format: uuid
+          type: string
+        dependants:
+          description: Number of dependants
+          format: int32
+          type:
+          - integer
+          - 'null'
+        employer_name:
+          description: Employer
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        employment_start_date:
+          description: Employment start
+          format: date
+          type:
+          - string
+          - 'null'
+        employment_status:
+          description: EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        monthly_net_income:
+          description: Declared monthly net income
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        occupation:
+          description: Occupation
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        residential_status:
+          description: OWNER, TENANT, WITH_PARENTS, OTHER
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        role:
+          description: Role on the application
+          enum:
+          - PRIMARY
+          - CO_APPLICANT
+          - GUARANTOR
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        share_of_liability:
+          description: Share of the liability (0..1) for co-borrowers
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - loan_application_id
+      - customer_id
+      - role
+      type: object
+    LoanApplicantCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Applicant customer
+          format: uuid
+          type: string
+        dependants:
+          description: Number of dependants
+          format: int32
+          type: integer
+        employer_name:
+          description: Employer
+          maxLength: 160
+          type: string
+        employment_start_date:
+          description: Employment start
+          format: date
+          type: string
+        employment_status:
+          description: EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT
+          maxLength: 32
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        monthly_net_income:
+          description: Declared monthly net income
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        occupation:
+          description: Occupation
+          maxLength: 120
+          type: string
+        residential_status:
+          description: OWNER, TENANT, WITH_PARENTS, OTHER
+          maxLength: 32
+          type: string
+        role:
+          description: Role on the application
+          enum:
+          - PRIMARY
+          - CO_APPLICANT
+          - GUARANTOR
+          type: string
+        share_of_liability:
+          description: Share of the liability (0..1) for co-borrowers
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - loan_application_id
+      - customer_id
+      - role
+      type: object
+    LoanApplicantPage:
+      description: One page of LoanApplicant results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LoanApplicant'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LoanApplicantUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Applicant customer
+          format: uuid
+          type: string
+        dependants:
+          description: Number of dependants
+          format: int32
+          type: integer
+        employer_name:
+          description: Employer
+          maxLength: 160
+          type: string
+        employment_start_date:
+          description: Employment start
+          format: date
+          type: string
+        employment_status:
+          description: EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT
+          maxLength: 32
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        monthly_net_income:
+          description: Declared monthly net income
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        occupation:
+          description: Occupation
+          maxLength: 120
+          type: string
+        residential_status:
+          description: OWNER, TENANT, WITH_PARENTS, OTHER
+          maxLength: 32
+          type: string
+        role:
+          description: Role on the application
+          enum:
+          - PRIMARY
+          - CO_APPLICANT
+          - GUARANTOR
+          type: string
+        share_of_liability:
+          description: Share of the liability (0..1) for co-borrowers
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      type: object
+    LoanApplication:
+      description: An application for a loan, credit line, BNPL plan or nano-loan
+      properties:
+        agent_id:
+          description: Agent who assisted the application
+          format: uuid
+          type:
+          - string
+          - 'null'
+        application_number:
+          description: Human-readable application number
+          maxLength: 32
+          readOnly: true
+          type: string
+        assigned_to:
+          description: Underwriter assigned for manual review
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        branch_id:
+          description: Originating branch
+          format: uuid
+          type:
+          - string
+          - 'null'
+        channel:
+          description: Channel the application came from
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - API
+          - USSD
+          - MERCHANT_POS
+          type: string
+        consent_at:
+          description: Consent time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        consent_bureau:
+          description: Applicant consented to a credit bureau check
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Primary applicant
+          format: uuid
+          type: string
+        decided_at:
+          description: Decision time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Application expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Lending legal entity
+          format: uuid
+          type:
+          - string
+          - 'null'
+        loan_type:
+          description: Kind of credit requested
+          enum:
+          - INSTALMENT
+          - BNPL
+          - NANO
+          - MERCHANT_FINANCING
+          - MORTGAGE
+          - VEHICLE
+          - OVERDRAFT_TERM
+          - SME_TERM
+          type: string
+        merchant_id:
+          description: Merchant for BNPL / point-of-sale financing
+          format: uuid
+          type:
+          - string
+          - 'null'
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        product_id:
+          description: Lending product applied for
+          format: uuid
+          type: string
+        product_version_id:
+          description: Product version in force at submission
+          format: uuid
+          type:
+          - string
+          - 'null'
+        purpose:
+          description: Purpose of the loan
+          enum:
+          - PERSONAL
+          - HOME
+          - VEHICLE
+          - EDUCATION
+          - MEDICAL
+          - BUSINESS_WORKING_CAPITAL
+          - BUSINESS_ASSET
+          - DEBT_CONSOLIDATION
+          - PURCHASE_FINANCING
+          - AGRICULTURE
+          - OTHER
+          type: string
+        purpose_detail:
+          description: Free-text purpose description
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        requested_amount:
+          description: Amount requested
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        requested_frequency:
+          description: Preferred repayment frequency
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          type:
+          - string
+          - 'null'
+        requested_term_months:
+          description: Term requested in months
+          format: int32
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - BUREAU_PENDING
+          - SCORED
+          - REFERRED
+          - APPROVED
+          - COUNTER_OFFERED
+          - DECLINED
+          - OFFER_ACCEPTED
+          - SIGNED
+          - DISBURSED
+          - WITHDRAWN
+          - EXPIRED
+          - CANCELLED
+          readOnly: true
+          type: string
+        submitted_at:
+          description: Submission time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_id:
+          description: Wallet scored for nano-loans
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - application_number
+      - customer_id
+      - product_id
+      - channel
+      - loan_type
+      - purpose
+      - requested_amount
+      - currency
+      - status
+      - consent_bureau
+      type: object
+    LoanApplicationCreate:
+      properties:
+        agent_id:
+          description: Agent who assisted the application
+          format: uuid
+          type: string
+        assigned_to:
+          description: Underwriter assigned for manual review
+          maxLength: 64
+          type: string
+        branch_id:
+          description: Originating branch
+          format: uuid
+          type: string
+        channel:
+          description: Channel the application came from
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - API
+          - USSD
+          - MERCHANT_POS
+          type: string
+        consent_at:
+          description: Consent time
+          format: date-time
+          type: string
+        consent_bureau:
+          description: Applicant consented to a credit bureau check
+          type: boolean
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Primary applicant
+          format: uuid
+          type: string
+        expires_at:
+          description: Application expiry
+          format: date-time
+          type: string
+        legal_entity_id:
+          description: Lending legal entity
+          format: uuid
+          type: string
+        loan_type:
+          description: Kind of credit requested
+          enum:
+          - INSTALMENT
+          - BNPL
+          - NANO
+          - MERCHANT_FINANCING
+          - MORTGAGE
+          - VEHICLE
+          - OVERDRAFT_TERM
+          - SME_TERM
+          type: string
+        merchant_id:
+          description: Merchant for BNPL / point-of-sale financing
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        product_id:
+          description: Lending product applied for
+          format: uuid
+          type: string
+        product_version_id:
+          description: Product version in force at submission
+          format: uuid
+          type: string
+        purpose:
+          description: Purpose of the loan
+          enum:
+          - PERSONAL
+          - HOME
+          - VEHICLE
+          - EDUCATION
+          - MEDICAL
+          - BUSINESS_WORKING_CAPITAL
+          - BUSINESS_ASSET
+          - DEBT_CONSOLIDATION
+          - PURCHASE_FINANCING
+          - AGRICULTURE
+          - OTHER
+          type: string
+        purpose_detail:
+          description: Free-text purpose description
+          maxLength: 500
+          type: string
+        requested_amount:
+          description: Amount requested
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        requested_frequency:
+          description: Preferred repayment frequency
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          type: string
+        requested_term_months:
+          description: Term requested in months
+          format: int32
+          type: integer
+        wallet_id:
+          description: Wallet scored for nano-loans
+          format: uuid
+          type: string
+      required:
+      - customer_id
+      - product_id
+      - channel
+      - loan_type
+      - purpose
+      - requested_amount
+      - currency
+      type: object
+    LoanApplicationDocument:
+      description: Documents requested and supplied for an application
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_id:
+          description: Stored document
+          format: uuid
+          type:
+          - string
+          - 'null'
+        document_type:
+          description: Type
+          enum:
+          - ID_PROOF
+          - INCOME_PROOF
+          - BANK_STATEMENT
+          - TAX_RETURN
+          - ADDRESS_PROOF
+          - BUSINESS_REGISTRATION
+          - FINANCIAL_STATEMENTS
+          - COLLATERAL_DOCUMENT
+          - SIGNED_AGREEMENT
+          - OTHER
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        loan_applicant_id:
+          description: Applicant the document belongs to
+          format: uuid
+          type:
+          - string
+          - 'null'
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        rejection_reason:
+          description: Why it was rejected
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - UPLOADED
+          - VERIFIED
+          - REJECTED
+          - EXPIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified_at:
+          description: Verification time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified_by:
+          description: Verifier
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - loan_application_id
+      - document_type
+      - status
+      type: object
+    LoanApplicationDocumentCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        document_id:
+          description: Stored document
+          format: uuid
+          type: string
+        document_type:
+          description: Type
+          enum:
+          - ID_PROOF
+          - INCOME_PROOF
+          - BANK_STATEMENT
+          - TAX_RETURN
+          - ADDRESS_PROOF
+          - BUSINESS_REGISTRATION
+          - FINANCIAL_STATEMENTS
+          - COLLATERAL_DOCUMENT
+          - SIGNED_AGREEMENT
+          - OTHER
+          type: string
+        loan_applicant_id:
+          description: Applicant the document belongs to
+          format: uuid
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        rejection_reason:
+          description: Why it was rejected
+          maxLength: 255
+          type: string
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - UPLOADED
+          - VERIFIED
+          - REJECTED
+          - EXPIRED
+          type: string
+      required:
+      - loan_application_id
+      - document_type
+      type: object
+    LoanApplicationDocumentPage:
+      description: One page of LoanApplicationDocument results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LoanApplicationDocument'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LoanApplicationDocumentUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        document_id:
+          description: Stored document
+          format: uuid
+          type: string
+        document_type:
+          description: Type
+          enum:
+          - ID_PROOF
+          - INCOME_PROOF
+          - BANK_STATEMENT
+          - TAX_RETURN
+          - ADDRESS_PROOF
+          - BUSINESS_REGISTRATION
+          - FINANCIAL_STATEMENTS
+          - COLLATERAL_DOCUMENT
+          - SIGNED_AGREEMENT
+          - OTHER
+          type: string
+        loan_applicant_id:
+          description: Applicant the document belongs to
+          format: uuid
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        rejection_reason:
+          description: Why it was rejected
+          maxLength: 255
+          type: string
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - UPLOADED
+          - VERIFIED
+          - REJECTED
+          - EXPIRED
+          type: string
+      type: object
+    LoanApplicationDocumentsRejectRequest:
+      properties:
+        rejection_reason:
+          maxLength: 255
+          type: string
+      required:
+      - rejection_reason
+      type: object
+    LoanApplicationPage:
+      description: One page of LoanApplication results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LoanApplication'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LoanApplicationUpdate:
+      properties:
+        agent_id:
+          description: Agent who assisted the application
+          format: uuid
+          type: string
+        assigned_to:
+          description: Underwriter assigned for manual review
+          maxLength: 64
+          type: string
+        branch_id:
+          description: Originating branch
+          format: uuid
+          type: string
+        channel:
+          description: Channel the application came from
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - API
+          - USSD
+          - MERCHANT_POS
+          type: string
+        consent_at:
+          description: Consent time
+          format: date-time
+          type: string
+        consent_bureau:
+          description: Applicant consented to a credit bureau check
+          type: boolean
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Primary applicant
+          format: uuid
+          type: string
+        expires_at:
+          description: Application expiry
+          format: date-time
+          type: string
+        legal_entity_id:
+          description: Lending legal entity
+          format: uuid
+          type: string
+        loan_type:
+          description: Kind of credit requested
+          enum:
+          - INSTALMENT
+          - BNPL
+          - NANO
+          - MERCHANT_FINANCING
+          - MORTGAGE
+          - VEHICLE
+          - OVERDRAFT_TERM
+          - SME_TERM
+          type: string
+        merchant_id:
+          description: Merchant for BNPL / point-of-sale financing
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        product_id:
+          description: Lending product applied for
+          format: uuid
+          type: string
+        product_version_id:
+          description: Product version in force at submission
+          format: uuid
+          type: string
+        purpose:
+          description: Purpose of the loan
+          enum:
+          - PERSONAL
+          - HOME
+          - VEHICLE
+          - EDUCATION
+          - MEDICAL
+          - BUSINESS_WORKING_CAPITAL
+          - BUSINESS_ASSET
+          - DEBT_CONSOLIDATION
+          - PURCHASE_FINANCING
+          - AGRICULTURE
+          - OTHER
+          type: string
+        purpose_detail:
+          description: Free-text purpose description
+          maxLength: 500
+          type: string
+        requested_amount:
+          description: Amount requested
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        requested_frequency:
+          description: Preferred repayment frequency
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          type: string
+        requested_term_months:
+          description: Term requested in months
+          format: int32
+          type: integer
+        wallet_id:
+          description: Wallet scored for nano-loans
+          format: uuid
+          type: string
+      type: object
+    LoanApplicationsAssignRequest:
+      properties:
+        assigned_to:
+          maxLength: 64
+          type: string
+      required:
+      - assigned_to
+      type: object
+    LoanApplicationsBureauPullRequest:
+      properties:
+        loan_applicant_id:
+          format: uuid
+          type: string
+        provider:
+          maxLength: 40
+          type: string
+        pull_type:
+          maxLength: 16
+          type: string
+      required:
+      - loan_applicant_id
+      type: object
+    LoanApplicationsDecideRequest:
+      properties:
+        approved_amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        approved_rate:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        approved_term_months:
+          format: int32
+          type: integer
+        conditions:
+          additionalProperties: true
+          type: object
+        notes:
+          type: string
+        outcome:
+          enum:
+          - APPROVED
+          - DECLINED
+          - REFER
+          - COUNTER_OFFER
+          type: string
+      required:
+      - outcome
+      type: object
+    LoanApplicationsQuickQuoteRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+        product_id:
+          format: uuid
+          type: string
+        term_months:
+          format: int32
+          type: integer
+      required:
+      - product_id
+      - amount
+      - currency
+      - term_months
+      type: object
+    LoanApplicationsWithdrawRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    LoanFinancialItem:
+      description: Declared or verified income and expense lines used in affordability
+      properties:
+        amount:
+          description: Amount per frequency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        frequency:
+          description: Frequency
+          enum:
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          - ONE_OFF
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_verified:
+          description: Verified from documents, open banking or bureau
+          type: boolean
+        item_type:
+          description: Income or expense type
+          enum:
+          - SALARY
+          - BUSINESS_INCOME
+          - RENTAL_INCOME
+          - PENSION
+          - OTHER_INCOME
+          - RENT
+          - MORTGAGE
+          - LOAN_REPAYMENT
+          - LIVING_COSTS
+          - EDUCATION
+          - OTHER_EXPENSE
+          type: string
+        loan_applicant_id:
+          description: Applicant
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verification_source:
+          description: DOCUMENT, OPEN_BANKING, BUREAU, PAYROLL, TRANSACTION_HISTORY
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - loan_applicant_id
+      - item_type
+      - amount
+      - currency
+      - frequency
+      - is_verified
+      type: object
+    LoanFinancialItemCreate:
+      properties:
+        amount:
+          description: Amount per frequency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          maxLength: 255
+          type: string
+        frequency:
+          description: Frequency
+          enum:
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          - ONE_OFF
+          type: string
+        is_verified:
+          description: Verified from documents, open banking or bureau
+          type: boolean
+        item_type:
+          description: Income or expense type
+          enum:
+          - SALARY
+          - BUSINESS_INCOME
+          - RENTAL_INCOME
+          - PENSION
+          - OTHER_INCOME
+          - RENT
+          - MORTGAGE
+          - LOAN_REPAYMENT
+          - LIVING_COSTS
+          - EDUCATION
+          - OTHER_EXPENSE
+          type: string
+        loan_applicant_id:
+          description: Applicant
+          format: uuid
+          type: string
+        verification_source:
+          description: DOCUMENT, OPEN_BANKING, BUREAU, PAYROLL, TRANSACTION_HISTORY
+          maxLength: 40
+          type: string
+      required:
+      - loan_applicant_id
+      - item_type
+      - amount
+      - currency
+      - frequency
+      type: object
+    LoanFinancialItemPage:
+      description: One page of LoanFinancialItem results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LoanFinancialItem'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LoanFinancialItemUpdate:
+      properties:
+        amount:
+          description: Amount per frequency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          maxLength: 255
+          type: string
+        frequency:
+          description: Frequency
+          enum:
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          - ONE_OFF
+          type: string
+        is_verified:
+          description: Verified from documents, open banking or bureau
+          type: boolean
+        item_type:
+          description: Income or expense type
+          enum:
+          - SALARY
+          - BUSINESS_INCOME
+          - RENTAL_INCOME
+          - PENSION
+          - OTHER_INCOME
+          - RENT
+          - MORTGAGE
+          - LOAN_REPAYMENT
+          - LIVING_COSTS
+          - EDUCATION
+          - OTHER_EXPENSE
+          type: string
+        loan_applicant_id:
+          description: Applicant
+          format: uuid
+          type: string
+        verification_source:
+          description: DOCUMENT, OPEN_BANKING, BUREAU, PAYROLL, TRANSACTION_HISTORY
+          maxLength: 40
+          type: string
+      type: object
+    LoanOffer:
+      description: A priced offer made to the applicant
+      properties:
+        accepted_at:
+          description: Acceptance time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        apr:
+          description: Annual percentage rate including fees
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        credit_decision_id:
+          description: Decision the offer is based on
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Offer expiry
+          format: date-time
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        instalment_amount:
+          description: Regular instalment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        interest_rate:
+          description: Nominal annual rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        offer_amount:
+          description: Principal offered
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        repayment_frequency:
+          description: Frequency
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        schedule_preview:
+          additionalProperties: true
+          description: Indicative repayment schedule
+          type: object
+        schedule_type:
+          description: Schedule type
+          enum:
+          - ANNUITY
+          - EQUAL_PRINCIPAL
+          - BULLET
+          - BALLOON
+          - INTEREST_ONLY
+          - CUSTOM
+          type: string
+        status:
+          description: Status
+          enum:
+          - ISSUED
+          - ACCEPTED
+          - DECLINED
+          - EXPIRED
+          - WITHDRAWN
+          readOnly: true
+          type: string
+        term_months:
+          description: Term
+          format: int32
+          type: integer
+        terms_document_id:
+          description: Pre-contract information / key facts document
+          format: uuid
+          type:
+          - string
+          - 'null'
+        total_repayable:
+          description: Total amount repayable
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        upfront_fees:
+          description: Fees deducted or charged at disbursement
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - loan_application_id
+      - credit_decision_id
+      - offer_amount
+      - currency
+      - term_months
+      - repayment_frequency
+      - schedule_type
+      - interest_rate
+      - apr
+      - upfront_fees
+      - instalment_amount
+      - total_repayable
+      - schedule_preview
+      - status
+      - expires_at
+      type: object
+    LoanOfferCreate:
+      properties:
+        apr:
+          description: Annual percentage rate including fees
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        credit_decision_id:
+          description: Decision the offer is based on
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        expires_at:
+          description: Offer expiry
+          format: date-time
+          type: string
+        instalment_amount:
+          description: Regular instalment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        interest_rate:
+          description: Nominal annual rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        loan_application_id:
+          description: Application
+          format: uuid
+          type: string
+        offer_amount:
+          description: Principal offered
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        repayment_frequency:
+          description: Frequency
+          enum:
+          - DAILY
+          - WEEKLY
+          - FORTNIGHTLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AT_MATURITY
+          type: string
+        schedule_preview:
+          additionalProperties: true
+          description: Indicative repayment schedule
+          type: object
+        schedule_type:
+          description: Schedule type
+          enum:
+          - ANNUITY
+          - EQUAL_PRINCIPAL
+          - BULLET
+          - BALLOON
+          - INTEREST_ONLY
+          - CUSTOM
+          type: string
+        term_months:
+          description: Term
+          format: int32
+          type: integer
+        terms_document_id:
+          description: Pre-contract information / key facts document
+          format: uuid
+          type: string
+        total_repayable:
+          description: Total amount repayable
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        upfront_fees:
+          description: Fees deducted or charged at disbursement
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - loan_application_id
+      - credit_decision_id
+      - offer_amount
+      - currency
+      - term_months
+      - repayment_frequency
+      - interest_rate
+      - apr
+      - instalment_amount
+      - total_repayable
+      - schedule_preview
+      - expires_at
+      type: object
+    LoanOfferPage:
+      description: One page of LoanOffer results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LoanOffer'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LoanOffersDeclineRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    LoanOffersWithdrawRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    Scorecard:
+      description: A credit scorecard / model family (application, behavioural, collections, wallet)
+      properties:
+        code:
+          description: Scorecard code
+          maxLength: 40
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        owner:
+          description: Model owner (model risk management)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scorecard_type:
+          description: Type
+          enum:
+          - APPLICATION
+          - BEHAVIOURAL
+          - COLLECTIONS
+          - WALLET_TRANSACTIONAL
+          - FRAUD_OVERLAY
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - scorecard_type
+      - is_active
+      type: object
+    ScorecardCreate:
+      properties:
+        code:
+          description: Scorecard code
+          maxLength: 40
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        owner:
+          description: Model owner (model risk management)
+          maxLength: 64
+          type: string
+        scorecard_type:
+          description: Type
+          enum:
+          - APPLICATION
+          - BEHAVIOURAL
+          - COLLECTIONS
+          - WALLET_TRANSACTIONAL
+          - FRAUD_OVERLAY
+          type: string
+      required:
+      - code
+      - name
+      - scorecard_type
+      type: object
+    ScorecardPage:
+      description: One page of Scorecard results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Scorecard'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ScorecardUpdate:
+      properties:
+        code:
+          description: Scorecard code
+          maxLength: 40
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        owner:
+          description: Model owner (model risk management)
+          maxLength: 64
+          type: string
+        scorecard_type:
+          description: Type
+          enum:
+          - APPLICATION
+          - BEHAVIOURAL
+          - COLLECTIONS
+          - WALLET_TRANSACTIONAL
+          - FRAUD_OVERLAY
+          type: string
+      type: object
+    ScorecardVersion:
+      description: A versioned scorecard or ML model with cut-offs; champion/challenger supported
+      properties:
+        activated_at:
+          description: Activation time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Model risk approver
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        challenger_traffic_pct:
+          description: Share of traffic routed to this challenger
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cutoffs:
+          additionalProperties: true
+          description: Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers
+          type: object
+        features:
+          additionalProperties: true
+          description: Input features and transformations
+          type: object
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        model_uri:
+          description: Model artefact location (model registry)
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scorecard_id:
+          description: Scorecard
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - VALIDATING
+          - ACTIVE
+          - CHAMPION
+          - CHALLENGER
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        validation_report_document_id:
+          description: Validation and bias-test report
+          format: uuid
+          type:
+          - string
+          - 'null'
+        version:
+          description: Version label
+          maxLength: 32
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - scorecard_id
+      - version
+      - status
+      - features
+      - cutoffs
+      type: object
+    ScorecardVersionCreate:
+      properties:
+        activated_at:
+          description: Activation time
+          format: date-time
+          type: string
+        approved_by:
+          description: Model risk approver
+          maxLength: 64
+          type: string
+        challenger_traffic_pct:
+          description: Share of traffic routed to this challenger
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoffs:
+          additionalProperties: true
+          description: Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers
+          type: object
+        features:
+          additionalProperties: true
+          description: Input features and transformations
+          type: object
+        model_uri:
+          description: Model artefact location (model registry)
+          maxLength: 500
+          type: string
+        scorecard_id:
+          description: Scorecard
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - VALIDATING
+          - ACTIVE
+          - CHAMPION
+          - CHALLENGER
+          - RETIRED
+          type: string
+        validation_report_document_id:
+          description: Validation and bias-test report
+          format: uuid
+          type: string
+        version:
+          description: Version label
+          maxLength: 32
+          type: string
+      required:
+      - scorecard_id
+      - version
+      - features
+      - cutoffs
+      type: object
+    ScorecardVersionPage:
+      description: One page of ScorecardVersion results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ScorecardVersion'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ScorecardVersionUpdate:
+      properties:
+        activated_at:
+          description: Activation time
+          format: date-time
+          type: string
+        approved_by:
+          description: Model risk approver
+          maxLength: 64
+          type: string
+        challenger_traffic_pct:
+          description: Share of traffic routed to this challenger
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoffs:
+          additionalProperties: true
+          description: Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers
+          type: object
+        features:
+          additionalProperties: true
+          description: Input features and transformations
+          type: object
+        model_uri:
+          description: Model artefact location (model registry)
+          maxLength: 500
+          type: string
+        scorecard_id:
+          description: Scorecard
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - VALIDATING
+          - ACTIVE
+          - CHAMPION
+          - CHALLENGER
+          - RETIRED
+          type: string
+        validation_report_document_id:
+          description: Validation and bias-test report
+          format: uuid
+          type: string
+        version:
+          description: Version label
+          maxLength: 32
+          type: string
+      type: object
+    ScorecardVersionsActivateRequest:
+      properties:
+        approval_request_id:
+          format: uuid
+          type: string
+      type: object
+    ScorecardVersionsSetChallengerRequest:
+      properties:
+        challenger_traffic_pct:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - challenger_traffic_pct
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            lending:read: Read Lending and Collections
+            lending:write: Change Lending and Collections
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            lending:read: Read Lending and Collections
+            lending:write: Change Lending and Collections
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Loan origination with bureau, scoring and explainable decisions; loan servicing for instalment loans, revolving
+    credit lines, BNPL and nano-loans; collateral management; and collections and recovery.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — loan-origination-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/loan-applications:
+    get:
+      operationId: loanApplicationsList
+      summary: List loan applications
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: product_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - IN_REVIEW
+          - BUREAU_PENDING
+          - SCORED
+          - REFERRED
+          - APPROVED
+          - COUNTER_OFFERED
+          - DECLINED
+          - OFFER_ACCEPTED
+          - SIGNED
+          - DISBURSED
+          - WITHDRAWN
+          - EXPIRED
+          - CANCELLED
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - API
+          - USSD
+          - MERCHANT_POS
+      - name: loan_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - INSTALMENT
+          - BNPL
+          - NANO
+          - MERCHANT_FINANCING
+          - MORTGAGE
+          - VEHICLE
+          - OVERDRAFT_TERM
+          - SME_TERM
+      - name: merchant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: assigned_to
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: loanApplicationsCreate
+      summary: Create loan application
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationCreate'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+      x-crud: true
+      x-crud-create: true
+  /v1/loan-applications/{id}:
+    get:
+      operationId: loanApplicationsGet
+      summary: Retrieve loan application
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: loanApplicationsUpdate
+      summary: Update loan application
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationUpdate'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+      x-crud: true
+      x-crud-update: true
+  /v1/loan-applications/{id}/submit:
+    post:
+      operationId: loanApplicationsSubmit
+      summary: Submit the application for decisioning
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/withdraw:
+    post:
+      operationId: loanApplicationsWithdraw
+      summary: Withdraw the application
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationsWithdrawRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/assign:
+    post:
+      operationId: loanApplicationsAssign
+      summary: Assign to an underwriter
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationsAssignRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/bureau-pull:
+    post:
+      operationId: loanApplicationsBureauPull
+      summary: Pull a credit bureau report
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BureauReport'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationsBureauPullRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/score:
+    post:
+      operationId: loanApplicationsScore
+      summary: Run the scorecard
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditScore'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/affordability:
+    post:
+      operationId: loanApplicationsAffordability
+      summary: Run the affordability assessment
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AffordabilityAssessment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/decide:
+    post:
+      operationId: loanApplicationsDecide
+      summary: Record a manual decision (maker)
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecision'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationsDecideRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/auto-decide:
+    post:
+      operationId: loanApplicationsAutoDecide
+      summary: Run automatic decisioning end to end
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecision'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/decisions:
+    get:
+      operationId: loanApplicationsDecisions
+      summary: Decision history
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/scores:
+    get:
+      operationId: loanApplicationsScores
+      summary: Scores produced
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditScorePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{id}/offers:
+    get:
+      operationId: loanApplicationsOffers
+      summary: Offers made
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOfferPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/quick-quote:
+    post:
+      operationId: loanApplicationsQuickQuote
+      summary: Indicative price without a bureau hard pull
+      tags:
+      - Loan Applications
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationsQuickQuoteRequest'
+      x-requirements:
+      - LND-01
+      - LND-06
+      - LND-07
+      x-service: loan-origination-service
+      x-table: loan_application
+  /v1/loan-applications/{loan_application_id}/applicants:
+    get:
+      operationId: loanApplicantsList
+      summary: List loan applicants
+      tags:
+      - Loan Applicants
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id006
+        name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: role
+        in: query
+        schema:
+          type: string
+          enum:
+          - PRIMARY
+          - CO_APPLICANT
+          - GUARANTOR
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicantPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CIF-01
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_applicant
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: loanApplicantsCreate
+      summary: Create loan applicant
+      tags:
+      - Loan Applicants
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicantCreate'
+      x-requirements:
+      - CIF-01
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_applicant
+      x-crud: true
+      x-crud-create: true
+  /v1/loan-applications/{loan_application_id}/applicants/{id}:
+    get:
+      operationId: loanApplicantsGet
+      summary: Retrieve loan applicant
+      tags:
+      - Loan Applicants
+      security:
+      - oauth2:
+        - lending:read
+      parameters: &id009
+      - &id007
+        name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-01
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_applicant
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: loanApplicantsUpdate
+      summary: Update loan applicant
+      tags:
+      - Loan Applicants
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id007
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicantUpdate'
+      x-requirements:
+      - CIF-01
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_applicant
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: loanApplicantsDelete
+      summary: Delete loan applicant
+      tags:
+      - Loan Applicants
+      security:
+      - oauth2:
+        - lending:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-01
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_applicant
+      x-crud: true
+      x-crud-delete: true
+  /v1/loan-applications/{loan_application_id}/financial-items:
+    get:
+      operationId: loanFinancialItemsList
+      summary: List loan financial items
+      tags:
+      - Loan Financial Items
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id010
+        name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_applicant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: item_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SALARY
+          - BUSINESS_INCOME
+          - RENTAL_INCOME
+          - PENSION
+          - OTHER_INCOME
+          - RENT
+          - MORTGAGE
+          - LOAN_REPAYMENT
+          - LIVING_COSTS
+          - EDUCATION
+          - OTHER_EXPENSE
+      - name: is_verified
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanFinancialItemPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_financial_item
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: loanFinancialItemsCreate
+      summary: Create loan financial item
+      tags:
+      - Loan Financial Items
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanFinancialItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanFinancialItemCreate'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_financial_item
+      x-crud: true
+      x-crud-create: true
+  /v1/loan-applications/{loan_application_id}/financial-items/{id}:
+    get:
+      operationId: loanFinancialItemsGet
+      summary: Retrieve loan financial item
+      tags:
+      - Loan Financial Items
+      security:
+      - oauth2:
+        - lending:read
+      parameters: &id013
+      - &id011
+        name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - &id012
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanFinancialItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_financial_item
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: loanFinancialItemsUpdate
+      summary: Update loan financial item
+      tags:
+      - Loan Financial Items
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id011
+      - *id012
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanFinancialItem'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanFinancialItemUpdate'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_financial_item
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: loanFinancialItemsDelete
+      summary: Delete loan financial item
+      tags:
+      - Loan Financial Items
+      security:
+      - oauth2:
+        - lending:write
+      parameters: *id013
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: loan_financial_item
+      x-crud: true
+      x-crud-delete: true
+  /v1/loan-applications/{loan_application_id}/documents:
+    get:
+      operationId: loanApplicationDocumentsList
+      summary: List loan application documents
+      tags:
+      - Loan Application Documents
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id014
+        name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: document_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - ID_PROOF
+          - INCOME_PROOF
+          - BANK_STATEMENT
+          - TAX_RETURN
+          - ADDRESS_PROOF
+          - BUSINESS_REGISTRATION
+          - FINANCIAL_STATEMENTS
+          - COLLATERAL_DOCUMENT
+          - SIGNED_AGREEMENT
+          - OTHER
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - UPLOADED
+          - VERIFIED
+          - REJECTED
+          - EXPIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationDocumentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-01
+      - ONB-02
+      x-service: loan-origination-service
+      x-table: loan_application_document
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: loanApplicationDocumentsCreate
+      summary: Create loan application document
+      tags:
+      - Loan Application Documents
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id014
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationDocumentCreate'
+      x-requirements:
+      - LND-01
+      - ONB-02
+      x-service: loan-origination-service
+      x-table: loan_application_document
+      x-crud: true
+      x-crud-create: true
+  /v1/loan-applications/{loan_application_id}/documents/{id}:
+    get:
+      operationId: loanApplicationDocumentsGet
+      summary: Retrieve loan application document
+      tags:
+      - Loan Application Documents
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id015
+        name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - &id016
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - ONB-02
+      x-service: loan-origination-service
+      x-table: loan_application_document
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: loanApplicationDocumentsUpdate
+      summary: Update loan application document
+      tags:
+      - Loan Application Documents
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id015
+      - *id016
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationDocumentUpdate'
+      x-requirements:
+      - LND-01
+      - ONB-02
+      x-service: loan-origination-service
+      x-table: loan_application_document
+      x-crud: true
+      x-crud-update: true
+  /v1/loan-applications/{loan_application_id}/documents/{id}/verify:
+    post:
+      operationId: loanApplicationDocumentsVerify
+      summary: Mark a document verified
+      tags:
+      - Loan Application Documents
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - ONB-02
+      x-service: loan-origination-service
+      x-table: loan_application_document
+  /v1/loan-applications/{loan_application_id}/documents/{id}/reject:
+    post:
+      operationId: loanApplicationDocumentsReject
+      summary: Reject a document
+      tags:
+      - Loan Application Documents
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: loan_application_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanApplicationDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationDocumentsRejectRequest'
+      x-requirements:
+      - LND-01
+      - ONB-02
+      x-service: loan-origination-service
+      x-table: loan_application_document
+  /v1/bureau-reports:
+    get:
+      operationId: bureauReportsList
+      summary: List bureau reports
+      tags:
+      - Bureau Reports
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: loan_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: provider
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - RECEIVED
+          - NO_HIT
+          - FAILED
+          - EXPIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BureauReportPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: bureau_report
+      x-crud: true
+      x-crud-list: true
+  /v1/bureau-reports/{id}:
+    get:
+      operationId: bureauReportsGet
+      summary: Retrieve bureau report
+      tags:
+      - Bureau Reports
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BureauReport'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: bureau_report
+      x-crud: true
+      x-crud-get: true
+  /v1/scorecards:
+    get:
+      operationId: scorecardsList
+      summary: List scorecards
+      tags:
+      - Scorecards
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: scorecard_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - APPLICATION
+          - BEHAVIOURAL
+          - COLLECTIONS
+          - WALLET_TRANSACTIONAL
+          - FRAUD_OVERLAY
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      - LND-01
+      - LND-07
+      x-service: loan-origination-service
+      x-table: scorecard
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: scorecardsCreate
+      summary: Create scorecard
+      tags:
+      - Scorecards
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scorecard'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardCreate'
+      x-requirements:
+      - AI-02
+      - LND-01
+      - LND-07
+      x-service: loan-origination-service
+      x-table: scorecard
+      x-crud: true
+      x-crud-create: true
+  /v1/scorecards/{id}:
+    get:
+      operationId: scorecardsGet
+      summary: Retrieve scorecard
+      tags:
+      - Scorecards
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id017
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scorecard'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - LND-01
+      - LND-07
+      x-service: loan-origination-service
+      x-table: scorecard
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: scorecardsUpdate
+      summary: Update scorecard
+      tags:
+      - Scorecards
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id017
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scorecard'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardUpdate'
+      x-requirements:
+      - AI-02
+      - LND-01
+      - LND-07
+      x-service: loan-origination-service
+      x-table: scorecard
+      x-crud: true
+      x-crud-update: true
+  /v1/scorecards/{scorecard_id}/versions:
+    get:
+      operationId: scorecardVersionsList
+      summary: List scorecard versions
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id018
+        name: scorecard_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - VALIDATING
+          - ACTIVE
+          - CHAMPION
+          - CHALLENGER
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: scorecardVersionsCreate
+      summary: Create scorecard version
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id018
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardVersionCreate'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+      x-crud: true
+      x-crud-create: true
+  /v1/scorecards/{scorecard_id}/versions/{id}:
+    get:
+      operationId: scorecardVersionsGet
+      summary: Retrieve scorecard version
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - &id019
+        name: scorecard_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - &id020
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: scorecardVersionsUpdate
+      summary: Update scorecard version
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - *id019
+      - *id020
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardVersionUpdate'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+      x-crud: true
+      x-crud-update: true
+  /v1/scorecards/{scorecard_id}/versions/{id}/activate:
+    post:
+      operationId: scorecardVersionsActivate
+      summary: Activate as champion (requires model risk approval)
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: scorecard_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardVersionsActivateRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+  /v1/scorecards/{scorecard_id}/versions/{id}/set-challenger:
+    post:
+      operationId: scorecardVersionsSetChallenger
+      summary: Route a share of traffic to this version
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: scorecard_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardVersionsSetChallengerRequest'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+  /v1/scorecards/{scorecard_id}/versions/{id}/retire:
+    post:
+      operationId: scorecardVersionsRetire
+      summary: Retire the version
+      tags:
+      - Scorecard Versions
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: scorecard_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScorecardVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - AI-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: scorecard_version
+  /v1/credit-scores:
+    get:
+      operationId: creditScoresList
+      summary: List credit scores
+      tags:
+      - Credit Scores
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: scorecard_version_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: risk_grade
+        in: query
+        schema:
+          type: string
+          maxLength: 8
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditScorePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - AI-02
+      - LND-01
+      - LND-07
+      x-service: loan-origination-service
+      x-table: credit_score
+      x-crud: true
+      x-crud-list: true
+  /v1/credit-scores/{id}:
+    get:
+      operationId: creditScoresGet
+      summary: Retrieve credit score
+      tags:
+      - Credit Scores
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditScore'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - AI-02
+      - LND-01
+      - LND-07
+      x-service: loan-origination-service
+      x-table: credit_score
+      x-crud: true
+      x-crud-get: true
+  /v1/affordability-assessments:
+    get:
+      operationId: affordabilityAssessmentsList
+      summary: List affordability assessments
+      tags:
+      - Affordability Assessments
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: result
+        in: query
+        schema:
+          type: string
+          enum:
+          - PASS
+          - FAIL
+          - MARGINAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AffordabilityAssessmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: affordability_assessment
+      x-crud: true
+      x-crud-list: true
+  /v1/affordability-assessments/{id}:
+    get:
+      operationId: affordabilityAssessmentsGet
+      summary: Retrieve affordability assessment
+      tags:
+      - Affordability Assessments
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AffordabilityAssessment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: affordability_assessment
+      x-crud: true
+      x-crud-get: true
+  /v1/credit-decisions:
+    get:
+      operationId: creditDecisionsList
+      summary: List credit decisions
+      tags:
+      - Credit Decisions
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: outcome
+        in: query
+        schema:
+          type: string
+          enum:
+          - APPROVED
+          - DECLINED
+          - REFER
+          - COUNTER_OFFER
+      - name: method
+        in: query
+        schema:
+          type: string
+          enum:
+          - AUTOMATIC
+          - MANUAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecisionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LIM-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: credit_decision
+      x-crud: true
+      x-crud-list: true
+  /v1/credit-decisions/{id}:
+    get:
+      operationId: creditDecisionsGet
+      summary: Retrieve credit decision
+      tags:
+      - Credit Decisions
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditDecision'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-02
+      - LND-01
+      x-service: loan-origination-service
+      x-table: credit_decision
+      x-crud: true
+      x-crud-get: true
+  /v1/loan-offers:
+    get:
+      operationId: loanOffersList
+      summary: List loan offers
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ISSUED
+          - ACCEPTED
+          - DECLINED
+          - EXPIRED
+          - WITHDRAWN
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOfferPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-table: loan_offer
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: loanOffersCreate
+      summary: Create loan offer
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOffer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanOfferCreate'
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-table: loan_offer
+      x-crud: true
+      x-crud-create: true
+  /v1/loan-offers/{id}:
+    get:
+      operationId: loanOffersGet
+      summary: Retrieve loan offer
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOffer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-table: loan_offer
+      x-crud: true
+      x-crud-get: true
+  /v1/loan-offers/{id}/accept:
+    post:
+      operationId: loanOffersAccept
+      summary: Accept the offer
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESignatureRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-table: loan_offer
+  /v1/loan-offers/{id}/decline:
+    post:
+      operationId: loanOffersDecline
+      summary: Decline the offer
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOffer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanOffersDeclineRequest'
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-table: loan_offer
+  /v1/loan-offers/{id}/withdraw:
+    post:
+      operationId: loanOffersWithdraw
+      summary: Withdraw the offer (lender)
+      tags:
+      - Loan Offers
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoanOffer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanOffersWithdrawRequest'
+      x-requirements:
+      - LND-01
+      - LND-02
+      x-service: loan-origination-service
+      x-table: loan_offer
+  /v1/e-signature-requests:
+    get:
+      operationId: eSignatureRequestsList
+      summary: List e signature requests
+      tags:
+      - E Signature Requests
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: loan_offer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - CREATED
+          - SENT
+          - VIEWED
+          - SIGNED
+          - DECLINED
+          - EXPIRED
+          - VOIDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESignatureRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: e_signature_request
+      x-crud: true
+      x-crud-list: true
+  /v1/e-signature-requests/{id}:
+    get:
+      operationId: eSignatureRequestsGet
+      summary: Retrieve e signature request
+      tags:
+      - E Signature Requests
+      security:
+      - oauth2:
+        - lending:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESignatureRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: e_signature_request
+      x-crud: true
+      x-crud-get: true
+  /v1/e-signature-requests/{id}/resend:
+    post:
+      operationId: eSignatureRequestsResend
+      summary: Resend to pending signers
+      tags:
+      - E Signature Requests
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESignatureRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: e_signature_request
+  /v1/e-signature-requests/{id}/void:
+    post:
+      operationId: eSignatureRequestsVoid
+      summary: Void the envelope
+      tags:
+      - E Signature Requests
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ESignatureRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ESignatureRequestsVoidRequest'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: e_signature_request
+  /v1/e-signature-requests/{id}/callback:
+    post:
+      operationId: eSignatureRequestsCallback
+      summary: Provider status callback
+      tags:
+      - E Signature Requests
+      security:
+      - oauth2:
+        - lending:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ESignatureRequestsCallbackRequest'
+      x-requirements:
+      - LND-01
+      x-service: loan-origination-service
+      x-table: e_signature_request
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: An application for a loan, credit line, BNPL plan or nano-loan
+  name: Loan Applications
+- description: A person or business on an application (primary, co-applicant, guarantor)
+  name: Loan Applicants
+- description: Declared or verified income and expense lines used in affordability
+  name: Loan Financial Items
+- description: Documents requested and supplied for an application
+  name: Loan Application Documents
+- description: A credit bureau pull for an applicant
+  name: Bureau Reports
+- description: A credit scorecard / model family (application, behavioural, collections, wallet)
+  name: Scorecards
+- description: A versioned scorecard or ML model with cut-offs; champion/challenger supported
+  name: Scorecard Versions
+- description: A score produced for an application with explainable reason codes. Append-only.
+  name: Credit Scores
+- description: Affordability calculation (income, commitments, stressed instalment). Append-only.
+  name: Affordability Assessments
+- description: The credit decision for an application. Append-only; a new decision supersedes the last.
+  name: Credit Decisions
+- description: A priced offer made to the applicant
+  name: Loan Offers
+- description: E-signature envelope for the loan agreement
+  name: E Signature Requests

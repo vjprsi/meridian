@@ -1,0 +1,22 @@
+{{! Meridian override of the JavaSpring methodBody partial.
+    Standard CRUD operations (x-crud-*) delegate to the generic CrudEngine in meridian-web, which maps the API
+    model to the table via PostgreSQL json_populate_record / row_to_json. Everything else answers 501 with a
+    problem+json body until a controller overrides it. }}
+{{#vendorExtensions.x-crud-list}}
+return io.meridian.web.crud.Crud.engine().list("{{vendorExtensions.x-table}}", {{{returnType}}}.class, io.meridian.web.crud.Crud.params(){{#allParams}}{{^isBodyParam}}{{^isHeaderParam}}.with("{{baseName}}", {{paramName}}){{/isHeaderParam}}{{/isBodyParam}}{{/allParams}});
+{{/vendorExtensions.x-crud-list}}
+{{#vendorExtensions.x-crud-get}}
+return io.meridian.web.crud.Crud.engine().get("{{vendorExtensions.x-table}}", {{{returnType}}}.class, io.meridian.web.crud.Crud.params(){{#allParams}}{{^isBodyParam}}{{^isHeaderParam}}.with("{{baseName}}", {{paramName}}){{/isHeaderParam}}{{/isBodyParam}}{{/allParams}});
+{{/vendorExtensions.x-crud-get}}
+{{#vendorExtensions.x-crud-create}}
+return io.meridian.web.crud.Crud.engine().create("{{vendorExtensions.x-table}}", {{{returnType}}}.class, {{#bodyParam}}{{paramName}}{{/bodyParam}}, idempotencyKey, io.meridian.web.crud.Crud.params(){{#allParams}}{{^isBodyParam}}{{^isHeaderParam}}.with("{{baseName}}", {{paramName}}){{/isHeaderParam}}{{/isBodyParam}}{{/allParams}});
+{{/vendorExtensions.x-crud-create}}
+{{#vendorExtensions.x-crud-update}}
+return io.meridian.web.crud.Crud.engine().update("{{vendorExtensions.x-table}}", {{{returnType}}}.class, {{#bodyParam}}{{paramName}}{{/bodyParam}}, ifMatch, io.meridian.web.crud.Crud.params(){{#allParams}}{{^isBodyParam}}{{^isHeaderParam}}.with("{{baseName}}", {{paramName}}){{/isHeaderParam}}{{/isBodyParam}}{{/allParams}});
+{{/vendorExtensions.x-crud-update}}
+{{#vendorExtensions.x-crud-delete}}
+return io.meridian.web.crud.Crud.engine().delete("{{vendorExtensions.x-table}}", io.meridian.web.crud.Crud.params(){{#allParams}}{{^isBodyParam}}{{^isHeaderParam}}.with("{{baseName}}", {{paramName}}){{/isHeaderParam}}{{/isBodyParam}}{{/allParams}});
+{{/vendorExtensions.x-crud-delete}}
+{{^vendorExtensions.x-crud}}
+throw io.meridian.common.error.ApiException.notImplemented("{{operationId}}");
+{{/vendorExtensions.x-crud}}

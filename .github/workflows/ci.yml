@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spec:
+    name: Spec, contracts and DDL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: pip install pyyaml openpyxl pglast
+      - name: Strict spec validation
+        run: python tools/generate.py --check
+      - name: Generated artefacts are up to date
+        run: |
+          python tools/generate.py
+          python tools/scaffold.py
+          git diff --exit-code -- generated settings.gradle.kts docs/SERVICES.md \
+            || (echo "::error::Run tools/generate.py and tools/scaffold.py and commit the result" && exit 1)
+      - name: Lint OpenAPI and AsyncAPI
+        run: |
+          npx --yes @redocly/cli@latest lint generated/openapi/meridian.openapi.yaml --format=github-actions
+          npx --yes @asyncapi/cli@latest validate generated/asyncapi/meridian.asyncapi.yaml
+      - name: Parse all DDL with the PostgreSQL parser
+        run: |
+          python - <<'EOF'
+          from pathlib import Path
+          import pglast
+          for f in sorted(Path("generated/db").glob("*/V001__init.sql")):
+              pglast.parse_sql(f.read_text())
+          print("DDL OK")
+          EOF
+
+  ddl-postgres:
+    name: Apply DDL on PostgreSQL 18 + smoke test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env: { POSTGRES_USER: meridian, POSTGRES_PASSWORD: meridian, POSTGRES_DB: meridian }
+        ports: ["5432:5432"]
+        options: >-
+          --name meridian-postgres --health-cmd "pg_isready -U meridian" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/db/apply-ddl.sh
+      - run: |
+          docker exec -i meridian-postgres psql "postgresql://meridian_app:meridian_app@localhost/ledger_db" \
+            -v ON_ERROR_STOP=1 -tA -f - < tools/db/smoke-test.sql | tee smoke.log
+          ! grep -q FAIL smoke.log
+
+  build:
+    name: Build and test (Java 25)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "25" }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build, unit and integration tests (Testcontainers)
+        run: ./gradlew build --continue -Porg.gradle.java.installations.paths=$JAVA_HOME
+        env:
+          DOCKER_HOST: unix:///var/run/docker.sock
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"

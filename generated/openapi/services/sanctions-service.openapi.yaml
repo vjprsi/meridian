@@ -1,0 +1,3039 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    SanctionsList:
+      description: A sanctions / PEP / adverse-media list and its loaded version (global lists have no tenant)
+      properties:
+        code:
+          description: List code, e.g. OFAC_SDN
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        entry_count:
+          description: Active entries
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Used for screening
+          type: boolean
+        list_version:
+          description: Publisher version / publication id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        loaded_at:
+          description: Time loaded into Meridian
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        name:
+          description: List name
+          maxLength: 160
+          type: string
+        owner_tenant_id:
+          description: Tenant for INTERNAL lists; empty for global lists
+          format: uuid
+          type:
+          - string
+          - 'null'
+        published_at:
+          description: Publication time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source:
+          description: Publisher
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+          type: string
+        source_url:
+          description: Download location
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - source
+      - code
+      - name
+      - is_active
+      type: object
+    SanctionsListCreate:
+      properties:
+        code:
+          description: List code, e.g. OFAC_SDN
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Used for screening
+          type: boolean
+        list_version:
+          description: Publisher version / publication id
+          maxLength: 64
+          type: string
+        name:
+          description: List name
+          maxLength: 160
+          type: string
+        owner_tenant_id:
+          description: Tenant for INTERNAL lists; empty for global lists
+          format: uuid
+          type: string
+        published_at:
+          description: Publication time
+          format: date-time
+          type: string
+        source:
+          description: Publisher
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+          type: string
+        source_url:
+          description: Download location
+          maxLength: 500
+          type: string
+      required:
+      - source
+      - code
+      - name
+      type: object
+    SanctionsListEntry:
+      description: A listed person, entity, vessel or aircraft with aliases and identifiers
+      properties:
+        aliases:
+          additionalProperties: true
+          description: Aliases, AKAs and transliterations
+          type:
+          - object
+          - 'null'
+        countries:
+          additionalProperties: true
+          description: Associated countries
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        date_of_birth:
+          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        delisted_on:
+          description: Date removed
+          format: date
+          type:
+          - string
+          - 'null'
+        entry_type:
+          description: Kind of entry
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+          type: string
+        external_id:
+          description: Publisher's entry id
+          maxLength: 64
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        identifiers:
+          additionalProperties: true
+          description: Passports, national ids, IMO numbers, registration numbers
+          type:
+          - object
+          - 'null'
+        listed_on:
+          description: Date listed
+          format: date
+          type:
+          - string
+          - 'null'
+        nationality:
+          description: Nationality (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        pep_level:
+          description: PEP class for PEP lists
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        place_of_birth:
+          description: Place of birth
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        primary_name:
+          description: Primary name
+          maxLength: 500
+          type: string
+        programs:
+          additionalProperties: true
+          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
+          type:
+          - object
+          - 'null'
+        remarks:
+          description: Publisher remarks
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sanctions_list_id:
+          description: List
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - sanctions_list_id
+      - external_id
+      - entry_type
+      - primary_name
+      type: object
+    SanctionsListEntryCreate:
+      properties:
+        aliases:
+          additionalProperties: true
+          description: Aliases, AKAs and transliterations
+          type: object
+        countries:
+          additionalProperties: true
+          description: Associated countries
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        date_of_birth:
+          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
+          maxLength: 32
+          type: string
+        delisted_on:
+          description: Date removed
+          format: date
+          type: string
+        entry_type:
+          description: Kind of entry
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+          type: string
+        external_id:
+          description: Publisher's entry id
+          maxLength: 64
+          type: string
+        identifiers:
+          additionalProperties: true
+          description: Passports, national ids, IMO numbers, registration numbers
+          type: object
+        listed_on:
+          description: Date listed
+          format: date
+          type: string
+        nationality:
+          description: Nationality (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        pep_level:
+          description: PEP class for PEP lists
+          maxLength: 16
+          type: string
+        place_of_birth:
+          description: Place of birth
+          maxLength: 255
+          type: string
+        primary_name:
+          description: Primary name
+          maxLength: 500
+          type: string
+        programs:
+          additionalProperties: true
+          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
+          type: object
+        remarks:
+          description: Publisher remarks
+          type: string
+        sanctions_list_id:
+          description: List
+          format: uuid
+          type: string
+      required:
+      - sanctions_list_id
+      - external_id
+      - entry_type
+      - primary_name
+      type: object
+    SanctionsListEntryPage:
+      description: One page of SanctionsListEntry results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SanctionsListEntry'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SanctionsListEntryUpdate:
+      properties:
+        aliases:
+          additionalProperties: true
+          description: Aliases, AKAs and transliterations
+          type: object
+        countries:
+          additionalProperties: true
+          description: Associated countries
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        date_of_birth:
+          description: Date of birth (may be partial, e.g. 1970 or 1970-05)
+          maxLength: 32
+          type: string
+        delisted_on:
+          description: Date removed
+          format: date
+          type: string
+        entry_type:
+          description: Kind of entry
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+          type: string
+        external_id:
+          description: Publisher's entry id
+          maxLength: 64
+          type: string
+        identifiers:
+          additionalProperties: true
+          description: Passports, national ids, IMO numbers, registration numbers
+          type: object
+        listed_on:
+          description: Date listed
+          format: date
+          type: string
+        nationality:
+          description: Nationality (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        pep_level:
+          description: PEP class for PEP lists
+          maxLength: 16
+          type: string
+        place_of_birth:
+          description: Place of birth
+          maxLength: 255
+          type: string
+        primary_name:
+          description: Primary name
+          maxLength: 500
+          type: string
+        programs:
+          additionalProperties: true
+          description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
+          type: object
+        remarks:
+          description: Publisher remarks
+          type: string
+        sanctions_list_id:
+          description: List
+          format: uuid
+          type: string
+      type: object
+    SanctionsListPage:
+      description: One page of SanctionsList results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SanctionsList'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SanctionsListUpdate:
+      properties:
+        code:
+          description: List code, e.g. OFAC_SDN
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Used for screening
+          type: boolean
+        list_version:
+          description: Publisher version / publication id
+          maxLength: 64
+          type: string
+        name:
+          description: List name
+          maxLength: 160
+          type: string
+        owner_tenant_id:
+          description: Tenant for INTERNAL lists; empty for global lists
+          format: uuid
+          type: string
+        published_at:
+          description: Publication time
+          format: date-time
+          type: string
+        source:
+          description: Publisher
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+          type: string
+        source_url:
+          description: Download location
+          maxLength: 500
+          type: string
+      type: object
+    SanctionsListsImportRequest:
+      properties:
+        document_id:
+          format: uuid
+          type: string
+      required:
+      - document_id
+      type: object
+    ScreeningMatch:
+      description: A candidate list entry matched for a screening result, with its disposition
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        disposition:
+          description: Reviewer decision
+          enum:
+          - PENDING
+          - TRUE_MATCH
+          - FALSE_POSITIVE
+          type: string
+        disposition_reason:
+          description: Rationale
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        match_algorithm:
+          description: JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID
+          maxLength: 40
+          type: string
+        match_score:
+          description: Match score 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        matched_fields:
+          additionalProperties: true
+          description: Fields compared and their individual scores
+          type:
+          - object
+          - 'null'
+        matched_name:
+          description: Name that matched
+          maxLength: 500
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sanctions_list_entry_id:
+          description: Matched entry
+          format: uuid
+          type: string
+        screening_result_id:
+          description: Result
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - screening_result_id
+      - sanctions_list_entry_id
+      - matched_name
+      - match_score
+      - match_algorithm
+      - disposition
+      type: object
+    ScreeningMatchPage:
+      description: One page of ScreeningMatch results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ScreeningMatch'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ScreeningMatchUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        disposition:
+          description: Reviewer decision
+          enum:
+          - PENDING
+          - TRUE_MATCH
+          - FALSE_POSITIVE
+          type: string
+        disposition_reason:
+          description: Rationale
+          type: string
+        match_algorithm:
+          description: JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID
+          maxLength: 40
+          type: string
+        match_score:
+          description: Match score 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        matched_fields:
+          additionalProperties: true
+          description: Fields compared and their individual scores
+          type: object
+        matched_name:
+          description: Name that matched
+          maxLength: 500
+          type: string
+        sanctions_list_entry_id:
+          description: Matched entry
+          format: uuid
+          type: string
+        screening_result_id:
+          description: Result
+          format: uuid
+          type: string
+      type: object
+    ScreeningRequest:
+      description: A request to screen a customer, related party, payee or payment
+      properties:
+        correlation_id:
+          description: Trace / saga correlation id
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        country:
+          description: Country of residence / registration (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        date_of_birth:
+          description: Date of birth
+          format: date
+          type:
+          - string
+          - 'null'
+        full_name:
+          description: Name screened
+          maxLength: 500
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        identifiers:
+          additionalProperties: true
+          description: Identity document numbers
+          type:
+          - object
+          - 'null'
+        list_codes:
+          additionalProperties: true
+          description: Lists to screen against (empty = tenant default)
+          type:
+          - object
+          - 'null'
+        nationality:
+          description: Nationality (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        payload:
+          additionalProperties: true
+          description: Payment fields screened (parties, agents, free text)
+          type:
+          - object
+          - 'null'
+        requested_by_service:
+          description: Calling service
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        subject_id:
+          description: Business id of the subject
+          format: uuid
+          type: string
+        subject_type:
+          description: What is screened
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          type: string
+        threshold:
+          description: Minimum match score that raises a hit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        trigger:
+          description: Why screening ran
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_type
+      - subject_id
+      - trigger
+      - full_name
+      - threshold
+      - requested_by_service
+      type: object
+    ScreeningRequestCreate:
+      properties:
+        correlation_id:
+          description: Trace / saga correlation id
+          maxLength: 128
+          type: string
+        country:
+          description: Country of residence / registration (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        date_of_birth:
+          description: Date of birth
+          format: date
+          type: string
+        full_name:
+          description: Name screened
+          maxLength: 500
+          type: string
+        identifiers:
+          additionalProperties: true
+          description: Identity document numbers
+          type: object
+        list_codes:
+          additionalProperties: true
+          description: Lists to screen against (empty = tenant default)
+          type: object
+        nationality:
+          description: Nationality (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        payload:
+          additionalProperties: true
+          description: Payment fields screened (parties, agents, free text)
+          type: object
+        requested_by_service:
+          description: Calling service
+          maxLength: 64
+          type: string
+        subject_id:
+          description: Business id of the subject
+          format: uuid
+          type: string
+        subject_type:
+          description: What is screened
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          type: string
+        threshold:
+          description: Minimum match score that raises a hit
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        trigger:
+          description: Why screening ran
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          type: string
+      required:
+      - subject_type
+      - subject_id
+      - trigger
+      - full_name
+      - requested_by_service
+      type: object
+    ScreeningRequestPage:
+      description: One page of ScreeningRequest results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ScreeningRequest'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ScreeningRequestsBatchRequest:
+      properties:
+        subjects:
+          additionalProperties: true
+          type: object
+        trigger:
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          type: string
+      required:
+      - subjects
+      - trigger
+      type: object
+    ScreeningRequestsScreenPaymentRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+        payment_id:
+          format: uuid
+          type: string
+      required:
+      - payment_id
+      - payload
+      type: object
+    ScreeningResult:
+      description: Outcome of a screening request, reviewed by compliance when there are potential matches
+      properties:
+        aml_case_id:
+          description: Case opened for a confirmed match
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decision_reason:
+          description: Reviewer rationale
+          type:
+          - string
+          - 'null'
+        has_adverse_media:
+          description: Adverse media found
+          readOnly: true
+          type: boolean
+        highest_score:
+          description: Best match score 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_pep:
+          description: PEP hit confirmed
+          readOnly: true
+          type: boolean
+        latency_ms:
+          description: Screening time
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        match_count:
+          description: Number of hits
+          format: int32
+          readOnly: true
+          type: integer
+        rescreen_due_at:
+          description: Next periodic rescreen
+          format: date-time
+          type:
+          - string
+          - 'null'
+        reviewed_at:
+          description: Review time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        reviewed_by:
+          description: Compliance reviewer
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        screening_request_id:
+          description: Request
+          format: uuid
+          type: string
+        status:
+          description: Outcome
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          type: string
+        subject_id:
+          description: Business id of the subject
+          format: uuid
+          type: string
+        subject_type:
+          description: What was screened
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - screening_request_id
+      - subject_type
+      - subject_id
+      - status
+      - highest_score
+      - match_count
+      - is_pep
+      - has_adverse_media
+      type: object
+    ScreeningResultPage:
+      description: One page of ScreeningResult results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ScreeningResult'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ScreeningResultsReviewRequest:
+      properties:
+        decision_reason:
+          type: string
+        status:
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          type: string
+      required:
+      - status
+      - decision_reason
+      type: object
+    ScreeningWhitelist:
+      description: Good-guy list suppressing a known false positive for one subject and list entry
+      properties:
+        approved_by:
+          description: Approver
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Review / expiry date
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        reason:
+          description: Why this is a false positive
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sanctions_list_entry_id:
+          description: Entry that is suppressed
+          format: uuid
+          type: string
+        subject_id:
+          description: Subject
+          format: uuid
+          type: string
+        subject_type:
+          description: Subject type
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_type
+      - subject_id
+      - sanctions_list_entry_id
+      - reason
+      type: object
+    ScreeningWhitelistCreate:
+      properties:
+        approved_by:
+          description: Approver
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        expires_at:
+          description: Review / expiry date
+          format: date-time
+          type: string
+        reason:
+          description: Why this is a false positive
+          type: string
+        sanctions_list_entry_id:
+          description: Entry that is suppressed
+          format: uuid
+          type: string
+        subject_id:
+          description: Subject
+          format: uuid
+          type: string
+        subject_type:
+          description: Subject type
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          type: string
+      required:
+      - subject_type
+      - subject_id
+      - sanctions_list_entry_id
+      - reason
+      type: object
+    ScreeningWhitelistPage:
+      description: One page of ScreeningWhitelist results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ScreeningWhitelist'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Real-time fraud scoring, transaction monitoring, sanctions and PEP screening, AML case management with SAR/STR
+    filing, and the limits engine. Every payment, card authorisation and wallet movement is scored, screened and limit-checked
+    before money moves.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — sanctions-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/risk/sanctions/lists:
+    get:
+      operationId: sanctionsListsList
+      summary: List sanctions lists
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: source
+        in: query
+        schema:
+          type: string
+          enum:
+          - OFAC_SDN
+          - OFAC_CONSOLIDATED
+          - UN
+          - EU
+          - UK_HMT
+          - LOCAL_REGULATOR
+          - PEP
+          - ADVERSE_MEDIA
+          - INTERNAL
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsListPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: sanctionsListsCreate
+      summary: Create sanctions list
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsList'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListCreate'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/sanctions/lists/{id}:
+    get:
+      operationId: sanctionsListsGet
+      summary: Retrieve sanctions list
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsList'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: sanctionsListsUpdate
+      summary: Update sanctions list
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsList'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListUpdate'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/sanctions/lists/{id}/sync:
+    post:
+      operationId: sanctionsListsSync
+      summary: Download and load the latest list version
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsList'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+  /v1/risk/sanctions/lists/{id}/entries:
+    get:
+      operationId: sanctionsListsEntries
+      summary: Entries of the list
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsListEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+  /v1/risk/sanctions/lists/{id}/import:
+    post:
+      operationId: sanctionsListsImport
+      summary: Import an internal list file
+      tags:
+      - Sanctions Lists
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListsImportRequest'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list
+  /v1/risk/sanctions/list-entries:
+    get:
+      operationId: sanctionsListEntriesList
+      summary: List sanctions list entries
+      tags:
+      - Sanctions List Entries
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: sanctions_list_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: entry_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - INDIVIDUAL
+          - ENTITY
+          - VESSEL
+          - AIRCRAFT
+          - COUNTRY
+      - name: nationality
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: external_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsListEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list_entry
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: sanctionsListEntriesCreate
+      summary: Create sanctions list entrie
+      tags:
+      - Sanctions List Entries
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsListEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListEntryCreate'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list_entry
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/sanctions/list-entries/{id}:
+    get:
+      operationId: sanctionsListEntriesGet
+      summary: Retrieve sanctions list entrie
+      tags:
+      - Sanctions List Entries
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsListEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list_entry
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: sanctionsListEntriesUpdate
+      summary: Update sanctions list entrie
+      tags:
+      - Sanctions List Entries
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SanctionsListEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListEntryUpdate'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: sanctions_list_entry
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/sanctions/screenings:
+    get:
+      operationId: screeningRequestsList
+      summary: List screening requests
+      tags:
+      - Screening Requests
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: subject_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+      - name: subject_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+      - name: requested_by_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_request
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: screeningRequestsCreate
+      summary: Create screening request
+      tags:
+      - Screening Requests
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningRequestCreate'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_request
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/sanctions/screenings/{id}:
+    get:
+      operationId: screeningRequestsGet
+      summary: Retrieve screening request
+      tags:
+      - Screening Requests
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_request
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/sanctions/screenings/screen-payment:
+    post:
+      operationId: screeningRequestsScreenPayment
+      summary: Synchronously screen an ISO 20022 payment's parties and free text
+      tags:
+      - Screening Requests
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningResult'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningRequestsScreenPaymentRequest'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_request
+  /v1/risk/sanctions/screenings/batch:
+    post:
+      operationId: screeningRequestsBatch
+      summary: Screen up to 10,000 subjects asynchronously
+      tags:
+      - Screening Requests
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningRequestsBatchRequest'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_request
+  /v1/risk/sanctions/results:
+    get:
+      operationId: screeningResultsList
+      summary: List screening results
+      tags:
+      - Screening Results
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+      - name: subject_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+      - name: subject_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_pep
+        in: query
+        schema:
+          type: boolean
+      - name: reviewed_by
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningResultPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_result
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/sanctions/results/{id}:
+    get:
+      operationId: screeningResultsGet
+      summary: Retrieve screening result
+      tags:
+      - Screening Results
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningResult'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_result
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/sanctions/results/{id}/matches:
+    get:
+      operationId: screeningResultsMatches
+      summary: Candidate matches
+      tags:
+      - Screening Results
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningMatchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_result
+  /v1/risk/sanctions/results/{id}/review:
+    post:
+      operationId: screeningResultsReview
+      summary: Record the compliance decision
+      tags:
+      - Screening Results
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningResult'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningResultsReviewRequest'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_result
+  /v1/risk/sanctions/results/{id}/rescreen:
+    post:
+      operationId: screeningResultsRescreen
+      summary: Screen the subject again now
+      tags:
+      - Screening Results
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningResult'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: sanctions-service
+      x-table: screening_result
+  /v1/risk/sanctions/matches:
+    get:
+      operationId: screeningMatchesList
+      summary: List screening matches
+      tags:
+      - Screening Matches
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: screening_result_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: disposition
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - TRUE_MATCH
+          - FALSE_POSITIVE
+      - name: sanctions_list_entry_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningMatchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_match
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/sanctions/matches/{id}:
+    get:
+      operationId: screeningMatchesGet
+      summary: Retrieve screening matche
+      tags:
+      - Screening Matches
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningMatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_match
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: screeningMatchesUpdate
+      summary: Update screening matche
+      tags:
+      - Screening Matches
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningMatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningMatchUpdate'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_match
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/sanctions/whitelist:
+    get:
+      operationId: screeningWhitelistList
+      summary: List screening whitelist
+      tags:
+      - Screening Whitelist
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: subject_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+      - name: subject_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: sanctions_list_entry_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningWhitelistPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_whitelist
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: screeningWhitelistCreate
+      summary: Create screening whitelist
+      tags:
+      - Screening Whitelist
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningWhitelist'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreeningWhitelistCreate'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_whitelist
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/sanctions/whitelist/{id}:
+    get:
+      operationId: screeningWhitelistGet
+      summary: Retrieve screening whitelist
+      tags:
+      - Screening Whitelist
+      security:
+      - oauth2:
+        - risk:read
+      parameters: &id008
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningWhitelist'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_whitelist
+      x-crud: true
+      x-crud-get: true
+    delete:
+      operationId: screeningWhitelistDelete
+      summary: Delete screening whitelist
+      tags:
+      - Screening Whitelist
+      security:
+      - oauth2:
+        - risk:write
+      parameters: *id008
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-table: screening_whitelist
+      x-crud: true
+      x-crud-delete: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A sanctions / PEP / adverse-media list and its loaded version (global lists have no tenant)
+  name: Sanctions Lists
+- description: A listed person, entity, vessel or aircraft with aliases and identifiers
+  name: Sanctions List Entries
+- description: A request to screen a customer, related party, payee or payment
+  name: Screening Requests
+- description: Outcome of a screening request, reviewed by compliance when there are potential matches
+  name: Screening Results
+- description: A candidate list entry matched for a screening result, with its disposition
+  name: Screening Matches
+- description: Good-guy list suppressing a known false positive for one subject and list entry
+  name: Screening Whitelist

@@ -1,0 +1,1878 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    CardDispute:
+      description: A cardholder dispute and its scheme chargeback lifecycle
+      properties:
+        ai_summary:
+          description: Copilot summary and suggested reason code
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        assigned_to:
+          description: Analyst
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        card_authorization_id:
+          description: Disputed authorisation
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        category:
+          description: Dispute category
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+          type: string
+        clearing_record_id:
+          description: Disputed presentment
+          format: uuid
+          type:
+          - string
+          - 'null'
+        closed_at:
+          description: Closure time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_description:
+          description: Cardholder statement
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Cardholder
+          format: uuid
+          type: string
+        disputed_amount:
+          description: Amount disputed
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        outcome:
+          description: WON, LOST, SPLIT, WITHDRAWN
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        provisional_credit_amount:
+          description: Provisional credit given
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        provisional_credit_entry_id:
+          description: Provisional credit posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        reason_code:
+          description: Scheme reason code, e.g. 10.4, 4837
+          maxLength: 8
+          type:
+          - string
+          - 'null'
+        recovered_amount:
+          description: Amount recovered from the merchant
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        regulatory_deadline:
+          description: Regulation E / Z or local deadline
+          format: date
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scheme:
+          description: Scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        scheme_case_id:
+          description: Scheme case number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        stage:
+          description: Scheme stage
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          type: string
+        stage_deadline:
+          description: Deadline for the current stage
+          format: date
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        written_off_amount:
+          description: Amount written off
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - customer_id
+      - category
+      - scheme
+      - stage
+      - status
+      - disputed_amount
+      - currency
+      - provisional_credit_amount
+      - recovered_amount
+      - written_off_amount
+      type: object
+    CardDisputeCreate:
+      properties:
+        assigned_to:
+          description: Analyst
+          maxLength: 64
+          type: string
+        card_authorization_id:
+          description: Disputed authorisation
+          format: uuid
+          type: string
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        category:
+          description: Dispute category
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+          type: string
+        clearing_record_id:
+          description: Disputed presentment
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_description:
+          description: Cardholder statement
+          type: string
+        customer_id:
+          description: Cardholder
+          format: uuid
+          type: string
+        disputed_amount:
+          description: Amount disputed
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        provisional_credit_entry_id:
+          description: Provisional credit posting
+          format: uuid
+          type: string
+        reason_code:
+          description: Scheme reason code, e.g. 10.4, 4837
+          maxLength: 8
+          type: string
+        regulatory_deadline:
+          description: Regulation E / Z or local deadline
+          format: date
+          type: string
+        scheme:
+          description: Scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        scheme_case_id:
+          description: Scheme case number
+          maxLength: 64
+          type: string
+        stage:
+          description: Scheme stage
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          type: string
+        stage_deadline:
+          description: Deadline for the current stage
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+          type: string
+      required:
+      - card_id
+      - customer_id
+      - category
+      - scheme
+      - disputed_amount
+      - currency
+      type: object
+    CardDisputeEvent:
+      description: Immutable timeline of a dispute (stage changes, scheme messages, postings)
+      properties:
+        actor_id:
+          description: Actor
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        amount:
+          description: Amount involved
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        card_dispute_id:
+          description: Dispute
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        event_type:
+          description: CREATED, PROVISIONAL_CREDIT, CHARGEBACK_SENT, REPRESENTMENT_RECEIVED, ARBITRATION_FILED, WON, LOST,
+            NOTE
+          maxLength: 40
+          type: string
+        from_stage:
+          description: Previous stage
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Posting created
+          format: uuid
+          type:
+          - string
+          - 'null'
+        note:
+          description: Note
+          type:
+          - string
+          - 'null'
+        to_stage:
+          description: New stage
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - card_dispute_id
+      - event_type
+      type: object
+    CardDisputeEventPage:
+      description: One page of CardDisputeEvent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardDisputeEvent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardDisputeEvidence:
+      description: Evidence attached to a dispute
+      properties:
+        card_dispute_id:
+          description: Dispute
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_id:
+          description: Stored file
+          format: uuid
+          type: string
+        evidence_type:
+          description: Evidence type
+          enum:
+          - CUSTOMER_STATEMENT
+          - RECEIPT
+          - CORRESPONDENCE
+          - POLICE_REPORT
+          - DELIVERY_PROOF
+          - SCREENSHOT
+          - SCHEME_DOCUMENT
+          - OTHER
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        submitted_at:
+          description: Submission time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        submitted_to_scheme:
+          description: Submitted to the scheme
+          type: boolean
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_dispute_id
+      - evidence_type
+      - document_id
+      - submitted_to_scheme
+      type: object
+    CardDisputeEvidenceCreate:
+      properties:
+        card_dispute_id:
+          description: Dispute
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          maxLength: 500
+          type: string
+        document_id:
+          description: Stored file
+          format: uuid
+          type: string
+        evidence_type:
+          description: Evidence type
+          enum:
+          - CUSTOMER_STATEMENT
+          - RECEIPT
+          - CORRESPONDENCE
+          - POLICE_REPORT
+          - DELIVERY_PROOF
+          - SCREENSHOT
+          - SCHEME_DOCUMENT
+          - OTHER
+          type: string
+        submitted_to_scheme:
+          description: Submitted to the scheme
+          type: boolean
+      required:
+      - card_dispute_id
+      - evidence_type
+      - document_id
+      type: object
+    CardDisputeEvidencePage:
+      description: One page of CardDisputeEvidence results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardDisputeEvidence'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardDisputePage:
+      description: One page of CardDispute results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardDispute'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardDisputeUpdate:
+      properties:
+        assigned_to:
+          description: Analyst
+          maxLength: 64
+          type: string
+        card_authorization_id:
+          description: Disputed authorisation
+          format: uuid
+          type: string
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        category:
+          description: Dispute category
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+          type: string
+        clearing_record_id:
+          description: Disputed presentment
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_description:
+          description: Cardholder statement
+          type: string
+        customer_id:
+          description: Cardholder
+          format: uuid
+          type: string
+        disputed_amount:
+          description: Amount disputed
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        provisional_credit_entry_id:
+          description: Provisional credit posting
+          format: uuid
+          type: string
+        reason_code:
+          description: Scheme reason code, e.g. 10.4, 4837
+          maxLength: 8
+          type: string
+        regulatory_deadline:
+          description: Regulation E / Z or local deadline
+          format: date
+          type: string
+        scheme:
+          description: Scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        scheme_case_id:
+          description: Scheme case number
+          maxLength: 64
+          type: string
+        stage:
+          description: Scheme stage
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          type: string
+        stage_deadline:
+          description: Deadline for the current stage
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+          type: string
+      type: object
+    CardDisputesAcceptRepresentmentRequest:
+      properties:
+        note:
+          type: string
+      type: object
+    CardDisputesAssignRequest:
+      properties:
+        assigned_to:
+          maxLength: 64
+          type: string
+      required:
+      - assigned_to
+      type: object
+    CardDisputesCloseRequest:
+      properties:
+        note:
+          type: string
+        outcome:
+          maxLength: 32
+          type: string
+      required:
+      - outcome
+      type: object
+    CardDisputesEscalateRequest:
+      properties:
+        note:
+          type: string
+        stage:
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+          type: string
+      required:
+      - stage
+      type: object
+    CardDisputesProvisionalCreditRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - amount
+      type: object
+    CardDisputesReverseProvisionalCreditRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    CardDisputesSubmitChargebackRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        reason_code:
+          maxLength: 8
+          type: string
+      required:
+      - reason_code
+      - amount
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
+    vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
+    clearing and settlement, interchange and fees, and scheme disputes.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — card-dispute-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/card-disputes:
+    get:
+      operationId: cardDisputesList
+      summary: List card disputes
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - AWAITING_CUSTOMER
+          - AWAITING_MERCHANT
+          - SUBMITTED
+          - WON
+          - LOST
+          - WITHDRAWN
+          - EXPIRED
+      - name: stage
+        in: query
+        schema:
+          type: string
+          enum:
+          - INQUIRY
+          - RETRIEVAL
+          - FIRST_CHARGEBACK
+          - REPRESENTMENT
+          - PRE_ARBITRATION
+          - ARBITRATION
+          - CLOSED
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - FRAUD
+          - AUTHORIZATION
+          - PROCESSING_ERROR
+          - CONSUMER_DISPUTE
+          - NOT_RECEIVED
+          - NOT_AS_DESCRIBED
+          - DUPLICATE
+          - CANCELLED_RECURRING
+          - CREDIT_NOT_PROCESSED
+          - ATM_DISPUTE
+      - name: scheme
+        in: query
+        schema:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+      - name: assigned_to
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: scheme_case_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDisputePage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardDisputesCreate
+      summary: Create card dispute
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputeCreate'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+      x-crud: true
+      x-crud-create: true
+  /v1/card-disputes/{id}:
+    get:
+      operationId: cardDisputesGet
+      summary: Retrieve card dispute
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardDisputesUpdate
+      summary: Update card dispute
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputeUpdate'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+      x-crud: true
+      x-crud-update: true
+  /v1/card-disputes/{id}/provisional-credit:
+    post:
+      operationId: cardDisputesProvisionalCredit
+      summary: Give provisional credit to the cardholder
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesProvisionalCreditRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/reverse-provisional-credit:
+    post:
+      operationId: cardDisputesReverseProvisionalCredit
+      summary: Reverse provisional credit after a lost case
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesReverseProvisionalCreditRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/submit-chargeback:
+    post:
+      operationId: cardDisputesSubmitChargeback
+      summary: Submit the chargeback to the scheme
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesSubmitChargebackRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/accept-representment:
+    post:
+      operationId: cardDisputesAcceptRepresentment
+      summary: Accept the merchant's representment
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesAcceptRepresentmentRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/escalate:
+    post:
+      operationId: cardDisputesEscalate
+      summary: Escalate to pre-arbitration or arbitration
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesEscalateRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/close:
+    post:
+      operationId: cardDisputesClose
+      summary: Close with an outcome
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesCloseRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/assign:
+    post:
+      operationId: cardDisputesAssign
+      summary: Assign to an analyst
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputesAssignRequest'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/events:
+    get:
+      operationId: cardDisputesEvents
+      summary: Dispute timeline
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDisputeEventPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-disputes/{id}/ai-summary:
+    post:
+      operationId: cardDisputesAiSummary
+      summary: Generate a copilot summary and suggested reason code
+      tags:
+      - Card Disputes
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute
+  /v1/card-dispute-evidence:
+    get:
+      operationId: cardDisputeEvidenceList
+      summary: List card dispute evidence
+      tags:
+      - Card Dispute Evidence
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_dispute_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: evidence_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER_STATEMENT
+          - RECEIPT
+          - CORRESPONDENCE
+          - POLICE_REPORT
+          - DELIVERY_PROOF
+          - SCREENSHOT
+          - SCHEME_DOCUMENT
+          - OTHER
+      - name: submitted_to_scheme
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDisputeEvidencePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute_evidence
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardDisputeEvidenceCreate
+      summary: Create card dispute evidence
+      tags:
+      - Card Dispute Evidence
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDisputeEvidence'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardDisputeEvidenceCreate'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute_evidence
+      x-crud: true
+      x-crud-create: true
+  /v1/card-dispute-evidence/{id}:
+    get:
+      operationId: cardDisputeEvidenceGet
+      summary: Retrieve card dispute evidence
+      tags:
+      - Card Dispute Evidence
+      security:
+      - oauth2:
+        - cards:read
+      parameters: &id006
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDisputeEvidence'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute_evidence
+      x-crud: true
+      x-crud-get: true
+    delete:
+      operationId: cardDisputeEvidenceDelete
+      summary: Delete card dispute evidence
+      tags:
+      - Card Dispute Evidence
+      security:
+      - oauth2:
+        - cards:write
+      parameters: *id006
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-08
+      x-service: card-dispute-service
+      x-table: card_dispute_evidence
+      x-crud: true
+      x-crud-delete: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A cardholder dispute and its scheme chargeback lifecycle
+  name: Card Disputes
+- description: Evidence attached to a dispute
+  name: Card Dispute Evidence

@@ -1,0 +1,1890 @@
+[
+  {
+    "name": "deposit-service",
+    "domain": "accounts",
+    "domain_title": "Deposits and Accounts",
+    "phase": 1,
+    "database": "accounts_db",
+    "schema": "accounts",
+    "package": "io.meridian.deposit",
+    "port": 9101,
+    "description": "Owns deposit accounts and everything around them. Opens a ledger account per deposit account, drives daily interest accrual and capitalisation, fee charging, overdrafts, term deposits, pots, sweeps, standing orders, dormancy and closure. Never changes balances itself; it posts through the ledger.",
+    "tags": [
+      "Account Blocks",
+      "Account Closures",
+      "Account Holders",
+      "Account Mandates",
+      "Account Rate Overrides",
+      "Account Status History",
+      "Cheque Books",
+      "Cheques",
+      "Deposit Accounts",
+      "Dormancy Events",
+      "Fee Charges",
+      "Interest Accruals",
+      "Interest Capitalisations",
+      "Overdraft Facilities",
+      "Savings Pot Rules",
+      "Savings Pots",
+      "Standing Orders",
+      "Sweep Rules",
+      "Term Deposits",
+      "Virtual Accounts"
+    ],
+    "tables": 23,
+    "events": [
+      "accounts.deposit_account.opened",
+      "accounts.deposit_account.activated",
+      "accounts.deposit_account.status_changed",
+      "accounts.deposit_account.product_changed",
+      "accounts.deposit_account.closed",
+      "accounts.account_holder.added",
+      "accounts.account_holder.removed",
+      "accounts.account_block.placed",
+      "accounts.account_block.lifted",
+      "accounts.overdraft_facility.approved",
+      "accounts.overdraft_facility.limit_exceeded",
+      "accounts.interest.capitalised",
+      "accounts.fee.charged",
+      "accounts.fee.refunded",
+      "accounts.term_deposit.placed",
+      "accounts.term_deposit.maturing",
+      "accounts.term_deposit.matured",
+      "accounts.term_deposit.broken",
+      "accounts.savings_pot.goal_reached",
+      "accounts.standing_order.executed",
+      "accounts.standing_order.failed",
+      "accounts.dormancy.marked_dormant",
+      "accounts.cheque.returned",
+      "accounts.virtual_account.created"
+    ]
+  },
+  {
+    "name": "statement-service",
+    "domain": "accounts",
+    "domain_title": "Deposits and Accounts",
+    "phase": 1,
+    "database": "statement_db",
+    "schema": "statement",
+    "package": "io.meridian.statement",
+    "port": 9102,
+    "description": "Generates account statements (PDF, CSV, camt.053, MT940, OFX) per cycle or on demand from ledger data, delivers them by email, in-app, post or SFTP, and produces interest and tax certificates.",
+    "tags": [
+      "Statement Schedules",
+      "Statements",
+      "Tax Certificates"
+    ],
+    "tables": 4,
+    "events": [
+      "accounts.statement.generated",
+      "accounts.statement.delivered",
+      "accounts.statement.failed",
+      "accounts.tax_certificate.generated"
+    ]
+  },
+  {
+    "name": "card-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_db",
+    "schema": "card",
+    "package": "io.meridian.card",
+    "port": 9103,
+    "description": "Card programs, card products, card lifecycle (issue, activate, freeze, replace, close), physical card orders through bureaus, card controls and spend limits, PIN events and credit card statement cycles.",
+    "tags": [
+      "Card Bureaus",
+      "Card Controls",
+      "Card Orders",
+      "Card Products",
+      "Card Programs",
+      "Card Replacements",
+      "Card Spend Limits",
+      "Card Statement Cycles",
+      "Cards"
+    ],
+    "tables": 11,
+    "events": [
+      "cards.card_program.activated",
+      "cards.card.created",
+      "cards.card.activated",
+      "cards.card.status_changed",
+      "cards.card.replaced",
+      "cards.card.expiring",
+      "cards.card_order.shipped",
+      "cards.card_order.delivered",
+      "cards.card_control.changed",
+      "cards.card_pin.changed",
+      "cards.card_statement_cycle.closed"
+    ]
+  },
+  {
+    "name": "card-vault-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_vault_db",
+    "schema": "card_vault",
+    "package": "io.meridian.cardvault",
+    "port": 9104,
+    "description": "PCI DSS scoped card data vault. Stores PAN, CVV2 and expiry encrypted with envelope encryption under HSM-managed keys and returns tokens. Isolated network segment; only authorisation, tokenisation and reveal flows may detokenise.",
+    "tags": [
+      "Card Vault",
+      "Card Vault Access Logs",
+      "Card Vault Keys"
+    ],
+    "tables": 3,
+    "events": [
+      "cards.card_vault.revealed"
+    ]
+  },
+  {
+    "name": "card-authorization-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_auth_db",
+    "schema": "card_auth",
+    "package": "io.meridian.cardauthorization",
+    "port": 9105,
+    "description": "Real-time authorisation: receives ISO 8583 from the card gateway, applies card status, controls, limits, fraud score and 3DS outcome, places or increments the ledger hold (or calls JIT funding), and responds within the scheme budget. Runs stand-in when the ledger is unavailable.",
+    "tags": [
+      "Card Authorization Rules",
+      "Card Authorizations",
+      "Card Stand In Records"
+    ],
+    "tables": 4,
+    "events": [
+      "cards.card_authorization.approved",
+      "cards.card_authorization.declined",
+      "cards.card_authorization.reversed",
+      "cards.card_authorization.expired",
+      "cards.card_authorization.stand_in_approved",
+      "cards.card_jit_funding.requested"
+    ]
+  },
+  {
+    "name": "card-tokenization-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_token_db",
+    "schema": "card_token",
+    "package": "io.meridian.cardtokenization",
+    "port": 9106,
+    "description": "Network tokenisation through scheme token services (VTS, MDES) for Apple Pay, Google Pay, Samsung Pay and merchant card-on-file, including provisioning decisions, step-up (OTP / app) and lifecycle sync.",
+    "tags": [
+      "Card Tokens"
+    ],
+    "tables": 2,
+    "events": [
+      "cards.card_token.provisioned",
+      "cards.card_token.status_changed"
+    ]
+  },
+  {
+    "name": "card-threeds-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_3ds_db",
+    "schema": "card_3ds",
+    "package": "io.meridian.cardthreeds",
+    "port": 9107,
+    "description": "3-D Secure 2.x access control server (ACS) integration: risk-based frictionless decisions, challenges via OTP, app push or biometrics, and decoupled authentication.",
+    "tags": [
+      "Threeds Authentications"
+    ],
+    "tables": 1,
+    "events": [
+      "cards.threeds_authentication.challenge_required",
+      "cards.threeds_authentication.completed"
+    ]
+  },
+  {
+    "name": "card-clearing-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_clearing_db",
+    "schema": "card_clearing",
+    "package": "io.meridian.cardclearing",
+    "port": 9108,
+    "description": "Imports scheme clearing files (Visa BASE II, Mastercard IPM/T112), matches presentments to authorisations, posts final amounts to the ledger, computes interchange and fees, and tracks scheme settlement positions.",
+    "tags": [
+      "Card Fees",
+      "Card Settlements",
+      "Clearing Files",
+      "Clearing Records"
+    ],
+    "tables": 4,
+    "events": [
+      "cards.clearing_file.processed",
+      "cards.clearing_record.posted",
+      "cards.clearing_record.unmatched",
+      "cards.card_settlement.calculated",
+      "cards.card_fee.charged"
+    ]
+  },
+  {
+    "name": "card-dispute-service",
+    "domain": "cards",
+    "domain_title": "Card Issuing and Processing",
+    "phase": 3,
+    "database": "card_dispute_db",
+    "schema": "card_dispute",
+    "package": "io.meridian.carddispute",
+    "port": 9109,
+    "description": "Cardholder disputes and scheme chargebacks (Visa Resolve Online, Mastercom): intake, provisional credit, evidence, deadlines per stage, representment handling and final outcome postings.",
+    "tags": [
+      "Card Dispute Evidence",
+      "Card Disputes"
+    ],
+    "tables": 3,
+    "events": [
+      "cards.card_dispute.opened",
+      "cards.card_dispute.stage_changed",
+      "cards.card_dispute.deadline_approaching",
+      "cards.card_dispute.closed"
+    ]
+  },
+  {
+    "name": "rewards-service",
+    "domain": "engagement",
+    "domain_title": "Engagement: Rewards, Insights and Campaigns",
+    "phase": 3,
+    "database": "rewards_db",
+    "schema": "rewards",
+    "package": "io.meridian.rewards",
+    "port": 9153,
+    "description": "Loyalty programs: earn rules on spend and behaviour, points accounts with an append-only points ledger, cashback, tiers, a redemption catalogue, and referral programs with qualification and payouts.",
+    "tags": [
+      "Cashback Transactions",
+      "Points Accounts",
+      "Points Ledger Entries",
+      "Redemptions",
+      "Referral Programs",
+      "Referrals",
+      "Reward Catalog Items",
+      "Reward Rules",
+      "Reward Tiers",
+      "Rewards Programs"
+    ],
+    "tables": 10,
+    "events": [
+      "engagement.rewards_program.activated",
+      "engagement.points.earned",
+      "engagement.points.redeemed",
+      "engagement.points.expired",
+      "engagement.points_account.tier_changed",
+      "engagement.cashback.confirmed",
+      "engagement.cashback.paid",
+      "engagement.cashback.reversed",
+      "engagement.redemption.fulfilled",
+      "engagement.redemption.failed",
+      "engagement.referral.signed_up",
+      "engagement.referral.qualified"
+    ]
+  },
+  {
+    "name": "insights-service",
+    "domain": "engagement",
+    "domain_title": "Engagement: Rewards, Insights and Campaigns",
+    "phase": 3,
+    "database": "insights_db",
+    "schema": "insights",
+    "package": "io.meridian.insights",
+    "port": 9154,
+    "description": "Personal finance management: transaction enrichment (clean merchant names, logos, categories, geo, recurring flags), category taxonomy and customer overrides, budgets, subscription detection, insight cards and cash-flow forecasts.",
+    "tags": [
+      "Budget Periods",
+      "Budgets",
+      "Cash Flow Forecasts",
+      "Category Override Rules",
+      "Financial Insights",
+      "Recurring Payments",
+      "Spend Categories",
+      "Spending Summaries",
+      "Transaction Enrichments"
+    ],
+    "tables": 8,
+    "events": [
+      "engagement.transaction.enriched",
+      "engagement.transaction.recategorised",
+      "engagement.budget.threshold_reached",
+      "engagement.budget.exceeded",
+      "engagement.recurring_payment.detected",
+      "engagement.recurring_payment.price_changed",
+      "engagement.insight.generated",
+      "engagement.cash_flow.low_balance_forecast"
+    ]
+  },
+  {
+    "name": "campaign-service",
+    "domain": "engagement",
+    "domain_title": "Engagement: Rewards, Insights and Campaigns",
+    "phase": 3,
+    "database": "campaign_db",
+    "schema": "campaign",
+    "package": "io.meridian.campaign",
+    "port": 9155,
+    "description": "Targeted marketing campaigns across channels with A/B variants, schedules and budgets; personalised offers (pre-approved loans, card upgrades, rate promotions) with eligibility, consent checks and response tracking.",
+    "tags": [
+      "Campaign Audience",
+      "Campaign Metrics",
+      "Campaign Offers",
+      "Campaign Variants",
+      "Campaigns",
+      "Marketing Consent Snapshots",
+      "Offer Assignments"
+    ],
+    "tables": 7,
+    "events": [
+      "engagement.campaign.approved",
+      "engagement.campaign.started",
+      "engagement.campaign.completed",
+      "engagement.offer.assigned",
+      "engagement.offer.accepted",
+      "engagement.offer.declined",
+      "engagement.offer.expired",
+      "engagement.campaign_audience.converted"
+    ]
+  },
+  {
+    "name": "inbox-service",
+    "domain": "engagement",
+    "domain_title": "Engagement: Rewards, Insights and Campaigns",
+    "phase": 3,
+    "database": "inbox_db",
+    "schema": "inbox",
+    "package": "io.meridian.inbox",
+    "port": 9156,
+    "description": "Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts, plus in-app announcements and banners.",
+    "tags": [
+      "Announcements",
+      "Secure Message Threads",
+      "Secure Messages"
+    ],
+    "tables": 4,
+    "events": [
+      "engagement.secure_message_thread.opened",
+      "engagement.secure_message.sent",
+      "engagement.secure_message_thread.closed",
+      "engagement.announcement.published"
+    ]
+  },
+  {
+    "name": "ledger-service",
+    "domain": "ledger",
+    "domain_title": "Ledger and Accounting",
+    "phase": 1,
+    "database": "ledger_db",
+    "schema": "ledger",
+    "package": "io.meridian.ledger",
+    "port": 9110,
+    "description": "Posting engine and balance service. The only component allowed to change balances. Enforces double-entry, idempotency, holds and available-balance rules; publishes every posting.",
+    "tags": [
+      "Balance Snapshots",
+      "Holds",
+      "Journal Entries",
+      "Ledger Accounts",
+      "Ledger Entries",
+      "Ledgers"
+    ],
+    "tables": 8,
+    "events": [
+      "ledger.ledger.created",
+      "ledger.ledger_account.created",
+      "ledger.ledger_account.status_changed",
+      "ledger.journal_entry.posted",
+      "ledger.journal_entry.reversed",
+      "ledger.balance.changed",
+      "ledger.hold.placed",
+      "ledger.hold.captured",
+      "ledger.hold.released"
+    ]
+  },
+  {
+    "name": "gl-service",
+    "domain": "ledger",
+    "domain_title": "Ledger and Accounting",
+    "phase": 1,
+    "database": "gl_db",
+    "schema": "gl",
+    "package": "io.meridian.gl",
+    "port": 9111,
+    "description": "Chart of accounts per legal entity, product-to-GL mapping, real-time GL aggregation from ledger events, accounting periods and continuous close, trial balance, IFRS 9 provisions and ERP export.",
+    "tags": [
+      "Accounting Periods",
+      "Ecl Provisions",
+      "Erp Exports",
+      "Gl Accounts",
+      "Gl Balances",
+      "Gl Journals",
+      "Gl Mapping Rules",
+      "Period Close Runs"
+    ],
+    "tables": 9,
+    "events": [
+      "ledger.gl_journal.posted",
+      "ledger.accounting_period.closed",
+      "ledger.accounting_period.reopened",
+      "ledger.period_close_run.completed",
+      "ledger.ecl_provision.calculated"
+    ]
+  },
+  {
+    "name": "reconciliation-service",
+    "domain": "ledger",
+    "domain_title": "Ledger and Accounting",
+    "phase": 1,
+    "database": "recon_db",
+    "schema": "recon",
+    "package": "io.meridian.reconciliation",
+    "port": 9112,
+    "description": "Imports external statements and settlement files, matches them against internal ledger records with configurable rules (and AI suggestions), and manages breaks in ageing exception queues.",
+    "tags": [
+      "Recon Exceptions",
+      "Recon Files",
+      "Recon Matches",
+      "Recon Rules",
+      "Recon Runs",
+      "Recon Sources"
+    ],
+    "tables": 7,
+    "events": [
+      "ledger.recon_file.parsed",
+      "ledger.recon_run.completed",
+      "ledger.recon_exception.raised",
+      "ledger.recon_exception.resolved"
+    ]
+  },
+  {
+    "name": "loan-origination-service",
+    "domain": "lending",
+    "domain_title": "Lending and Collections",
+    "phase": 3,
+    "database": "loan_origination_db",
+    "schema": "loan_origination",
+    "package": "io.meridian.loanorigination",
+    "port": 9113,
+    "description": "Loan and credit-line applications from any channel: applicants, declared finances, documents, credit bureau pulls, scorecards with explainable reason codes, affordability, decisions, offers and e-signature.",
+    "tags": [
+      "Affordability Assessments",
+      "Bureau Reports",
+      "Credit Decisions",
+      "Credit Scores",
+      "E Signature Requests",
+      "Loan Applicants",
+      "Loan Application Documents",
+      "Loan Applications",
+      "Loan Financial Items",
+      "Loan Offers",
+      "Scorecard Versions",
+      "Scorecards"
+    ],
+    "tables": 12,
+    "events": [
+      "lending.loan_application.submitted",
+      "lending.loan_application.status_changed",
+      "lending.bureau_report.received",
+      "lending.credit_score.calculated",
+      "lending.credit_decision.made",
+      "lending.loan_offer.issued",
+      "lending.loan_offer.accepted",
+      "lending.e_signature_request.signed"
+    ]
+  },
+  {
+    "name": "loan-service",
+    "domain": "lending",
+    "domain_title": "Lending and Collections",
+    "phase": 3,
+    "database": "loan_db",
+    "schema": "loan",
+    "package": "io.meridian.loan",
+    "port": 9114,
+    "description": "Loan and credit-line servicing: disbursement, schedules, daily accrual, repayment allocation waterfall, fees, rate changes, restructuring, prepayment, delinquency (DPD) tracking, write-off and recovery. All money movements are posted through ledger-service.",
+    "tags": [
+      "Allocation Rules",
+      "Bnpl Plans",
+      "Credit Line Drawdowns",
+      "Credit Line Statements",
+      "Credit Lines",
+      "Loan Accruals",
+      "Loan Disbursements",
+      "Loan Fee Charges",
+      "Loan Prepayment Quotes",
+      "Loan Recoveries",
+      "Loan Repayments",
+      "Loan Restructures",
+      "Loan Write Offs",
+      "Loans",
+      "Schedule Installments"
+    ],
+    "tables": 19,
+    "events": [
+      "lending.loan.created",
+      "lending.loan.disbursed",
+      "lending.loan.repayment_received",
+      "lending.loan.repayment_reversed",
+      "lending.loan.installment_due",
+      "lending.loan.installment_overdue",
+      "lending.loan.delinquency_changed",
+      "lending.loan.restructured",
+      "lending.loan.rate_changed",
+      "lending.loan.paid_off",
+      "lending.loan.written_off",
+      "lending.loan.recovery_received",
+      "lending.credit_line.activated",
+      "lending.credit_line.drawn",
+      "lending.credit_line.limit_changed",
+      "lending.credit_line.statement_issued",
+      "lending.bnpl_plan.created"
+    ]
+  },
+  {
+    "name": "collateral-service",
+    "domain": "lending",
+    "domain_title": "Lending and Collections",
+    "phase": 3,
+    "database": "collateral_db",
+    "schema": "collateral",
+    "package": "io.meridian.collateral",
+    "port": 9115,
+    "description": "Collateral registry: pledged assets and guarantees, valuations, links to exposures with LTV, insurance policies and release / liquidation.",
+    "tags": [
+      "Collateral Insurances",
+      "Collateral Links",
+      "Collateral Valuations",
+      "Collaterals"
+    ],
+    "tables": 4,
+    "events": [
+      "lending.collateral.registered",
+      "lending.collateral.revalued",
+      "lending.collateral.released",
+      "lending.collateral_insurance.expiring"
+    ]
+  },
+  {
+    "name": "collections-service",
+    "domain": "lending",
+    "domain_title": "Lending and Collections",
+    "phase": 3,
+    "database": "collections_db",
+    "schema": "collections",
+    "package": "io.meridian.collections",
+    "port": 9116,
+    "description": "Collections and recovery for loans, credit lines, cards, overdrafts and BNPL: strategies by segment and DPD, automated contact actions, agent queues, promises to pay, payment plans, AI next-best-action and legal proceedings.",
+    "tags": [
+      "Collection Actions",
+      "Collection Cases",
+      "Collection Queues",
+      "Collection Strategies",
+      "Collection Strategy Steps",
+      "Legal Proceedings",
+      "Next Best Actions",
+      "Payment Plans",
+      "Promises To Pay"
+    ],
+    "tables": 9,
+    "events": [
+      "lending.collection_case.opened",
+      "lending.collection_case.assigned",
+      "lending.collection_case.closed",
+      "lending.collection_action.performed",
+      "lending.promise_to_pay.made",
+      "lending.promise_to_pay.broken",
+      "lending.payment_plan.activated",
+      "lending.payment_plan.broken",
+      "lending.legal_proceeding.started"
+    ]
+  },
+  {
+    "name": "openbanking-service",
+    "domain": "openbanking",
+    "domain_title": "Open Banking",
+    "phase": 4,
+    "database": "openbanking_db",
+    "schema": "openbanking",
+    "package": "io.meridian.openbanking",
+    "port": 9117,
+    "description": "ASPSP open banking gateway. Validates TPP identity (eIDAS / directory certificates), manages consents and SCA redirect / decoupled flows, enforces consent scope on every call, and translates standard profiles to internal account, payment and funds-check APIs.",
+    "tags": [
+      "Ob Access Logs",
+      "Ob Authorisations",
+      "Ob Consents",
+      "Ob Funds Confirmations",
+      "Ob Payment Initiations",
+      "Ob Standard Profiles",
+      "Tpp Certificates",
+      "Tpps"
+    ],
+    "tables": 9,
+    "events": [
+      "openbanking.tpp.registered",
+      "openbanking.tpp.suspended",
+      "openbanking.ob_consent.created",
+      "openbanking.ob_consent.authorised",
+      "openbanking.ob_consent.revoked",
+      "openbanking.ob_consent.expired",
+      "openbanking.ob_payment_initiation.received",
+      "openbanking.ob_payment_initiation.status_changed"
+    ]
+  },
+  {
+    "name": "business-day-service",
+    "domain": "operations",
+    "domain_title": "Operations: Batch, Files, Search and Archive",
+    "phase": 1,
+    "database": "business_day_db",
+    "schema": "business_day",
+    "package": "io.meridian.businessday",
+    "port": 9157,
+    "description": "Owns the business date per legal entity, orchestrates EOD/EOM/EOQ/EOY job graphs with dependencies, parallelism, retries and restart-from-failure, performs the date roll, and schedules non-EOD batch jobs with distributed locks. Jobs execute in the owning services; this service coordinates them (Temporal).",
+    "tags": [
+      "Batch Job Locks",
+      "Business Days",
+      "Date Rolls",
+      "Eod Job Definitions",
+      "Eod Job Runs",
+      "Eod Runs",
+      "Job Schedules"
+    ],
+    "tables": 8,
+    "events": [
+      "operations.business_day.opened",
+      "operations.business_day.cut_off",
+      "operations.business_day.closed",
+      "operations.eod_run.started",
+      "operations.eod_run.completed",
+      "operations.eod_run.failed",
+      "operations.eod_job_run.requested",
+      "operations.eod_job_run.failed",
+      "operations.date_roll.completed",
+      "operations.job_schedule_run.completed"
+    ]
+  },
+  {
+    "name": "file-gateway-service",
+    "domain": "operations",
+    "domain_title": "Operations: Batch, Files, Search and Archive",
+    "phase": 1,
+    "database": "file_gateway_db",
+    "schema": "file_gateway",
+    "package": "io.meridian.filegateway",
+    "port": 9158,
+    "description": "Managed file transfer with banks, schemes, bureaus, regulators and partners over SFTP, FTPS, S3, AS2 and APIs: PGP encryption, virus scanning, format validation, routing of inbound files to consumer services, generation and delivery of outbound files, acknowledgements and a complete transfer audit trail.",
+    "tags": [
+      "File Channels",
+      "File Formats",
+      "File Routes",
+      "File Transfer Logs",
+      "Inbound Files",
+      "Outbound Files"
+    ],
+    "tables": 6,
+    "events": [
+      "operations.inbound_file.received",
+      "operations.inbound_file.quarantined",
+      "operations.inbound_file.routed",
+      "operations.inbound_file.processed",
+      "operations.outbound_file.generated",
+      "operations.outbound_file.delivered",
+      "operations.outbound_file.failed",
+      "operations.file_channel.health_changed"
+    ]
+  },
+  {
+    "name": "search-service",
+    "domain": "operations",
+    "domain_title": "Operations: Batch, Files, Search and Archive",
+    "phase": 1,
+    "database": "search_db",
+    "schema": "search",
+    "package": "io.meridian.search",
+    "port": 9159,
+    "description": "Enterprise search across customers, accounts, wallets, cards, loans, payments and cases. Maintains OpenSearch indices fed by domain events (CDC), with versioned mappings, zero-downtime reindexing via alias swaps, synonyms, field-level masking by role, and saved searches per user.",
+    "tags": [
+      "Saved Searches",
+      "Search",
+      "Search Index Jobs",
+      "Search Indexes",
+      "Search Synonyms"
+    ],
+    "tables": 4,
+    "events": [
+      "operations.search_index.reindexed",
+      "operations.search_index.degraded"
+    ]
+  },
+  {
+    "name": "archive-service",
+    "domain": "operations",
+    "domain_title": "Operations: Batch, Files, Search and Archive",
+    "phase": 1,
+    "database": "archive_db",
+    "schema": "archive",
+    "package": "io.meridian.archive",
+    "port": 9160,
+    "description": "Data lifecycle management: data classification catalogue, retention policies per data class and jurisdiction, archival of aged records to immutable object storage with manifests, legal holds that override retention, anonymisation, and approved purges with certificates of destruction.",
+    "tags": [
+      "Archive Jobs",
+      "Archived Objects",
+      "Data Classifications",
+      "Legal Holds",
+      "Purge Requests",
+      "Retention Policies"
+    ],
+    "tables": 6,
+    "events": [
+      "operations.archive_job.completed",
+      "operations.legal_hold.placed",
+      "operations.legal_hold.released",
+      "operations.purge_request.approved",
+      "operations.purge_request.completed"
+    ]
+  },
+  {
+    "name": "customer-service",
+    "domain": "party",
+    "domain_title": "Customer and Onboarding",
+    "phase": 1,
+    "database": "customer_db",
+    "schema": "customer",
+    "package": "io.meridian.customer",
+    "port": 9118,
+    "description": "Customer information file (CIF): individuals and businesses, identifiers, addresses, contacts, relationships and UBOs, groups and households, segments, KYC tier, devices, credentials, consent and privacy requests. Provides the single customer view across all products.",
+    "tags": [
+      "Consents",
+      "Customer Addresses",
+      "Customer Contacts",
+      "Customer Credentials",
+      "Customer Devices",
+      "Customer Groups",
+      "Customer Identifiers",
+      "Customer Relationships",
+      "Customer Segment Assignments",
+      "Customer Segments",
+      "Customers",
+      "Privacy Requests"
+    ],
+    "tables": 14,
+    "events": [
+      "party.customer.created",
+      "party.customer.updated",
+      "party.customer.status_changed",
+      "party.customer.tier_changed",
+      "party.customer.merged",
+      "party.customer_relationship.changed",
+      "party.customer_device.trusted",
+      "party.customer_device.revoked",
+      "party.customer_credential.locked",
+      "party.consent.given",
+      "party.consent.withdrawn",
+      "party.privacy_request.completed"
+    ]
+  },
+  {
+    "name": "onboarding-service",
+    "domain": "party",
+    "domain_title": "Customer and Onboarding",
+    "phase": 1,
+    "database": "onboarding_db",
+    "schema": "onboarding",
+    "package": "io.meridian.onboarding",
+    "port": 9119,
+    "description": "No-code onboarding journeys per product, segment and country; runs applications step by step across app, web, USSD, agent and branch channels, orchestrates KYC checks and decisions, and syncs offline agent-assisted applications.",
+    "tags": [
+      "Onboarding Applications",
+      "Onboarding Journeys",
+      "Onboarding Offline Batches"
+    ],
+    "tables": 4,
+    "events": [
+      "party.onboarding_journey.published",
+      "party.onboarding_application.started",
+      "party.onboarding_application.submitted",
+      "party.onboarding_application.referred",
+      "party.onboarding_application.approved",
+      "party.onboarding_application.rejected",
+      "party.onboarding_application.abandoned",
+      "party.onboarding_offline_batch.processed"
+    ]
+  },
+  {
+    "name": "kyc-service",
+    "domain": "party",
+    "domain_title": "Customer and Onboarding",
+    "phase": 1,
+    "database": "kyc_db",
+    "schema": "kyc",
+    "package": "io.meridian.kyc",
+    "port": 9120,
+    "description": "KYC/KYB orchestration: document capture and OCR, liveness and face match, database and registry checks, UBO discovery, PEP/sanctions/adverse-media screening at onboarding, risk rating with factors, periodic review and document-expiry refresh, all through pluggable providers.",
+    "tags": [
+      "Kyc Checks",
+      "Kyc Documents",
+      "Kyc Profiles",
+      "Kyc Providers",
+      "Kyc Reviews",
+      "Kyc Risk Assessments",
+      "Kyc Screenings"
+    ],
+    "tables": 7,
+    "events": [
+      "party.kyc_profile.verified",
+      "party.kyc_profile.status_changed",
+      "party.kyc_profile.risk_changed",
+      "party.kyc_check.completed",
+      "party.kyc_document.expiring",
+      "party.kyc_screening.match_found",
+      "party.kyc_screening.disposed",
+      "party.kyc_review.due",
+      "party.kyc_review.completed"
+    ]
+  },
+  {
+    "name": "payment-service",
+    "domain": "payments",
+    "domain_title": "Payments Hub",
+    "phase": 2,
+    "database": "payment_db",
+    "schema": "payment",
+    "package": "io.meridian.payment",
+    "port": 9121,
+    "description": "Payment orchestrator. Owns the payment lifecycle state machine (initiate, screen, approve, hold funds, route, submit, settle, return), payees and aliases, bulk payments, mandates, collections, request-to-pay, payment links and QR codes. Runs multi-step flows as Temporal sagas with compensations.",
+    "tags": [
+      "Bulk Payment Items",
+      "Bulk Payments",
+      "Direct Debit Collections",
+      "Payee Aliases",
+      "Payee Verifications",
+      "Payees",
+      "Payment Approvals",
+      "Payment Links",
+      "Payment Mandates",
+      "Payment Qr Codes",
+      "Payment Recalls",
+      "Payment Repairs",
+      "Payment Returns",
+      "Payments",
+      "Requests To Pay"
+    ],
+    "tables": 16,
+    "events": [
+      "payments.payment.initiated",
+      "payments.payment.pending_approval",
+      "payments.payment.approved",
+      "payments.payment.submitted",
+      "payments.payment.accepted",
+      "payments.payment.settled",
+      "payments.payment.rejected",
+      "payments.payment.failed",
+      "payments.payment.cancelled",
+      "payments.payment.received",
+      "payments.payment_return.completed",
+      "payments.payment_recall.received",
+      "payments.payment_repair.opened",
+      "payments.payee.created",
+      "payments.payee.verified",
+      "payments.bulk_payment.completed",
+      "payments.payment_mandate.activated",
+      "payments.payment_mandate.cancelled",
+      "payments.direct_debit_collection.collected",
+      "payments.direct_debit_collection.failed",
+      "payments.request_to_pay.sent",
+      "payments.request_to_pay.paid",
+      "payments.payment_link.paid"
+    ]
+  },
+  {
+    "name": "routing-service",
+    "domain": "payments",
+    "domain_title": "Payments Hub",
+    "phase": 2,
+    "database": "routing_db",
+    "schema": "routing",
+    "package": "io.meridian.routing",
+    "port": 9122,
+    "description": "Rail catalogue and adapters, cut-offs and calendars, smart routing (cost, speed, success rate), raw rail message store, settlement batches, nostro accounts and intraday liquidity positions.",
+    "tags": [
+      "Liquidity Positions",
+      "Nostro Accounts",
+      "Payment Rails",
+      "Rail Adapters",
+      "Rail Cutoffs",
+      "Rail Messages",
+      "Rail Participants",
+      "Rail Settlement Batches",
+      "Routing Rules"
+    ],
+    "tables": 9,
+    "events": [
+      "payments.payment_rail.status_changed",
+      "payments.rail_message.received",
+      "payments.rail_settlement_batch.settled",
+      "payments.rail_liquidity_position.breached"
+    ]
+  },
+  {
+    "name": "fx-service",
+    "domain": "payments",
+    "domain_title": "Payments Hub",
+    "phase": 2,
+    "database": "fx_db",
+    "schema": "fx",
+    "package": "io.meridian.fx",
+    "port": 9123,
+    "description": "FX quotes with expiry and margin, FX deal booking, remittance corridors with partner routing and payout methods, and remittance partner configuration.",
+    "tags": [
+      "Fx Deals",
+      "Fx Margin Rules",
+      "Fx Quotes",
+      "Remittance Corridors",
+      "Remittance Partners"
+    ],
+    "tables": 5,
+    "events": [
+      "payments.fx_quote.created",
+      "payments.fx_deal.booked",
+      "payments.fx_deal.settled",
+      "payments.remittance_corridor.status_changed"
+    ]
+  },
+  {
+    "name": "tenant-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "tenant_db",
+    "schema": "tenant",
+    "package": "io.meridian.tenant",
+    "port": 9124,
+    "description": "Tenant lifecycle and placement on cells, legal entities, branches, per-tenant settings, feature flags, enabled modules and white-label branding.",
+    "tags": [
+      "Branches",
+      "Branding",
+      "Cells",
+      "Feature Flags",
+      "Legal Entities",
+      "Modules",
+      "Settings",
+      "Tenants"
+    ],
+    "tables": 9,
+    "events": [
+      "platform.tenant.provisioned",
+      "platform.tenant.activated",
+      "platform.tenant.suspended",
+      "platform.tenant.migrated",
+      "platform.tenant_module.changed",
+      "platform.legal_entity.created",
+      "platform.legal_entity.updated",
+      "platform.branch.created",
+      "platform.branch.updated",
+      "platform.tenant_setting.changed",
+      "platform.feature_flag.changed"
+    ]
+  },
+  {
+    "name": "identity-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "identity_db",
+    "schema": "identity",
+    "package": "io.meridian.identity",
+    "port": 9125,
+    "description": "Staff and operator identity: users, roles, permissions, ABAC policies, SSO (OIDC/SAML), MFA, sessions; and machine identity: OAuth 2.1 API clients, API keys, scopes, rate-limit policies and request logs. Customer credentials and device binding live in the party domain.",
+    "tags": [
+      "Access Policies",
+      "Api Clients",
+      "Api Keys",
+      "Mfa Factors",
+      "Oauth Scopes",
+      "Permissions",
+      "Rate Limit Policies",
+      "Request Logs",
+      "Role Permissions",
+      "Roles",
+      "Sessions",
+      "Sso Providers",
+      "User Roles",
+      "Users"
+    ],
+    "tables": 14,
+    "events": [
+      "platform.app_user.created",
+      "platform.app_user.status_changed",
+      "platform.app_user.logged_in",
+      "platform.app_user.login_failed",
+      "platform.user_role.granted",
+      "platform.user_role.revoked",
+      "platform.role.changed",
+      "platform.user_session.revoked",
+      "platform.api_client.created",
+      "platform.api_client.status_changed",
+      "platform.api_key.created",
+      "platform.api_key.revoked"
+    ]
+  },
+  {
+    "name": "config-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "config_db",
+    "schema": "config",
+    "package": "io.meridian.config",
+    "port": 9126,
+    "description": "Versioned, approval-gated configuration promoted across environments, country packs (regulatory reports, tax rules, holidays, schemes per jurisdiction) and tax rules.",
+    "tags": [
+      "Config Changes",
+      "Config Entries",
+      "Country Packs",
+      "Custom Field Definitions",
+      "Installed Country Packs",
+      "Tax Rate Rules"
+    ],
+    "tables": 6,
+    "events": [
+      "platform.custom_field_definition.changed",
+      "platform.config_entry.activated",
+      "platform.config_entry.rolled_back",
+      "platform.country_pack.released",
+      "platform.country_pack.installed",
+      "platform.tax_rule.changed"
+    ]
+  },
+  {
+    "name": "reference-data-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "refdata_db",
+    "schema": "refdata",
+    "package": "io.meridian.referencedata",
+    "port": 9127,
+    "description": "Golden source of reference data: currencies, countries, languages, business and rail calendars, FX rates and their sources, bank directory (BIC / national clearing codes), MCC and ISO 20022 purpose codes.",
+    "tags": [
+      "Banks",
+      "Countries",
+      "Currencies",
+      "Fx Rate Sources",
+      "Fx Rates",
+      "Holiday Calendars",
+      "Holidays",
+      "Languages",
+      "Mcc Codes",
+      "Purpose Codes"
+    ],
+    "tables": 10,
+    "events": [
+      "platform.fx_rate.published",
+      "platform.holiday_calendar.changed",
+      "platform.currency.changed",
+      "platform.country.risk_changed"
+    ]
+  },
+  {
+    "name": "document-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "document_db",
+    "schema": "document",
+    "package": "io.meridian.document",
+    "port": 9128,
+    "description": "Encrypted document storage with virus scanning, classification and retention / legal hold; templates and document generation (statements, contracts, letters); electronic signatures.",
+    "tags": [
+      "Document Templates",
+      "Documents",
+      "Esign Requests",
+      "Generated Documents"
+    ],
+    "tables": 4,
+    "events": [
+      "platform.document.uploaded",
+      "platform.document.quarantined",
+      "platform.document.expiring",
+      "platform.generated_document.completed",
+      "platform.esign_request.completed",
+      "platform.esign_request.declined"
+    ]
+  },
+  {
+    "name": "workflow-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "workflow_db",
+    "schema": "workflow",
+    "package": "io.meridian.workflow",
+    "port": 9129,
+    "description": "Maker-checker approvals for configuration and sensitive operations (multi-level, amount thresholds, segregation of duties), workflow definitions and instances on Temporal, and human work queues with SLAs.",
+    "tags": [
+      "Approval Policies",
+      "Approval Requests",
+      "Tasks",
+      "Workflow Definitions",
+      "Workflow Instances"
+    ],
+    "tables": 6,
+    "events": [
+      "platform.approval_request.created",
+      "platform.approval_request.approved",
+      "platform.approval_request.rejected",
+      "platform.approval_request.executed",
+      "platform.approval_request.expired",
+      "platform.workflow_instance.completed",
+      "platform.workflow_instance.failed",
+      "platform.work_task.created",
+      "platform.work_task.sla_breached",
+      "platform.work_task.completed"
+    ]
+  },
+  {
+    "name": "notification-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "notification_db",
+    "schema": "notification",
+    "package": "io.meridian.notification",
+    "port": 9130,
+    "description": "Event-driven multi-channel notifications (push, SMS, email, WhatsApp, in-app, USSD, voice) with localised templates, provider failover, delivery tracking, preferences and quiet hours.",
+    "tags": [
+      "Notification Preferences",
+      "Notification Providers",
+      "Notification Rules",
+      "Notification Templates",
+      "Notifications"
+    ],
+    "tables": 6,
+    "events": [
+      "platform.notification.sent",
+      "platform.notification.delivered",
+      "platform.notification.failed",
+      "platform.notification_preference.changed"
+    ]
+  },
+  {
+    "name": "webhook-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "webhook_db",
+    "schema": "webhook",
+    "package": "io.meridian.webhook",
+    "port": 9131,
+    "description": "Delivers domain events to client endpoints: signed (HMAC-SHA256 + timestamp), at-least-once with exponential retries for 72 hours, ordering per aggregate, delivery logs and event replay.",
+    "tags": [
+      "Event Replays",
+      "Webhook Deliveries",
+      "Webhook Endpoints",
+      "Webhook Subscriptions"
+    ],
+    "tables": 5,
+    "events": [
+      "platform.webhook_endpoint.disabled",
+      "platform.webhook_delivery.abandoned",
+      "platform.webhook_replay_job.completed"
+    ]
+  },
+  {
+    "name": "audit-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "audit_db",
+    "schema": "audit",
+    "package": "io.meridian.audit",
+    "port": 9132,
+    "description": "Tamper-evident, hash-chained audit log of every user, API and system action, retained per jurisdiction (10 years minimum), with regulator / DSAR exports under maker-checker.",
+    "tags": [
+      "Audit Events",
+      "Audit Retention Policies",
+      "Data Exports"
+    ],
+    "tables": 3,
+    "events": [
+      "platform.audit_event.recorded",
+      "platform.audit_chain.broken",
+      "platform.data_export_request.completed"
+    ]
+  },
+  {
+    "name": "billing-service",
+    "domain": "platform",
+    "domain_title": "Platform and Administration",
+    "phase": 1,
+    "database": "billing_db",
+    "schema": "billing",
+    "package": "io.meridian.billing",
+    "port": 9133,
+    "description": "SaaS commercial engine: price plans, tenant subscriptions, usage metering from platform events, and monthly invoicing with usage tiers.",
+    "tags": [
+      "Invoices",
+      "Price Plans",
+      "Subscriptions",
+      "Usage"
+    ],
+    "tables": 5,
+    "events": [
+      "platform.usage_record.recorded",
+      "platform.tenant_invoice.issued",
+      "platform.tenant_invoice.paid",
+      "platform.tenant_subscription.changed"
+    ]
+  },
+  {
+    "name": "product-catalog-service",
+    "domain": "product",
+    "domain_title": "Product Studio and Pricing",
+    "phase": 1,
+    "database": "product_db",
+    "schema": "product",
+    "package": "io.meridian.productcatalog",
+    "port": 9134,
+    "description": "Product Studio back end. Holds templates, products and immutable published versions with all parameters (interest, fees, tax, limits, eligibility, scripts). Accounts pin a version; publishing goes through maker-checker; simulations run a product against synthetic customers.",
+    "tags": [
+      "Eligibility Rules",
+      "Fee Definitions",
+      "Fee Tiers",
+      "Fee Waiver Rules",
+      "Interest Rate Configs",
+      "Interest Rate Tiers",
+      "Product Availability",
+      "Product Bundle Items",
+      "Product Bundles",
+      "Product Disclosures",
+      "Product Limit Templates",
+      "Product Parameters",
+      "Product Scripts",
+      "Product Simulations",
+      "Product Templates",
+      "Product Versions",
+      "Products",
+      "Promotional Rates",
+      "Rate Indexes",
+      "Relationship Pricing Rules",
+      "Tax Rules"
+    ],
+    "tables": 22,
+    "events": [
+      "product.product.created",
+      "product.product.status_changed",
+      "product.product_version.submitted",
+      "product.product_version.approved",
+      "product.product_version.rejected",
+      "product.product_version.published",
+      "product.rate_index_value.published",
+      "product.interest_rate_config.changed",
+      "product.product_script.activated",
+      "product.product_simulation.completed",
+      "product.promotional_rate.started",
+      "product.promotional_rate.ended"
+    ]
+  },
+  {
+    "name": "pricing-rules-service",
+    "domain": "product",
+    "domain_title": "Product Studio and Pricing",
+    "phase": 1,
+    "database": "pricing_db",
+    "schema": "pricing",
+    "package": "io.meridian.pricingrules",
+    "port": 9135,
+    "description": "DMN-compatible decision engine used for pricing, eligibility, fees, limits and routing decisions. Decision tables are versioned with maker-checker; every evaluation is logged for explainability.",
+    "tags": [
+      "Decision Table Versions",
+      "Decision Tables",
+      "Price Quotes",
+      "Rule Evaluations"
+    ],
+    "tables": 4,
+    "events": [
+      "product.decision_table_version.published",
+      "product.product_price_quote.created",
+      "product.product_price_quote.accepted"
+    ]
+  },
+  {
+    "name": "regulatory-reporting-service",
+    "domain": "reporting",
+    "domain_title": "Regulatory Reporting, Analytics and AI",
+    "phase": 4,
+    "database": "regreport_db",
+    "schema": "regreport",
+    "package": "io.meridian.regulatoryreporting",
+    "port": 9136,
+    "description": "Catalogue of regulatory reports per country pack with versioned templates and data mappings; runs reports reproducibly from lakehouse snapshots, validates them, tracks manual adjustments and submits to regulators with acknowledgements. Also builds CRS and FATCA records.",
+    "tags": [
+      "Crs Fatca Records",
+      "Report Adjustments",
+      "Report Definition Versions",
+      "Report Definitions",
+      "Report Outputs",
+      "Report Runs",
+      "Report Schedules",
+      "Report Submissions"
+    ],
+    "tables": 9,
+    "events": [
+      "reporting.report_definition.published",
+      "reporting.report_run.completed",
+      "reporting.report_run.failed",
+      "reporting.report_run.validation_failed",
+      "reporting.report_submission.submitted",
+      "reporting.report_submission.acknowledged",
+      "reporting.report_submission.rejected",
+      "reporting.report_submission.deadline_approaching"
+    ]
+  },
+  {
+    "name": "analytics-service",
+    "domain": "reporting",
+    "domain_title": "Regulatory Reporting, Analytics and AI",
+    "phase": 4,
+    "database": "analytics_db",
+    "schema": "analytics",
+    "package": "io.meridian.analytics",
+    "port": 9137,
+    "description": "Self-service analytics over the Iceberg lakehouse via Trino: KPI catalogue, dashboards and widgets embedded in the console, saved parameterised queries, exports and scheduled data shares to the tenant's warehouse or bucket.",
+    "tags": [
+      "Analytics Dashboards",
+      "Analytics Data Shares",
+      "Analytics Exports",
+      "Analytics Kpis",
+      "Analytics Saved Queries",
+      "Analytics Widgets"
+    ],
+    "tables": 6,
+    "events": [
+      "reporting.analytics_export.completed",
+      "reporting.data_share.failed",
+      "reporting.analytics_kpi.certified"
+    ]
+  },
+  {
+    "name": "ai-platform-service",
+    "domain": "reporting",
+    "domain_title": "Regulatory Reporting, Analytics and AI",
+    "phase": 4,
+    "database": "ai_db",
+    "schema": "ai",
+    "package": "io.meridian.aiplatform",
+    "port": 9138,
+    "description": "Model registry with model risk management (validation, bias tests, explainability, approval), deployments in shadow/canary/champion-challenger with monitoring, feature catalogue, copilot definitions, an immutable audit of every copilot interaction, and LLM gateway policies.",
+    "tags": [
+      "Ai Copilot Feedback",
+      "Copilot Interactions",
+      "Copilots",
+      "Llm Gateway Policies",
+      "Ml Features",
+      "Ml Model Versions",
+      "Ml Models",
+      "Model Deployments",
+      "Model Metrics"
+    ],
+    "tables": 9,
+    "events": [
+      "reporting.ml_model_version.approved",
+      "reporting.ml_model_version.rejected",
+      "reporting.model_deployment.activated",
+      "reporting.model_deployment.rolled_back",
+      "reporting.model_metric.breached",
+      "reporting.copilot_interaction.recorded",
+      "reporting.copilot_action.approved",
+      "reporting.llm_budget.exceeded"
+    ]
+  },
+  {
+    "name": "fraud-service",
+    "domain": "risk",
+    "domain_title": "Risk, Fraud, AML and Limits",
+    "phase": 2,
+    "database": "fraud_db",
+    "schema": "fraud",
+    "package": "io.meridian.fraud",
+    "port": 9139,
+    "description": "Scores every authorisation, payment, wallet transfer, login and profile change in under 50 ms with rules (CEL expressions) plus ML models, maintains device intelligence and block/allow lists, raises fraud alerts and collects outcome labels for model training.",
+    "tags": [
+      "Behavioural Signals",
+      "Fraud Alerts",
+      "Fraud Decision Policies",
+      "Fraud Devices",
+      "Fraud Feedback",
+      "Fraud List Entries",
+      "Fraud Lists",
+      "Fraud Rules",
+      "Fraud Scores"
+    ],
+    "tables": 10,
+    "events": [
+      "risk.fraud_score.evaluated",
+      "risk.fraud_score.blocked",
+      "risk.fraud_rule.activated",
+      "risk.fraud_alert.raised",
+      "risk.fraud_alert.resolved",
+      "risk.device.blocked",
+      "risk.fraud_feedback.recorded"
+    ]
+  },
+  {
+    "name": "transaction-monitoring-service",
+    "domain": "risk",
+    "domain_title": "Risk, Fraud, AML and Limits",
+    "phase": 2,
+    "database": "tm_db",
+    "schema": "tm",
+    "package": "io.meridian.transactionmonitoring",
+    "port": 9140,
+    "description": "Streaming (Flink) and batch AML transaction monitoring scenarios with versioned thresholds, alerts with contributing transactions, customer AML risk rating, and an entity graph for mule and network detection.",
+    "tags": [
+      "Customer Risk Ratings",
+      "Risk Graph Entities",
+      "Risk Graph Links",
+      "Tm Alerts",
+      "Tm Runs",
+      "Tm Scenario Versions",
+      "Tm Scenarios"
+    ],
+    "tables": 8,
+    "events": [
+      "risk.tm_scenario.version_activated",
+      "risk.tm_run.completed",
+      "risk.tm_alert.raised",
+      "risk.tm_alert.closed",
+      "risk.tm_alert.escalated",
+      "risk.customer_risk_rating.changed",
+      "risk.graph_entity.mule_suspected"
+    ]
+  },
+  {
+    "name": "sanctions-service",
+    "domain": "risk",
+    "domain_title": "Risk, Fraud, AML and Limits",
+    "phase": 2,
+    "database": "sanctions_db",
+    "schema": "sanctions",
+    "package": "io.meridian.sanctions",
+    "port": 9141,
+    "description": "Loads and versions sanctions, PEP and adverse-media lists; screens customers, related parties and payments with fuzzy name matching (transliteration, phonetic, token) and manages good-guy whitelists.",
+    "tags": [
+      "Sanctions List Entries",
+      "Sanctions Lists",
+      "Screening Matches",
+      "Screening Requests",
+      "Screening Results",
+      "Screening Whitelist"
+    ],
+    "tables": 6,
+    "events": [
+      "risk.sanctions_list.updated",
+      "risk.screening.completed",
+      "risk.screening.potential_match",
+      "risk.screening.confirmed_match",
+      "risk.screening.cleared"
+    ]
+  },
+  {
+    "name": "case-management-service",
+    "domain": "risk",
+    "domain_title": "Risk, Fraud, AML and Limits",
+    "phase": 2,
+    "database": "aml_case_db",
+    "schema": "aml_case",
+    "package": "io.meridian.casemanagement",
+    "port": 9142,
+    "description": "Investigation workspace for AML, fraud and sanctions cases: consolidates alerts, evidence, notes and tasks; records dispositions with maker-checker; drafts and files SAR/STR reports (goAML export).",
+    "tags": [
+      "Aml Case Dispositions",
+      "Aml Case Evidence",
+      "Aml Case Tasks",
+      "Aml Cases",
+      "Sar Reports"
+    ],
+    "tables": 7,
+    "events": [
+      "risk.aml_case.opened",
+      "risk.aml_case.escalated",
+      "risk.aml_case.closed",
+      "risk.aml_case_disposition.recorded",
+      "risk.sar_report.approved",
+      "risk.sar_report.filed",
+      "risk.sar_report.acknowledged"
+    ]
+  },
+  {
+    "name": "limits-service",
+    "domain": "risk",
+    "domain_title": "Risk, Fraud, AML and Limits",
+    "phase": 2,
+    "database": "limits_db",
+    "schema": "limits",
+    "package": "io.meridian.limits",
+    "port": 9143,
+    "description": "Central limits engine: amount, count and balance limits by scope (tier, product, customer, account, card, wallet, agent), channel, transaction type and period; atomic check-and-reserve with commit or release, temporary overrides with approval, and risk appetite metrics.",
+    "tags": [
+      "Limit Checks",
+      "Limit Overrides",
+      "Limit Rules",
+      "Limit Usages",
+      "Risk Appetite Metrics"
+    ],
+    "tables": 5,
+    "events": [
+      "risk.limit_rule.activated",
+      "risk.limit_rule.changed",
+      "risk.limit.breached",
+      "risk.limit_override.approved",
+      "risk.limit_override.expired",
+      "risk.appetite_metric.breached"
+    ]
+  },
+  {
+    "name": "crm-service",
+    "domain": "servicing",
+    "domain_title": "Servicing and CRM",
+    "phase": 2,
+    "database": "crm_db",
+    "schema": "crm",
+    "package": "io.meridian.crm",
+    "port": 9144,
+    "description": "Cases, complaints, interactions, notes, work queues and SLAs for servicing staff, plus the knowledge base and the servicing copilot. Builds the customer timeline from its own records and from events of other domains.",
+    "tags": [
+      "Canned Responses",
+      "Complaint Redress",
+      "Complaints",
+      "Copilot Sessions",
+      "Customer Notes",
+      "Customer Timeline",
+      "Interactions",
+      "Knowledge Articles",
+      "Service Cases",
+      "Sla Policies",
+      "Work Items",
+      "Work Queues"
+    ],
+    "tables": 14,
+    "events": [
+      "servicing.service_case.created",
+      "servicing.service_case.assigned",
+      "servicing.service_case.escalated",
+      "servicing.service_case.sla_breached",
+      "servicing.service_case.resolved",
+      "servicing.service_case.closed",
+      "servicing.complaint.received",
+      "servicing.complaint.acknowledged",
+      "servicing.complaint.deadline_at_risk",
+      "servicing.complaint.resolved",
+      "servicing.complaint.escalated",
+      "servicing.complaint_redress.paid",
+      "servicing.interaction.logged",
+      "servicing.work_item.assigned",
+      "servicing.copilot_session.created"
+    ]
+  },
+  {
+    "name": "treasury-deal-service",
+    "domain": "treasury",
+    "domain_title": "Treasury and ALM",
+    "phase": 4,
+    "database": "treasury_deal_db",
+    "schema": "treasury_deal",
+    "package": "io.meridian.treasurydeal",
+    "port": 9161,
+    "description": "Front and middle office for treasury: counterparties and limits, money market, FX and securities deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement.",
+    "tags": [
+      "Money Market Deals",
+      "Securities Holdings",
+      "Securities Trades",
+      "Treasury Confirmations",
+      "Treasury Counterparties",
+      "Treasury Counterparty Limits",
+      "Treasury Fx Deal Legs",
+      "Treasury Fx Deals",
+      "Treasury Limit Utilisations",
+      "Treasury Securities",
+      "Treasury Settlements",
+      "Treasury Ssis"
+    ],
+    "tables": 12,
+    "events": [
+      "treasury.counterparty.approved",
+      "treasury.limit.breached",
+      "treasury.money_market_deal.captured",
+      "treasury.money_market_deal.settled",
+      "treasury.money_market_deal.matured",
+      "treasury.fx_deal.captured",
+      "treasury.fx_deal.settled",
+      "treasury.securities_trade.settled",
+      "treasury.confirmation.unmatched",
+      "treasury.settlement.failed"
+    ]
+  },
+  {
+    "name": "liquidity-service",
+    "domain": "treasury",
+    "domain_title": "Treasury and ALM",
+    "phase": 4,
+    "database": "liquidity_db",
+    "schema": "liquidity",
+    "package": "io.meridian.liquidity",
+    "port": 9162,
+    "description": "Real-time and projected cash positions by currency and nostro, maturity ladders, Basel III LCR and NSFR calculations, intraday liquidity monitoring and liquidity stress testing.",
+    "tags": [
+      "Intraday Liquidity",
+      "Lcr Calculations",
+      "Liquidity Ladder Runs",
+      "Liquidity Positions",
+      "Liquidity Stress Results",
+      "Liquidity Stress Scenarios",
+      "Nsfr Calculations"
+    ],
+    "tables": 8,
+    "events": [
+      "treasury.liquidity_position.shortfall",
+      "treasury.lcr.calculated",
+      "treasury.nsfr.calculated",
+      "treasury.liquidity_stress.breached"
+    ]
+  },
+  {
+    "name": "alm-service",
+    "domain": "treasury",
+    "domain_title": "Treasury and ALM",
+    "phase": 4,
+    "database": "alm_db",
+    "schema": "alm",
+    "package": "io.meridian.alm",
+    "port": 9163,
+    "description": "Interest rate risk in the banking book: repricing gap, NII and EVE sensitivity under rate shocks, behavioural assumptions, and funds transfer pricing curves and assignments.",
+    "tags": [
+      "Alm Behavioural Assumptions",
+      "Alm Gap Runs",
+      "Alm Sensitivity Runs",
+      "Ftp Assignments",
+      "Ftp Curve Points",
+      "Ftp Curves",
+      "Ftp Rules"
+    ],
+    "tables": 8,
+    "events": [
+      "treasury.alm_gap_run.completed",
+      "treasury.alm_sensitivity.completed",
+      "treasury.ftp_curve.published",
+      "treasury.ftp_assignment.computed"
+    ]
+  },
+  {
+    "name": "wallet-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "wallet_db",
+    "schema": "wallet",
+    "package": "io.meridian.wallet",
+    "port": 9145,
+    "description": "Wallet lifecycle, KYC-tier limits, PINs, linked bank accounts and every wallet money movement (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank, reversals). Each transaction is broken into legs and posted atomically to the ledger.",
+    "tags": [
+      "Wallet Bank Links",
+      "Wallet Favorites",
+      "Wallet Pin Resets",
+      "Wallet Tier Limits",
+      "Wallet Transactions",
+      "Wallets"
+    ],
+    "tables": 8,
+    "events": [
+      "wallets.wallet.created",
+      "wallets.wallet.status_changed",
+      "wallets.wallet.tier_upgraded",
+      "wallets.wallet_transaction.initiated",
+      "wallets.wallet_transaction.completed",
+      "wallets.wallet_transaction.failed",
+      "wallets.wallet_transaction.reversed",
+      "wallets.wallet_bank_link.verified",
+      "wallets.wallet_pin_reset.completed"
+    ]
+  },
+  {
+    "name": "agent-network-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "agent_db",
+    "schema": "agent",
+    "package": "io.meridian.agentnetwork",
+    "port": 9146,
+    "description": "Agent hierarchy (super-agent, agent, sub-agent), outlets with geo-location, territories, float management and rebalancing, tills and cash counts, agent devices / POS, agent KYB documents, cash-in-transit requests and daily performance.",
+    "tags": [
+      "Agent Devices",
+      "Agent Float Requests",
+      "Agent Floats",
+      "Agent Kyc Documents",
+      "Agent Outlets",
+      "Agent Territories",
+      "Agent Tills",
+      "Agents",
+      "Cash Management Requests"
+    ],
+    "tables": 10,
+    "events": [
+      "wallets.agent.onboarded",
+      "wallets.agent.status_changed",
+      "wallets.agent_float.low_balance",
+      "wallets.agent_float_request.approved",
+      "wallets.agent_till.closed",
+      "wallets.agent_device.lost"
+    ]
+  },
+  {
+    "name": "commission-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "commission_db",
+    "schema": "commission",
+    "package": "io.meridian.commission",
+    "port": 9147,
+    "description": "Multi-level commission engine: versioned plans with rules by transaction type, channel, tier, agent level, territory and biller; real-time accrual on every completed transaction; periodic or real-time payout runs to commission wallets with tax withholding.",
+    "tags": [
+      "Commission Earnings",
+      "Commission Payout Runs",
+      "Commission Plans",
+      "Commission Rules"
+    ],
+    "tables": 5,
+    "events": [
+      "wallets.commission_plan.activated",
+      "wallets.commission_earning.accrued",
+      "wallets.commission_payout_run.completed"
+    ]
+  },
+  {
+    "name": "biller-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "biller_db",
+    "schema": "biller",
+    "package": "io.meridian.biller",
+    "port": 9148,
+    "description": "Biller catalogue (utilities, telecom, TV, government, education), airtime and bundle products, bill inquiry and validation, bill payments and airtime top-ups with provider integration and retries, and periodic settlement to billers.",
+    "tags": [
+      "Airtime Topups",
+      "Bill Inquiries",
+      "Bill Payments",
+      "Biller Products",
+      "Biller Settlements",
+      "Billers"
+    ],
+    "tables": 6,
+    "events": [
+      "wallets.bill_payment.completed",
+      "wallets.bill_payment.failed",
+      "wallets.airtime_topup.completed",
+      "wallets.biller_settlement.paid"
+    ]
+  },
+  {
+    "name": "merchant-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "merchant_db",
+    "schema": "merchant",
+    "package": "io.meridian.merchant",
+    "port": 9149,
+    "description": "Merchant onboarding and acceptance: stores, terminals, EMVCo static/dynamic QR codes and payment links; merchant discount rate fee plans; periodic settlement to wallet or bank; refunds.",
+    "tags": [
+      "Merchant Fee Plans",
+      "Merchant Payment Links",
+      "Merchant Qr Codes",
+      "Merchant Refunds",
+      "Merchant Settlements",
+      "Merchant Stores",
+      "Merchant Terminals",
+      "Merchants"
+    ],
+    "tables": 8,
+    "events": [
+      "wallets.merchant.onboarded",
+      "wallets.merchant.status_changed",
+      "wallets.merchant_settlement.paid",
+      "wallets.merchant_refund.completed"
+    ]
+  },
+  {
+    "name": "channel-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "channel_db",
+    "schema": "channel",
+    "package": "io.meridian.channel",
+    "port": 9150,
+    "description": "USSD and SMS channels for feature phones: per-tenant, per-language menu trees with versioning and a simulator, MNO gateway callbacks and session state, SMS keyword commands, and an SMS log.",
+    "tags": [
+      "Sms Commands",
+      "Sms Messages",
+      "Ussd Menu Nodes",
+      "Ussd Menus",
+      "Ussd Sessions"
+    ],
+    "tables": 6,
+    "events": [
+      "wallets.ussd_session.completed",
+      "wallets.sms_message.received"
+    ]
+  },
+  {
+    "name": "disbursement-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "disbursement_db",
+    "schema": "disbursement",
+    "package": "io.meridian.disbursement",
+    "port": 9151,
+    "description": "Government-to-person, payroll, social-transfer and humanitarian bulk disbursements: programs with funding wallets, batch upload, beneficiary validation (wallet exists, name match, tier, duplicates), multi-level approval, execution with retries and reporting.",
+    "tags": [
+      "Disbursement Batches",
+      "Disbursement Beneficiaries",
+      "Disbursement Programs"
+    ],
+    "tables": 3,
+    "events": [
+      "wallets.disbursement_batch.approved",
+      "wallets.disbursement_batch.completed",
+      "wallets.disbursement_beneficiary.paid"
+    ]
+  },
+  {
+    "name": "interop-service",
+    "domain": "wallets",
+    "domain_title": "Wallets, Agents and Merchants",
+    "phase": 2,
+    "database": "interop_db",
+    "schema": "interop",
+    "package": "io.meridian.interop",
+    "port": 9152,
+    "description": "Interoperability with national switches, Mojaloop hubs and partner wallets/banks: participant directory, party lookup, quotes, two-phase transfers (reserve, commit, abort) with liquidity and net-debit-cap control, and inbound callbacks.",
+    "tags": [
+      "Interop Participants",
+      "Interop Quotes",
+      "Interop Switches",
+      "Interop Transfers"
+    ],
+    "tables": 4,
+    "events": [
+      "wallets.interop_quote.received",
+      "wallets.interop_transfer.committed",
+      "wallets.interop_transfer.aborted"
+    ]
+  }
+]

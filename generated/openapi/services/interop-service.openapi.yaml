@@ -1,0 +1,2262 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    InteropParticipant:
+      description: Another wallet, bank or MFI reachable through a switch
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fsp_id:
+          description: Participant id
+          maxLength: 64
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        participant_type:
+          description: WALLET, BANK, MFI
+          maxLength: 32
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        supports_lookup:
+          description: Supports party lookup
+          type: boolean
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - interop_switch_id
+      - fsp_id
+      - name
+      - participant_type
+      - supports_lookup
+      - is_active
+      type: object
+    InteropParticipantCreate:
+      properties:
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fsp_id:
+          description: Participant id
+          maxLength: 64
+          type: string
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        participant_type:
+          description: WALLET, BANK, MFI
+          maxLength: 32
+          type: string
+        supports_lookup:
+          description: Supports party lookup
+          type: boolean
+      required:
+      - interop_switch_id
+      - fsp_id
+      - name
+      - participant_type
+      type: object
+    InteropParticipantPage:
+      description: One page of InteropParticipant results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/InteropParticipant'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    InteropParticipantUpdate:
+      properties:
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fsp_id:
+          description: Participant id
+          maxLength: 64
+          type: string
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        participant_type:
+          description: WALLET, BANK, MFI
+          maxLength: 32
+          type: string
+        supports_lookup:
+          description: Supports party lookup
+          type: boolean
+      type: object
+    InteropQuote:
+      description: A quote for an interoperable transfer (fees and amounts agreed before transfer)
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Outbound or inbound
+          enum:
+          - OUTBOUND
+          - INBOUND
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        fee_amount:
+          description: Fees
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ilp_condition:
+          description: Cryptographic condition for the transfer
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        payee_fsp_id:
+          description: Payee participant
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        payee_name:
+          description: Payee name returned by lookup
+          maxLength: 160
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        payee_party_id:
+          description: Payee identifier
+          maxLength: 64
+          type: string
+        payee_party_type:
+          description: MSISDN, ACCOUNT, ALIAS
+          maxLength: 32
+          type: string
+        payee_receive_amount:
+          description: Amount the payee receives
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        payer_wallet_id:
+          description: Payer wallet (outbound)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        quote_id:
+          description: Quote id on the switch
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - ACCEPTED
+          - REJECTED
+          - EXPIRED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - interop_switch_id
+      - quote_id
+      - direction
+      - payee_party_type
+      - payee_party_id
+      - amount
+      - currency
+      - status
+      type: object
+    InteropQuoteCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        direction:
+          description: Outbound or inbound
+          enum:
+          - OUTBOUND
+          - INBOUND
+          type: string
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        payee_fsp_id:
+          description: Payee participant
+          maxLength: 64
+          type: string
+        payee_party_id:
+          description: Payee identifier
+          maxLength: 64
+          type: string
+        payee_party_type:
+          description: MSISDN, ACCOUNT, ALIAS
+          maxLength: 32
+          type: string
+        payer_wallet_id:
+          description: Payer wallet (outbound)
+          format: uuid
+          type: string
+        quote_id:
+          description: Quote id on the switch
+          maxLength: 64
+          type: string
+      required:
+      - interop_switch_id
+      - quote_id
+      - direction
+      - payee_party_type
+      - payee_party_id
+      - amount
+      - currency
+      type: object
+    InteropQuotePage:
+      description: One page of InteropQuote results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/InteropQuote'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    InteropQuotesLookupPartyRequest:
+      properties:
+        interop_switch_id:
+          format: uuid
+          type: string
+        party_id:
+          maxLength: 64
+          type: string
+        party_type:
+          maxLength: 32
+          type: string
+      required:
+      - interop_switch_id
+      - party_type
+      - party_id
+      type: object
+    InteropSwitch:
+      description: A connected switch or partner network
+      properties:
+        code:
+          description: Switch code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Settlement currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        endpoint_url:
+          description: Switch endpoint
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        liquidity_limit:
+          description: Prefunded liquidity
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        net_debit_cap:
+          description: Net debit cap set by the switch
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        participant_id:
+          description: Our FSP / participant id on the switch
+          maxLength: 64
+          type: string
+        protocol:
+          description: MOJALOOP_FSPIOP, ISO20022, ISO8583, PROPRIETARY_API
+          maxLength: 32
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        settlement_account_id:
+          description: Settlement position account
+          format: uuid
+          type:
+          - string
+          - 'null'
+        switch_type:
+          description: Type
+          enum:
+          - NATIONAL_SWITCH
+          - MOJALOOP_HUB
+          - WALLET_PARTNER
+          - BANK_PARTNER
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - switch_type
+      - protocol
+      - participant_id
+      - is_active
+      type: object
+    InteropSwitchCreate:
+      properties:
+        code:
+          description: Switch code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currency:
+          description: Settlement currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        endpoint_url:
+          description: Switch endpoint
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        liquidity_limit:
+          description: Prefunded liquidity
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        net_debit_cap:
+          description: Net debit cap set by the switch
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        participant_id:
+          description: Our FSP / participant id on the switch
+          maxLength: 64
+          type: string
+        protocol:
+          description: MOJALOOP_FSPIOP, ISO20022, ISO8583, PROPRIETARY_API
+          maxLength: 32
+          type: string
+        settlement_account_id:
+          description: Settlement position account
+          format: uuid
+          type: string
+        switch_type:
+          description: Type
+          enum:
+          - NATIONAL_SWITCH
+          - MOJALOOP_HUB
+          - WALLET_PARTNER
+          - BANK_PARTNER
+          type: string
+      required:
+      - code
+      - name
+      - switch_type
+      - protocol
+      - participant_id
+      type: object
+    InteropSwitchPage:
+      description: One page of InteropSwitch results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/InteropSwitch'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    InteropSwitchUpdate:
+      properties:
+        code:
+          description: Switch code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currency:
+          description: Settlement currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        endpoint_url:
+          description: Switch endpoint
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        liquidity_limit:
+          description: Prefunded liquidity
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        net_debit_cap:
+          description: Net debit cap set by the switch
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        participant_id:
+          description: Our FSP / participant id on the switch
+          maxLength: 64
+          type: string
+        protocol:
+          description: MOJALOOP_FSPIOP, ISO20022, ISO8583, PROPRIETARY_API
+          maxLength: 32
+          type: string
+        settlement_account_id:
+          description: Settlement position account
+          format: uuid
+          type: string
+        switch_type:
+          description: Type
+          enum:
+          - NATIONAL_SWITCH
+          - MOJALOOP_HUB
+          - WALLET_PARTNER
+          - BANK_PARTNER
+          type: string
+      type: object
+    InteropTransfer:
+      description: A two-phase transfer to or from another participant
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        counterparty_fsp_id:
+          description: Other participant
+          maxLength: 64
+          type: string
+        counterparty_party_id:
+          description: Other party identifier
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Outbound or inbound
+          enum:
+          - OUTBOUND
+          - INBOUND
+          type: string
+        error_code:
+          description: Switch error code
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        error_description:
+          description: Error description
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        hold_id:
+          description: Funds reserved while pending
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Client key
+          maxLength: 128
+          readOnly: true
+          type: string
+        interop_quote_id:
+          description: Quote
+          format: uuid
+          type:
+          - string
+          - 'null'
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        payee_wallet_id:
+          description: Payee wallet (inbound)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        payer_wallet_id:
+          description: Payer wallet (outbound)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - QUOTE_REQUESTED
+          - QUOTED
+          - RESERVED
+          - COMMITTED
+          - ABORTED
+          - FAILED
+          - EXPIRED
+          readOnly: true
+          type: string
+        transfer_id:
+          description: Transfer id on the switch
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_transaction_id:
+          description: Wallet transaction
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - interop_switch_id
+      - transfer_id
+      - direction
+      - counterparty_fsp_id
+      - amount
+      - currency
+      - status
+      - idempotency_key
+      type: object
+    InteropTransferCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        counterparty_fsp_id:
+          description: Other participant
+          maxLength: 64
+          type: string
+        counterparty_party_id:
+          description: Other party identifier
+          maxLength: 64
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        direction:
+          description: Outbound or inbound
+          enum:
+          - OUTBOUND
+          - INBOUND
+          type: string
+        interop_quote_id:
+          description: Quote
+          format: uuid
+          type: string
+        interop_switch_id:
+          description: Switch
+          format: uuid
+          type: string
+        payee_wallet_id:
+          description: Payee wallet (inbound)
+          format: uuid
+          type: string
+        payer_wallet_id:
+          description: Payer wallet (outbound)
+          format: uuid
+          type: string
+        transfer_id:
+          description: Transfer id on the switch
+          maxLength: 64
+          type: string
+      required:
+      - interop_switch_id
+      - transfer_id
+      - direction
+      - counterparty_fsp_id
+      - amount
+      - currency
+      type: object
+    InteropTransferPage:
+      description: One page of InteropTransfer results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/InteropTransfer'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    InteropTransfersAbortRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    InteropTransfersCallbacksQuotesRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+      required:
+      - payload
+      type: object
+    InteropTransfersCallbacksTransfersRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+      required:
+      - payload
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
+    with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
+    bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
+    and bulk disbursements; interoperability with national switches and other wallets. Every money movement posts through
+    the ledger.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — interop-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/interop-switches:
+    get:
+      operationId: interopSwitchesList
+      summary: List interop switches
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: switch_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - NATIONAL_SWITCH
+          - MOJALOOP_HUB
+          - WALLET_PARTNER
+          - BANK_PARTNER
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropSwitchPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: interopSwitchesCreate
+      summary: Create interop switche
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropSwitch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropSwitchCreate'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-create: true
+  /v1/interop-switches/{id}:
+    get:
+      operationId: interopSwitchesGet
+      summary: Retrieve interop switche
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropSwitch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: interopSwitchesUpdate
+      summary: Update interop switche
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropSwitch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropSwitchUpdate'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+      x-crud: true
+      x-crud-update: true
+  /v1/interop-switches/{id}/participants:
+    get:
+      operationId: interopSwitchesParticipants
+      summary: Participants reachable through the switch
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropParticipantPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+  /v1/interop-switches/{id}/sync-participants:
+    post:
+      operationId: interopSwitchesSyncParticipants
+      summary: Refresh the participant directory from the switch
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropSwitch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+  /v1/interop-switches/{id}/position:
+    get:
+      operationId: interopSwitchesPosition
+      summary: Net position and liquidity against the net debit cap
+      tags:
+      - Interop Switches
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_switch
+  /v1/interop-participants:
+    get:
+      operationId: interopParticipantsList
+      summary: List interop participants
+      tags:
+      - Interop Participants
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: interop_switch_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: fsp_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: participant_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropParticipantPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: interopParticipantsCreate
+      summary: Create interop participant
+      tags:
+      - Interop Participants
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropParticipantCreate'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-create: true
+  /v1/interop-participants/{id}:
+    get:
+      operationId: interopParticipantsGet
+      summary: Retrieve interop participant
+      tags:
+      - Interop Participants
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: interopParticipantsUpdate
+      summary: Update interop participant
+      tags:
+      - Interop Participants
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropParticipantUpdate'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_participant
+      x-crud: true
+      x-crud-update: true
+  /v1/interop-quotes:
+    get:
+      operationId: interopQuotesList
+      summary: List interop quotes
+      tags:
+      - Interop Quotes
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: interop_switch_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - OUTBOUND
+          - INBOUND
+      - name: payer_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - ACCEPTED
+          - REJECTED
+          - EXPIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropQuotePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_quote
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: interopQuotesCreate
+      summary: Create interop quote
+      tags:
+      - Interop Quotes
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropQuoteCreate'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_quote
+      x-crud: true
+      x-crud-create: true
+  /v1/interop-quotes/{id}:
+    get:
+      operationId: interopQuotesGet
+      summary: Retrieve interop quote
+      tags:
+      - Interop Quotes
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_quote
+      x-crud: true
+      x-crud-get: true
+  /v1/interop-quotes/lookup-party:
+    post:
+      operationId: interopQuotesLookupParty
+      summary: Resolve a payee by MSISDN or alias through the switch
+      tags:
+      - Interop Quotes
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropQuotesLookupPartyRequest'
+      x-requirements:
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_quote
+  /v1/interop-transfers:
+    get:
+      operationId: interopTransfersList
+      summary: List interop transfers
+      tags:
+      - Interop Transfers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: interop_switch_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - OUTBOUND
+          - INBOUND
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUOTE_REQUESTED
+          - QUOTED
+          - RESERVED
+          - COMMITTED
+          - ABORTED
+          - FAILED
+          - EXPIRED
+      - name: payer_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: payee_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: counterparty_fsp_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropTransferPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-01
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_transfer
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: interopTransfersCreate
+      summary: Create interop transfer
+      tags:
+      - Interop Transfers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropTransfer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropTransferCreate'
+      x-requirements:
+      - PAY-01
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_transfer
+      x-crud: true
+      x-crud-create: true
+  /v1/interop-transfers/{id}:
+    get:
+      operationId: interopTransfersGet
+      summary: Retrieve interop transfer
+      tags:
+      - Interop Transfers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropTransfer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-01
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_transfer
+      x-crud: true
+      x-crud-get: true
+  /v1/interop-transfers/{id}/abort:
+    post:
+      operationId: interopTransfersAbort
+      summary: Abort a reserved transfer
+      tags:
+      - Interop Transfers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteropTransfer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropTransfersAbortRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_transfer
+  /v1/interop-transfers/callbacks/quotes:
+    post:
+      operationId: interopTransfersCallbacksQuotes
+      summary: Inbound quote request or response from the switch
+      tags:
+      - Interop Transfers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropTransfersCallbacksQuotesRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_transfer
+  /v1/interop-transfers/callbacks/transfers:
+    post:
+      operationId: interopTransfersCallbacksTransfers
+      summary: Inbound transfer prepare or fulfil from the switch
+      tags:
+      - Interop Transfers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteropTransfersCallbacksTransfersRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-08
+      x-service: interop-service
+      x-table: interop_transfer
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A connected switch or partner network
+  name: Interop Switches
+- description: Another wallet, bank or MFI reachable through a switch
+  name: Interop Participants
+- description: A quote for an interoperable transfer (fees and amounts agreed before transfer)
+  name: Interop Quotes
+- description: A two-phase transfer to or from another participant
+  name: Interop Transfers

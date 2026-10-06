@@ -1,0 +1,5650 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Agent:
+      description: A cash-in/cash-out agent business at any level of the hierarchy
+      properties:
+        agent_code:
+          description: Agent code used at the till and on USSD
+          maxLength: 32
+          type: string
+        agent_level:
+          description: Level in the hierarchy
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          type: string
+        agent_territory_id:
+          description: Territory
+          format: uuid
+          type:
+          - string
+          - 'null'
+        branch_id:
+          description: Sponsoring bank branch
+          format: uuid
+          type:
+          - string
+          - 'null'
+        commission_plan_id:
+          description: Commission plan
+          format: uuid
+          type:
+          - string
+          - 'null'
+        commission_wallet_id:
+          description: Wallet receiving commissions
+          format: uuid
+          type:
+          - string
+          - 'null'
+        contact_email:
+          description: Main contact email
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        contact_msisdn:
+          description: Main contact mobile (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        contact_name:
+          description: Main contact
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        contract_end:
+          description: Agency contract end
+          format: date
+          type:
+          - string
+          - 'null'
+        contract_start:
+          description: Agency contract start
+          format: date
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Business party record (KYB)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        float_wallet_id:
+          description: Main float wallet
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        kyc_status:
+          description: PENDING, VERIFIED, REJECTED, EXPIRED
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        legal_name:
+          description: Registered business name
+          maxLength: 200
+          type: string
+        max_float_amount:
+          description: Maximum float the agent may hold
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        onboarded_at:
+          description: Activation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        parent_agent_id:
+          description: Direct parent (agent for sub-agents, super-agent for agents)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        registration_number:
+          description: Company registration number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        risk_rating:
+          description: LOW, MEDIUM, HIGH
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ONBOARDING
+          - ACTIVE
+          - SUSPENDED
+          - TERMINATED
+          type: string
+        status_reason:
+          description: Reason for the current status
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        super_agent_id:
+          description: Top-level super-agent
+          format: uuid
+          type:
+          - string
+          - 'null'
+        tax_id:
+          description: Tax identification number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        trading_name:
+          description: Trading name
+          maxLength: 200
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_code
+      - agent_level
+      - legal_name
+      - contact_msisdn
+      - status
+      type: object
+    AgentCreate:
+      properties:
+        agent_code:
+          description: Agent code used at the till and on USSD
+          maxLength: 32
+          type: string
+        agent_level:
+          description: Level in the hierarchy
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          type: string
+        agent_territory_id:
+          description: Territory
+          format: uuid
+          type: string
+        branch_id:
+          description: Sponsoring bank branch
+          format: uuid
+          type: string
+        commission_plan_id:
+          description: Commission plan
+          format: uuid
+          type: string
+        commission_wallet_id:
+          description: Wallet receiving commissions
+          format: uuid
+          type: string
+        contact_email:
+          description: Main contact email
+          format: email
+          maxLength: 320
+          type: string
+        contact_msisdn:
+          description: Main contact mobile (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        contact_name:
+          description: Main contact
+          maxLength: 160
+          type: string
+        contract_end:
+          description: Agency contract end
+          format: date
+          type: string
+        contract_start:
+          description: Agency contract start
+          format: date
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Business party record (KYB)
+          format: uuid
+          type: string
+        float_wallet_id:
+          description: Main float wallet
+          format: uuid
+          type: string
+        kyc_status:
+          description: PENDING, VERIFIED, REJECTED, EXPIRED
+          maxLength: 32
+          type: string
+        legal_name:
+          description: Registered business name
+          maxLength: 200
+          type: string
+        max_float_amount:
+          description: Maximum float the agent may hold
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        parent_agent_id:
+          description: Direct parent (agent for sub-agents, super-agent for agents)
+          format: uuid
+          type: string
+        registration_number:
+          description: Company registration number
+          maxLength: 64
+          type: string
+        risk_rating:
+          description: LOW, MEDIUM, HIGH
+          maxLength: 16
+          type: string
+        status:
+          description: Status
+          enum:
+          - ONBOARDING
+          - ACTIVE
+          - SUSPENDED
+          - TERMINATED
+          type: string
+        status_reason:
+          description: Reason for the current status
+          maxLength: 255
+          type: string
+        super_agent_id:
+          description: Top-level super-agent
+          format: uuid
+          type: string
+        tax_id:
+          description: Tax identification number
+          maxLength: 64
+          type: string
+        trading_name:
+          description: Trading name
+          maxLength: 200
+          type: string
+      required:
+      - agent_code
+      - agent_level
+      - legal_name
+      - contact_msisdn
+      type: object
+    AgentDevice:
+      description: A POS terminal or phone used by an agent
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type:
+          - string
+          - 'null'
+        app_version:
+          description: Agent app version
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        assigned_at:
+          description: Assignment time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        device_type:
+          description: Device type
+          enum:
+          - POS
+          - SMARTPHONE
+          - TABLET
+          - FEATURE_PHONE
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        imei:
+          description: IMEI
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        last_latitude:
+          description: Last known latitude
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        last_longitude:
+          description: Last known longitude
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        last_seen_at:
+          description: Last heartbeat
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        model:
+          description: Model
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        os_version:
+          description: OS version
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        serial_number:
+          description: Serial number
+          maxLength: 64
+          type: string
+        sim_msisdn:
+          description: SIM number (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - LOST
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_id
+      - device_type
+      - serial_number
+      - status
+      type: object
+    AgentDeviceCreate:
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        app_version:
+          description: Agent app version
+          maxLength: 32
+          type: string
+        assigned_at:
+          description: Assignment time
+          format: date-time
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        device_type:
+          description: Device type
+          enum:
+          - POS
+          - SMARTPHONE
+          - TABLET
+          - FEATURE_PHONE
+          type: string
+        imei:
+          description: IMEI
+          maxLength: 20
+          type: string
+        model:
+          description: Model
+          maxLength: 64
+          type: string
+        os_version:
+          description: OS version
+          maxLength: 32
+          type: string
+        serial_number:
+          description: Serial number
+          maxLength: 64
+          type: string
+        sim_msisdn:
+          description: SIM number (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - LOST
+          - RETIRED
+          type: string
+      required:
+      - agent_id
+      - device_type
+      - serial_number
+      type: object
+    AgentDevicePage:
+      description: One page of AgentDevice results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentDevice'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentDeviceUpdate:
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        app_version:
+          description: Agent app version
+          maxLength: 32
+          type: string
+        assigned_at:
+          description: Assignment time
+          format: date-time
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        device_type:
+          description: Device type
+          enum:
+          - POS
+          - SMARTPHONE
+          - TABLET
+          - FEATURE_PHONE
+          type: string
+        imei:
+          description: IMEI
+          maxLength: 20
+          type: string
+        model:
+          description: Model
+          maxLength: 64
+          type: string
+        os_version:
+          description: OS version
+          maxLength: 32
+          type: string
+        serial_number:
+          description: Serial number
+          maxLength: 64
+          type: string
+        sim_msisdn:
+          description: SIM number (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - LOST
+          - RETIRED
+          type: string
+      type: object
+    AgentDevicesReportLostRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    AgentFloat:
+      description: Float position configuration and alerting for an agent or outlet float wallet
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet (empty = agent-level float)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        auto_rebalance:
+          description: Request rebalancing automatically when low
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_alert_at:
+          description: Last low-float alert
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        low_float_alert_threshold:
+          description: Alert threshold
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        max_balance:
+          description: Maximum float
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        min_balance:
+          description: Balance below which cash-in is refused
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        rebalance_source_agent_id:
+          description: Default source of rebalancing (usually the super-agent)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_id:
+          description: Float wallet
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_id
+      - wallet_id
+      - currency
+      - auto_rebalance
+      type: object
+    AgentFloatCreate:
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet (empty = agent-level float)
+          format: uuid
+          type: string
+        auto_rebalance:
+          description: Request rebalancing automatically when low
+          type: boolean
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        low_float_alert_threshold:
+          description: Alert threshold
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        max_balance:
+          description: Maximum float
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_balance:
+          description: Balance below which cash-in is refused
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rebalance_source_agent_id:
+          description: Default source of rebalancing (usually the super-agent)
+          format: uuid
+          type: string
+        wallet_id:
+          description: Float wallet
+          format: uuid
+          type: string
+      required:
+      - agent_id
+      - wallet_id
+      - currency
+      type: object
+    AgentFloatPage:
+      description: One page of AgentFloat results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentFloat'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentFloatRequest:
+      description: A float top-up, rebalance, withdrawal or transfer between agents
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        approved_at:
+          description: Approval time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Approver
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        bank_reference:
+          description: Bank deposit reference
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        funding_method:
+          description: BANK_TRANSFER, CASH_DEPOSIT, SUPER_AGENT, WALLET
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        proof_document_id:
+          description: Deposit slip
+          format: uuid
+          type:
+          - string
+          - 'null'
+        rejection_reason:
+          description: Rejection reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        request_type:
+          description: Request type
+          enum:
+          - TOP_UP
+          - REBALANCE
+          - WITHDRAW
+          - TRANSFER
+          type: string
+        requesting_agent_id:
+          description: Agent requesting
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source_agent_id:
+          description: Agent providing float (rebalance / transfer)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        source_wallet_id:
+          description: Source wallet
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          readOnly: true
+          type: string
+        target_wallet_id:
+          description: Target wallet
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_transaction_id:
+          description: Resulting float transfer
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - request_type
+      - requesting_agent_id
+      - target_wallet_id
+      - amount
+      - currency
+      - status
+      type: object
+    AgentFloatRequestCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        bank_reference:
+          description: Bank deposit reference
+          maxLength: 64
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        funding_method:
+          description: BANK_TRANSFER, CASH_DEPOSIT, SUPER_AGENT, WALLET
+          maxLength: 32
+          type: string
+        proof_document_id:
+          description: Deposit slip
+          format: uuid
+          type: string
+        request_type:
+          description: Request type
+          enum:
+          - TOP_UP
+          - REBALANCE
+          - WITHDRAW
+          - TRANSFER
+          type: string
+        requesting_agent_id:
+          description: Agent requesting
+          format: uuid
+          type: string
+        source_agent_id:
+          description: Agent providing float (rebalance / transfer)
+          format: uuid
+          type: string
+        source_wallet_id:
+          description: Source wallet
+          format: uuid
+          type: string
+        target_wallet_id:
+          description: Target wallet
+          format: uuid
+          type: string
+      required:
+      - request_type
+      - requesting_agent_id
+      - target_wallet_id
+      - amount
+      - currency
+      type: object
+    AgentFloatRequestPage:
+      description: One page of AgentFloatRequest results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentFloatRequest'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentFloatRequestsApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    AgentFloatRequestsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    AgentFloatRequestsRejectRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    AgentFloatUpdate:
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet (empty = agent-level float)
+          format: uuid
+          type: string
+        auto_rebalance:
+          description: Request rebalancing automatically when low
+          type: boolean
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        low_float_alert_threshold:
+          description: Alert threshold
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        max_balance:
+          description: Maximum float
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_balance:
+          description: Balance below which cash-in is refused
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rebalance_source_agent_id:
+          description: Default source of rebalancing (usually the super-agent)
+          format: uuid
+          type: string
+        wallet_id:
+          description: Float wallet
+          format: uuid
+          type: string
+      type: object
+    AgentKycDocument:
+      description: KYB document held for an agent (licence, tax certificate, contract)
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_id:
+          description: Stored document
+          format: uuid
+          type: string
+        document_type:
+          description: BUSINESS_LICENSE, TAX_CERTIFICATE, ID, PROOF_OF_ADDRESS, CONTRACT
+          maxLength: 48
+          type: string
+        expires_at:
+          description: Expiry date
+          format: date
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified:
+          description: Verified
+          readOnly: true
+          type: boolean
+        verified_at:
+          description: Verification time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified_by:
+          description: Verifier
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_id
+      - document_type
+      - document_id
+      - verified
+      type: object
+    AgentKycDocumentCreate:
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        document_id:
+          description: Stored document
+          format: uuid
+          type: string
+        document_type:
+          description: BUSINESS_LICENSE, TAX_CERTIFICATE, ID, PROOF_OF_ADDRESS, CONTRACT
+          maxLength: 48
+          type: string
+        expires_at:
+          description: Expiry date
+          format: date
+          type: string
+      required:
+      - agent_id
+      - document_type
+      - document_id
+      type: object
+    AgentKycDocumentPage:
+      description: One page of AgentKycDocument results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentKycDocument'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentKycDocumentsVerifyRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    AgentOutlet:
+      description: A physical point of service operated by an agent
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 200
+          type:
+          - string
+          - 'null'
+        address_line2:
+          description: Address line 2
+          maxLength: 200
+          type:
+          - string
+          - 'null'
+        agent_id:
+          description: Operating agent
+          format: uuid
+          type: string
+        agent_territory_id:
+          description: Territory
+          format: uuid
+          type:
+          - string
+          - 'null'
+        city:
+          description: City
+          maxLength: 100
+          type:
+          - string
+          - 'null'
+        contact_msisdn:
+          description: Outlet phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        float_wallet_id:
+          description: Outlet-level float wallet when separate from the agent
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        latitude:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        longitude:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        name:
+          description: Outlet name
+          maxLength: 160
+          type: string
+        opening_hours:
+          additionalProperties: true
+          description: Opening hours per weekday
+          type:
+          - object
+          - 'null'
+        outlet_code:
+          description: Outlet code
+          maxLength: 32
+          type: string
+        photo_document_id:
+          description: Storefront photo
+          format: uuid
+          type:
+          - string
+          - 'null'
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        region:
+          description: Region / state
+          maxLength: 100
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        services:
+          additionalProperties: true
+          description: 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME'
+          type:
+          - object
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_id
+      - outlet_code
+      - name
+      - country
+      - status
+      type: object
+    AgentOutletCreate:
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 200
+          type: string
+        address_line2:
+          description: Address line 2
+          maxLength: 200
+          type: string
+        agent_id:
+          description: Operating agent
+          format: uuid
+          type: string
+        agent_territory_id:
+          description: Territory
+          format: uuid
+          type: string
+        city:
+          description: City
+          maxLength: 100
+          type: string
+        contact_msisdn:
+          description: Outlet phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        float_wallet_id:
+          description: Outlet-level float wallet when separate from the agent
+          format: uuid
+          type: string
+        latitude:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        longitude:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Outlet name
+          maxLength: 160
+          type: string
+        opening_hours:
+          additionalProperties: true
+          description: Opening hours per weekday
+          type: object
+        outlet_code:
+          description: Outlet code
+          maxLength: 32
+          type: string
+        photo_document_id:
+          description: Storefront photo
+          format: uuid
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        region:
+          description: Region / state
+          maxLength: 100
+          type: string
+        services:
+          additionalProperties: true
+          description: 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME'
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          type: string
+      required:
+      - agent_id
+      - outlet_code
+      - name
+      - country
+      type: object
+    AgentOutletPage:
+      description: One page of AgentOutlet results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentOutlet'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentOutletUpdate:
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 200
+          type: string
+        address_line2:
+          description: Address line 2
+          maxLength: 200
+          type: string
+        agent_id:
+          description: Operating agent
+          format: uuid
+          type: string
+        agent_territory_id:
+          description: Territory
+          format: uuid
+          type: string
+        city:
+          description: City
+          maxLength: 100
+          type: string
+        contact_msisdn:
+          description: Outlet phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        float_wallet_id:
+          description: Outlet-level float wallet when separate from the agent
+          format: uuid
+          type: string
+        latitude:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        longitude:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Outlet name
+          maxLength: 160
+          type: string
+        opening_hours:
+          additionalProperties: true
+          description: Opening hours per weekday
+          type: object
+        outlet_code:
+          description: Outlet code
+          maxLength: 32
+          type: string
+        photo_document_id:
+          description: Storefront photo
+          format: uuid
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        region:
+          description: Region / state
+          maxLength: 100
+          type: string
+        services:
+          additionalProperties: true
+          description: 'Services offered: CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME'
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          type: string
+      type: object
+    AgentOutletsCloseRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    AgentPage:
+      description: One page of Agent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Agent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentPerformanceDaily:
+      description: Daily KPIs per agent and outlet (append-only)
+      properties:
+        active_customers:
+          description: Distinct customers served
+          format: int32
+          type: integer
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type:
+          - string
+          - 'null'
+        bill_pay_count:
+          description: Bill payments
+          format: int32
+          type: integer
+        business_date:
+          description: Business date
+          format: date
+          type: string
+        cash_in_amount:
+          description: Cash-in value
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        cash_in_count:
+          description: Cash-in transactions
+          format: int32
+          type: integer
+        cash_out_amount:
+          description: Cash-out value
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        cash_out_count:
+          description: Cash-out transactions
+          format: int32
+          type: integer
+        commission_earned:
+          description: Commission earned
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        onboarding_count:
+          description: Customers registered
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - agent_id
+      - business_date
+      - currency
+      - cash_in_count
+      - cash_in_amount
+      - cash_out_count
+      - cash_out_amount
+      - onboarding_count
+      - bill_pay_count
+      - commission_earned
+      - active_customers
+      type: object
+    AgentPerformanceDailyPage:
+      description: One page of AgentPerformanceDaily results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentPerformanceDaily'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentTerritory:
+      description: Geographic territory used to organise and manage the agent network
+      properties:
+        code:
+          description: Territory code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        geo_boundary:
+          additionalProperties: true
+          description: GeoJSON polygon
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        manager_user_id:
+          description: Territory manager
+          format: uuid
+          type:
+          - string
+          - 'null'
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        parent_id:
+          description: Parent territory
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        territory_level:
+          description: COUNTRY, REGION, DISTRICT, ZONE
+          maxLength: 32
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - territory_level
+      - country
+      type: object
+    AgentTerritoryCreate:
+      properties:
+        code:
+          description: Territory code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        geo_boundary:
+          additionalProperties: true
+          description: GeoJSON polygon
+          type: object
+        manager_user_id:
+          description: Territory manager
+          format: uuid
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        parent_id:
+          description: Parent territory
+          format: uuid
+          type: string
+        territory_level:
+          description: COUNTRY, REGION, DISTRICT, ZONE
+          maxLength: 32
+          type: string
+      required:
+      - code
+      - name
+      - territory_level
+      - country
+      type: object
+    AgentTerritoryPage:
+      description: One page of AgentTerritory results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentTerritory'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentTerritoryUpdate:
+      properties:
+        code:
+          description: Territory code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        geo_boundary:
+          additionalProperties: true
+          description: GeoJSON polygon
+          type: object
+        manager_user_id:
+          description: Territory manager
+          format: uuid
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        parent_id:
+          description: Parent territory
+          format: uuid
+          type: string
+        territory_level:
+          description: COUNTRY, REGION, DISTRICT, ZONE
+          maxLength: 32
+          type: string
+      type: object
+    AgentTill:
+      description: A cash till at an outlet, opened and closed per shift with cash counts
+      properties:
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        closed_at:
+          description: Shift end
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        declared_cash:
+          description: Declared cash at closing
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        denominations:
+          additionalProperties: true
+          description: Cash count by denomination
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        expected_cash:
+          description: Opening cash + cash-in - cash-out
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        opened_at:
+          description: Shift start
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        opening_cash:
+          description: Declared cash at opening
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        operator_user_id:
+          description: Operator on shift
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - CLOSED
+          - SUSPENDED
+          readOnly: true
+          type: string
+        till_number:
+          description: Till number
+          maxLength: 32
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        variance:
+          description: Declared minus expected
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_outlet_id
+      - till_number
+      - status
+      - currency
+      type: object
+    AgentTillCreate:
+      properties:
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        operator_user_id:
+          description: Operator on shift
+          format: uuid
+          type: string
+        till_number:
+          description: Till number
+          maxLength: 32
+          type: string
+      required:
+      - agent_outlet_id
+      - till_number
+      - currency
+      type: object
+    AgentTillPage:
+      description: One page of AgentTill results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AgentTill'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AgentTillsCloseRequest:
+      properties:
+        declared_cash:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        denominations:
+          additionalProperties: true
+          type: object
+      required:
+      - declared_cash
+      type: object
+    AgentTillsOpenRequest:
+      properties:
+        denominations:
+          additionalProperties: true
+          type: object
+        opening_cash:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        operator_user_id:
+          format: uuid
+          type: string
+      required:
+      - operator_user_id
+      - opening_cash
+      type: object
+    AgentUpdate:
+      properties:
+        agent_code:
+          description: Agent code used at the till and on USSD
+          maxLength: 32
+          type: string
+        agent_level:
+          description: Level in the hierarchy
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          type: string
+        agent_territory_id:
+          description: Territory
+          format: uuid
+          type: string
+        branch_id:
+          description: Sponsoring bank branch
+          format: uuid
+          type: string
+        commission_plan_id:
+          description: Commission plan
+          format: uuid
+          type: string
+        commission_wallet_id:
+          description: Wallet receiving commissions
+          format: uuid
+          type: string
+        contact_email:
+          description: Main contact email
+          format: email
+          maxLength: 320
+          type: string
+        contact_msisdn:
+          description: Main contact mobile (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        contact_name:
+          description: Main contact
+          maxLength: 160
+          type: string
+        contract_end:
+          description: Agency contract end
+          format: date
+          type: string
+        contract_start:
+          description: Agency contract start
+          format: date
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Business party record (KYB)
+          format: uuid
+          type: string
+        float_wallet_id:
+          description: Main float wallet
+          format: uuid
+          type: string
+        kyc_status:
+          description: PENDING, VERIFIED, REJECTED, EXPIRED
+          maxLength: 32
+          type: string
+        legal_name:
+          description: Registered business name
+          maxLength: 200
+          type: string
+        max_float_amount:
+          description: Maximum float the agent may hold
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        parent_agent_id:
+          description: Direct parent (agent for sub-agents, super-agent for agents)
+          format: uuid
+          type: string
+        registration_number:
+          description: Company registration number
+          maxLength: 64
+          type: string
+        risk_rating:
+          description: LOW, MEDIUM, HIGH
+          maxLength: 16
+          type: string
+        status:
+          description: Status
+          enum:
+          - ONBOARDING
+          - ACTIVE
+          - SUSPENDED
+          - TERMINATED
+          type: string
+        status_reason:
+          description: Reason for the current status
+          maxLength: 255
+          type: string
+        super_agent_id:
+          description: Top-level super-agent
+          format: uuid
+          type: string
+        tax_id:
+          description: Tax identification number
+          maxLength: 64
+          type: string
+        trading_name:
+          description: Trading name
+          maxLength: 200
+          type: string
+      type: object
+    AgentsActivateRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    AgentsAssignCommissionPlanRequest:
+      properties:
+        commission_plan_id:
+          format: uuid
+          type: string
+        effective_from:
+          format: date
+          type: string
+      required:
+      - commission_plan_id
+      - effective_from
+      type: object
+    AgentsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    AgentsTerminateRequest:
+      properties:
+        effective_date:
+          format: date
+          type: string
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    CashManagementRequest:
+      description: Cash-in-transit delivery or pickup request for an outlet
+      properties:
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        cit_provider:
+          description: Cash-in-transit company
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        cit_reference:
+          description: CIT reference
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        denominations:
+          additionalProperties: true
+          description: Requested denominations
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        request_type:
+          description: Delivery or pickup
+          enum:
+          - CASH_DELIVERY
+          - CASH_PICKUP
+          type: string
+        requested_for:
+          description: Requested time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_outlet_id
+      - request_type
+      - amount
+      - currency
+      - status
+      type: object
+    CashManagementRequestCreate:
+      properties:
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        cit_provider:
+          description: Cash-in-transit company
+          maxLength: 64
+          type: string
+        cit_reference:
+          description: CIT reference
+          maxLength: 64
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        denominations:
+          additionalProperties: true
+          description: Requested denominations
+          type: object
+        request_type:
+          description: Delivery or pickup
+          enum:
+          - CASH_DELIVERY
+          - CASH_PICKUP
+          type: string
+        requested_for:
+          description: Requested time
+          format: date-time
+          type: string
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          type: string
+      required:
+      - agent_outlet_id
+      - request_type
+      - amount
+      - currency
+      type: object
+    CashManagementRequestPage:
+      description: One page of CashManagementRequest results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CashManagementRequest'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CashManagementRequestUpdate:
+      properties:
+        agent_outlet_id:
+          description: Outlet
+          format: uuid
+          type: string
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        cit_provider:
+          description: Cash-in-transit company
+          maxLength: 64
+          type: string
+        cit_reference:
+          description: CIT reference
+          maxLength: 64
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        denominations:
+          additionalProperties: true
+          description: Requested denominations
+          type: object
+        request_type:
+          description: Delivery or pickup
+          enum:
+          - CASH_DELIVERY
+          - CASH_PICKUP
+          type: string
+        requested_for:
+          description: Requested time
+          format: date-time
+          type: string
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          type: string
+      type: object
+    CashManagementRequestsCompleteRequest:
+      properties:
+        cit_reference:
+          maxLength: 64
+          type: string
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
+    with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
+    bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
+    and bulk disbursements; interoperability with national switches and other wallets. Every money movement posts through
+    the ledger.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — agent-network-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/agents:
+    get:
+      operationId: agentsList
+      summary: List agents
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_level
+        in: query
+        schema:
+          type: string
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+      - name: parent_agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: super_agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ONBOARDING
+          - ACTIVE
+          - SUSPENDED
+          - TERMINATED
+      - name: agent_territory_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: agent_code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: risk_rating
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentsCreate
+      summary: Create agent
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-create: true
+  /v1/agents/{id}:
+    get:
+      operationId: agentsGet
+      summary: Retrieve agent
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: agentsUpdate
+      summary: Update agent
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentUpdate'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+      x-crud: true
+      x-crud-update: true
+  /v1/agents/{id}/activate:
+    post:
+      operationId: agentsActivate
+      summary: Activate an onboarded agent
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentsActivateRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/suspend:
+    post:
+      operationId: agentsSuspend
+      summary: Suspend the agent and its outlets
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentsSuspendRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/terminate:
+    post:
+      operationId: agentsTerminate
+      summary: Terminate the agency contract
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentsTerminateRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/assign-commission-plan:
+    post:
+      operationId: agentsAssignCommissionPlan
+      summary: Assign a commission plan
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentsAssignCommissionPlanRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/sub-agents:
+    get:
+      operationId: agentsSubAgents
+      summary: Direct children in the hierarchy
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/outlets:
+    get:
+      operationId: agentsOutlets
+      summary: Outlets of the agent
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutletPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/float:
+    get:
+      operationId: agentsFloat
+      summary: Float positions
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agents/{id}/performance:
+    get:
+      operationId: agentsPerformance
+      summary: Daily KPIs (?from=&to=)
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentPerformanceDailyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent
+  /v1/agent-territories:
+    get:
+      operationId: agentTerritoriesList
+      summary: List agent territories
+      tags:
+      - Agent Territories
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: parent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: territory_level
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: manager_user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTerritoryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-01
+      x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentTerritoriesCreate
+      summary: Create agent territorie
+      tags:
+      - Agent Territories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTerritory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTerritoryCreate'
+      x-requirements:
+      - WAL-01
+      x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-territories/{id}:
+    get:
+      operationId: agentTerritoriesGet
+      summary: Retrieve agent territorie
+      tags:
+      - Agent Territories
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTerritory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: agentTerritoriesUpdate
+      summary: Update agent territorie
+      tags:
+      - Agent Territories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTerritory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTerritoryUpdate'
+      x-requirements:
+      - WAL-01
+      x-service: agent-network-service
+      x-table: agent_territory
+      x-crud: true
+      x-crud-update: true
+  /v1/agent-outlets:
+    get:
+      operationId: agentOutletsList
+      summary: List agent outlets
+      tags:
+      - Agent Outlets
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+      - name: agent_territory_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: city
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      - name: outlet_code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutletPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentOutletsCreate
+      summary: Create agent outlet
+      tags:
+      - Agent Outlets
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutlet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentOutletCreate'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-outlets/{id}:
+    get:
+      operationId: agentOutletsGet
+      summary: Retrieve agent outlet
+      tags:
+      - Agent Outlets
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutlet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: agentOutletsUpdate
+      summary: Update agent outlet
+      tags:
+      - Agent Outlets
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutlet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentOutletUpdate'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_outlet
+      x-crud: true
+      x-crud-update: true
+  /v1/agent-outlets/nearby:
+    get:
+      operationId: agentOutletsNearby
+      summary: Outlets near a location (?lat=&lon=&radius_m=&service=)
+      tags:
+      - Agent Outlets
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutletPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_outlet
+  /v1/agent-outlets/{id}/close:
+    post:
+      operationId: agentOutletsClose
+      summary: Close the outlet
+      tags:
+      - Agent Outlets
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentOutlet'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentOutletsCloseRequest'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_outlet
+  /v1/agent-floats:
+    get:
+      operationId: agentFloatsList
+      summary: List agent floats
+      tags:
+      - Agent Floats
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: agent_outlet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentFloatsCreate
+      summary: Create agent float
+      tags:
+      - Agent Floats
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloat'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFloatCreate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-floats/{id}:
+    get:
+      operationId: agentFloatsGet
+      summary: Retrieve agent float
+      tags:
+      - Agent Floats
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloat'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: agentFloatsUpdate
+      summary: Update agent float
+      tags:
+      - Agent Floats
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloat'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFloatUpdate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float
+      x-crud: true
+      x-crud-update: true
+  /v1/agent-float-requests:
+    get:
+      operationId: agentFloatRequestsList
+      summary: List agent float requests
+      tags:
+      - Agent Float Requests
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: request_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - TOP_UP
+          - REBALANCE
+          - WITHDRAW
+          - TRANSFER
+      - name: requesting_agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: source_agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float_request
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentFloatRequestsCreate
+      summary: Create agent float request
+      tags:
+      - Agent Float Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFloatRequestCreate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float_request
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-float-requests/{id}:
+    get:
+      operationId: agentFloatRequestsGet
+      summary: Retrieve agent float request
+      tags:
+      - Agent Float Requests
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float_request
+      x-crud: true
+      x-crud-get: true
+  /v1/agent-float-requests/{id}/approve:
+    post:
+      operationId: agentFloatRequestsApprove
+      summary: Approve and execute the float movement
+      tags:
+      - Agent Float Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFloatRequestsApproveRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float_request
+  /v1/agent-float-requests/{id}/reject:
+    post:
+      operationId: agentFloatRequestsReject
+      summary: Reject the request
+      tags:
+      - Agent Float Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFloatRequestsRejectRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float_request
+  /v1/agent-float-requests/{id}/cancel:
+    post:
+      operationId: agentFloatRequestsCancel
+      summary: Cancel a pending request
+      tags:
+      - Agent Float Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFloatRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFloatRequestsCancelRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_float_request
+  /v1/agent-tills:
+    get:
+      operationId: agentTillsList
+      summary: List agent tills
+      tags:
+      - Agent Tills
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_outlet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - CLOSED
+          - SUSPENDED
+      - name: operator_user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTillPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_till
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentTillsCreate
+      summary: Create agent till
+      tags:
+      - Agent Tills
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTill'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTillCreate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_till
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-tills/{id}:
+    get:
+      operationId: agentTillsGet
+      summary: Retrieve agent till
+      tags:
+      - Agent Tills
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTill'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_till
+      x-crud: true
+      x-crud-get: true
+  /v1/agent-tills/{id}/open:
+    post:
+      operationId: agentTillsOpen
+      summary: Open the till for a shift
+      tags:
+      - Agent Tills
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTill'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTillsOpenRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_till
+  /v1/agent-tills/{id}/close:
+    post:
+      operationId: agentTillsClose
+      summary: Close the till with a cash count
+      tags:
+      - Agent Tills
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTill'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTillsCloseRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_till
+  /v1/agent-devices:
+    get:
+      operationId: agentDevicesList
+      summary: List agent devices
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: agent_outlet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - LOST
+          - RETIRED
+      - name: device_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - POS
+          - SMARTPHONE
+          - TABLET
+          - FEATURE_PHONE
+      - name: serial_number
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevicePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentDevicesCreate
+      summary: Create agent device
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDeviceCreate'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-devices/{id}:
+    get:
+      operationId: agentDevicesGet
+      summary: Retrieve agent device
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: agentDevicesUpdate
+      summary: Update agent device
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDeviceUpdate'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_device
+      x-crud: true
+      x-crud-update: true
+  /v1/agent-devices/{id}/report-lost:
+    post:
+      operationId: agentDevicesReportLost
+      summary: Report a device lost and block it
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDevicesReportLostRequest'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_device
+  /v1/agent-devices/{id}/retire:
+    post:
+      operationId: agentDevicesRetire
+      summary: Retire a device
+      tags:
+      - Agent Devices
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDevice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-07
+      - WAL-02
+      x-service: agent-network-service
+      x-table: agent_device
+  /v1/agent-kyc-documents:
+    get:
+      operationId: agentKycDocumentsList
+      summary: List agent kyc documents
+      tags:
+      - Agent Kyc Documents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: document_type
+        in: query
+        schema:
+          type: string
+          maxLength: 48
+      - name: verified
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentKycDocumentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-04
+      - ONB-06
+      x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: agentKycDocumentsCreate
+      summary: Create agent kyc document
+      tags:
+      - Agent Kyc Documents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentKycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentKycDocumentCreate'
+      x-requirements:
+      - ONB-04
+      - ONB-06
+      x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-create: true
+  /v1/agent-kyc-documents/{id}:
+    get:
+      operationId: agentKycDocumentsGet
+      summary: Retrieve agent kyc document
+      tags:
+      - Agent Kyc Documents
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id010
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentKycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - ONB-06
+      x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-get: true
+    delete:
+      operationId: agentKycDocumentsDelete
+      summary: Delete agent kyc document
+      tags:
+      - Agent Kyc Documents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id010
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-04
+      - ONB-06
+      x-service: agent-network-service
+      x-table: agent_kyc_document
+      x-crud: true
+      x-crud-delete: true
+  /v1/agent-kyc-documents/{id}/verify:
+    post:
+      operationId: agentKycDocumentsVerify
+      summary: Mark the document verified
+      tags:
+      - Agent Kyc Documents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentKycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentKycDocumentsVerifyRequest'
+      x-requirements:
+      - ONB-04
+      - ONB-06
+      x-service: agent-network-service
+      x-table: agent_kyc_document
+  /v1/cash-management-requests:
+    get:
+      operationId: cashManagementRequestsList
+      summary: List cash management requests
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_outlet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: request_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CASH_DELIVERY
+          - CASH_PICKUP
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cashManagementRequestsCreate
+      summary: Create cash management request
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashManagementRequestCreate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-create: true
+  /v1/cash-management-requests/{id}:
+    get:
+      operationId: cashManagementRequestsGet
+      summary: Retrieve cash management request
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id011
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cashManagementRequestsUpdate
+      summary: Update cash management request
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id011
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashManagementRequestUpdate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: cash_management_request
+      x-crud: true
+      x-crud-update: true
+  /v1/cash-management-requests/{id}/complete:
+    post:
+      operationId: cashManagementRequestsComplete
+      summary: Confirm the cash delivery or pickup
+      tags:
+      - Cash Management Requests
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashManagementRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashManagementRequestsCompleteRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-table: cash_management_request
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A cash-in/cash-out agent business at any level of the hierarchy
+  name: Agents
+- description: Geographic territory used to organise and manage the agent network
+  name: Agent Territories
+- description: A physical point of service operated by an agent
+  name: Agent Outlets
+- description: Float position configuration and alerting for an agent or outlet float wallet
+  name: Agent Floats
+- description: A float top-up, rebalance, withdrawal or transfer between agents
+  name: Agent Float Requests
+- description: A cash till at an outlet, opened and closed per shift with cash counts
+  name: Agent Tills
+- description: A POS terminal or phone used by an agent
+  name: Agent Devices
+- description: KYB document held for an agent (licence, tax certificate, contract)
+  name: Agent Kyc Documents
+- description: Cash-in-transit delivery or pickup request for an outlet
+  name: Cash Management Requests

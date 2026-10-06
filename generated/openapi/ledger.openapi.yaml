@@ -121,21 +121,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Ledger'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LedgerPage'
         '400': &id001
           $ref: '#/components/responses/BadRequest'
         '401': &id002
@@ -148,6 +134,9 @@ paths:
       - GL-05
       - LED-01
       x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: ledgersCreate
       summary: Create ledger
@@ -183,6 +172,9 @@ paths:
       - GL-05
       - LED-01
       x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-create: true
   /v1/ledgers/{id}:
     get:
       operationId: ledgersGet
@@ -217,6 +209,9 @@ paths:
       - GL-05
       - LED-01
       x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: ledgersUpdate
       summary: Update ledger
@@ -255,6 +250,9 @@ paths:
       - GL-05
       - LED-01
       x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-update: true
   /v1/ledgers/{id}/lock:
     post:
       operationId: ledgersLock
@@ -299,6 +297,7 @@ paths:
       - GL-05
       - LED-01
       x-service: ledger-service
+      x-table: ledger
   /v1/ledgers/{id}/verify:
     get:
       operationId: ledgersVerify
@@ -328,6 +327,7 @@ paths:
       - GL-05
       - LED-01
       x-service: ledger-service
+      x-table: ledger
   /v1/ledger-accounts:
     get:
       operationId: ledgerAccountsList
@@ -424,21 +424,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LedgerAccount'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LedgerAccountPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -449,6 +435,9 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: ledgerAccountsCreate
       summary: Create ledger account
@@ -486,6 +475,9 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-create: true
   /v1/ledger-accounts/{id}:
     get:
       operationId: ledgerAccountsGet
@@ -522,6 +514,9 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: ledgerAccountsUpdate
       summary: Update ledger account
@@ -562,6 +557,9 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-update: true
   /v1/ledger-accounts/{id}/balance:
     get:
       operationId: ledgerAccountsBalance
@@ -597,10 +595,11 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/ledger-accounts/{id}/balance-at:
     get:
       operationId: ledgerAccountsBalanceAt
-      summary: Point-in-time balance at a timestamp (?at=)
+      summary: Point-in-time balance at a timestamp
       tags:
       - Ledger Accounts
       security:
@@ -613,6 +612,12 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: at
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: OK
@@ -632,10 +637,11 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/ledger-accounts/{id}/balance-history:
     get:
       operationId: ledgerAccountsBalanceHistory
-      summary: Daily balance snapshots (?from=&to=)
+      summary: Daily balance snapshots in a date range
       tags:
       - Ledger Accounts
       security:
@@ -648,6 +654,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -656,21 +674,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BalanceSnapshot'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BalanceSnapshotPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -683,6 +687,7 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/ledger-accounts/{id}/entries:
     get:
       operationId: ledgerAccountsEntries
@@ -699,6 +704,18 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -707,21 +724,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LedgerEntry'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LedgerEntryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -734,6 +737,7 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/ledger-accounts/{id}/freeze:
     post:
       operationId: ledgerAccountsFreeze
@@ -780,6 +784,7 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/ledger-accounts/{id}/unfreeze:
     post:
       operationId: ledgerAccountsUnfreeze
@@ -826,6 +831,7 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/ledger-accounts/{id}/close:
     post:
       operationId: ledgerAccountsClose
@@ -872,6 +878,7 @@ paths:
       - LED-03
       - LED-08
       x-service: ledger-service
+      x-table: ledger_account
   /v1/journal-entries:
     get:
       operationId: journalEntriesList
@@ -956,21 +963,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/JournalEntry'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/JournalEntryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -981,6 +974,9 @@ paths:
       - LED-06
       - LED-07
       x-service: ledger-service
+      x-table: journal_entry
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: journalEntriesCreate
       summary: Create journal entrie
@@ -1018,6 +1014,9 @@ paths:
       - LED-06
       - LED-07
       x-service: ledger-service
+      x-table: journal_entry
+      x-crud: true
+      x-crud-create: true
   /v1/journal-entries/{id}:
     get:
       operationId: journalEntriesGet
@@ -1053,6 +1052,9 @@ paths:
       - LED-06
       - LED-07
       x-service: ledger-service
+      x-table: journal_entry
+      x-crud: true
+      x-crud-get: true
   /v1/journal-entries/{id}/reverse:
     post:
       operationId: journalEntriesReverse
@@ -1099,6 +1101,7 @@ paths:
       - LED-06
       - LED-07
       x-service: ledger-service
+      x-table: journal_entry
   /v1/journal-entries/{id}/entries:
     get:
       operationId: journalEntriesEntries
@@ -1123,21 +1126,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LedgerEntry'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LedgerEntryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1150,6 +1139,7 @@ paths:
       - LED-06
       - LED-07
       x-service: ledger-service
+      x-table: journal_entry
   /v1/journal-entries/batch:
     post:
       operationId: journalEntriesBatch
@@ -1186,6 +1176,7 @@ paths:
       - LED-06
       - LED-07
       x-service: ledger-service
+      x-table: journal_entry
   /v1/ledger-entries:
     get:
       operationId: ledgerEntriesList
@@ -1253,21 +1244,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LedgerEntry'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LedgerEntryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1277,6 +1254,9 @@ paths:
       - LED-02
       - LED-03
       x-service: ledger-service
+      x-table: ledger_entry
+      x-crud: true
+      x-crud-list: true
   /v1/ledger-entries/{id}:
     get:
       operationId: ledgerEntriesGet
@@ -1311,6 +1291,9 @@ paths:
       - LED-02
       - LED-03
       x-service: ledger-service
+      x-table: ledger_entry
+      x-crud: true
+      x-crud-get: true
   /v1/holds:
     get:
       operationId: holdsList
@@ -1392,21 +1375,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Hold'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/HoldPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1414,6 +1383,9 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: holdsCreate
       summary: Create hold
@@ -1448,6 +1420,9 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
+      x-crud: true
+      x-crud-create: true
   /v1/holds/{id}:
     get:
       operationId: holdsGet
@@ -1480,6 +1455,9 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
+      x-crud: true
+      x-crud-get: true
   /v1/holds/{id}/increment:
     post:
       operationId: holdsIncrement
@@ -1523,10 +1501,11 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
   /v1/holds/{id}/capture:
     post:
       operationId: holdsCapture
-      summary: Capture all or part of a hold into postings
+      summary: 'Capture all or part of a hold: debit the held account, credit the counter account'
       tags:
       - Holds
       security:
@@ -1566,6 +1545,7 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
   /v1/holds/{id}/release:
     post:
       operationId: holdsRelease
@@ -1609,6 +1589,7 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
   /v1/holds/{id}/events:
     get:
       operationId: holdsEvents
@@ -1633,21 +1614,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/HoldEvent'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/HoldEventPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1657,6 +1624,7 @@ paths:
       x-requirements:
       - LED-04
       x-service: ledger-service
+      x-table: hold
   /v1/balance-snapshots:
     get:
       operationId: balanceSnapshotsList
@@ -1712,21 +1680,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BalanceSnapshot'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BalanceSnapshotPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1735,6 +1689,9 @@ paths:
       - GL-03
       - LED-09
       x-service: ledger-service
+      x-table: balance_snapshot
+      x-crud: true
+      x-crud-list: true
   /v1/balance-snapshots/{id}:
     get:
       operationId: balanceSnapshotsGet
@@ -1768,6 +1725,9 @@ paths:
       - GL-03
       - LED-09
       x-service: ledger-service
+      x-table: balance_snapshot
+      x-crud: true
+      x-crud-get: true
   /v1/gl/accounts:
     get:
       operationId: glAccountsList
@@ -1847,21 +1807,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GlAccount'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GlAccountPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1869,6 +1815,9 @@ paths:
       x-requirements:
       - GL-01
       x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: glAccountsCreate
       summary: Create gl account
@@ -1903,6 +1852,9 @@ paths:
       x-requirements:
       - GL-01
       x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-create: true
   /v1/gl/accounts/{id}:
     get:
       operationId: glAccountsGet
@@ -1936,6 +1888,9 @@ paths:
       x-requirements:
       - GL-01
       x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: glAccountsUpdate
       summary: Update gl account
@@ -1973,6 +1928,9 @@ paths:
       x-requirements:
       - GL-01
       x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-update: true
   /v1/gl/mapping-rules:
     get:
       operationId: glMappingRulesList
@@ -2033,21 +1991,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GlMappingRule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GlMappingRulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2056,6 +2000,9 @@ paths:
       - GL-01
       - GL-02
       x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: glMappingRulesCreate
       summary: Create gl mapping rule
@@ -2091,6 +2038,9 @@ paths:
       - GL-01
       - GL-02
       x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-create: true
   /v1/gl/mapping-rules/{id}:
     get:
       operationId: glMappingRulesGet
@@ -2125,6 +2075,9 @@ paths:
       - GL-01
       - GL-02
       x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: glMappingRulesUpdate
       summary: Update gl mapping rule
@@ -2163,6 +2116,9 @@ paths:
       - GL-01
       - GL-02
       x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: glMappingRulesDelete
       summary: Delete gl mapping rule
@@ -2185,6 +2141,9 @@ paths:
       - GL-01
       - GL-02
       x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-delete: true
   /v1/gl/mapping-rules/simulate:
     post:
       operationId: glMappingRulesSimulate
@@ -2223,6 +2182,7 @@ paths:
       - GL-01
       - GL-02
       x-service: gl-service
+      x-table: gl_mapping_rule
   /v1/gl/periods:
     get:
       operationId: accountingPeriodsList
@@ -2291,21 +2251,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AccountingPeriod'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AccountingPeriodPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2313,6 +2259,9 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: accountingPeriodsCreate
       summary: Create accounting period
@@ -2347,6 +2296,9 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
+      x-crud: true
+      x-crud-create: true
   /v1/gl/periods/{id}:
     get:
       operationId: accountingPeriodsGet
@@ -2379,6 +2331,9 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
+      x-crud: true
+      x-crud-get: true
   /v1/gl/periods/{id}/close:
     post:
       operationId: accountingPeriodsClose
@@ -2416,6 +2371,7 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
   /v1/gl/periods/{id}/approve-close:
     post:
       operationId: accountingPeriodsApproveClose
@@ -2459,6 +2415,7 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
   /v1/gl/periods/{id}/reopen:
     post:
       operationId: accountingPeriodsReopen
@@ -2502,6 +2459,7 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
   /v1/gl/periods/{id}/trial-balance:
     get:
       operationId: accountingPeriodsTrialBalance
@@ -2526,21 +2484,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GlBalance'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GlBalancePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2550,6 +2494,7 @@ paths:
       x-requirements:
       - GL-03
       x-service: gl-service
+      x-table: accounting_period
   /v1/gl/balances:
     get:
       operationId: glBalancesList
@@ -2610,21 +2555,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GlBalance'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GlBalancePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2633,6 +2564,9 @@ paths:
       - GL-02
       - GL-03
       x-service: gl-service
+      x-table: gl_balance
+      x-crud: true
+      x-crud-list: true
   /v1/gl/balances/{id}:
     get:
       operationId: glBalancesGet
@@ -2666,6 +2600,9 @@ paths:
       - GL-02
       - GL-03
       x-service: gl-service
+      x-table: gl_balance
+      x-crud: true
+      x-crud-get: true
   /v1/gl/journals:
     get:
       operationId: glJournalsList
@@ -2731,21 +2668,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GlJournal'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GlJournalPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2754,6 +2677,9 @@ paths:
       - GL-02
       - GL-05
       x-service: gl-service
+      x-table: gl_journal
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: glJournalsCreate
       summary: Create gl journal
@@ -2789,6 +2715,9 @@ paths:
       - GL-02
       - GL-05
       x-service: gl-service
+      x-table: gl_journal
+      x-crud: true
+      x-crud-create: true
   /v1/gl/journals/{id}:
     get:
       operationId: glJournalsGet
@@ -2822,6 +2751,9 @@ paths:
       - GL-02
       - GL-05
       x-service: gl-service
+      x-table: gl_journal
+      x-crud: true
+      x-crud-get: true
   /v1/gl/journals/{id}/lines:
     get:
       operationId: glJournalsLines
@@ -2846,21 +2778,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GlJournalLine'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GlJournalLinePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2871,6 +2789,7 @@ paths:
       - GL-02
       - GL-05
       x-service: gl-service
+      x-table: gl_journal
   /v1/gl/journals/{id}/approve:
     post:
       operationId: glJournalsApprove
@@ -2915,6 +2834,7 @@ paths:
       - GL-02
       - GL-05
       x-service: gl-service
+      x-table: gl_journal
   /v1/gl/close-runs:
     get:
       operationId: periodCloseRunsList
@@ -2976,21 +2896,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PeriodCloseRun'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/PeriodCloseRunPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2999,6 +2905,9 @@ paths:
       - GL-03
       - GL-04
       x-service: gl-service
+      x-table: period_close_run
+      x-crud: true
+      x-crud-list: true
   /v1/gl/close-runs/{id}:
     get:
       operationId: periodCloseRunsGet
@@ -3032,6 +2941,9 @@ paths:
       - GL-03
       - GL-04
       x-service: gl-service
+      x-table: period_close_run
+      x-crud: true
+      x-crud-get: true
   /v1/gl/ecl-provisions:
     get:
       operationId: eclProvisionsList
@@ -3106,21 +3018,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/EclProvision'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/EclProvisionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3128,6 +3026,9 @@ paths:
       x-requirements:
       - GL-04
       x-service: gl-service
+      x-table: ecl_provision
+      x-crud: true
+      x-crud-list: true
   /v1/gl/ecl-provisions/{id}:
     get:
       operationId: eclProvisionsGet
@@ -3160,6 +3061,9 @@ paths:
       x-requirements:
       - GL-04
       x-service: gl-service
+      x-table: ecl_provision
+      x-crud: true
+      x-crud-get: true
   /v1/gl/ecl-provisions/calculate:
     post:
       operationId: eclProvisionsCalculate
@@ -3197,6 +3101,7 @@ paths:
       x-requirements:
       - GL-04
       x-service: gl-service
+      x-table: ecl_provision
   /v1/gl/erp-exports:
     get:
       operationId: erpExportsList
@@ -3263,21 +3168,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ErpExport'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ErpExportPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3285,6 +3176,9 @@ paths:
       x-requirements:
       - GL-06
       x-service: gl-service
+      x-table: erp_export
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: erpExportsCreate
       summary: Create erp export
@@ -3319,6 +3213,9 @@ paths:
       x-requirements:
       - GL-06
       x-service: gl-service
+      x-table: erp_export
+      x-crud: true
+      x-crud-create: true
   /v1/gl/erp-exports/{id}:
     get:
       operationId: erpExportsGet
@@ -3351,6 +3248,9 @@ paths:
       x-requirements:
       - GL-06
       x-service: gl-service
+      x-table: erp_export
+      x-crud: true
+      x-crud-get: true
   /v1/gl/erp-exports/{id}/download:
     get:
       operationId: erpExportsDownload
@@ -3379,6 +3279,7 @@ paths:
       x-requirements:
       - GL-06
       x-service: gl-service
+      x-table: erp_export
   /v1/reconciliation/sources:
     get:
       operationId: reconSourcesList
@@ -3444,21 +3345,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconSource'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconSourcePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3466,6 +3353,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_source
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: reconSourcesCreate
       summary: Create recon source
@@ -3500,6 +3390,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_source
+      x-crud: true
+      x-crud-create: true
   /v1/reconciliation/sources/{id}:
     get:
       operationId: reconSourcesGet
@@ -3533,6 +3426,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_source
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: reconSourcesUpdate
       summary: Update recon source
@@ -3570,6 +3466,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_source
+      x-crud: true
+      x-crud-update: true
   /v1/reconciliation/files:
     get:
       operationId: reconFilesList
@@ -3635,21 +3534,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconFile'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconFilePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3657,6 +3542,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_file
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: reconFilesCreate
       summary: Create recon file
@@ -3691,6 +3579,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_file
+      x-crud: true
+      x-crud-create: true
   /v1/reconciliation/files/{id}:
     get:
       operationId: reconFilesGet
@@ -3723,6 +3614,9 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_file
+      x-crud: true
+      x-crud-get: true
   /v1/reconciliation/files/{id}/records:
     get:
       operationId: reconFilesRecords
@@ -3747,21 +3641,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconRecord'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconRecordPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3771,6 +3651,7 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_file
   /v1/reconciliation/files/{id}/reprocess:
     post:
       operationId: reconFilesReprocess
@@ -3808,6 +3689,7 @@ paths:
       x-requirements:
       - REC-01
       x-service: reconciliation-service
+      x-table: recon_file
   /v1/reconciliation/rules:
     get:
       operationId: reconRulesList
@@ -3862,21 +3744,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconRule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconRulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3884,6 +3752,9 @@ paths:
       x-requirements:
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_rule
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: reconRulesCreate
       summary: Create recon rule
@@ -3918,6 +3789,9 @@ paths:
       x-requirements:
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_rule
+      x-crud: true
+      x-crud-create: true
   /v1/reconciliation/rules/{id}:
     get:
       operationId: reconRulesGet
@@ -3951,6 +3825,9 @@ paths:
       x-requirements:
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_rule
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: reconRulesUpdate
       summary: Update recon rule
@@ -3988,6 +3865,9 @@ paths:
       x-requirements:
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_rule
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: reconRulesDelete
       summary: Delete recon rule
@@ -4009,6 +3889,9 @@ paths:
       x-requirements:
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_rule
+      x-crud: true
+      x-crud-delete: true
   /v1/reconciliation/runs:
     get:
       operationId: reconRunsList
@@ -4070,21 +3953,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconRun'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconRunPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4093,6 +3962,9 @@ paths:
       - REC-01
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_run
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: reconRunsCreate
       summary: Create recon run
@@ -4128,6 +4000,9 @@ paths:
       - REC-01
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_run
+      x-crud: true
+      x-crud-create: true
   /v1/reconciliation/runs/{id}:
     get:
       operationId: reconRunsGet
@@ -4161,6 +4036,9 @@ paths:
       - REC-01
       - REC-02
       x-service: reconciliation-service
+      x-table: recon_run
+      x-crud: true
+      x-crud-get: true
   /v1/reconciliation/matches:
     get:
       operationId: reconMatchesList
@@ -4221,21 +4099,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconMatch'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconMatchPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4244,6 +4108,9 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_match
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: reconMatchesCreate
       summary: Create recon matche
@@ -4279,6 +4146,9 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_match
+      x-crud: true
+      x-crud-create: true
   /v1/reconciliation/matches/{id}:
     get:
       operationId: reconMatchesGet
@@ -4312,6 +4182,9 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_match
+      x-crud: true
+      x-crud-get: true
   /v1/reconciliation/matches/{id}/unmatch:
     post:
       operationId: reconMatchesUnmatch
@@ -4356,6 +4229,7 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_match
   /v1/reconciliation/exceptions:
     get:
       operationId: reconExceptionsList
@@ -4433,21 +4307,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ReconException'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ReconExceptionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4456,6 +4316,9 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_exception
+      x-crud: true
+      x-crud-list: true
   /v1/reconciliation/exceptions/{id}:
     get:
       operationId: reconExceptionsGet
@@ -4490,6 +4353,9 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_exception
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: reconExceptionsUpdate
       summary: Update recon exception
@@ -4528,6 +4394,9 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_exception
+      x-crud: true
+      x-crud-update: true
   /v1/reconciliation/exceptions/{id}/assign:
     post:
       operationId: reconExceptionsAssign
@@ -4572,6 +4441,7 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_exception
   /v1/reconciliation/exceptions/{id}/resolve:
     post:
       operationId: reconExceptionsResolve
@@ -4616,6 +4486,7 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_exception
   /v1/reconciliation/exceptions/{id}/accept-suggestion:
     post:
       operationId: reconExceptionsAcceptSuggestion
@@ -4654,6 +4525,7 @@ paths:
       - REC-02
       - REC-03
       x-service: reconciliation-service
+      x-table: recon_exception
 components:
   parameters:
     CreatedAfter:
@@ -4776,6 +4648,24 @@ components:
       - status
       - code
       type: object
+    LedgerPage:
+      type: object
+      description: One page of Ledger results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ledger'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     LedgersLockRequest:
       type: object
       properties:
@@ -4784,6 +4674,60 @@ components:
           maxLength: 255
       required:
       - reason
+    LedgerAccountPage:
+      type: object
+      description: One page of LedgerAccount results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerAccount'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BalanceSnapshotPage:
+      type: object
+      description: One page of BalanceSnapshot results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BalanceSnapshot'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LedgerEntryPage:
+      type: object
+      description: One page of LedgerEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     LedgerAccountsFreezeRequest:
       type: object
       properties:
@@ -4815,6 +4759,24 @@ components:
         reason:
           type: string
           maxLength: 255
+    JournalEntryPage:
+      type: object
+      description: One page of JournalEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     JournalEntriesReverseRequest:
       type: object
       properties:
@@ -4834,13 +4796,32 @@ components:
           additionalProperties: true
       required:
       - entries
+    HoldPage:
+      type: object
+      description: One page of Hold results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Hold'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     HoldsIncrementRequest:
       type: object
       properties:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         reason:
           type: string
           maxLength: 255
@@ -4852,19 +4833,79 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
-        journal_entry:
-          type: object
-          additionalProperties: true
+          examples:
+          - '125.50'
+        counter_account_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 500
+        release_remainder:
+          type: boolean
       required:
       - amount
-      - journal_entry
+      - counter_account_id
     HoldsReleaseRequest:
       type: object
       properties:
         reason:
           type: string
           maxLength: 255
+    HoldEventPage:
+      type: object
+      description: One page of HoldEvent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/HoldEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GlAccountPage:
+      type: object
+      description: One page of GlAccount results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlAccount'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GlMappingRulePage:
+      type: object
+      description: One page of GlMappingRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlMappingRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     GlMappingRulesSimulateRequest:
       type: object
       properties:
@@ -4900,6 +4941,24 @@ components:
         owner_type:
           type: string
           maxLength: 40
+    AccountingPeriodPage:
+      type: object
+      description: One page of AccountingPeriod results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountingPeriod'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AccountingPeriodsApproveCloseRequest:
       type: object
       properties:
@@ -4914,12 +4973,102 @@ components:
           maxLength: 500
       required:
       - reason
+    GlBalancePage:
+      type: object
+      description: One page of GlBalance results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlBalance'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GlJournalPage:
+      type: object
+      description: One page of GlJournal results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournal'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GlJournalLinePage:
+      type: object
+      description: One page of GlJournalLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GlJournalLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     GlJournalsApproveRequest:
       type: object
       properties:
         comment:
           type: string
           maxLength: 500
+    PeriodCloseRunPage:
+      type: object
+      description: One page of PeriodCloseRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PeriodCloseRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    EclProvisionPage:
+      type: object
+      description: One page of EclProvision results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EclProvision'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     EclProvisionsCalculateRequest:
       type: object
       properties:
@@ -4932,6 +5081,132 @@ components:
       required:
       - legal_entity_id
       - reporting_date
+    ErpExportPage:
+      type: object
+      description: One page of ErpExport results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErpExport'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconSourcePage:
+      type: object
+      description: One page of ReconSource results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconSource'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconFilePage:
+      type: object
+      description: One page of ReconFile results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconFile'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRecordPage:
+      type: object
+      description: One page of ReconRecord results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRecord'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRulePage:
+      type: object
+      description: One page of ReconRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconRunPage:
+      type: object
+      description: One page of ReconRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconMatchPage:
+      type: object
+      description: One page of ReconMatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconMatch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ReconMatchesUnmatchRequest:
       type: object
       properties:
@@ -4940,6 +5215,24 @@ components:
           maxLength: 255
       required:
       - reason
+    ReconExceptionPage:
+      type: object
+      description: One page of ReconException results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconException'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ReconExceptionsAssignRequest:
       type: object
       properties:
@@ -5007,37 +5300,43 @@ components:
         posted_debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Lifetime posted debits
           readOnly: true
         posted_credits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Lifetime posted credits
           readOnly: true
         posted_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Posted (ledger) balance in normal-balance terms
           readOnly: true
         pending_debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Active holds and pending debits
           readOnly: true
         pending_credits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Pending credits not yet available
           readOnly: true
         available_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Posted - pending debits + overdraft limit
           readOnly: true
         account_version:
@@ -5315,27 +5614,32 @@ components:
         opening_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Balance at start of day
         total_debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Debits during the day
         total_credits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Credits during the day
         closing_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Balance at end of day
         available_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Available balance at end of day
         account_version:
           type: integer
@@ -5431,22 +5735,26 @@ components:
         ead:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Exposure at default
         pd:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Probability of default (12-month or lifetime)
         lgd:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Loss given default
         ecl_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Expected credit loss
         currency:
           type: string
@@ -6014,31 +6322,36 @@ components:
         opening_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Opening balance
           readOnly: true
         debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Period debits
           readOnly: true
         credits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Period credits
           readOnly: true
         closing_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Closing balance
           readOnly: true
         base_closing_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Closing balance in entity base currency
           readOnly: true
         last_event_at:
@@ -6277,7 +6590,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -6286,7 +6600,8 @@ components:
         base_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount in entity base currency
         cost_center:
           type:
@@ -6719,7 +7034,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Held amount (can be incremented)
         currency:
           type: string
@@ -6728,7 +7044,8 @@ components:
         captured_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount converted into postings
           readOnly: true
         status:
@@ -6756,7 +7073,8 @@ components:
         idempotency_key:
           type: string
           maxLength: 128
-          description: Client key
+          description: Taken from the Idempotency-Key header
+          readOnly: true
         description:
           type:
           - string
@@ -6844,7 +7162,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Held amount (can be incremented)
         currency:
           type: string
@@ -6858,10 +7177,6 @@ components:
           type: string
           format: uuid
           description: Business object id
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key
         description:
           type: string
           maxLength: 500
@@ -6899,7 +7214,6 @@ components:
       - hold_type
       - amount
       - currency
-      - idempotency_key
     HoldEvent:
       type: object
       description: Immutable history of a hold (placed, incremented, captured, released, expired)
@@ -6932,7 +7246,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount affected by this event
         journal_entry_id:
           type:
@@ -7010,7 +7325,8 @@ components:
         idempotency_key:
           type: string
           maxLength: 128
-          description: Client key; a replay returns the original entry
+          description: Taken from the Idempotency-Key header; a replay returns the original entry
+          readOnly: true
         entry_type:
           type: string
           enum:
@@ -7038,11 +7354,11 @@ components:
         effective_at:
           type: string
           format: date-time
-          description: Economic time of the transaction
+          description: 'Economic time of the transaction (default: now)'
         value_date:
           type: string
           format: date
-          description: Date interest starts or stops counting
+          description: 'Date interest starts or stops counting (default: today)'
         booked_at:
           type: string
           format: date-time
@@ -7053,11 +7369,13 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Entry this one reverses
+          description: Entry this one reverses (set by POST /{id}/reverse)
+          readOnly: true
         source_service:
           type: string
           maxLength: 64
-          description: Service that requested the posting
+          description: Service or client that requested the posting (from the caller identity)
+          readOnly: true
         source_type:
           type:
           - string
@@ -7084,7 +7402,8 @@ components:
         total_debits:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Sum of debits in base currency (equals credits)
           readOnly: true
         hash:
@@ -7137,6 +7456,12 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+          readOnly: true
+          description: Debit and credit lines; must balance per currency
       required:
       - id
       - created_at
@@ -7156,10 +7481,6 @@ components:
           type: string
           format: uuid
           description: Ledger book
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Client key; a replay returns the original entry
         entry_type:
           type: string
           enum:
@@ -7185,19 +7506,11 @@ components:
         effective_at:
           type: string
           format: date-time
-          description: Economic time of the transaction
+          description: 'Economic time of the transaction (default: now)'
         value_date:
           type: string
           format: date
-          description: Date interest starts or stops counting
-        reversal_of_id:
-          type: string
-          format: uuid
-          description: Entry this one reverses
-        source_service:
-          type: string
-          maxLength: 64
-          description: Service that requested the posting
+          description: 'Date interest starts or stops counting (default: today)'
         source_type:
           type: string
           maxLength: 64
@@ -7234,12 +7547,15 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LedgerEntryCreate'
+          minItems: 1
+          description: Debit and credit lines; must balance per currency
       required:
       - ledger_id
-      - idempotency_key
-      - effective_at
-      - value_date
-      - source_service
+      - entries
     Ledger:
       type: object
       description: A book of accounts for one legal entity (a tenant may run several ledgers)
@@ -7572,12 +7888,14 @@ components:
         overdraft_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Arranged overdraft; available = balance + limit - holds
         min_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum balance that must remain
         opened_at:
           type: string
@@ -7707,12 +8025,14 @@ components:
         overdraft_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Arranged overdraft; available = balance + limit - holds
         min_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum balance that must remain
         opened_at:
           type: string
@@ -7819,12 +8139,14 @@ components:
         overdraft_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Arranged overdraft; available = balance + limit - holds
         min_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum balance that must remain
         opened_at:
           type: string
@@ -7883,6 +8205,7 @@ components:
           type: string
           format: uuid
           description: Parent journal entry
+          readOnly: true
         ledger_account_id:
           type: string
           format: uuid
@@ -7890,7 +8213,8 @@ components:
         line_no:
           type: integer
           format: int32
-          description: Line number within the journal entry
+          description: Line number within the journal entry (order sent)
+          readOnly: true
         direction:
           type: string
           enum:
@@ -7900,7 +8224,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Positive amount in the account currency
         currency:
           type: string
@@ -7911,17 +8236,21 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Rate to ledger base currency at posting time
         base_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
-          description: Amount in ledger base currency
+          examples:
+          - '125.50'
+          description: Amount in ledger base currency (amount x fx_rate)
+          readOnly: true
         effective_at:
           type: string
           format: date-time
           description: Copied from the journal entry for range queries
+          readOnly: true
         account_version:
           type: integer
           format: int64
@@ -7930,7 +8259,8 @@ components:
         balance_after:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Posted balance of the account after this entry
           readOnly: true
         description:
@@ -7982,6 +8312,64 @@ components:
       - effective_at
       - account_version
       - balance_after
+    LedgerEntryCreate:
+      type: object
+      properties:
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: Account posted to
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: Debit or credit
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Positive amount in the account currency
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Account currency (ISO 4217)
+        fx_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate to ledger base currency at posting time
+        description:
+          type: string
+          maxLength: 500
+          description: Line narrative
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - ledger_account_id
+      - direction
+      - amount
+      - currency
     PeriodCloseRun:
       type: object
       description: Execution of an EOD / EOM / EOY close with its checklist steps
@@ -8176,7 +8564,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Break amount
         currency:
           type: string
@@ -8291,7 +8680,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Break amount
         currency:
           type: string
@@ -8391,14 +8781,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Opening balance stated in the file
         closing_balance:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Closing balance stated in the file
         record_count:
           type:
@@ -8481,12 +8873,14 @@ components:
         opening_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Opening balance stated in the file
         closing_balance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Closing balance stated in the file
         custom_field_1:
           type: string
@@ -8564,14 +8958,16 @@ components:
         difference:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Residual difference within tolerance
         confidence:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: AI / rule confidence 0..1
         confirmed_by:
           type:
@@ -8653,12 +9049,14 @@ components:
         difference:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Residual difference within tolerance
         confidence:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: AI / rule confidence 0..1
         confirmed_by:
           type: string
@@ -8752,7 +9150,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount
         currency:
           type: string
@@ -8883,7 +9282,8 @@ components:
         amount_tolerance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Allowed absolute amount difference
         date_tolerance_days:
           type: integer
@@ -8969,7 +9369,8 @@ components:
         amount_tolerance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Allowed absolute amount difference
         date_tolerance_days:
           type: integer
@@ -9036,7 +9437,8 @@ components:
         amount_tolerance:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Allowed absolute amount difference
         date_tolerance_days:
           type: integer

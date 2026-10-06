@@ -176,21 +176,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Customer'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerPage'
         '400': &id001
           $ref: '#/components/responses/BadRequest'
         '401': &id002
@@ -204,6 +190,9 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customersCreate
       summary: Create customer
@@ -240,6 +229,9 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
+      x-crud: true
+      x-crud-create: true
   /v1/customers/{id}:
     get:
       operationId: customersGet
@@ -275,6 +267,9 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customersUpdate
       summary: Update customer
@@ -314,6 +309,9 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
+      x-crud: true
+      x-crud-update: true
   /v1/customers/search:
     get:
       operationId: customersSearch
@@ -332,21 +330,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Customer'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -358,6 +342,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/view:
     get:
       operationId: customersView
@@ -388,6 +373,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/activate:
     post:
       operationId: customersActivate
@@ -427,6 +413,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/suspend:
     post:
       operationId: customersSuspend
@@ -472,6 +459,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/reactivate:
     post:
       operationId: customersReactivate
@@ -517,6 +505,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/close:
     post:
       operationId: customersClose
@@ -562,6 +551,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/mark-deceased:
     post:
       operationId: customersMarkDeceased
@@ -607,6 +597,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/merge:
     post:
       operationId: customersMerge
@@ -652,6 +643,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/change-tier:
     post:
       operationId: customersChangeTier
@@ -697,6 +689,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/tier-history:
     get:
       operationId: customersTierHistory
@@ -721,21 +714,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerKycTierHistory'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerKycTierHistoryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -747,6 +726,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/relationships:
     get:
       operationId: customersRelationships
@@ -771,21 +751,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerRelationship'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerRelationshipPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -797,6 +763,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{id}/ownership-tree:
     get:
       operationId: customersOwnershipTree
@@ -827,6 +794,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/duplicates-check:
     post:
       operationId: customersDuplicatesCheck
@@ -846,21 +814,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Customer'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -882,6 +836,7 @@ paths:
       - CIF-02
       - CIF-03
       x-service: customer-service
+      x-table: customer
   /v1/customers/{customer_id}/identifiers:
     get:
       operationId: customerIdentifiersList
@@ -956,21 +911,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerIdentifier'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerIdentifierPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -979,6 +920,9 @@ paths:
       - CIF-01
       - ONB-02
       x-service: customer-service
+      x-table: customer_identifier
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerIdentifiersCreate
       summary: Create customer identifier
@@ -1015,6 +959,9 @@ paths:
       - CIF-01
       - ONB-02
       x-service: customer-service
+      x-table: customer_identifier
+      x-crud: true
+      x-crud-create: true
   /v1/customers/{customer_id}/identifiers/{id}:
     get:
       operationId: customerIdentifiersGet
@@ -1056,6 +1003,9 @@ paths:
       - CIF-01
       - ONB-02
       x-service: customer-service
+      x-table: customer_identifier
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerIdentifiersUpdate
       summary: Update customer identifier
@@ -1095,6 +1045,9 @@ paths:
       - CIF-01
       - ONB-02
       x-service: customer-service
+      x-table: customer_identifier
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customerIdentifiersDelete
       summary: Delete customer identifier
@@ -1117,6 +1070,9 @@ paths:
       - CIF-01
       - ONB-02
       x-service: customer-service
+      x-table: customer_identifier
+      x-crud: true
+      x-crud-delete: true
   /v1/customers/{customer_id}/addresses:
     get:
       operationId: customerAddressesList
@@ -1185,21 +1141,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerAddress'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerAddressPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1207,6 +1149,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_address
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerAddressesCreate
       summary: Create customer addresse
@@ -1242,6 +1187,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_address
+      x-crud: true
+      x-crud-create: true
   /v1/customers/{customer_id}/addresses/{id}:
     get:
       operationId: customerAddressesGet
@@ -1282,6 +1230,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_address
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerAddressesUpdate
       summary: Update customer addresse
@@ -1320,6 +1271,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_address
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customerAddressesDelete
       summary: Delete customer addresse
@@ -1341,6 +1295,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_address
+      x-crud: true
+      x-crud-delete: true
   /v1/customers/{customer_id}/contacts:
     get:
       operationId: customerContactsList
@@ -1403,21 +1360,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerContact'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerContactPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1426,6 +1369,9 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerContactsCreate
       summary: Create customer contact
@@ -1462,6 +1408,9 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
+      x-crud: true
+      x-crud-create: true
   /v1/customers/{customer_id}/contacts/{id}:
     get:
       operationId: customerContactsGet
@@ -1503,6 +1452,9 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerContactsUpdate
       summary: Update customer contact
@@ -1542,6 +1494,9 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customerContactsDelete
       summary: Delete customer contact
@@ -1564,6 +1519,9 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
+      x-crud: true
+      x-crud-delete: true
   /v1/customers/{customer_id}/contacts/{id}/send-verification:
     post:
       operationId: customerContactsSendVerification
@@ -1604,6 +1562,7 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
   /v1/customers/{customer_id}/contacts/{id}/verify:
     post:
       operationId: customerContactsVerify
@@ -1654,6 +1613,7 @@ paths:
       - CIF-01
       - NOT-02
       x-service: customer-service
+      x-table: customer_contact
   /v1/customer-relationships:
     get:
       operationId: customerRelationshipsList
@@ -1731,21 +1691,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerRelationship'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerRelationshipPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1754,6 +1700,9 @@ paths:
       - CIF-01
       - ONB-04
       x-service: customer-service
+      x-table: customer_relationship
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerRelationshipsCreate
       summary: Create customer relationship
@@ -1789,6 +1738,9 @@ paths:
       - CIF-01
       - ONB-04
       x-service: customer-service
+      x-table: customer_relationship
+      x-crud: true
+      x-crud-create: true
   /v1/customer-relationships/{id}:
     get:
       operationId: customerRelationshipsGet
@@ -1823,6 +1775,9 @@ paths:
       - CIF-01
       - ONB-04
       x-service: customer-service
+      x-table: customer_relationship
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerRelationshipsUpdate
       summary: Update customer relationship
@@ -1861,6 +1816,9 @@ paths:
       - CIF-01
       - ONB-04
       x-service: customer-service
+      x-table: customer_relationship
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customerRelationshipsDelete
       summary: Delete customer relationship
@@ -1883,6 +1841,9 @@ paths:
       - CIF-01
       - ONB-04
       x-service: customer-service
+      x-table: customer_relationship
+      x-crud: true
+      x-crud-delete: true
   /v1/customer-groups:
     get:
       operationId: customerGroupsList
@@ -1947,21 +1908,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerGroup'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerGroupPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1969,6 +1916,9 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerGroupsCreate
       summary: Create customer group
@@ -2003,6 +1953,9 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
+      x-crud: true
+      x-crud-create: true
   /v1/customer-groups/{id}:
     get:
       operationId: customerGroupsGet
@@ -2036,6 +1989,9 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerGroupsUpdate
       summary: Update customer group
@@ -2073,6 +2029,9 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customerGroupsDelete
       summary: Delete customer group
@@ -2094,6 +2053,9 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
+      x-crud: true
+      x-crud-delete: true
   /v1/customer-groups/{id}/members:
     get:
       operationId: customerGroupsMembers
@@ -2118,21 +2080,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerGroupMember'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerGroupMemberPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2142,6 +2090,7 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
     post:
       operationId: customerGroupsAddMembers
       summary: Add a member
@@ -2184,6 +2133,7 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
   /v1/customer-groups/{id}/members/{member_id}:
     delete:
       operationId: customerGroupsRemoveMembers
@@ -2223,6 +2173,7 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
   /v1/customer-groups/{id}/exposure:
     get:
       operationId: customerGroupsExposure
@@ -2251,6 +2202,7 @@ paths:
       x-requirements:
       - CIF-05
       x-service: customer-service
+      x-table: customer_group
   /v1/customer-segments:
     get:
       operationId: customerSegmentsList
@@ -2304,21 +2256,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerSegment'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerSegmentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2327,6 +2265,9 @@ paths:
       - CIF-02
       - PRC-04
       x-service: customer-service
+      x-table: customer_segment
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerSegmentsCreate
       summary: Create customer segment
@@ -2362,6 +2303,9 @@ paths:
       - CIF-02
       - PRC-04
       x-service: customer-service
+      x-table: customer_segment
+      x-crud: true
+      x-crud-create: true
   /v1/customer-segments/{id}:
     get:
       operationId: customerSegmentsGet
@@ -2396,6 +2340,9 @@ paths:
       - CIF-02
       - PRC-04
       x-service: customer-service
+      x-table: customer_segment
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerSegmentsUpdate
       summary: Update customer segment
@@ -2434,6 +2381,9 @@ paths:
       - CIF-02
       - PRC-04
       x-service: customer-service
+      x-table: customer_segment
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customerSegmentsDelete
       summary: Delete customer segment
@@ -2456,6 +2406,9 @@ paths:
       - CIF-02
       - PRC-04
       x-service: customer-service
+      x-table: customer_segment
+      x-crud: true
+      x-crud-delete: true
   /v1/customer-segments/{id}/evaluate:
     post:
       operationId: customerSegmentsEvaluate
@@ -2490,6 +2443,7 @@ paths:
       - CIF-02
       - PRC-04
       x-service: customer-service
+      x-table: customer_segment
   /v1/customers/{customer_id}/segments:
     get:
       operationId: customerSegmentAssignmentsList
@@ -2547,21 +2501,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerSegmentAssignment'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerSegmentAssignmentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2569,6 +2509,9 @@ paths:
       x-requirements:
       - CIF-02
       x-service: customer-service
+      x-table: customer_segment_assignment
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerSegmentAssignmentsCreate
       summary: Create customer segment assignment
@@ -2604,6 +2547,9 @@ paths:
       x-requirements:
       - CIF-02
       x-service: customer-service
+      x-table: customer_segment_assignment
+      x-crud: true
+      x-crud-create: true
   /v1/customers/{customer_id}/segments/{id}:
     delete:
       operationId: customerSegmentAssignmentsDelete
@@ -2638,6 +2584,9 @@ paths:
       x-requirements:
       - CIF-02
       x-service: customer-service
+      x-table: customer_segment_assignment
+      x-crud: true
+      x-crud-delete: true
   /v1/customers/{customer_id}/devices:
     get:
       operationId: customerDevicesList
@@ -2709,21 +2658,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerDevice'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerDevicePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2732,6 +2667,9 @@ paths:
       - CIF-01
       - FRM-05
       x-service: customer-service
+      x-table: customer_device
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customerDevicesCreate
       summary: Create customer device
@@ -2768,6 +2706,9 @@ paths:
       - CIF-01
       - FRM-05
       x-service: customer-service
+      x-table: customer_device
+      x-crud: true
+      x-crud-create: true
   /v1/customers/{customer_id}/devices/{id}:
     get:
       operationId: customerDevicesGet
@@ -2809,6 +2750,9 @@ paths:
       - CIF-01
       - FRM-05
       x-service: customer-service
+      x-table: customer_device
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customerDevicesUpdate
       summary: Update customer device
@@ -2848,6 +2792,9 @@ paths:
       - CIF-01
       - FRM-05
       x-service: customer-service
+      x-table: customer_device
+      x-crud: true
+      x-crud-update: true
   /v1/customers/{customer_id}/devices/{id}/trust:
     post:
       operationId: customerDevicesTrust
@@ -2898,6 +2845,7 @@ paths:
       - CIF-01
       - FRM-05
       x-service: customer-service
+      x-table: customer_device
   /v1/customers/{customer_id}/devices/{id}/revoke:
     post:
       operationId: customerDevicesRevoke
@@ -2948,6 +2896,7 @@ paths:
       - CIF-01
       - FRM-05
       x-service: customer-service
+      x-table: customer_device
   /v1/customers/{customer_id}/credentials:
     get:
       operationId: customerCredentialsList
@@ -3020,21 +2969,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomerCredential'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomerCredentialPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3042,6 +2977,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
+      x-crud: true
+      x-crud-list: true
   /v1/customers/{customer_id}/credentials/{id}:
     get:
       operationId: customerCredentialsGet
@@ -3080,6 +3018,9 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
+      x-crud: true
+      x-crud-get: true
   /v1/customers/{customer_id}/credentials/passkeys/registration-options:
     post:
       operationId: customerCredentialsPasskeysRegistrationOptions
@@ -3119,6 +3060,7 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
   /v1/customers/{customer_id}/credentials/passkeys:
     post:
       operationId: customerCredentialsPasskeys
@@ -3162,6 +3104,7 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
   /v1/customers/{customer_id}/credentials/pin:
     post:
       operationId: customerCredentialsPin
@@ -3201,6 +3144,7 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
   /v1/customers/{customer_id}/credentials/{id}/unlock:
     post:
       operationId: customerCredentialsUnlock
@@ -3250,6 +3194,7 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
   /v1/customers/{customer_id}/credentials/{id}/revoke:
     post:
       operationId: customerCredentialsRevoke
@@ -3299,6 +3244,7 @@ paths:
       x-requirements:
       - CIF-01
       x-service: customer-service
+      x-table: customer_credential
   /v1/consents:
     get:
       operationId: consentsList
@@ -3379,21 +3325,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Consent'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ConsentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3402,6 +3334,9 @@ paths:
       - CIF-04
       - OBK-01
       x-service: customer-service
+      x-table: consent
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: consentsCreate
       summary: Create consent
@@ -3437,6 +3372,9 @@ paths:
       - CIF-04
       - OBK-01
       x-service: customer-service
+      x-table: consent
+      x-crud: true
+      x-crud-create: true
   /v1/consents/{id}:
     get:
       operationId: consentsGet
@@ -3470,6 +3408,9 @@ paths:
       - CIF-04
       - OBK-01
       x-service: customer-service
+      x-table: consent
+      x-crud: true
+      x-crud-get: true
   /v1/consents/{id}/withdraw:
     post:
       operationId: consentsWithdraw
@@ -3514,6 +3455,7 @@ paths:
       - CIF-04
       - OBK-01
       x-service: customer-service
+      x-table: consent
   /v1/consents/{id}/renew:
     post:
       operationId: consentsRenew
@@ -3558,6 +3500,7 @@ paths:
       - CIF-04
       - OBK-01
       x-service: customer-service
+      x-table: consent
   /v1/privacy-requests:
     get:
       operationId: privacyRequestsList
@@ -3635,21 +3578,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PrivacyRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/PrivacyRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3657,6 +3586,9 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: privacyRequestsCreate
       summary: Create privacy request
@@ -3691,6 +3623,9 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
+      x-crud: true
+      x-crud-create: true
   /v1/privacy-requests/{id}:
     get:
       operationId: privacyRequestsGet
@@ -3724,6 +3659,9 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: privacyRequestsUpdate
       summary: Update privacy request
@@ -3761,6 +3699,9 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
+      x-crud: true
+      x-crud-update: true
   /v1/privacy-requests/{id}/verify-identity:
     post:
       operationId: privacyRequestsVerifyIdentity
@@ -3804,6 +3745,7 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
   /v1/privacy-requests/{id}/execute:
     post:
       operationId: privacyRequestsExecute
@@ -3841,6 +3783,7 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
   /v1/privacy-requests/{id}/reject:
     post:
       operationId: privacyRequestsReject
@@ -3884,6 +3827,7 @@ paths:
       x-requirements:
       - CIF-04
       x-service: customer-service
+      x-table: privacy_request
   /v1/onboarding/journeys:
     get:
       operationId: onboardingJourneysList
@@ -3960,21 +3904,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OnboardingJourney'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/OnboardingJourneyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3982,6 +3912,9 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: onboardingJourneysCreate
       summary: Create onboarding journey
@@ -4016,6 +3949,9 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-create: true
   /v1/onboarding/journeys/{id}:
     get:
       operationId: onboardingJourneysGet
@@ -4049,6 +3985,9 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: onboardingJourneysUpdate
       summary: Update onboarding journey
@@ -4086,6 +4025,9 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-update: true
   /v1/onboarding/journeys/{id}/publish:
     post:
       operationId: onboardingJourneysPublish
@@ -4123,6 +4065,7 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
   /v1/onboarding/journeys/{id}/retire:
     post:
       operationId: onboardingJourneysRetire
@@ -4166,6 +4109,7 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
   /v1/onboarding/journeys/{id}/new-version:
     post:
       operationId: onboardingJourneysNewVersion
@@ -4203,6 +4147,7 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
   /v1/onboarding/journeys/{id}/simulate:
     post:
       operationId: onboardingJourneysSimulate
@@ -4242,6 +4187,7 @@ paths:
       x-requirements:
       - ONB-01
       x-service: onboarding-service
+      x-table: onboarding_journey
   /v1/onboarding/applications:
     get:
       operationId: onboardingApplicationsList
@@ -4349,21 +4295,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OnboardingApplication'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/OnboardingApplicationPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4372,6 +4304,9 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: onboardingApplicationsCreate
       summary: Create onboarding application
@@ -4407,6 +4342,9 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-create: true
   /v1/onboarding/applications/{id}:
     get:
       operationId: onboardingApplicationsGet
@@ -4441,6 +4379,9 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: onboardingApplicationsUpdate
       summary: Update onboarding application
@@ -4479,6 +4420,9 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-update: true
   /v1/onboarding/applications/{id}/next-step:
     get:
       operationId: onboardingApplicationsNextStep
@@ -4512,6 +4456,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/steps/{step_code}:
     post:
       operationId: onboardingApplicationsSteps
@@ -4561,6 +4506,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/steps:
     get:
       operationId: onboardingApplicationsGetSteps
@@ -4585,21 +4531,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OnboardingStep'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/OnboardingStepPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4610,6 +4542,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/submit:
     post:
       operationId: onboardingApplicationsSubmit
@@ -4648,6 +4581,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/approve:
     post:
       operationId: onboardingApplicationsApprove
@@ -4692,6 +4626,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/reject:
     post:
       operationId: onboardingApplicationsReject
@@ -4736,6 +4671,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/request-info:
     post:
       operationId: onboardingApplicationsRequestInfo
@@ -4780,6 +4716,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/abandon:
     post:
       operationId: onboardingApplicationsAbandon
@@ -4818,6 +4755,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/applications/{id}/resume:
     post:
       operationId: onboardingApplicationsResume
@@ -4852,6 +4790,7 @@ paths:
       - ONB-01
       - ONB-05
       x-service: onboarding-service
+      x-table: onboarding_application
   /v1/onboarding/offline-batches:
     get:
       operationId: onboardingOfflineBatchesList
@@ -4912,21 +4851,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OnboardingOfflineBatch'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/OnboardingOfflineBatchPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4934,6 +4859,9 @@ paths:
       x-requirements:
       - ONB-07
       x-service: onboarding-service
+      x-table: onboarding_offline_batch
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: onboardingOfflineBatchesCreate
       summary: Create onboarding offline batche
@@ -4968,6 +4896,9 @@ paths:
       x-requirements:
       - ONB-07
       x-service: onboarding-service
+      x-table: onboarding_offline_batch
+      x-crud: true
+      x-crud-create: true
   /v1/onboarding/offline-batches/{id}:
     get:
       operationId: onboardingOfflineBatchesGet
@@ -5000,6 +4931,9 @@ paths:
       x-requirements:
       - ONB-07
       x-service: onboarding-service
+      x-table: onboarding_offline_batch
+      x-crud: true
+      x-crud-get: true
   /v1/onboarding/offline-batches/{id}/reprocess:
     post:
       operationId: onboardingOfflineBatchesReprocess
@@ -5037,6 +4971,7 @@ paths:
       x-requirements:
       - ONB-07
       x-service: onboarding-service
+      x-table: onboarding_offline_batch
   /v1/kyc/providers:
     get:
       operationId: kycProvidersList
@@ -5091,21 +5026,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycProvider'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycProviderPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5114,6 +5035,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: kycProvidersCreate
       summary: Create kyc provider
@@ -5149,6 +5073,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/providers/{id}:
     get:
       operationId: kycProvidersGet
@@ -5183,6 +5110,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: kycProvidersUpdate
       summary: Update kyc provider
@@ -5221,6 +5151,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-update: true
   /v1/kyc/providers/{id}/test-connection:
     post:
       operationId: kycProvidersTestConnection
@@ -5255,6 +5188,7 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_provider
   /v1/kyc/profiles:
     get:
       operationId: kycProfilesList
@@ -5335,21 +5269,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycProfile'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycProfilePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5359,6 +5279,9 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
+      x-crud: true
+      x-crud-list: true
   /v1/kyc/profiles/{id}:
     get:
       operationId: kycProfilesGet
@@ -5393,6 +5316,9 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
+      x-crud: true
+      x-crud-get: true
   /v1/kyc/profiles/{id}/evaluate:
     post:
       operationId: kycProfilesEvaluate
@@ -5432,6 +5358,7 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
   /v1/kyc/profiles/{id}/require-edd:
     post:
       operationId: kycProfilesRequireEdd
@@ -5477,6 +5404,7 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
   /v1/kyc/profiles/{id}/complete-edd:
     post:
       operationId: kycProfilesCompleteEdd
@@ -5522,6 +5450,7 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
   /v1/kyc/profiles/{id}/checks:
     get:
       operationId: kycProfilesChecks
@@ -5546,21 +5475,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycCheck'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycCheckPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5572,6 +5487,7 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
   /v1/kyc/profiles/{id}/risk-assessments:
     get:
       operationId: kycProfilesRiskAssessments
@@ -5596,21 +5512,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycRiskAssessment'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycRiskAssessmentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5622,6 +5524,7 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_profile
   /v1/kyc/documents:
     get:
       operationId: kycDocumentsList
@@ -5711,21 +5614,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycDocument'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycDocumentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5735,6 +5624,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_document
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: kycDocumentsCreate
       summary: Create kyc document
@@ -5771,6 +5663,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_document
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/documents/{id}:
     get:
       operationId: kycDocumentsGet
@@ -5805,6 +5700,9 @@ paths:
       - ONB-04
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_document
+      x-crud: true
+      x-crud-get: true
   /v1/kyc/documents/{id}/accept:
     post:
       operationId: kycDocumentsAccept
@@ -5850,6 +5748,7 @@ paths:
       - ONB-04
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_document
   /v1/kyc/documents/{id}/reject:
     post:
       operationId: kycDocumentsReject
@@ -5895,6 +5794,7 @@ paths:
       - ONB-04
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_document
   /v1/kyc/checks:
     get:
       operationId: kycChecksList
@@ -5984,21 +5884,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycCheck'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycCheckPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6007,6 +5893,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_check
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: kycChecksCreate
       summary: Create kyc check
@@ -6042,6 +5931,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_check
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/checks/{id}:
     get:
       operationId: kycChecksGet
@@ -6075,6 +5967,9 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_check
+      x-crud: true
+      x-crud-get: true
   /v1/kyc/checks/{id}/retry:
     post:
       operationId: kycChecksRetry
@@ -6119,6 +6014,7 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_check
   /v1/kyc/checks/provider-callbacks/{provider_code}/events:
     post:
       operationId: kycChecksProviderCallbacksEvents
@@ -6158,6 +6054,7 @@ paths:
       - ONB-02
       - ONB-04
       x-service: kyc-service
+      x-table: kyc_check
   /v1/kyc/screenings:
     get:
       operationId: kycScreeningsList
@@ -6233,21 +6130,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycScreening'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycScreeningPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6256,6 +6139,9 @@ paths:
       - FRM-03
       - ONB-03
       x-service: kyc-service
+      x-table: kyc_screening
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: kycScreeningsCreate
       summary: Create kyc screening
@@ -6291,6 +6177,9 @@ paths:
       - FRM-03
       - ONB-03
       x-service: kyc-service
+      x-table: kyc_screening
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/screenings/{id}:
     get:
       operationId: kycScreeningsGet
@@ -6324,6 +6213,9 @@ paths:
       - FRM-03
       - ONB-03
       x-service: kyc-service
+      x-table: kyc_screening
+      x-crud: true
+      x-crud-get: true
   /v1/kyc/screenings/{id}/disposition:
     post:
       operationId: kycScreeningsDisposition
@@ -6368,6 +6260,7 @@ paths:
       - FRM-03
       - ONB-03
       x-service: kyc-service
+      x-table: kyc_screening
   /v1/kyc/risk-assessments:
     get:
       operationId: kycRiskAssessmentsList
@@ -6432,21 +6325,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycRiskAssessment'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycRiskAssessmentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6455,6 +6334,9 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_risk_assessment
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: kycRiskAssessmentsCreate
       summary: Create kyc risk assessment
@@ -6490,6 +6372,9 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_risk_assessment
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/risk-assessments/{id}:
     get:
       operationId: kycRiskAssessmentsGet
@@ -6523,6 +6408,9 @@ paths:
       - ONB-05
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_risk_assessment
+      x-crud: true
+      x-crud-get: true
   /v1/kyc/reviews:
     get:
       operationId: kycReviewsList
@@ -6611,21 +6499,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/KycReview'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/KycReviewPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6633,6 +6507,9 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: kycReviewsCreate
       summary: Create kyc review
@@ -6667,6 +6544,9 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-create: true
   /v1/kyc/reviews/{id}:
     get:
       operationId: kycReviewsGet
@@ -6700,6 +6580,9 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: kycReviewsUpdate
       summary: Update kyc review
@@ -6737,6 +6620,9 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-update: true
   /v1/kyc/reviews/{id}/assign:
     post:
       operationId: kycReviewsAssign
@@ -6780,6 +6666,7 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
   /v1/kyc/reviews/{id}/request-update:
     post:
       operationId: kycReviewsRequestUpdate
@@ -6823,6 +6710,7 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
   /v1/kyc/reviews/{id}/complete:
     post:
       operationId: kycReviewsComplete
@@ -6866,6 +6754,7 @@ paths:
       x-requirements:
       - ONB-06
       x-service: kyc-service
+      x-table: kyc_review
 components:
   parameters:
     CreatedAfter:
@@ -6988,6 +6877,24 @@ components:
       - status
       - code
       type: object
+    CustomerPage:
+      type: object
+      description: One page of Customer results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomersSuspendRequest:
       type: object
       properties:
@@ -7052,6 +6959,42 @@ components:
       required:
       - to_tier
       - reason
+    CustomerKycTierHistoryPage:
+      type: object
+      description: One page of CustomerKycTierHistory results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerKycTierHistory'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomerRelationshipPage:
+      type: object
+      description: One page of CustomerRelationship results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerRelationship'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomersDuplicatesCheckRequest:
       type: object
       properties:
@@ -7078,6 +7021,60 @@ components:
         registration_number:
           type: string
           maxLength: 64
+    CustomerIdentifierPage:
+      type: object
+      description: One page of CustomerIdentifier results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerIdentifier'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomerAddressPage:
+      type: object
+      description: One page of CustomerAddress results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerAddress'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomerContactPage:
+      type: object
+      description: One page of CustomerContact results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerContact'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomerContactsVerifyRequest:
       type: object
       properties:
@@ -7086,6 +7083,42 @@ components:
           maxLength: 10
       required:
       - code
+    CustomerGroupPage:
+      type: object
+      description: One page of CustomerGroup results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerGroup'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomerGroupMemberPage:
+      type: object
+      description: One page of CustomerGroupMember results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerGroupMember'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomerGroupsMembersRequest:
       type: object
       properties:
@@ -7101,6 +7134,60 @@ components:
       required:
       - customer_id
       - joined_on
+    CustomerSegmentPage:
+      type: object
+      description: One page of CustomerSegment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSegment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomerSegmentAssignmentPage:
+      type: object
+      description: One page of CustomerSegmentAssignment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerSegmentAssignment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomerDevicePage:
+      type: object
+      description: One page of CustomerDevice results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerDevice'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomerDevicesTrustRequest:
       type: object
       properties:
@@ -7117,6 +7204,24 @@ components:
           maxLength: 255
       required:
       - reason
+    CustomerCredentialPage:
+      type: object
+      description: One page of CustomerCredential results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerCredential'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomerCredentialsPasskeysRegistrationOptionsRequest:
       type: object
       properties:
@@ -7161,6 +7266,24 @@ components:
           maxLength: 255
       required:
       - reason
+    ConsentPage:
+      type: object
+      description: One page of Consent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Consent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ConsentsWithdrawRequest:
       type: object
       properties:
@@ -7178,6 +7301,24 @@ components:
           additionalProperties: true
       required:
       - expires_at
+    PrivacyRequestPage:
+      type: object
+      description: One page of PrivacyRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrivacyRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     PrivacyRequestsVerifyIdentityRequest:
       type: object
       properties:
@@ -7194,6 +7335,24 @@ components:
           maxLength: 255
       required:
       - reason
+    OnboardingJourneyPage:
+      type: object
+      description: One page of OnboardingJourney results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingJourney'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     OnboardingJourneysRetireRequest:
       type: object
       properties:
@@ -7208,6 +7367,24 @@ components:
           additionalProperties: true
       required:
       - sample_data
+    OnboardingApplicationPage:
+      type: object
+      description: One page of OnboardingApplication results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingApplication'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     OnboardingApplicationsStepsRequest:
       type: object
       properties:
@@ -7216,6 +7393,24 @@ components:
           additionalProperties: true
       required:
       - input
+    OnboardingStepPage:
+      type: object
+      description: One page of OnboardingStep results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingStep'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     OnboardingApplicationsApproveRequest:
       type: object
       properties:
@@ -7241,6 +7436,60 @@ components:
           additionalProperties: true
       required:
       - message
+    OnboardingOfflineBatchPage:
+      type: object
+      description: One page of OnboardingOfflineBatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnboardingOfflineBatch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    KycProviderPage:
+      type: object
+      description: One page of KycProvider results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycProvider'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    KycProfilePage:
+      type: object
+      description: One page of KycProfile results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycProfile'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     KycProfilesRequireEddRequest:
       type: object
       properties:
@@ -7256,6 +7505,60 @@ components:
           type: string
       required:
       - notes
+    KycCheckPage:
+      type: object
+      description: One page of KycCheck results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycCheck'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    KycRiskAssessmentPage:
+      type: object
+      description: One page of KycRiskAssessment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycRiskAssessment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    KycDocumentPage:
+      type: object
+      description: One page of KycDocument results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycDocument'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     KycDocumentsAcceptRequest:
       type: object
       properties:
@@ -7283,6 +7586,24 @@ components:
           additionalProperties: true
       required:
       - payload
+    KycScreeningPage:
+      type: object
+      description: One page of KycScreening results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycScreening'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     KycScreeningsDispositionRequest:
       type: object
       properties:
@@ -7299,6 +7620,24 @@ components:
       required:
       - status
       - review_comment
+    KycReviewPage:
+      type: object
+      description: One page of KycReview results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycReview'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     KycReviewsAssignRequest:
       type: object
       properties:
@@ -7801,7 +8140,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared annual income
         income_currency:
           type:
@@ -7892,7 +8232,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared annual turnover
         is_pep:
           type: boolean
@@ -8163,7 +8504,8 @@ components:
         annual_income:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared annual income
         income_currency:
           type: string
@@ -8224,7 +8566,8 @@ components:
         annual_turnover:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared annual turnover
         is_staff:
           type: boolean
@@ -8423,7 +8766,8 @@ components:
         annual_income:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared annual income
         income_currency:
           type: string
@@ -8484,7 +8828,8 @@ components:
         annual_turnover:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Declared annual turnover
         is_staff:
           type: boolean
@@ -8638,14 +8983,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Geocoded latitude
         longitude:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Geocoded longitude
         is_primary:
           type: boolean
@@ -8766,12 +9113,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Geocoded latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Geocoded longitude
         is_primary:
           type: boolean
@@ -8863,12 +9212,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Geocoded latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Geocoded longitude
         is_primary:
           type: boolean
@@ -9716,7 +10067,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Group credit exposure limit (connected-exposure groups)
         exposure_currency:
           type:
@@ -9792,7 +10144,8 @@ components:
         exposure_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Group credit exposure limit (connected-exposure groups)
         exposure_currency:
           type: string
@@ -9850,7 +10203,8 @@ components:
         exposure_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Group credit exposure limit (connected-exposure groups)
         exposure_currency:
           type: string
@@ -10435,14 +10789,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Direct ownership share 0..100 (shareholders and UBOs)
         indirect_ownership_percentage:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Indirect ownership share through chains
         control_type:
           type:
@@ -10467,7 +10823,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount this signatory may approve alone
         limit_currency:
           type:
@@ -10570,12 +10927,14 @@ components:
         ownership_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Direct ownership share 0..100 (shareholders and UBOs)
         indirect_ownership_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Indirect ownership share through chains
         control_type:
           type: string
@@ -10592,7 +10951,8 @@ components:
         signing_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount this signatory may approve alone
         limit_currency:
           type: string
@@ -10670,12 +11030,14 @@ components:
         ownership_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Direct ownership share 0..100 (shareholders and UBOs)
         indirect_ownership_percentage:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Indirect ownership share through chains
         control_type:
           type: string
@@ -10692,7 +11054,8 @@ components:
         signing_limit:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Maximum amount this signatory may approve alone
         limit_currency:
           type: string
@@ -11170,7 +11533,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Provider score / confidence 0..1
         result_summary:
           type:
@@ -11205,7 +11569,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Provider cost of the check
         cost_currency:
           type:
@@ -11302,7 +11667,8 @@ components:
         score:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Provider score / confidence 0..1
         result_summary:
           type: string
@@ -11327,7 +11693,8 @@ components:
         cost:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Provider cost of the check
         cost_currency:
           type: string

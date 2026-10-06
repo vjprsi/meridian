@@ -1,0 +1,2635 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    OnboardingApplication:
+      description: One customer's run through an onboarding journey
+      properties:
+        agent_id:
+          description: Agent assisting (agent channel)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        application_number:
+          description: Human-readable reference
+          maxLength: 32
+          type: string
+        branch_id:
+          description: Branch (branch channel)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        channel:
+          description: Channel
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+          type: string
+        collected_data:
+          additionalProperties: true
+          description: Data captured so far (encrypted)
+          type:
+          - object
+          - 'null'
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_product_refs:
+          additionalProperties: true
+          description: Accounts / wallets / cards opened on approval
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        current_step:
+          description: Code of the current step
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer created or matched
+          format: uuid
+          type:
+          - string
+          - 'null'
+        decision:
+          description: Automated decision
+          enum:
+          - AUTO_APPROVE
+          - REFER
+          - REJECT
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        decision_reasons:
+          additionalProperties: true
+          description: Rule outcomes and reason codes
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        device_fingerprint:
+          description: Device used
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        email:
+          description: Email used to start the application
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Expiry of an idle application
+          format: date-time
+          type:
+          - string
+          - 'null'
+        geo_location:
+          additionalProperties: true
+          description: Coarse location at start
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ip_address:
+          description: IP address at start (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        onboarding_journey_id:
+          description: Journey version
+          format: uuid
+          type: string
+        phone:
+          description: Phone used to start the application (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        product_ids:
+          additionalProperties: true
+          description: Products requested
+          type:
+          - object
+          - 'null'
+        progress_percent:
+          description: Completion percentage
+          format: int32
+          readOnly: true
+          type: integer
+        rejection_reason:
+          description: Reason when rejected
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        reviewed_at:
+          description: Review time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        reviewer_id:
+          description: Manual reviewer
+          format: uuid
+          type:
+          - string
+          - 'null'
+        risk_level:
+          description: Risk level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        risk_score:
+          description: Onboarding risk score 0..1000
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        staff_user_id:
+          description: Staff member assisting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - STARTED
+          - IN_PROGRESS
+          - SUBMITTED
+          - UNDER_REVIEW
+          - REFERRED
+          - APPROVED
+          - REJECTED
+          - ABANDONED
+          - EXPIRED
+          type: string
+        submitted_at:
+          description: Submission time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        utm:
+          additionalProperties: true
+          description: Marketing attribution
+          type:
+          - object
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - application_number
+      - onboarding_journey_id
+      - status
+      - channel
+      - progress_percent
+      type: object
+    OnboardingApplicationCreate:
+      properties:
+        agent_id:
+          description: Agent assisting (agent channel)
+          format: uuid
+          type: string
+        application_number:
+          description: Human-readable reference
+          maxLength: 32
+          type: string
+        branch_id:
+          description: Branch (branch channel)
+          format: uuid
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+          type: string
+        collected_data:
+          additionalProperties: true
+          description: Data captured so far (encrypted)
+          type: object
+        current_step:
+          description: Code of the current step
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer created or matched
+          format: uuid
+          type: string
+        device_fingerprint:
+          description: Device used
+          maxLength: 128
+          type: string
+        email:
+          description: Email used to start the application
+          format: email
+          maxLength: 320
+          type: string
+        expires_at:
+          description: Expiry of an idle application
+          format: date-time
+          type: string
+        geo_location:
+          additionalProperties: true
+          description: Coarse location at start
+          type: object
+        ip_address:
+          description: IP address at start (IPv4 or IPv6 address)
+          type: string
+        onboarding_journey_id:
+          description: Journey version
+          format: uuid
+          type: string
+        phone:
+          description: Phone used to start the application (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        product_ids:
+          additionalProperties: true
+          description: Products requested
+          type: object
+        reviewer_id:
+          description: Manual reviewer
+          format: uuid
+          type: string
+        staff_user_id:
+          description: Staff member assisting
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - STARTED
+          - IN_PROGRESS
+          - SUBMITTED
+          - UNDER_REVIEW
+          - REFERRED
+          - APPROVED
+          - REJECTED
+          - ABANDONED
+          - EXPIRED
+          type: string
+        utm:
+          additionalProperties: true
+          description: Marketing attribution
+          type: object
+      required:
+      - application_number
+      - onboarding_journey_id
+      - channel
+      type: object
+    OnboardingApplicationPage:
+      description: One page of OnboardingApplication results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/OnboardingApplication'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    OnboardingApplicationUpdate:
+      properties:
+        agent_id:
+          description: Agent assisting (agent channel)
+          format: uuid
+          type: string
+        application_number:
+          description: Human-readable reference
+          maxLength: 32
+          type: string
+        branch_id:
+          description: Branch (branch channel)
+          format: uuid
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+          type: string
+        collected_data:
+          additionalProperties: true
+          description: Data captured so far (encrypted)
+          type: object
+        current_step:
+          description: Code of the current step
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer created or matched
+          format: uuid
+          type: string
+        device_fingerprint:
+          description: Device used
+          maxLength: 128
+          type: string
+        email:
+          description: Email used to start the application
+          format: email
+          maxLength: 320
+          type: string
+        expires_at:
+          description: Expiry of an idle application
+          format: date-time
+          type: string
+        geo_location:
+          additionalProperties: true
+          description: Coarse location at start
+          type: object
+        ip_address:
+          description: IP address at start (IPv4 or IPv6 address)
+          type: string
+        onboarding_journey_id:
+          description: Journey version
+          format: uuid
+          type: string
+        phone:
+          description: Phone used to start the application (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        product_ids:
+          additionalProperties: true
+          description: Products requested
+          type: object
+        reviewer_id:
+          description: Manual reviewer
+          format: uuid
+          type: string
+        staff_user_id:
+          description: Staff member assisting
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - STARTED
+          - IN_PROGRESS
+          - SUBMITTED
+          - UNDER_REVIEW
+          - REFERRED
+          - APPROVED
+          - REJECTED
+          - ABANDONED
+          - EXPIRED
+          type: string
+        utm:
+          additionalProperties: true
+          description: Marketing attribution
+          type: object
+      type: object
+    OnboardingApplicationsApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    OnboardingApplicationsRejectRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    OnboardingApplicationsRequestInfoRequest:
+      properties:
+        message:
+          maxLength: 1000
+          type: string
+        step_codes:
+          additionalProperties: true
+          type: object
+      required:
+      - message
+      type: object
+    OnboardingApplicationsStepsRequest:
+      properties:
+        input:
+          additionalProperties: true
+          type: object
+      required:
+      - input
+      type: object
+    OnboardingJourney:
+      description: Versioned onboarding journey definition built in the no-code flow builder
+      properties:
+        approval_request_id:
+          description: Maker-checker approval for publication
+          format: uuid
+          type:
+          - string
+          - 'null'
+        channels:
+          additionalProperties: true
+          description: Allowed channels
+          type: object
+        code:
+          description: Journey code, e.g. RETAIL_WALLET_KE
+          maxLength: 64
+          type: string
+        country:
+          description: Country the journey applies to (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_type:
+          description: Individual or business journey
+          enum:
+          - INDIVIDUAL
+          - SOLE_TRADER
+          - COMPANY
+          - PARTNERSHIP
+          - TRUST
+          - NON_PROFIT
+          - GOVERNMENT
+          - GROUP
+          type: string
+        decision_rules:
+          additionalProperties: true
+          description: Auto-approve / refer / reject rules
+          type:
+          - object
+          - 'null'
+        definition:
+          additionalProperties: true
+          description: Steps, branching conditions and screens (server-driven UI)
+          type: object
+        expiry_days:
+          description: Days before an idle application expires
+          format: int32
+          type: integer
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Journey name
+          maxLength: 160
+          type: string
+        product_ids:
+          additionalProperties: true
+          description: Products that can be opened at the end of the journey
+          type:
+          - object
+          - 'null'
+        published_at:
+          description: Publication time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - RETIRED
+          type: string
+        target_tier:
+          description: KYC tier granted on approval
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version:
+          description: Version number
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - version
+      - name
+      - status
+      - customer_type
+      - channels
+      - target_tier
+      - definition
+      - expiry_days
+      type: object
+    OnboardingJourneyCreate:
+      properties:
+        approval_request_id:
+          description: Maker-checker approval for publication
+          format: uuid
+          type: string
+        channels:
+          additionalProperties: true
+          description: Allowed channels
+          type: object
+        code:
+          description: Journey code, e.g. RETAIL_WALLET_KE
+          maxLength: 64
+          type: string
+        country:
+          description: Country the journey applies to (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_type:
+          description: Individual or business journey
+          enum:
+          - INDIVIDUAL
+          - SOLE_TRADER
+          - COMPANY
+          - PARTNERSHIP
+          - TRUST
+          - NON_PROFIT
+          - GOVERNMENT
+          - GROUP
+          type: string
+        decision_rules:
+          additionalProperties: true
+          description: Auto-approve / refer / reject rules
+          type: object
+        definition:
+          additionalProperties: true
+          description: Steps, branching conditions and screens (server-driven UI)
+          type: object
+        expiry_days:
+          description: Days before an idle application expires
+          format: int32
+          type: integer
+        name:
+          description: Journey name
+          maxLength: 160
+          type: string
+        product_ids:
+          additionalProperties: true
+          description: Products that can be opened at the end of the journey
+          type: object
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - RETIRED
+          type: string
+        target_tier:
+          description: KYC tier granted on approval
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          type: string
+        version:
+          description: Version number
+          format: int32
+          type: integer
+      required:
+      - code
+      - name
+      - customer_type
+      - channels
+      - target_tier
+      - definition
+      type: object
+    OnboardingJourneyPage:
+      description: One page of OnboardingJourney results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/OnboardingJourney'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    OnboardingJourneyUpdate:
+      properties:
+        approval_request_id:
+          description: Maker-checker approval for publication
+          format: uuid
+          type: string
+        channels:
+          additionalProperties: true
+          description: Allowed channels
+          type: object
+        code:
+          description: Journey code, e.g. RETAIL_WALLET_KE
+          maxLength: 64
+          type: string
+        country:
+          description: Country the journey applies to (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_type:
+          description: Individual or business journey
+          enum:
+          - INDIVIDUAL
+          - SOLE_TRADER
+          - COMPANY
+          - PARTNERSHIP
+          - TRUST
+          - NON_PROFIT
+          - GOVERNMENT
+          - GROUP
+          type: string
+        decision_rules:
+          additionalProperties: true
+          description: Auto-approve / refer / reject rules
+          type: object
+        definition:
+          additionalProperties: true
+          description: Steps, branching conditions and screens (server-driven UI)
+          type: object
+        expiry_days:
+          description: Days before an idle application expires
+          format: int32
+          type: integer
+        name:
+          description: Journey name
+          maxLength: 160
+          type: string
+        product_ids:
+          additionalProperties: true
+          description: Products that can be opened at the end of the journey
+          type: object
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - RETIRED
+          type: string
+        target_tier:
+          description: KYC tier granted on approval
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          type: string
+        version:
+          description: Version number
+          format: int32
+          type: integer
+      type: object
+    OnboardingJourneysRetireRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    OnboardingJourneysSimulateRequest:
+      properties:
+        sample_data:
+          additionalProperties: true
+          type: object
+      required:
+      - sample_data
+      type: object
+    OnboardingOfflineBatch:
+      description: Batch of applications captured offline by an agent device and synced later
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        application_count:
+          description: Applications in the batch
+          format: int32
+          type: integer
+        captured_from:
+          description: Earliest capture time in the batch
+          format: date-time
+          type: string
+        captured_to:
+          description: Latest capture time in the batch
+          format: date-time
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        device_fingerprint:
+          description: Agent device
+          maxLength: 128
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        payload_signature:
+          description: Device signature of the payload
+          maxLength: 512
+          type: string
+        payload_uri:
+          description: Encrypted payload location
+          maxLength: 500
+          type: string
+        processed_at:
+          description: Processing time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        result:
+          additionalProperties: true
+          description: Per-application outcome and conflicts
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Sync status
+          enum:
+          - RECEIVED
+          - VALIDATING
+          - APPLIED
+          - CONFLICT
+          - REJECTED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - agent_id
+      - device_fingerprint
+      - captured_from
+      - captured_to
+      - application_count
+      - payload_uri
+      - payload_signature
+      - status
+      type: object
+    OnboardingOfflineBatchCreate:
+      properties:
+        agent_id:
+          description: Agent
+          format: uuid
+          type: string
+        application_count:
+          description: Applications in the batch
+          format: int32
+          type: integer
+        captured_from:
+          description: Earliest capture time in the batch
+          format: date-time
+          type: string
+        captured_to:
+          description: Latest capture time in the batch
+          format: date-time
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        device_fingerprint:
+          description: Agent device
+          maxLength: 128
+          type: string
+        payload_signature:
+          description: Device signature of the payload
+          maxLength: 512
+          type: string
+        payload_uri:
+          description: Encrypted payload location
+          maxLength: 500
+          type: string
+      required:
+      - agent_id
+      - device_fingerprint
+      - captured_from
+      - captured_to
+      - application_count
+      - payload_uri
+      - payload_signature
+      type: object
+    OnboardingOfflineBatchPage:
+      description: One page of OnboardingOfflineBatch results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/OnboardingOfflineBatch'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    OnboardingStep:
+      description: Execution state of one step of an application
+      properties:
+        attempts:
+          description: Attempts
+          format: int32
+          type: integer
+        completed_at:
+          description: Completion
+          format: date-time
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        error:
+          description: Last error
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        input:
+          additionalProperties: true
+          description: Data submitted for the step
+          type:
+          - object
+          - 'null'
+        onboarding_application_id:
+          description: Application
+          format: uuid
+          type: string
+        output:
+          additionalProperties: true
+          description: Results, e.g. check ids and outcomes
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sequence:
+          description: Order
+          format: int32
+          type: integer
+        started_at:
+          description: Start
+          format: date-time
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - COMPLETED
+          - FAILED
+          - SKIPPED
+          - WAITING_REVIEW
+          type: string
+        step_code:
+          description: Step code from the journey definition
+          maxLength: 64
+          type: string
+        step_type:
+          description: Step type
+          enum:
+          - PHONE_VERIFICATION
+          - EMAIL_VERIFICATION
+          - PERSONAL_DETAILS
+          - BUSINESS_DETAILS
+          - ADDRESS
+          - DOCUMENT_CAPTURE
+          - SELFIE_LIVENESS
+          - SCREENING
+          - RISK_ASSESSMENT
+          - UBO_DECLARATION
+          - TAX_DECLARATION
+          - PRODUCT_SELECTION
+          - TERMS_ACCEPTANCE
+          - SIGNATURE
+          - CREDENTIAL_SETUP
+          - MANUAL_REVIEW
+          - CUSTOM
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - onboarding_application_id
+      - step_code
+      - step_type
+      - sequence
+      - status
+      - attempts
+      type: object
+    OnboardingStepPage:
+      description: One page of OnboardingStep results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/OnboardingStep'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            party:read: Read Customer and Onboarding
+            party:write: Change Customer and Onboarding
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            party:read: Read Customer and Onboarding
+            party:write: Change Customer and Onboarding
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Single customer view for individuals and businesses (CIF), relationships and UBOs, tiered KYC, devices and
+    credentials, consent and privacy, configurable onboarding journeys, and KYC/KYB checks through pluggable providers.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — onboarding-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/onboarding/journeys:
+    get:
+      operationId: onboardingJourneysList
+      summary: List onboarding journeys
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - RETIRED
+      - name: customer_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - INDIVIDUAL
+          - SOLE_TRADER
+          - COMPANY
+          - PARTNERSHIP
+          - TRUST
+          - NON_PROFIT
+          - GOVERNMENT
+          - GROUP
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourneyPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: onboardingJourneysCreate
+      summary: Create onboarding journey
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourney'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingJourneyCreate'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-create: true
+  /v1/onboarding/journeys/{id}:
+    get:
+      operationId: onboardingJourneysGet
+      summary: Retrieve onboarding journey
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourney'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: onboardingJourneysUpdate
+      summary: Update onboarding journey
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourney'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingJourneyUpdate'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+      x-crud: true
+      x-crud-update: true
+  /v1/onboarding/journeys/{id}/publish:
+    post:
+      operationId: onboardingJourneysPublish
+      summary: Submit the journey for approval and publish
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourney'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+  /v1/onboarding/journeys/{id}/retire:
+    post:
+      operationId: onboardingJourneysRetire
+      summary: Retire a journey version
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourney'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingJourneysRetireRequest'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+  /v1/onboarding/journeys/{id}/new-version:
+    post:
+      operationId: onboardingJourneysNewVersion
+      summary: Create a draft copy as the next version
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingJourney'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+  /v1/onboarding/journeys/{id}/simulate:
+    post:
+      operationId: onboardingJourneysSimulate
+      summary: Dry-run the journey with sample data
+      tags:
+      - Onboarding Journeys
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingJourneysSimulateRequest'
+      x-requirements:
+      - ONB-01
+      x-service: onboarding-service
+      x-table: onboarding_journey
+  /v1/onboarding/applications:
+    get:
+      operationId: onboardingApplicationsList
+      summary: List onboarding applications
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: onboarding_journey_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - STARTED
+          - IN_PROGRESS
+          - SUBMITTED
+          - UNDER_REVIEW
+          - REFERRED
+          - APPROVED
+          - REJECTED
+          - ABANDONED
+          - EXPIRED
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: branch_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: decision
+        in: query
+        schema:
+          type: string
+          enum:
+          - AUTO_APPROVE
+          - REFER
+          - REJECT
+      - name: risk_level
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplicationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: onboardingApplicationsCreate
+      summary: Create onboarding application
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicationCreate'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-create: true
+  /v1/onboarding/applications/{id}:
+    get:
+      operationId: onboardingApplicationsGet
+      summary: Retrieve onboarding application
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: onboardingApplicationsUpdate
+      summary: Update onboarding application
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicationUpdate'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+      x-crud: true
+      x-crud-update: true
+  /v1/onboarding/applications/{id}/next-step:
+    get:
+      operationId: onboardingApplicationsNextStep
+      summary: The next step to render (server-driven UI)
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/steps/{step_code}:
+    post:
+      operationId: onboardingApplicationsSteps
+      summary: Submit data for a step
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: step_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicationsStepsRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/steps:
+    get:
+      operationId: onboardingApplicationsGetSteps
+      summary: All steps and their states
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingStepPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/submit:
+    post:
+      operationId: onboardingApplicationsSubmit
+      summary: Submit the application for decision
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/approve:
+    post:
+      operationId: onboardingApplicationsApprove
+      summary: Approve a referred application (checker)
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicationsApproveRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/reject:
+    post:
+      operationId: onboardingApplicationsReject
+      summary: Reject the application
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicationsRejectRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/request-info:
+    post:
+      operationId: onboardingApplicationsRequestInfo
+      summary: Ask the applicant for more information
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingApplicationsRequestInfoRequest'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/abandon:
+    post:
+      operationId: onboardingApplicationsAbandon
+      summary: Mark as abandoned
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingApplication'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/applications/{id}/resume:
+    post:
+      operationId: onboardingApplicationsResume
+      summary: Send a resume link to the applicant
+      tags:
+      - Onboarding Applications
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-01
+      - ONB-05
+      x-service: onboarding-service
+      x-table: onboarding_application
+  /v1/onboarding/offline-batches:
+    get:
+      operationId: onboardingOfflineBatchesList
+      summary: List onboarding offline batches
+      tags:
+      - Onboarding Offline Batches
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RECEIVED
+          - VALIDATING
+          - APPLIED
+          - CONFLICT
+          - REJECTED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOfflineBatchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-07
+      x-service: onboarding-service
+      x-table: onboarding_offline_batch
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: onboardingOfflineBatchesCreate
+      summary: Create onboarding offline batche
+      tags:
+      - Onboarding Offline Batches
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOfflineBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingOfflineBatchCreate'
+      x-requirements:
+      - ONB-07
+      x-service: onboarding-service
+      x-table: onboarding_offline_batch
+      x-crud: true
+      x-crud-create: true
+  /v1/onboarding/offline-batches/{id}:
+    get:
+      operationId: onboardingOfflineBatchesGet
+      summary: Retrieve onboarding offline batche
+      tags:
+      - Onboarding Offline Batches
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOfflineBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-07
+      x-service: onboarding-service
+      x-table: onboarding_offline_batch
+      x-crud: true
+      x-crud-get: true
+  /v1/onboarding/offline-batches/{id}/reprocess:
+    post:
+      operationId: onboardingOfflineBatchesReprocess
+      summary: Reprocess a batch after resolving conflicts
+      tags:
+      - Onboarding Offline Batches
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnboardingOfflineBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-07
+      x-service: onboarding-service
+      x-table: onboarding_offline_batch
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Versioned onboarding journey definition built in the no-code flow builder
+  name: Onboarding Journeys
+- description: One customer's run through an onboarding journey
+  name: Onboarding Applications
+- description: Batch of applications captured offline by an agent device and synced later
+  name: Onboarding Offline Batches

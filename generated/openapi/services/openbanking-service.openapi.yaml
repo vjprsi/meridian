@@ -1,0 +1,3803 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    ObAccessLog:
+      description: Every TPP API call under a consent, for audit, regulatory reporting and customer dashboards. Append-only.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type:
+          - string
+          - 'null'
+        endpoint:
+          description: Standard endpoint called
+          maxLength: 255
+          type: string
+        http_method:
+          description: HTTP method
+          maxLength: 8
+          type: string
+        http_status:
+          description: Response status
+          format: int32
+          type: integer
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interaction_id:
+          description: x-fapi-interaction-id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        latency_ms:
+          description: Response time
+          format: int32
+          type:
+          - integer
+          - 'null'
+        ob_consent_id:
+          description: Consent
+          format: uuid
+          type:
+          - string
+          - 'null'
+        psu_ip_address:
+          description: Customer IP when present (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        psu_present:
+          description: Customer present (PSU-IP-Address supplied)
+          type: boolean
+        records_returned:
+          description: Records returned
+          format: int32
+          type:
+          - integer
+          - 'null'
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - tpp_id
+      - endpoint
+      - http_method
+      - http_status
+      - psu_present
+      type: object
+    ObAccessLogPage:
+      description: One page of ObAccessLog results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ObAccessLog'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ObAuthorisation:
+      description: SCA authorisation session for a consent (redirect, decoupled or embedded)
+      properties:
+        authentication_method:
+          description: Method used (passkey, app push, OTP)
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        code_challenge:
+          description: PKCE code challenge
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Authenticated customer
+          format: uuid
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Session expiry
+          format: date-time
+          type: string
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ob_consent_id:
+          description: Consent being authorised
+          format: uuid
+          type: string
+        redirect_uri:
+          description: TPP redirect URI
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sca_approach:
+          description: REDIRECT, DECOUPLED, EMBEDDED
+          maxLength: 16
+          type: string
+        state:
+          description: OAuth state
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - STARTED
+          - SCA_REQUIRED
+          - AUTHENTICATED
+          - ACCOUNTS_SELECTED
+          - FINALISED
+          - FAILED
+          - EXPIRED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ob_consent_id
+      - sca_approach
+      - status
+      - expires_at
+      type: object
+    ObAuthorisationsDenyRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    ObAuthorisationsSelectAccountsRequest:
+      properties:
+        account_ids:
+          additionalProperties: true
+          type: object
+      required:
+      - account_ids
+      type: object
+    ObConsent:
+      description: Customer consent given to a TPP for account information, payment initiation or funds confirmation
+      properties:
+        authorised_at:
+          description: Authorisation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        consent_type:
+          description: Consent type
+          enum:
+          - AIS
+          - PIS
+          - CBPII
+          - VRP
+          - FDX_DATA
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer who authorised (set on authorisation)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        external_consent_id:
+          description: Consent id exposed to the TPP
+          maxLength: 128
+          type: string
+        frequency_per_day:
+          description: Allowed unattended accesses per day (Berlin Group)
+          format: int32
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_accessed_at:
+          description: Last access by the TPP
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        ob_standard_profile_id:
+          description: Standard used
+          format: uuid
+          type: string
+        permissions:
+          additionalProperties: true
+          description: Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)
+          type: object
+        recurring:
+          description: Recurring access
+          type: boolean
+        revoked_at:
+          description: Revocation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        revoked_by:
+          description: CUSTOMER, TPP or ASPSP
+          maxLength: 16
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        risk:
+          additionalProperties: true
+          description: Payment context / risk indicators supplied by the TPP
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - AWAITING_AUTHORISATION
+          - AUTHORISED
+          - REJECTED
+          - REVOKED
+          - EXPIRED
+          - CONSUMED
+          readOnly: true
+          type: string
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+        transaction_from:
+          description: Earliest transaction date visible
+          format: date-time
+          type:
+          - string
+          - 'null'
+        transaction_to:
+          description: Latest transaction date visible
+          format: date-time
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        vrp_control_parameters:
+          additionalProperties: true
+          description: Variable recurring payment limits (VRP)
+          type:
+          - object
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - tpp_id
+      - ob_standard_profile_id
+      - consent_type
+      - external_consent_id
+      - permissions
+      - recurring
+      - status
+      type: object
+    ObConsentAccount:
+      description: Account selected by the customer under a consent
+      properties:
+        account_id:
+          description: Account
+          format: uuid
+          type: string
+        account_resource_id:
+          description: Account id exposed to the TPP
+          maxLength: 128
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ob_consent_id:
+          description: Consent
+          format: uuid
+          type: string
+        permissions:
+          additionalProperties: true
+          description: Account-level permission overrides
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ob_consent_id
+      - account_id
+      - account_resource_id
+      type: object
+    ObConsentAccountPage:
+      description: One page of ObConsentAccount results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ObConsentAccount'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ObConsentCreate:
+      properties:
+        consent_type:
+          description: Consent type
+          enum:
+          - AIS
+          - PIS
+          - CBPII
+          - VRP
+          - FDX_DATA
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer who authorised (set on authorisation)
+          format: uuid
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          type: string
+        external_consent_id:
+          description: Consent id exposed to the TPP
+          maxLength: 128
+          type: string
+        frequency_per_day:
+          description: Allowed unattended accesses per day (Berlin Group)
+          format: int32
+          type: integer
+        ob_standard_profile_id:
+          description: Standard used
+          format: uuid
+          type: string
+        permissions:
+          additionalProperties: true
+          description: Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)
+          type: object
+        recurring:
+          description: Recurring access
+          type: boolean
+        risk:
+          additionalProperties: true
+          description: Payment context / risk indicators supplied by the TPP
+          type: object
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+        transaction_from:
+          description: Earliest transaction date visible
+          format: date-time
+          type: string
+        transaction_to:
+          description: Latest transaction date visible
+          format: date-time
+          type: string
+        vrp_control_parameters:
+          additionalProperties: true
+          description: Variable recurring payment limits (VRP)
+          type: object
+      required:
+      - tpp_id
+      - ob_standard_profile_id
+      - consent_type
+      - external_consent_id
+      - permissions
+      type: object
+    ObConsentPage:
+      description: One page of ObConsent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ObConsent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ObConsentsAuthoriseRequest:
+      properties:
+        code_challenge:
+          maxLength: 128
+          type: string
+        redirect_uri:
+          maxLength: 500
+          type: string
+        sca_approach:
+          maxLength: 16
+          type: string
+        state:
+          maxLength: 255
+          type: string
+      required:
+      - sca_approach
+      type: object
+    ObConsentsRevokeRequest:
+      properties:
+        revoked_by:
+          maxLength: 16
+          type: string
+      required:
+      - revoked_by
+      type: object
+    ObFundsConfirmation:
+      description: Confirmation of funds check by a CBPII. Append-only.
+      properties:
+        account_id:
+          description: Account checked
+          format: uuid
+          type: string
+        amount:
+          description: Amount checked
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        funds_available:
+          description: Result
+          type: boolean
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ob_consent_id:
+          description: Consent
+          format: uuid
+          type: string
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - ob_consent_id
+      - tpp_id
+      - account_id
+      - amount
+      - currency
+      - funds_available
+      type: object
+    ObFundsConfirmationCreate:
+      properties:
+        account_id:
+          description: Account checked
+          format: uuid
+          type: string
+        amount:
+          description: Amount checked
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        funds_available:
+          description: Result
+          type: boolean
+        ob_consent_id:
+          description: Consent
+          format: uuid
+          type: string
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+      required:
+      - ob_consent_id
+      - tpp_id
+      - account_id
+      - amount
+      - currency
+      - funds_available
+      type: object
+    ObFundsConfirmationPage:
+      description: One page of ObFundsConfirmation results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ObFundsConfirmation'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ObPaymentInitiation:
+      description: Payment initiated by a PISP under a consent; links to the core payment
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        creditor_account:
+          description: Creditor account
+          maxLength: 64
+          type: string
+        creditor_name:
+          description: Creditor name
+          maxLength: 140
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        external_payment_id:
+          description: Payment id exposed to the TPP
+          maxLength: 128
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ob_consent_id:
+          description: Consent
+          format: uuid
+          type: string
+        payment_id:
+          description: Core payment created
+          format: uuid
+          type:
+          - string
+          - 'null'
+        payment_product:
+          description: Product, e.g. domestic-payments, sepa-credit-transfers, instant
+          maxLength: 64
+          type: string
+        remittance_information:
+          description: Remittance information
+          maxLength: 140
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - RECEIVED
+          - PENDING
+          - ACCEPTED
+          - REJECTED
+          - EXECUTED
+          - CANCELLED
+          readOnly: true
+          type: string
+        status_reason:
+          description: Status reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        tpp_id:
+          description: Initiating TPP
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ob_consent_id
+      - tpp_id
+      - external_payment_id
+      - payment_product
+      - amount
+      - currency
+      - creditor_name
+      - creditor_account
+      - status
+      type: object
+    ObPaymentInitiationCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        creditor_account:
+          description: Creditor account
+          maxLength: 64
+          type: string
+        creditor_name:
+          description: Creditor name
+          maxLength: 140
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        external_payment_id:
+          description: Payment id exposed to the TPP
+          maxLength: 128
+          type: string
+        ob_consent_id:
+          description: Consent
+          format: uuid
+          type: string
+        payment_id:
+          description: Core payment created
+          format: uuid
+          type: string
+        payment_product:
+          description: Product, e.g. domestic-payments, sepa-credit-transfers, instant
+          maxLength: 64
+          type: string
+        remittance_information:
+          description: Remittance information
+          maxLength: 140
+          type: string
+        tpp_id:
+          description: Initiating TPP
+          format: uuid
+          type: string
+      required:
+      - ob_consent_id
+      - tpp_id
+      - external_payment_id
+      - payment_product
+      - amount
+      - currency
+      - creditor_name
+      - creditor_account
+      type: object
+    ObPaymentInitiationPage:
+      description: One page of ObPaymentInitiation results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ObPaymentInitiation'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ObPaymentInitiationsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    ObStandardProfile:
+      description: An open banking standard enabled for the tenant, with version and endpoints
+      properties:
+        base_path:
+          description: Public base path for the profile
+          maxLength: 255
+          type: string
+        consent_max_days:
+          description: Maximum AIS consent validity
+          format: int32
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        directory_url:
+          description: Trust directory / registry endpoint
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sca_approaches:
+          additionalProperties: true
+          description: Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)
+          type: object
+        settings:
+          additionalProperties: true
+          description: Profile settings and field mappings
+          type:
+          - object
+          - 'null'
+        standard:
+          description: Standard
+          enum:
+          - UK_OBIE
+          - BERLIN_GROUP
+          - BRAZIL_OPEN_FINANCE
+          - FDX
+          - CDR_AU
+          - SAUDI_OB
+          - CUSTOM
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version:
+          description: Standard version, e.g. 3.1.11, 1.3.12
+          maxLength: 16
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - standard
+      - version
+      - base_path
+      - sca_approaches
+      - consent_max_days
+      - is_active
+      type: object
+    ObStandardProfileCreate:
+      properties:
+        base_path:
+          description: Public base path for the profile
+          maxLength: 255
+          type: string
+        consent_max_days:
+          description: Maximum AIS consent validity
+          format: int32
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        directory_url:
+          description: Trust directory / registry endpoint
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        sca_approaches:
+          additionalProperties: true
+          description: Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)
+          type: object
+        settings:
+          additionalProperties: true
+          description: Profile settings and field mappings
+          type: object
+        standard:
+          description: Standard
+          enum:
+          - UK_OBIE
+          - BERLIN_GROUP
+          - BRAZIL_OPEN_FINANCE
+          - FDX
+          - CDR_AU
+          - SAUDI_OB
+          - CUSTOM
+          type: string
+        version:
+          description: Standard version, e.g. 3.1.11, 1.3.12
+          maxLength: 16
+          type: string
+      required:
+      - standard
+      - version
+      - base_path
+      - sca_approaches
+      type: object
+    ObStandardProfilePage:
+      description: One page of ObStandardProfile results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ObStandardProfile'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ObStandardProfileUpdate:
+      properties:
+        base_path:
+          description: Public base path for the profile
+          maxLength: 255
+          type: string
+        consent_max_days:
+          description: Maximum AIS consent validity
+          format: int32
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        directory_url:
+          description: Trust directory / registry endpoint
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        sca_approaches:
+          additionalProperties: true
+          description: Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)
+          type: object
+        settings:
+          additionalProperties: true
+          description: Profile settings and field mappings
+          type: object
+        standard:
+          description: Standard
+          enum:
+          - UK_OBIE
+          - BERLIN_GROUP
+          - BRAZIL_OPEN_FINANCE
+          - FDX
+          - CDR_AU
+          - SAUDI_OB
+          - CUSTOM
+          type: string
+        version:
+          description: Standard version, e.g. 3.1.11, 1.3.12
+          maxLength: 16
+          type: string
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    Tpp:
+      description: Registered third-party provider (AISP, PISP, CBPII)
+      properties:
+        authorisation_number:
+          description: Regulator authorisation / licence number
+          maxLength: 64
+          type: string
+        client_id:
+          description: OAuth client id issued via dynamic client registration
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        competent_authority:
+          description: National competent authority (e.g. GB-FCA)
+          maxLength: 64
+          type: string
+        contact_email:
+          description: Technical contact
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        country:
+          description: Home country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        directory_id:
+          description: Id in the trust directory
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_verified_at:
+          description: Last regulator / directory check
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        logo_uri:
+          description: Logo shown on the consent screen
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        name:
+          description: TPP legal name
+          maxLength: 140
+          type: string
+        redirect_uris:
+          additionalProperties: true
+          description: Registered redirect URIs
+          type:
+          - object
+          - 'null'
+        roles:
+          additionalProperties: true
+          description: 'PSD2 roles: AISP, PISP, CBPII'
+          type: object
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          type: string
+        trading_name:
+          description: Trading name shown to customers
+          maxLength: 140
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - authorisation_number
+      - competent_authority
+      - country
+      - roles
+      - status
+      type: object
+    TppCertificate:
+      description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+      properties:
+        certificate_type:
+          description: Type
+          enum:
+          - QWAC
+          - QSEAL
+          - OBWAC
+          - OBSEAL
+          - MTLS_CLIENT
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fingerprint_sha256:
+          description: Fingerprint
+          maxLength: 64
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        issuer_dn:
+          description: Issuer
+          maxLength: 500
+          type: string
+        last_ocsp_check_at:
+          description: Last revocation check
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        serial_number:
+          description: Serial number
+          maxLength: 128
+          type: string
+        status:
+          description: Status (OCSP / CRL checked)
+          enum:
+          - VALID
+          - EXPIRED
+          - REVOKED
+          readOnly: true
+          type: string
+        subject_dn:
+          description: Subject distinguished name
+          maxLength: 500
+          type: string
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Not before
+          format: date-time
+          type: string
+        valid_to:
+          description: Not after
+          format: date-time
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - tpp_id
+      - certificate_type
+      - subject_dn
+      - issuer_dn
+      - serial_number
+      - fingerprint_sha256
+      - valid_from
+      - valid_to
+      - status
+      type: object
+    TppCertificateCreate:
+      properties:
+        certificate_type:
+          description: Type
+          enum:
+          - QWAC
+          - QSEAL
+          - OBWAC
+          - OBSEAL
+          - MTLS_CLIENT
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fingerprint_sha256:
+          description: Fingerprint
+          maxLength: 64
+          type: string
+        issuer_dn:
+          description: Issuer
+          maxLength: 500
+          type: string
+        serial_number:
+          description: Serial number
+          maxLength: 128
+          type: string
+        subject_dn:
+          description: Subject distinguished name
+          maxLength: 500
+          type: string
+        tpp_id:
+          description: TPP
+          format: uuid
+          type: string
+        valid_from:
+          description: Not before
+          format: date-time
+          type: string
+        valid_to:
+          description: Not after
+          format: date-time
+          type: string
+      required:
+      - tpp_id
+      - certificate_type
+      - subject_dn
+      - issuer_dn
+      - serial_number
+      - fingerprint_sha256
+      - valid_from
+      - valid_to
+      type: object
+    TppCertificatePage:
+      description: One page of TppCertificate results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TppCertificate'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TppCreate:
+      properties:
+        authorisation_number:
+          description: Regulator authorisation / licence number
+          maxLength: 64
+          type: string
+        client_id:
+          description: OAuth client id issued via dynamic client registration
+          maxLength: 128
+          type: string
+        competent_authority:
+          description: National competent authority (e.g. GB-FCA)
+          maxLength: 64
+          type: string
+        contact_email:
+          description: Technical contact
+          format: email
+          maxLength: 320
+          type: string
+        country:
+          description: Home country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        directory_id:
+          description: Id in the trust directory
+          maxLength: 128
+          type: string
+        logo_uri:
+          description: Logo shown on the consent screen
+          maxLength: 500
+          type: string
+        name:
+          description: TPP legal name
+          maxLength: 140
+          type: string
+        redirect_uris:
+          additionalProperties: true
+          description: Registered redirect URIs
+          type: object
+        roles:
+          additionalProperties: true
+          description: 'PSD2 roles: AISP, PISP, CBPII'
+          type: object
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          type: string
+        trading_name:
+          description: Trading name shown to customers
+          maxLength: 140
+          type: string
+      required:
+      - name
+      - authorisation_number
+      - competent_authority
+      - country
+      - roles
+      type: object
+    TppPage:
+      description: One page of Tpp results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Tpp'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TppUpdate:
+      properties:
+        authorisation_number:
+          description: Regulator authorisation / licence number
+          maxLength: 64
+          type: string
+        client_id:
+          description: OAuth client id issued via dynamic client registration
+          maxLength: 128
+          type: string
+        competent_authority:
+          description: National competent authority (e.g. GB-FCA)
+          maxLength: 64
+          type: string
+        contact_email:
+          description: Technical contact
+          format: email
+          maxLength: 320
+          type: string
+        country:
+          description: Home country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        directory_id:
+          description: Id in the trust directory
+          maxLength: 128
+          type: string
+        logo_uri:
+          description: Logo shown on the consent screen
+          maxLength: 500
+          type: string
+        name:
+          description: TPP legal name
+          maxLength: 140
+          type: string
+        redirect_uris:
+          additionalProperties: true
+          description: Registered redirect URIs
+          type: object
+        roles:
+          additionalProperties: true
+          description: 'PSD2 roles: AISP, PISP, CBPII'
+          type: object
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          type: string
+        trading_name:
+          description: Trading name shown to customers
+          maxLength: 140
+          type: string
+      type: object
+    TppsRegisterRequest:
+      properties:
+        software_statement:
+          type: string
+      required:
+      - software_statement
+      type: object
+    TppsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            openbanking:read: Read Open Banking
+            openbanking:write: Change Open Banking
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            openbanking:read: Read Open Banking
+            openbanking:write: Change Open Banking
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Regulated third-party access (ASPSP side). Registers and certifies TPPs, manages AIS / PIS / CBPII / VRP consents
+    and their SCA authorisation, logs every data access, and exposes standard profiles (UK OBIE, Berlin Group NextGenPSD2,
+    Brazil Open Finance, FDX, CDR) mapped onto Meridian core APIs.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — openbanking-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/open-banking/profiles:
+    get:
+      operationId: obStandardProfilesList
+      summary: List ob standard profiles
+      tags:
+      - Ob Standard Profiles
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: standard
+        in: query
+        schema:
+          type: string
+          enum:
+          - UK_OBIE
+          - BERLIN_GROUP
+          - BRAZIL_OPEN_FINANCE
+          - FDX
+          - CDR_AU
+          - SAUDI_OB
+          - CUSTOM
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObStandardProfilePage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_standard_profile
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: obStandardProfilesCreate
+      summary: Create ob standard profile
+      tags:
+      - Ob Standard Profiles
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObStandardProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObStandardProfileCreate'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_standard_profile
+      x-crud: true
+      x-crud-create: true
+  /v1/open-banking/profiles/{id}:
+    get:
+      operationId: obStandardProfilesGet
+      summary: Retrieve ob standard profile
+      tags:
+      - Ob Standard Profiles
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObStandardProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_standard_profile
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: obStandardProfilesUpdate
+      summary: Update ob standard profile
+      tags:
+      - Ob Standard Profiles
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObStandardProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObStandardProfileUpdate'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_standard_profile
+      x-crud: true
+      x-crud-update: true
+  /v1/open-banking/tpps:
+    get:
+      operationId: tppsList
+      summary: List tpps
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: competent_authority
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TppPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tppsCreate
+      summary: Create tpp
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppCreate'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+      x-crud: true
+      x-crud-create: true
+  /v1/open-banking/tpps/{id}:
+    get:
+      operationId: tppsGet
+      summary: Retrieve tpp
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: tppsUpdate
+      summary: Update tpp
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppUpdate'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+      x-crud: true
+      x-crud-update: true
+  /v1/open-banking/tpps/register:
+    post:
+      operationId: tppsRegister
+      summary: Dynamic client registration with a signed software statement
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppsRegisterRequest'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+  /v1/open-banking/tpps/{id}/verify:
+    post:
+      operationId: tppsVerify
+      summary: Re-verify the TPP against the regulator register and directory
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+  /v1/open-banking/tpps/{id}/suspend:
+    post:
+      operationId: tppsSuspend
+      summary: Suspend TPP access
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppsSuspendRequest'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+  /v1/open-banking/tpps/{id}/reactivate:
+    post:
+      operationId: tppsReactivate
+      summary: Reactivate a suspended TPP
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tpp'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+  /v1/open-banking/tpps/{id}/certificates:
+    get:
+      operationId: tppsCertificates
+      summary: Certificates of the TPP
+      tags:
+      - Tpps
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TppCertificatePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp
+  /v1/open-banking/tpp-certificates:
+    get:
+      operationId: tppCertificatesList
+      summary: List tpp certificates
+      tags:
+      - Tpp Certificates
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: tpp_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: certificate_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - QWAC
+          - QSEAL
+          - OBWAC
+          - OBSEAL
+          - MTLS_CLIENT
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - VALID
+          - EXPIRED
+          - REVOKED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TppCertificatePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp_certificate
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tppCertificatesCreate
+      summary: Create tpp certificate
+      tags:
+      - Tpp Certificates
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TppCertificate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TppCertificateCreate'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp_certificate
+      x-crud: true
+      x-crud-create: true
+  /v1/open-banking/tpp-certificates/{id}:
+    get:
+      operationId: tppCertificatesGet
+      summary: Retrieve tpp certificate
+      tags:
+      - Tpp Certificates
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TppCertificate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: tpp_certificate
+      x-crud: true
+      x-crud-get: true
+  /v1/open-banking/consents:
+    get:
+      operationId: obConsentsList
+      summary: List ob consents
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: tpp_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: consent_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - AIS
+          - PIS
+          - CBPII
+          - VRP
+          - FDX_DATA
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - AWAITING_AUTHORISATION
+          - AUTHORISED
+          - REJECTED
+          - REVOKED
+          - EXPIRED
+          - CONSUMED
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObConsentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: obConsentsCreate
+      summary: Create ob consent
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObConsent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObConsentCreate'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+      x-crud: true
+      x-crud-create: true
+  /v1/open-banking/consents/{id}:
+    get:
+      operationId: obConsentsGet
+      summary: Retrieve ob consent
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObConsent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+      x-crud: true
+      x-crud-get: true
+  /v1/open-banking/consents/{id}/authorise:
+    post:
+      operationId: obConsentsAuthorise
+      summary: Start SCA authorisation for the consent
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObConsentsAuthoriseRequest'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+  /v1/open-banking/consents/{id}/revoke:
+    post:
+      operationId: obConsentsRevoke
+      summary: Revoke a consent (customer or TPP)
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObConsent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObConsentsRevokeRequest'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+  /v1/open-banking/consents/{id}/accounts:
+    get:
+      operationId: obConsentsAccounts
+      summary: Accounts selected under the consent
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObConsentAccountPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+  /v1/open-banking/consents/{id}/access-log:
+    get:
+      operationId: obConsentsAccessLog
+      summary: Access log of the consent
+      tags:
+      - Ob Consents
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAccessLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OBK-01
+      - OBK-02
+      - OBK-03
+      x-service: openbanking-service
+      x-table: ob_consent
+  /v1/open-banking/authorisations/{id}:
+    get:
+      operationId: obAuthorisationsGet
+      summary: Retrieve ob authorisation
+      tags:
+      - Ob Authorisations
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_authorisation
+      x-crud: true
+      x-crud-get: true
+  /v1/open-banking/authorisations/{id}/select-accounts:
+    post:
+      operationId: obAuthorisationsSelectAccounts
+      summary: Customer selects accounts to share
+      tags:
+      - Ob Authorisations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObAuthorisationsSelectAccountsRequest'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_authorisation
+  /v1/open-banking/authorisations/{id}/approve:
+    post:
+      operationId: obAuthorisationsApprove
+      summary: Customer approves the consent after SCA
+      tags:
+      - Ob Authorisations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_authorisation
+  /v1/open-banking/authorisations/{id}/deny:
+    post:
+      operationId: obAuthorisationsDeny
+      summary: Customer denies the consent
+      tags:
+      - Ob Authorisations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObAuthorisationsDenyRequest'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_authorisation
+  /v1/open-banking/payment-initiations:
+    get:
+      operationId: obPaymentInitiationsList
+      summary: List ob payment initiations
+      tags:
+      - Ob Payment Initiations
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ob_consent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: tpp_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RECEIVED
+          - PENDING
+          - ACCEPTED
+          - REJECTED
+          - EXECUTED
+          - CANCELLED
+      - name: payment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObPaymentInitiationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OBK-03
+      - PAY-01
+      x-service: openbanking-service
+      x-table: ob_payment_initiation
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: obPaymentInitiationsCreate
+      summary: Create ob payment initiation
+      tags:
+      - Ob Payment Initiations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObPaymentInitiation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObPaymentInitiationCreate'
+      x-requirements:
+      - OBK-03
+      - PAY-01
+      x-service: openbanking-service
+      x-table: ob_payment_initiation
+      x-crud: true
+      x-crud-create: true
+  /v1/open-banking/payment-initiations/{id}:
+    get:
+      operationId: obPaymentInitiationsGet
+      summary: Retrieve ob payment initiation
+      tags:
+      - Ob Payment Initiations
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObPaymentInitiation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-03
+      - PAY-01
+      x-service: openbanking-service
+      x-table: ob_payment_initiation
+      x-crud: true
+      x-crud-get: true
+  /v1/open-banking/payment-initiations/{id}/cancel:
+    post:
+      operationId: obPaymentInitiationsCancel
+      summary: Cancel a future-dated initiation
+      tags:
+      - Ob Payment Initiations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObPaymentInitiation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObPaymentInitiationsCancelRequest'
+      x-requirements:
+      - OBK-03
+      - PAY-01
+      x-service: openbanking-service
+      x-table: ob_payment_initiation
+  /v1/open-banking/funds-confirmations:
+    get:
+      operationId: obFundsConfirmationsList
+      summary: List ob funds confirmations
+      tags:
+      - Ob Funds Confirmations
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ob_consent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: tpp_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObFundsConfirmationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_funds_confirmation
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: obFundsConfirmationsCreate
+      summary: Create ob funds confirmation
+      tags:
+      - Ob Funds Confirmations
+      security:
+      - oauth2:
+        - openbanking:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObFundsConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ObFundsConfirmationCreate'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_funds_confirmation
+      x-crud: true
+      x-crud-create: true
+  /v1/open-banking/funds-confirmations/{id}:
+    get:
+      operationId: obFundsConfirmationsGet
+      summary: Retrieve ob funds confirmation
+      tags:
+      - Ob Funds Confirmations
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObFundsConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OBK-01
+      x-service: openbanking-service
+      x-table: ob_funds_confirmation
+      x-crud: true
+      x-crud-get: true
+  /v1/open-banking/access-logs:
+    get:
+      operationId: obAccessLogsList
+      summary: List ob access logs
+      tags:
+      - Ob Access Logs
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: tpp_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: ob_consent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: http_status
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAccessLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - OBK-02
+      x-service: openbanking-service
+      x-table: ob_access_log
+      x-crud: true
+      x-crud-list: true
+  /v1/open-banking/access-logs/{id}:
+    get:
+      operationId: obAccessLogsGet
+      summary: Retrieve ob access log
+      tags:
+      - Ob Access Logs
+      security:
+      - oauth2:
+        - openbanking:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObAccessLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - OBK-02
+      x-service: openbanking-service
+      x-table: ob_access_log
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: An open banking standard enabled for the tenant, with version and endpoints
+  name: Ob Standard Profiles
+- description: Registered third-party provider (AISP, PISP, CBPII)
+  name: Tpps
+- description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+  name: Tpp Certificates
+- description: Customer consent given to a TPP for account information, payment initiation or funds confirmation
+  name: Ob Consents
+- description: SCA authorisation session for a consent (redirect, decoupled or embedded)
+  name: Ob Authorisations
+- description: Payment initiated by a PISP under a consent; links to the core payment
+  name: Ob Payment Initiations
+- description: Confirmation of funds check by a CBPII. Append-only.
+  name: Ob Funds Confirmations
+- description: Every TPP API call under a consent, for audit, regulatory reporting and customer dashboards. Append-only.
+  name: Ob Access Logs

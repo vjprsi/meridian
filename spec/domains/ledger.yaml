@@ -81,14 +81,14 @@ services:
         fr: [LED-01, LED-05, LED-06, LED-07]
         columns:
           - "ledger_id uuid nn fk=ledger idx | Ledger book"
-          - "idempotency_key string(128) nn | Client key; a replay returns the original entry"
+          - "idempotency_key string(128) nn ro | Taken from the Idempotency-Key header; a replay returns the original entry"
           - "entry_type enum:JournalEntryType nn default=STANDARD | Business classification"
           - "description string(500) | Narrative shown on statements"
-          - "effective_at ts nn | Economic time of the transaction"
-          - "value_date date nn | Date interest starts or stops counting"
+          - "effective_at ts nn default=now | Economic time of the transaction (default: now)"
+          - "value_date date nn default=now | Date interest starts or stops counting (default: today)"
           - "booked_at ts nn default=now ro | Time the ledger committed the entry"
-          - "reversal_of_id uuid fk=journal_entry idx | Entry this one reverses"
-          - "source_service string(64) nn | Service that requested the posting"
+          - "reversal_of_id uuid fk=journal_entry idx ro | Entry this one reverses (set by POST /{id}/reverse)"
+          - "source_service string(64) nn ro | Service or client that requested the posting (from the caller identity)"
           - "source_type string(64) | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION"
           - "source_id uuid idx | Business object id"
           - "correlation_id string(128) idx | Trace / saga correlation id"
@@ -99,6 +99,8 @@ services:
           - "metadata json | Client-defined key/value metadata"
         unique: [[tenant_id, ledger_id, idempotency_key]]
         indexes: [[ledger_id, effective_at], [source_type, source_id]]
+        nested:
+          - "entries list:ledger_entry nn | Debit and credit lines; must balance per currency"
 
       - name: ledger_entry
         prefix: le
@@ -106,15 +108,15 @@ services:
         immutable: true
         fr: [LED-01, LED-02, LED-03]
         columns:
-          - "journal_entry_id uuid nn fk=journal_entry idx | Parent journal entry"
+          - "journal_entry_id uuid nn fk=journal_entry idx ro | Parent journal entry"
           - "ledger_account_id uuid nn fk=ledger_account | Account posted to"
-          - "line_no int nn | Line number within the journal entry"
+          - "line_no int nn ro | Line number within the journal entry (order sent)"
           - "direction enum:EntryDirection nn | Debit or credit"
           - "amount amount nn | Positive amount in the account currency"
           - "currency currency nn | Account currency"
           - "fx_rate rate | Rate to ledger base currency at posting time"
-          - "base_amount amount nn | Amount in ledger base currency"
-          - "effective_at ts nn | Copied from the journal entry for range queries"
+          - "base_amount amount nn ro | Amount in ledger base currency (amount x fx_rate)"
+          - "effective_at ts nn ro | Copied from the journal entry for range queries"
           - "account_version bigint nn ro | Account balance version after this entry (gapless per account)"
           - "balance_after amount nn ro | Posted balance of the account after this entry"
           - "description string(500) | Line narrative"
@@ -150,7 +152,7 @@ services:
           - "status enum:HoldStatus nn default=ACTIVE ro | Lifecycle status"
           - "source_type string(64) | Business object type, e.g. CARD_AUTHORIZATION"
           - "source_id uuid idx | Business object id"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Taken from the Idempotency-Key header"
           - "description string(500) | Narrative"
           - "expires_at ts | Automatic release time"
           - "released_at ts ro | Time released or expired"
@@ -203,9 +205,9 @@ services:
         filters: [ledger_id, account_type, currency, status, owner_type, owner_id, parent_id, gl_account_id]
         actions:
           - "GET /{id}/balance | Current balances (ledger, available, pending) | | account_balance"
-          - "GET /{id}/balance-at | Point-in-time balance at a timestamp (?at=) | | account_balance"
-          - "GET /{id}/balance-history | Daily balance snapshots (?from=&to=) | | balance_snapshot[]"
-          - "GET /{id}/entries | Ledger entries for this account, newest first | | ledger_entry[]"
+          - "GET /{id}/balance-at?at:ts! | Point-in-time balance at a timestamp | | account_balance"
+          - "GET /{id}/balance-history?from:date&to:date | Daily balance snapshots in a date range | | balance_snapshot[]"
+          - "GET /{id}/entries?from:ts&to:ts | Ledger entries for this account, newest first | | ledger_entry[]"
           - "POST /{id}/freeze | Restrict debits, credits or both | status enum:LedgerAccountStatus nn, reason string(255) nn"
           - "POST /{id}/unfreeze | Remove posting restrictions | reason string(255) nn"
           - "POST /{id}/close | Close an account with zero balance | reason string(255)"
@@ -234,7 +236,7 @@ services:
         filters: [ledger_account_id, hold_type, status, source_type, source_id]
         actions:
           - "POST /{id}/increment | Increase a hold (e.g. incremental card authorisation) | amount amount nn, reason string(255)"
-          - "POST /{id}/capture | Capture all or part of a hold into postings | amount amount nn, journal_entry json nn"
+          - "POST /{id}/capture | Capture all or part of a hold: debit the held account, credit the counter account | amount amount nn, counter_account_id uuid nn, description string(500), release_remainder bool"
           - "POST /{id}/release | Release the remaining held amount | reason string(255)"
           - "GET /{id}/events | History of the hold | | hold_event[]"
 

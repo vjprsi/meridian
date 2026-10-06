@@ -1,0 +1,3328 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AirtimeTopup:
+      description: An airtime or data top-up for any mobile number
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        biller_id:
+          description: Mobile operator
+          format: uuid
+          type: string
+        biller_product_id:
+          description: Bundle, if any
+          format: uuid
+          type:
+          - string
+          - 'null'
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Client key
+          maxLength: 128
+          readOnly: true
+          type: string
+        payer_wallet_id:
+          description: Paying wallet
+          format: uuid
+          type: string
+        provider_reference:
+          description: Operator reference
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - INITIATED
+          - VALIDATED
+          - PROCESSING
+          - PENDING_PROVIDER
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          readOnly: true
+          type: string
+        target_msisdn:
+          description: Number topped up (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_transaction_id:
+          description: Wallet transaction
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - payer_wallet_id
+      - target_msisdn
+      - amount
+      - currency
+      - status
+      - idempotency_key
+      type: object
+    AirtimeTopupCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        biller_id:
+          description: Mobile operator
+          format: uuid
+          type: string
+        biller_product_id:
+          description: Bundle, if any
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        payer_wallet_id:
+          description: Paying wallet
+          format: uuid
+          type: string
+        target_msisdn:
+          description: Number topped up (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+      required:
+      - biller_id
+      - payer_wallet_id
+      - target_msisdn
+      - amount
+      - currency
+      type: object
+    AirtimeTopupPage:
+      description: One page of AirtimeTopup results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AirtimeTopup'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BillInquiry:
+      description: A bill lookup at the biller returning the customer name and amount due
+      properties:
+        account_reference:
+          description: Account / meter / policy number
+          maxLength: 64
+          type: string
+        amount_due:
+          description: Amount due
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_name:
+          description: Name returned by the biller
+          maxLength: 160
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        due_date:
+          description: Due date
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Inquiry validity
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inquiry_reference:
+          description: Biller inquiry reference to quote on payment
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        response_code:
+          description: Biller response code
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - account_reference
+      type: object
+    BillInquiryCreate:
+      properties:
+        account_reference:
+          description: Account / meter / policy number
+          maxLength: 64
+          type: string
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+      required:
+      - biller_id
+      - account_reference
+      type: object
+    BillInquiryPage:
+      description: One page of BillInquiry results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BillInquiry'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BillPayment:
+      description: A payment of a bill from a wallet to a biller
+      properties:
+        account_reference:
+          description: Account / meter number
+          maxLength: 64
+          type: string
+        amount:
+          description: Amount paid
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        bill_inquiry_id:
+          description: Inquiry the payment is based on
+          format: uuid
+          type:
+          - string
+          - 'null'
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        biller_product_id:
+          description: Product (fixed bills and bundles)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        biller_settlement_id:
+          description: Settlement that paid it out
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        completed_at:
+          description: Completion time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_name:
+          description: Name on the bill
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        fee_amount:
+          description: Fee
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Client key
+          maxLength: 128
+          readOnly: true
+          type: string
+        payer_wallet_id:
+          description: Paying wallet
+          format: uuid
+          type: string
+        provider_reference:
+          description: Biller transaction reference
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        receipt_number:
+          description: Biller receipt number
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        retry_count:
+          description: Provider retries
+          format: int32
+          readOnly: true
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - INITIATED
+          - VALIDATED
+          - PROCESSING
+          - PENDING_PROVIDER
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          readOnly: true
+          type: string
+        token:
+          description: Prepaid token (e.g. electricity) returned by the biller
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_transaction_id:
+          description: Wallet transaction
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - payer_wallet_id
+      - account_reference
+      - amount
+      - currency
+      - fee_amount
+      - status
+      - retry_count
+      - idempotency_key
+      type: object
+    BillPaymentCreate:
+      properties:
+        account_reference:
+          description: Account / meter number
+          maxLength: 64
+          type: string
+        amount:
+          description: Amount paid
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        bill_inquiry_id:
+          description: Inquiry the payment is based on
+          format: uuid
+          type: string
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        biller_product_id:
+          description: Product (fixed bills and bundles)
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_name:
+          description: Name on the bill
+          maxLength: 160
+          type: string
+        payer_wallet_id:
+          description: Paying wallet
+          format: uuid
+          type: string
+      required:
+      - biller_id
+      - payer_wallet_id
+      - account_reference
+      - amount
+      - currency
+      type: object
+    BillPaymentPage:
+      description: One page of BillPayment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BillPayment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BillPaymentsReverseRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    Biller:
+      description: A company or agency that customers can pay bills to
+      properties:
+        account_reference_label:
+          description: Label shown to the customer, e.g. Meter number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        account_reference_regex:
+          description: Validation pattern
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        aggregator_name:
+          description: Aggregator when integration is AGGREGATOR
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        biller_code:
+          description: Biller code
+          maxLength: 32
+          type: string
+        category:
+          description: Category
+          enum:
+          - ELECTRICITY
+          - WATER
+          - GAS
+          - TELECOM
+          - AIRTIME
+          - DATA
+          - TV
+          - INTERNET
+          - EDUCATION
+          - GOVERNMENT
+          - TAX
+          - INSURANCE
+          - LOAN
+          - OTHER
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        display_order:
+          description: Order in menus
+          format: int32
+          type:
+          - integer
+          - 'null'
+        fee_bearer:
+          description: CUSTOMER, BILLER, SHARED
+          maxLength: 16
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        integration_type:
+          description: How payments reach the biller
+          enum:
+          - API
+          - ISO8583
+          - FILE
+          - AGGREGATOR
+          type: string
+        logo_document_id:
+          description: Logo
+          format: uuid
+          type:
+          - string
+          - 'null'
+        max_amount:
+          description: Maximum payment
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        min_amount:
+          description: Minimum payment
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        settlement_frequency:
+          description: Settlement frequency
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ON_DEMAND
+          type: string
+        settlement_wallet_id:
+          description: Biller collection wallet
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          type: string
+        supports_inquiry:
+          description: Supports bill inquiry
+          type: boolean
+        supports_overpayment:
+          description: Accepts more than the amount due
+          type: boolean
+        supports_partial_payment:
+          description: Accepts less than the amount due
+          type: boolean
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_code
+      - name
+      - category
+      - country
+      - currency
+      - integration_type
+      - supports_inquiry
+      - supports_partial_payment
+      - supports_overpayment
+      - settlement_frequency
+      - fee_bearer
+      - status
+      type: object
+    BillerCreate:
+      properties:
+        account_reference_label:
+          description: Label shown to the customer, e.g. Meter number
+          maxLength: 64
+          type: string
+        account_reference_regex:
+          description: Validation pattern
+          maxLength: 128
+          type: string
+        aggregator_name:
+          description: Aggregator when integration is AGGREGATOR
+          maxLength: 64
+          type: string
+        biller_code:
+          description: Biller code
+          maxLength: 32
+          type: string
+        category:
+          description: Category
+          enum:
+          - ELECTRICITY
+          - WATER
+          - GAS
+          - TELECOM
+          - AIRTIME
+          - DATA
+          - TV
+          - INTERNET
+          - EDUCATION
+          - GOVERNMENT
+          - TAX
+          - INSURANCE
+          - LOAN
+          - OTHER
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        display_order:
+          description: Order in menus
+          format: int32
+          type: integer
+        fee_bearer:
+          description: CUSTOMER, BILLER, SHARED
+          maxLength: 16
+          type: string
+        integration_type:
+          description: How payments reach the biller
+          enum:
+          - API
+          - ISO8583
+          - FILE
+          - AGGREGATOR
+          type: string
+        logo_document_id:
+          description: Logo
+          format: uuid
+          type: string
+        max_amount:
+          description: Maximum payment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Minimum payment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        settlement_frequency:
+          description: Settlement frequency
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ON_DEMAND
+          type: string
+        settlement_wallet_id:
+          description: Biller collection wallet
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          type: string
+        supports_inquiry:
+          description: Supports bill inquiry
+          type: boolean
+        supports_overpayment:
+          description: Accepts more than the amount due
+          type: boolean
+        supports_partial_payment:
+          description: Accepts less than the amount due
+          type: boolean
+      required:
+      - biller_code
+      - name
+      - category
+      - country
+      - currency
+      - integration_type
+      type: object
+    BillerPage:
+      description: One page of Biller results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Biller'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BillerProduct:
+      description: A fixed product sold through a biller (airtime denomination, data bundle, TV package)
+      properties:
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        denomination:
+          description: Fixed price (empty = open amount)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        product_code:
+          description: Provider product code
+          maxLength: 32
+          type: string
+        product_type:
+          description: AIRTIME, DATA_BUNDLE, TV_PACKAGE, TOKEN, FIXED_BILL
+          maxLength: 32
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        validity_days:
+          description: Validity of the bundle
+          format: int32
+          type:
+          - integer
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - product_code
+      - name
+      - product_type
+      - currency
+      - is_active
+      type: object
+    BillerProductCreate:
+      properties:
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        denomination:
+          description: Fixed price (empty = open amount)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        description:
+          description: Description
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        product_code:
+          description: Provider product code
+          maxLength: 32
+          type: string
+        product_type:
+          description: AIRTIME, DATA_BUNDLE, TV_PACKAGE, TOKEN, FIXED_BILL
+          maxLength: 32
+          type: string
+        validity_days:
+          description: Validity of the bundle
+          format: int32
+          type: integer
+      required:
+      - biller_id
+      - product_code
+      - name
+      - product_type
+      - currency
+      type: object
+    BillerProductPage:
+      description: One page of BillerProduct results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BillerProduct'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BillerProductUpdate:
+      properties:
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        denomination:
+          description: Fixed price (empty = open amount)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        description:
+          description: Description
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        product_code:
+          description: Provider product code
+          maxLength: 32
+          type: string
+        product_type:
+          description: AIRTIME, DATA_BUNDLE, TV_PACKAGE, TOKEN, FIXED_BILL
+          maxLength: 32
+          type: string
+        validity_days:
+          description: Validity of the bundle
+          format: int32
+          type: integer
+      type: object
+    BillerSettlement:
+      description: Settlement of collected bill payments to a biller for a period
+      properties:
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        commission_amount:
+          description: Commissions retained
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fee_amount:
+          description: Fees retained
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        gross_amount:
+          description: Collected
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        net_amount:
+          description: Net payable to the biller
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        paid_at:
+          description: Payment time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        payment_count:
+          description: Payments included
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        payment_reference:
+          description: Bank payment reference
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        period_end:
+          description: To
+          format: date
+          type: string
+        period_start:
+          description: From
+          format: date
+          type: string
+        report_document_id:
+          description: Settlement report
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - CALCULATED
+          - APPROVED
+          - PAID
+          - FAILED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - period_start
+      - period_end
+      - currency
+      - status
+      type: object
+    BillerSettlementCreate:
+      properties:
+        biller_id:
+          description: Biller
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        period_end:
+          description: To
+          format: date
+          type: string
+        period_start:
+          description: From
+          format: date
+          type: string
+      required:
+      - biller_id
+      - period_start
+      - period_end
+      - currency
+      type: object
+    BillerSettlementPage:
+      description: One page of BillerSettlement results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BillerSettlement'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BillerSettlementsApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    BillerSettlementsMarkPaidRequest:
+      properties:
+        payment_reference:
+          maxLength: 64
+          type: string
+      required:
+      - payment_reference
+      type: object
+    BillerUpdate:
+      properties:
+        account_reference_label:
+          description: Label shown to the customer, e.g. Meter number
+          maxLength: 64
+          type: string
+        account_reference_regex:
+          description: Validation pattern
+          maxLength: 128
+          type: string
+        aggregator_name:
+          description: Aggregator when integration is AGGREGATOR
+          maxLength: 64
+          type: string
+        biller_code:
+          description: Biller code
+          maxLength: 32
+          type: string
+        category:
+          description: Category
+          enum:
+          - ELECTRICITY
+          - WATER
+          - GAS
+          - TELECOM
+          - AIRTIME
+          - DATA
+          - TV
+          - INTERNET
+          - EDUCATION
+          - GOVERNMENT
+          - TAX
+          - INSURANCE
+          - LOAN
+          - OTHER
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        display_order:
+          description: Order in menus
+          format: int32
+          type: integer
+        fee_bearer:
+          description: CUSTOMER, BILLER, SHARED
+          maxLength: 16
+          type: string
+        integration_type:
+          description: How payments reach the biller
+          enum:
+          - API
+          - ISO8583
+          - FILE
+          - AGGREGATOR
+          type: string
+        logo_document_id:
+          description: Logo
+          format: uuid
+          type: string
+        max_amount:
+          description: Maximum payment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Minimum payment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        settlement_frequency:
+          description: Settlement frequency
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ON_DEMAND
+          type: string
+        settlement_wallet_id:
+          description: Biller collection wallet
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          type: string
+        supports_inquiry:
+          description: Supports bill inquiry
+          type: boolean
+        supports_overpayment:
+          description: Accepts more than the amount due
+          type: boolean
+        supports_partial_payment:
+          description: Accepts less than the amount due
+          type: boolean
+      type: object
+    BillersSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    BillersValidateReferenceRequest:
+      properties:
+        account_reference:
+          maxLength: 64
+          type: string
+      required:
+      - account_reference
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
+    with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
+    bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
+    and bulk disbursements; interoperability with national switches and other wallets. Every money movement posts through
+    the ledger.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — biller-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/billers:
+    get:
+      operationId: billersList
+      summary: List billers
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: category
+        in: query
+        schema:
+          type: string
+          enum:
+          - ELECTRICITY
+          - WATER
+          - GAS
+          - TELECOM
+          - AIRTIME
+          - DATA
+          - TV
+          - INTERNET
+          - EDUCATION
+          - GOVERNMENT
+          - TAX
+          - INSURANCE
+          - LOAN
+          - OTHER
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+      - name: integration_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - API
+          - ISO8583
+          - FILE
+          - AGGREGATOR
+      - name: biller_code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: billersCreate
+      summary: Create biller
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Biller'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerCreate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-create: true
+  /v1/billers/{id}:
+    get:
+      operationId: billersGet
+      summary: Retrieve biller
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Biller'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: billersUpdate
+      summary: Update biller
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Biller'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerUpdate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+      x-crud: true
+      x-crud-update: true
+  /v1/billers/{id}/products:
+    get:
+      operationId: billersProducts
+      summary: Products of the biller
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerProductPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+  /v1/billers/{id}/validate-reference:
+    post:
+      operationId: billersValidateReference
+      summary: Validate an account reference and fetch the bill
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillersValidateReferenceRequest'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+  /v1/billers/{id}/activate:
+    post:
+      operationId: billersActivate
+      summary: Activate the biller
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Biller'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+  /v1/billers/{id}/suspend:
+    post:
+      operationId: billersSuspend
+      summary: Suspend the biller
+      tags:
+      - Billers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Biller'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillersSuspendRequest'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller
+  /v1/biller-products:
+    get:
+      operationId: billerProductsList
+      summary: List biller products
+      tags:
+      - Biller Products
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: biller_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: product_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerProductPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: billerProductsCreate
+      summary: Create biller product
+      tags:
+      - Biller Products
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerProductCreate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-create: true
+  /v1/biller-products/{id}:
+    get:
+      operationId: billerProductsGet
+      summary: Retrieve biller product
+      tags:
+      - Biller Products
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: billerProductsUpdate
+      summary: Update biller product
+      tags:
+      - Biller Products
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerProductUpdate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_product
+      x-crud: true
+      x-crud-update: true
+  /v1/bill-inquiries:
+    get:
+      operationId: billInquiriesList
+      summary: List bill inquiries
+      tags:
+      - Bill Inquiries
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: biller_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_inquiry
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: billInquiriesCreate
+      summary: Create bill inquirie
+      tags:
+      - Bill Inquiries
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillInquiryCreate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_inquiry
+      x-crud: true
+      x-crud-create: true
+  /v1/bill-inquiries/{id}:
+    get:
+      operationId: billInquiriesGet
+      summary: Retrieve bill inquirie
+      tags:
+      - Bill Inquiries
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_inquiry
+      x-crud: true
+      x-crud-get: true
+  /v1/bill-payments:
+    get:
+      operationId: billPaymentsList
+      summary: List bill payments
+      tags:
+      - Bill Payments
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: biller_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - INITIATED
+          - VALIDATED
+          - PROCESSING
+          - PENDING_PROVIDER
+          - COMPLETED
+          - FAILED
+          - REVERSED
+      - name: payer_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: provider_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: biller_settlement_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPaymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_payment
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: billPaymentsCreate
+      summary: Create bill payment
+      tags:
+      - Bill Payments
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillPaymentCreate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_payment
+      x-crud: true
+      x-crud-create: true
+  /v1/bill-payments/{id}:
+    get:
+      operationId: billPaymentsGet
+      summary: Retrieve bill payment
+      tags:
+      - Bill Payments
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_payment
+      x-crud: true
+      x-crud-get: true
+  /v1/bill-payments/{id}/retry:
+    post:
+      operationId: billPaymentsRetry
+      summary: Retry a payment pending at the provider
+      tags:
+      - Bill Payments
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_payment
+  /v1/bill-payments/{id}/reverse:
+    post:
+      operationId: billPaymentsReverse
+      summary: Reverse a failed or disputed payment
+      tags:
+      - Bill Payments
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillPaymentsReverseRequest'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_payment
+  /v1/bill-payments/{id}/receipt:
+    get:
+      operationId: billPaymentsReceipt
+      summary: Receipt with token and biller reference
+      tags:
+      - Bill Payments
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: bill_payment
+  /v1/airtime-topups:
+    get:
+      operationId: airtimeTopupsList
+      summary: List airtime topups
+      tags:
+      - Airtime Topups
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: biller_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - INITIATED
+          - VALIDATED
+          - PROCESSING
+          - PENDING_PROVIDER
+          - COMPLETED
+          - FAILED
+          - REVERSED
+      - name: payer_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: target_msisdn
+        in: query
+        schema:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopupPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: airtime_topup
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: airtimeTopupsCreate
+      summary: Create airtime topup
+      tags:
+      - Airtime Topups
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopup'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AirtimeTopupCreate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: airtime_topup
+      x-crud: true
+      x-crud-create: true
+  /v1/airtime-topups/{id}:
+    get:
+      operationId: airtimeTopupsGet
+      summary: Retrieve airtime topup
+      tags:
+      - Airtime Topups
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopup'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: airtime_topup
+      x-crud: true
+      x-crud-get: true
+  /v1/airtime-topups/{id}/retry:
+    post:
+      operationId: airtimeTopupsRetry
+      summary: Retry a top-up pending at the operator
+      tags:
+      - Airtime Topups
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopup'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: airtime_topup
+  /v1/biller-settlements:
+    get:
+      operationId: billerSettlementsList
+      summary: List biller settlements
+      tags:
+      - Biller Settlements
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: biller_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - CALCULATED
+          - APPROVED
+          - PAID
+          - FAILED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerSettlementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_settlement
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: billerSettlementsCreate
+      summary: Create biller settlement
+      tags:
+      - Biller Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerSettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerSettlementCreate'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_settlement
+      x-crud: true
+      x-crud-create: true
+  /v1/biller-settlements/{id}:
+    get:
+      operationId: billerSettlementsGet
+      summary: Retrieve biller settlement
+      tags:
+      - Biller Settlements
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerSettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_settlement
+      x-crud: true
+      x-crud-get: true
+  /v1/biller-settlements/{id}/approve:
+    post:
+      operationId: billerSettlementsApprove
+      summary: Approve the settlement (checker)
+      tags:
+      - Biller Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerSettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerSettlementsApproveRequest'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_settlement
+  /v1/biller-settlements/{id}/mark-paid:
+    post:
+      operationId: billerSettlementsMarkPaid
+      summary: Record the bank payment of the settlement
+      tags:
+      - Biller Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerSettlement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillerSettlementsMarkPaidRequest'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_settlement
+  /v1/biller-settlements/{id}/payments:
+    get:
+      operationId: billerSettlementsPayments
+      summary: Payments included
+      tags:
+      - Biller Settlements
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPaymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-05
+      x-service: biller-service
+      x-table: biller_settlement
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A company or agency that customers can pay bills to
+  name: Billers
+- description: A fixed product sold through a biller (airtime denomination, data bundle, TV package)
+  name: Biller Products
+- description: A bill lookup at the biller returning the customer name and amount due
+  name: Bill Inquiries
+- description: A payment of a bill from a wallet to a biller
+  name: Bill Payments
+- description: An airtime or data top-up for any mobile number
+  name: Airtime Topups
+- description: Settlement of collected bill payments to a biller for a period
+  name: Biller Settlements

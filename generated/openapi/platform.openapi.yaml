@@ -219,21 +219,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Cell'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CellPage'
         '400': &id001
           $ref: '#/components/responses/BadRequest'
         '401': &id002
@@ -245,6 +231,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: cellsCreate
       summary: Create cell
@@ -279,6 +268,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-create: true
   /v1/platform/cells/{id}:
     get:
       operationId: cellsGet
@@ -312,6 +304,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: cellsUpdate
       summary: Update cell
@@ -349,6 +344,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-update: true
   /v1/platform/cells/{id}/drain:
     post:
       operationId: cellsDrain
@@ -392,6 +390,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: cell
   /v1/platform/tenants:
     get:
       operationId: tenantsList
@@ -478,21 +477,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Tenant'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -500,6 +485,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: tenantsCreate
       summary: Create tenant
@@ -534,6 +522,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-create: true
   /v1/platform/tenants/{id}:
     get:
       operationId: tenantsGet
@@ -567,6 +558,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: tenantsUpdate
       summary: Update tenant
@@ -604,6 +598,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-update: true
   /v1/platform/tenants/{id}/activate:
     post:
       operationId: tenantsActivate
@@ -641,6 +638,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
   /v1/platform/tenants/{id}/suspend:
     post:
       operationId: tenantsSuspend
@@ -684,6 +682,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
   /v1/platform/tenants/{id}/reinstate:
     post:
       operationId: tenantsReinstate
@@ -727,6 +726,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
   /v1/platform/tenants/{id}/migrate:
     post:
       operationId: tenantsMigrate
@@ -770,6 +770,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
   /v1/platform/tenants/{id}/placements:
     get:
       operationId: tenantsPlacements
@@ -794,21 +795,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantPlacement'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantPlacementPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -818,6 +805,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
   /v1/platform/tenants/provision-from-template:
     post:
       operationId: tenantsProvisionFromTemplate
@@ -855,6 +843,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant
   /v1/modules:
     get:
       operationId: modulesList
@@ -920,21 +909,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantModule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantModulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -942,6 +917,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_module
+      x-crud: true
+      x-crud-list: true
   /v1/modules/{id}:
     get:
       operationId: modulesGet
@@ -975,6 +953,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_module
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: modulesUpdate
       summary: Update module
@@ -1012,6 +993,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_module
+      x-crud: true
+      x-crud-update: true
   /v1/modules/{id}/enable:
     post:
       operationId: modulesEnable
@@ -1055,6 +1039,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_module
   /v1/modules/{id}/disable:
     post:
       operationId: modulesDisable
@@ -1098,6 +1083,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_module
   /v1/legal-entities:
     get:
       operationId: legalEntitiesList
@@ -1166,21 +1152,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LegalEntity'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LegalEntityPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1189,6 +1161,9 @@ paths:
       - ADM-01
       - GL-05
       x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: legalEntitiesCreate
       summary: Create legal entitie
@@ -1224,6 +1199,9 @@ paths:
       - ADM-01
       - GL-05
       x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-create: true
   /v1/legal-entities/{id}:
     get:
       operationId: legalEntitiesGet
@@ -1258,6 +1236,9 @@ paths:
       - ADM-01
       - GL-05
       x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: legalEntitiesUpdate
       summary: Update legal entitie
@@ -1296,6 +1277,9 @@ paths:
       - ADM-01
       - GL-05
       x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-update: true
   /v1/branches:
     get:
       operationId: branchesList
@@ -1380,21 +1364,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Branch'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BranchPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1402,6 +1372,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: branchesCreate
       summary: Create branche
@@ -1436,6 +1409,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-create: true
   /v1/branches/{id}:
     get:
       operationId: branchesGet
@@ -1469,6 +1445,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: branchesUpdate
       summary: Update branche
@@ -1506,6 +1485,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-update: true
   /v1/branches/{id}/close:
     post:
       operationId: branchesClose
@@ -1549,6 +1531,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: branch
   /v1/settings:
     get:
       operationId: settingsList
@@ -1604,21 +1587,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantSetting'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantSettingPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1626,6 +1595,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: settingsCreate
       summary: Create setting
@@ -1660,6 +1632,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-create: true
   /v1/settings/{id}:
     get:
       operationId: settingsGet
@@ -1693,6 +1668,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: settingsUpdate
       summary: Update setting
@@ -1730,6 +1708,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: settingsDelete
       summary: Delete setting
@@ -1751,6 +1732,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-delete: true
   /v1/feature-flags:
     get:
       operationId: featureFlagsList
@@ -1805,21 +1789,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/FeatureFlag'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/FeatureFlagPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1827,6 +1797,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: featureFlagsCreate
       summary: Create feature flag
@@ -1861,6 +1834,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-create: true
   /v1/feature-flags/{id}:
     get:
       operationId: featureFlagsGet
@@ -1894,6 +1870,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: featureFlagsUpdate
       summary: Update feature flag
@@ -1931,6 +1910,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: featureFlagsDelete
       summary: Delete feature flag
@@ -1952,6 +1934,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-delete: true
   /v1/feature-flags/evaluate:
     post:
       operationId: featureFlagsEvaluate
@@ -1985,6 +1970,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: feature_flag
   /v1/branding:
     get:
       operationId: brandingList
@@ -2047,21 +2033,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantBranding'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantBrandingPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2069,6 +2041,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: brandingCreate
       summary: Create branding
@@ -2103,6 +2078,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-create: true
   /v1/branding/{id}:
     get:
       operationId: brandingGet
@@ -2136,6 +2114,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: brandingUpdate
       summary: Update branding
@@ -2173,6 +2154,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-update: true
   /v1/branding/{id}/preview:
     get:
       operationId: brandingPreview
@@ -2201,6 +2185,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: tenant-service
+      x-table: tenant_branding
   /v1/users:
     get:
       operationId: usersList
@@ -2292,21 +2277,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AppUser'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AppUserPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2314,6 +2285,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: usersCreate
       summary: Create user
@@ -2348,6 +2322,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-create: true
   /v1/users/{id}:
     get:
       operationId: usersGet
@@ -2381,6 +2358,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: usersUpdate
       summary: Update user
@@ -2418,6 +2398,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-update: true
   /v1/users/{id}/invite:
     post:
       operationId: usersInvite
@@ -2455,6 +2438,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/{id}/lock:
     post:
       operationId: usersLock
@@ -2498,6 +2482,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/{id}/unlock:
     post:
       operationId: usersUnlock
@@ -2541,6 +2526,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/{id}/deactivate:
     post:
       operationId: usersDeactivate
@@ -2584,6 +2570,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/{id}/reset-mfa:
     post:
       operationId: usersResetMfa
@@ -2627,6 +2614,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/{id}/roles:
     get:
       operationId: usersRoles
@@ -2651,21 +2639,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserRole'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UserRolePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2675,6 +2649,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/{id}/effective-permissions:
     get:
       operationId: usersEffectivePermissions
@@ -2703,6 +2678,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/users/me:
     get:
       operationId: usersMe
@@ -2729,6 +2705,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: app_user
   /v1/user-roles:
     get:
       operationId: userRolesList
@@ -2797,21 +2774,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserRole'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UserRolePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2820,6 +2783,9 @@ paths:
       - ADM-02
       - LIM-02
       x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: userRolesCreate
       summary: Create user role
@@ -2855,6 +2821,9 @@ paths:
       - ADM-02
       - LIM-02
       x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-create: true
   /v1/user-roles/{id}:
     get:
       operationId: userRolesGet
@@ -2888,6 +2857,9 @@ paths:
       - ADM-02
       - LIM-02
       x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-get: true
     delete:
       operationId: userRolesDelete
       summary: Delete user role
@@ -2910,6 +2882,9 @@ paths:
       - ADM-02
       - LIM-02
       x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-delete: true
   /v1/user-roles/elevate:
     post:
       operationId: userRolesElevate
@@ -2948,6 +2923,7 @@ paths:
       - ADM-02
       - LIM-02
       x-service: identity-service
+      x-table: user_role
   /v1/roles:
     get:
       operationId: rolesList
@@ -3009,21 +2985,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Role'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/RolePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3031,6 +2993,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: rolesCreate
       summary: Create role
@@ -3065,6 +3030,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-create: true
   /v1/roles/{id}:
     get:
       operationId: rolesGet
@@ -3098,6 +3066,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: rolesUpdate
       summary: Update role
@@ -3135,6 +3106,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: rolesDelete
       summary: Delete role
@@ -3156,6 +3130,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-delete: true
   /v1/roles/{id}/permissions:
     get:
       operationId: rolesPermissions
@@ -3180,21 +3157,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/RolePermission'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/RolePermissionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3204,6 +3167,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
     post:
       operationId: rolesAddPermissions
       summary: Grant permissions to a role (maker-checker)
@@ -3246,6 +3210,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
   /v1/roles/{id}/clone:
     post:
       operationId: rolesClone
@@ -3289,6 +3254,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role
   /v1/role-permissions:
     get:
       operationId: rolePermissionsList
@@ -3344,21 +3310,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/RolePermission'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/RolePermissionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3366,6 +3318,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role_permission
+      x-crud: true
+      x-crud-list: true
   /v1/role-permissions/{id}:
     get:
       operationId: rolePermissionsGet
@@ -3398,6 +3353,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role_permission
+      x-crud: true
+      x-crud-get: true
     delete:
       operationId: rolePermissionsDelete
       summary: Delete role permission
@@ -3419,6 +3377,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: role_permission
+      x-crud: true
+      x-crud-delete: true
   /v1/permissions:
     get:
       operationId: permissionsList
@@ -3478,21 +3439,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Permission'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/PermissionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3500,6 +3447,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: permission
+      x-crud: true
+      x-crud-list: true
   /v1/permissions/{id}:
     get:
       operationId: permissionsGet
@@ -3532,6 +3482,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: permission
+      x-crud: true
+      x-crud-get: true
   /v1/access-policies:
     get:
       operationId: accessPoliciesList
@@ -3588,21 +3541,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AccessPolicy'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AccessPolicyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3610,6 +3549,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: accessPoliciesCreate
       summary: Create access policie
@@ -3644,6 +3586,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-create: true
   /v1/access-policies/{id}:
     get:
       operationId: accessPoliciesGet
@@ -3677,6 +3622,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: accessPoliciesUpdate
       summary: Update access policie
@@ -3714,6 +3662,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: accessPoliciesDelete
       summary: Delete access policie
@@ -3735,6 +3686,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-delete: true
   /v1/access-policies/simulate:
     post:
       operationId: accessPoliciesSimulate
@@ -3768,6 +3722,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: access_policy
   /v1/sso-providers:
     get:
       operationId: ssoProvidersList
@@ -3829,21 +3784,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SsoProvider'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/SsoProviderPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3851,6 +3792,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: ssoProvidersCreate
       summary: Create sso provider
@@ -3885,6 +3829,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-create: true
   /v1/sso-providers/{id}:
     get:
       operationId: ssoProvidersGet
@@ -3918,6 +3865,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: ssoProvidersUpdate
       summary: Update sso provider
@@ -3955,6 +3905,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: ssoProvidersDelete
       summary: Delete sso provider
@@ -3976,6 +3929,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-delete: true
   /v1/sso-providers/{id}/test:
     post:
       operationId: ssoProvidersTest
@@ -4009,6 +3965,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: sso_provider
   /v1/users/{user_id}/mfa-factors:
     get:
       operationId: mfaFactorsList
@@ -4079,21 +4036,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MfaFactor'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MfaFactorPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4101,6 +4044,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: mfaFactorsCreate
       summary: Create mfa factor
@@ -4136,6 +4082,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-create: true
   /v1/users/{user_id}/mfa-factors/{id}:
     get:
       operationId: mfaFactorsGet
@@ -4174,6 +4123,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-get: true
     delete:
       operationId: mfaFactorsDelete
       summary: Delete mfa factor
@@ -4195,6 +4147,9 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-delete: true
   /v1/users/{user_id}/mfa-factors/{id}/verify:
     post:
       operationId: mfaFactorsVerify
@@ -4244,6 +4199,7 @@ paths:
       x-requirements:
       - ADM-02
       x-service: identity-service
+      x-table: mfa_factor
   /v1/sessions:
     get:
       operationId: sessionsList
@@ -4298,21 +4254,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserSession'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UserSessionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4321,6 +4263,9 @@ paths:
       - ADM-02
       - ADM-03
       x-service: identity-service
+      x-table: user_session
+      x-crud: true
+      x-crud-list: true
   /v1/sessions/{id}:
     get:
       operationId: sessionsGet
@@ -4354,6 +4299,9 @@ paths:
       - ADM-02
       - ADM-03
       x-service: identity-service
+      x-table: user_session
+      x-crud: true
+      x-crud-get: true
   /v1/sessions/{id}/revoke:
     post:
       operationId: sessionsRevoke
@@ -4398,6 +4346,7 @@ paths:
       - ADM-02
       - ADM-03
       x-service: identity-service
+      x-table: user_session
   /v1/sessions/revoke-all:
     post:
       operationId: sessionsRevokeAll
@@ -4432,6 +4381,7 @@ paths:
       - ADM-02
       - ADM-03
       x-service: identity-service
+      x-table: user_session
   /v1/api-clients:
     get:
       operationId: apiClientsList
@@ -4502,21 +4452,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApiClient'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApiClientPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4525,6 +4461,9 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: apiClientsCreate
       summary: Create api client
@@ -4560,6 +4499,9 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-create: true
   /v1/api-clients/{id}:
     get:
       operationId: apiClientsGet
@@ -4594,6 +4536,9 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: apiClientsUpdate
       summary: Update api client
@@ -4632,6 +4577,9 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-update: true
   /v1/api-clients/{id}/rotate-secret:
     post:
       operationId: apiClientsRotateSecret
@@ -4666,6 +4614,7 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
   /v1/api-clients/{id}/suspend:
     post:
       operationId: apiClientsSuspend
@@ -4710,6 +4659,7 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
   /v1/api-clients/{id}/reactivate:
     post:
       operationId: apiClientsReactivate
@@ -4748,6 +4698,7 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
   /v1/api-clients/{id}/usage:
     get:
       operationId: apiClientsUsage
@@ -4777,6 +4728,7 @@ paths:
       - API-02
       - OBK-01
       x-service: identity-service
+      x-table: api_client
   /v1/api-clients/{api_client_id}/keys:
     get:
       operationId: apiKeysList
@@ -4838,21 +4790,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApiKey'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApiKeyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4860,6 +4798,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: api_key
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: apiKeysCreate
       summary: Create api key
@@ -4895,6 +4836,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: api_key
+      x-crud: true
+      x-crud-create: true
   /v1/api-clients/{api_client_id}/keys/{id}:
     get:
       operationId: apiKeysGet
@@ -4933,6 +4877,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: api_key
+      x-crud: true
+      x-crud-get: true
   /v1/api-clients/{api_client_id}/keys/{id}/rotate:
     post:
       operationId: apiKeysRotate
@@ -4982,6 +4929,7 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: api_key
   /v1/api-clients/{api_client_id}/keys/{id}/revoke:
     post:
       operationId: apiKeysRevoke
@@ -5031,6 +4979,7 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: api_key
   /v1/oauth-scopes:
     get:
       operationId: oauthScopesList
@@ -5085,21 +5034,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/OauthScope'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/OauthScopePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5107,6 +5042,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: oauth_scope
+      x-crud: true
+      x-crud-list: true
   /v1/oauth-scopes/{id}:
     get:
       operationId: oauthScopesGet
@@ -5139,6 +5077,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: oauth_scope
+      x-crud: true
+      x-crud-get: true
   /v1/rate-limit-policies:
     get:
       operationId: rateLimitPoliciesList
@@ -5193,21 +5134,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/RateLimitPolicy'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/RateLimitPolicyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5215,6 +5142,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: rateLimitPoliciesCreate
       summary: Create rate limit policie
@@ -5249,6 +5179,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-create: true
   /v1/rate-limit-policies/{id}:
     get:
       operationId: rateLimitPoliciesGet
@@ -5282,6 +5215,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: rateLimitPoliciesUpdate
       summary: Update rate limit policie
@@ -5319,6 +5255,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: rateLimitPoliciesDelete
       summary: Delete rate limit policie
@@ -5340,6 +5279,9 @@ paths:
       x-requirements:
       - API-02
       x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-delete: true
   /v1/request-logs:
     get:
       operationId: requestLogsList
@@ -5417,21 +5359,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApiRequestLog'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApiRequestLogPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5440,6 +5368,9 @@ paths:
       - ADM-05
       - API-02
       x-service: identity-service
+      x-table: api_request_log
+      x-crud: true
+      x-crud-list: true
   /v1/request-logs/{id}:
     get:
       operationId: requestLogsGet
@@ -5473,6 +5404,9 @@ paths:
       - ADM-05
       - API-02
       x-service: identity-service
+      x-table: api_request_log
+      x-crud: true
+      x-crud-get: true
   /v1/config/custom-fields:
     get:
       operationId: customFieldDefinitionsList
@@ -5537,21 +5471,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CustomFieldDefinition'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CustomFieldDefinitionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5559,6 +5479,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: customFieldDefinitionsCreate
       summary: Create custom field definition
@@ -5593,6 +5516,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-create: true
   /v1/config/custom-fields/{id}:
     get:
       operationId: customFieldDefinitionsGet
@@ -5626,6 +5552,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: customFieldDefinitionsUpdate
       summary: Update custom field definition
@@ -5663,6 +5592,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: customFieldDefinitionsDelete
       summary: Delete custom field definition
@@ -5684,6 +5616,9 @@ paths:
       x-requirements:
       - ADM-01
       x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-delete: true
   /v1/config/custom-fields/validate:
     post:
       operationId: customFieldDefinitionsValidate
@@ -5717,6 +5652,7 @@ paths:
       x-requirements:
       - ADM-01
       x-service: config-service
+      x-table: custom_field_definition
   /v1/config/entries:
     get:
       operationId: configEntriesList
@@ -5782,21 +5718,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ConfigEntry'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ConfigEntryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5805,6 +5727,9 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: configEntriesCreate
       summary: Create config entrie
@@ -5840,6 +5765,9 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
+      x-crud: true
+      x-crud-create: true
   /v1/config/entries/{id}:
     get:
       operationId: configEntriesGet
@@ -5873,6 +5801,9 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
+      x-crud: true
+      x-crud-get: true
   /v1/config/entries/{id}/submit:
     post:
       operationId: configEntriesSubmit
@@ -5917,6 +5848,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/entries/{id}/activate:
     post:
       operationId: configEntriesActivate
@@ -5955,6 +5887,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/entries/{id}/rollback:
     post:
       operationId: configEntriesRollback
@@ -5999,6 +5932,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/entries/{id}/history:
     get:
       operationId: configEntriesHistory
@@ -6023,21 +5957,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ConfigChange'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ConfigChangePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6048,6 +5968,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/entries/export:
     post:
       operationId: configEntriesExport
@@ -6082,6 +6003,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/entries/import:
     post:
       operationId: configEntriesImport
@@ -6116,6 +6038,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/entries/resolve:
     get:
       operationId: configEntriesResolve
@@ -6139,6 +6062,7 @@ paths:
       - ADM-01
       - LIM-02
       x-service: config-service
+      x-table: config_entry
   /v1/config/changes:
     get:
       operationId: configChangesList
@@ -6204,21 +6128,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ConfigChange'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ConfigChangePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6227,6 +6137,9 @@ paths:
       - ADM-03
       - LIM-02
       x-service: config-service
+      x-table: config_change
+      x-crud: true
+      x-crud-list: true
   /v1/config/changes/{id}:
     get:
       operationId: configChangesGet
@@ -6260,6 +6173,9 @@ paths:
       - ADM-03
       - LIM-02
       x-service: config-service
+      x-table: config_change
+      x-crud: true
+      x-crud-get: true
   /v1/config/country-packs:
     get:
       operationId: countryPacksList
@@ -6318,21 +6234,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CountryPack'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CountryPackPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6341,6 +6243,9 @@ paths:
       - ADM-04
       - REG-01
       x-service: config-service
+      x-table: country_pack
+      x-crud: true
+      x-crud-list: true
   /v1/config/country-packs/{id}:
     get:
       operationId: countryPacksGet
@@ -6374,6 +6279,9 @@ paths:
       - ADM-04
       - REG-01
       x-service: config-service
+      x-table: country_pack
+      x-crud: true
+      x-crud-get: true
   /v1/config/country-packs/{id}/install:
     post:
       operationId: countryPacksInstall
@@ -6418,6 +6326,7 @@ paths:
       - ADM-04
       - REG-01
       x-service: config-service
+      x-table: country_pack
   /v1/config/installed-country-packs:
     get:
       operationId: installedCountryPacksList
@@ -6483,21 +6392,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantCountryPack'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantCountryPackPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6505,6 +6400,9 @@ paths:
       x-requirements:
       - REG-01
       x-service: config-service
+      x-table: tenant_country_pack
+      x-crud: true
+      x-crud-list: true
   /v1/config/installed-country-packs/{id}:
     get:
       operationId: installedCountryPacksGet
@@ -6538,6 +6436,9 @@ paths:
       x-requirements:
       - REG-01
       x-service: config-service
+      x-table: tenant_country_pack
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: installedCountryPacksUpdate
       summary: Update installed country pack
@@ -6575,6 +6476,9 @@ paths:
       x-requirements:
       - REG-01
       x-service: config-service
+      x-table: tenant_country_pack
+      x-crud: true
+      x-crud-update: true
   /v1/config/installed-country-packs/{id}/upgrade:
     post:
       operationId: installedCountryPacksUpgrade
@@ -6618,6 +6522,7 @@ paths:
       x-requirements:
       - REG-01
       x-service: config-service
+      x-table: tenant_country_pack
   /v1/config/installed-country-packs/{id}/uninstall:
     post:
       operationId: installedCountryPacksUninstall
@@ -6661,6 +6566,7 @@ paths:
       x-requirements:
       - REG-01
       x-service: config-service
+      x-table: tenant_country_pack
   /v1/config/tax-rules:
     get:
       operationId: taxRateRulesList
@@ -6733,21 +6639,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TaxRateRule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TaxRateRulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6755,6 +6647,9 @@ paths:
       x-requirements:
       - PRC-03
       x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: taxRateRulesCreate
       summary: Create tax rate rule
@@ -6789,6 +6684,9 @@ paths:
       x-requirements:
       - PRC-03
       x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-create: true
   /v1/config/tax-rules/{id}:
     get:
       operationId: taxRateRulesGet
@@ -6822,6 +6720,9 @@ paths:
       x-requirements:
       - PRC-03
       x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: taxRateRulesUpdate
       summary: Update tax rate rule
@@ -6859,6 +6760,9 @@ paths:
       x-requirements:
       - PRC-03
       x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: taxRateRulesDelete
       summary: Delete tax rate rule
@@ -6880,6 +6784,9 @@ paths:
       x-requirements:
       - PRC-03
       x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-delete: true
   /v1/config/tax-rules/calculate:
     post:
       operationId: taxRateRulesCalculate
@@ -6913,6 +6820,7 @@ paths:
       x-requirements:
       - PRC-03
       x-service: config-service
+      x-table: tax_rate_rule
   /v1/reference/currencies:
     get:
       operationId: currenciesList
@@ -6971,21 +6879,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Currency'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CurrencyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6994,6 +6888,9 @@ paths:
       - ADM-04
       - LED-03
       x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: currenciesCreate
       summary: Create currencie
@@ -7029,6 +6926,9 @@ paths:
       - ADM-04
       - LED-03
       x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-create: true
   /v1/reference/currencies/{id}:
     get:
       operationId: currenciesGet
@@ -7063,6 +6963,9 @@ paths:
       - ADM-04
       - LED-03
       x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: currenciesUpdate
       summary: Update currencie
@@ -7101,6 +7004,9 @@ paths:
       - ADM-04
       - LED-03
       x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-update: true
   /v1/reference/countries:
     get:
       operationId: countriesList
@@ -7172,21 +7078,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Country'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/CountryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7194,6 +7086,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: country
+      x-crud: true
+      x-crud-list: true
   /v1/reference/countries/{id}:
     get:
       operationId: countriesGet
@@ -7227,6 +7122,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: country
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: countriesUpdate
       summary: Update countrie
@@ -7264,6 +7162,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: country
+      x-crud: true
+      x-crud-update: true
   /v1/reference/languages:
     get:
       operationId: languagesList
@@ -7313,21 +7214,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Language'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/LanguagePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7335,6 +7222,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: languagesCreate
       summary: Create language
@@ -7369,6 +7259,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-create: true
   /v1/reference/languages/{id}:
     get:
       operationId: languagesGet
@@ -7402,6 +7295,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: languagesUpdate
       summary: Update language
@@ -7439,6 +7335,9 @@ paths:
       x-requirements:
       - ADM-04
       x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-update: true
   /v1/reference/holiday-calendars:
     get:
       operationId: holidayCalendarsList
@@ -7505,21 +7404,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/HolidayCalendar'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/HolidayCalendarPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7528,6 +7413,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: holidayCalendarsCreate
       summary: Create holiday calendar
@@ -7563,6 +7451,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-create: true
   /v1/reference/holiday-calendars/{id}:
     get:
       operationId: holidayCalendarsGet
@@ -7597,6 +7488,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: holidayCalendarsUpdate
       summary: Update holiday calendar
@@ -7635,6 +7529,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-update: true
   /v1/reference/holiday-calendars/{id}/is-business-day:
     get:
       operationId: holidayCalendarsIsBusinessDay
@@ -7664,6 +7561,7 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
   /v1/reference/holiday-calendars/{id}/next-business-day:
     get:
       operationId: holidayCalendarsNextBusinessDay
@@ -7693,6 +7591,7 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
   /v1/reference/holiday-calendars/{id}/import:
     post:
       operationId: holidayCalendarsImport
@@ -7733,6 +7632,7 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday_calendar
   /v1/reference/holidays:
     get:
       operationId: holidaysList
@@ -7798,21 +7698,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Holiday'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/HolidayPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7821,6 +7707,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: holidaysCreate
       summary: Create holiday
@@ -7856,6 +7745,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-create: true
   /v1/reference/holidays/{id}:
     get:
       operationId: holidaysGet
@@ -7890,6 +7782,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: holidaysUpdate
       summary: Update holiday
@@ -7928,6 +7823,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: holidaysDelete
       summary: Delete holiday
@@ -7950,6 +7848,9 @@ paths:
       - ADM-04
       - PAY-05
       x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-delete: true
   /v1/reference/fx-rate-sources:
     get:
       operationId: fxRateSourcesList
@@ -7999,21 +7900,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/FxRateSource'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/FxRateSourcePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8022,6 +7909,9 @@ paths:
       - ADM-04
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: fxRateSourcesCreate
       summary: Create fx rate source
@@ -8057,6 +7947,9 @@ paths:
       - ADM-04
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-create: true
   /v1/reference/fx-rate-sources/{id}:
     get:
       operationId: fxRateSourcesGet
@@ -8091,6 +7984,9 @@ paths:
       - ADM-04
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: fxRateSourcesUpdate
       summary: Update fx rate source
@@ -8129,6 +8025,9 @@ paths:
       - ADM-04
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-update: true
   /v1/reference/fx-rates:
     get:
       operationId: fxRatesList
@@ -8205,21 +8104,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/FxRate'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/FxRatePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8229,6 +8114,9 @@ paths:
       - LED-03
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: fxRatesCreate
       summary: Create fx rate
@@ -8265,6 +8153,9 @@ paths:
       - LED-03
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate
+      x-crud: true
+      x-crud-create: true
   /v1/reference/fx-rates/{id}:
     get:
       operationId: fxRatesGet
@@ -8299,6 +8190,9 @@ paths:
       - LED-03
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate
+      x-crud: true
+      x-crud-get: true
   /v1/reference/fx-rates/latest:
     get:
       operationId: fxRatesLatest
@@ -8327,6 +8221,7 @@ paths:
       - LED-03
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate
   /v1/reference/fx-rates/convert:
     post:
       operationId: fxRatesConvert
@@ -8362,6 +8257,7 @@ paths:
       - LED-03
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate
   /v1/reference/fx-rates/bulk:
     post:
       operationId: fxRatesBulk
@@ -8397,6 +8293,7 @@ paths:
       - LED-03
       - PAY-06
       x-service: reference-data-service
+      x-table: fx_rate
   /v1/reference/banks:
     get:
       operationId: banksList
@@ -8462,21 +8359,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BankDirectory'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/BankDirectoryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8485,6 +8368,9 @@ paths:
       - ADM-04
       - PAY-02
       x-service: reference-data-service
+      x-table: bank_directory
+      x-crud: true
+      x-crud-list: true
   /v1/reference/banks/{id}:
     get:
       operationId: banksGet
@@ -8518,6 +8404,9 @@ paths:
       - ADM-04
       - PAY-02
       x-service: reference-data-service
+      x-table: bank_directory
+      x-crud: true
+      x-crud-get: true
   /v1/reference/banks/validate-account:
     post:
       operationId: banksValidateAccount
@@ -8552,6 +8441,7 @@ paths:
       - ADM-04
       - PAY-02
       x-service: reference-data-service
+      x-table: bank_directory
   /v1/reference/mcc-codes:
     get:
       operationId: mccCodesList
@@ -8606,21 +8496,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MccCode'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/MccCodePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8629,6 +8505,9 @@ paths:
       - ADM-04
       - CRD-04
       x-service: reference-data-service
+      x-table: mcc_code
+      x-crud: true
+      x-crud-list: true
   /v1/reference/mcc-codes/{id}:
     get:
       operationId: mccCodesGet
@@ -8662,6 +8541,9 @@ paths:
       - ADM-04
       - CRD-04
       x-service: reference-data-service
+      x-table: mcc_code
+      x-crud: true
+      x-crud-get: true
   /v1/reference/purpose-codes:
     get:
       operationId: purposeCodesList
@@ -8712,21 +8594,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PurposeCode'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/PurposeCodePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8735,6 +8603,9 @@ paths:
       - ADM-04
       - PAY-03
       x-service: reference-data-service
+      x-table: purpose_code
+      x-crud: true
+      x-crud-list: true
   /v1/reference/purpose-codes/{id}:
     get:
       operationId: purposeCodesGet
@@ -8768,6 +8639,9 @@ paths:
       - ADM-04
       - PAY-03
       x-service: reference-data-service
+      x-table: purpose_code
+      x-crud: true
+      x-crud-get: true
   /v1/documents:
     get:
       operationId: documentsList
@@ -8867,21 +8741,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Document'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DocumentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8891,6 +8751,9 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: documentsCreate
       summary: Create document
@@ -8927,6 +8790,9 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
+      x-crud: true
+      x-crud-create: true
   /v1/documents/{id}:
     get:
       operationId: documentsGet
@@ -8962,6 +8828,9 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: documentsUpdate
       summary: Update document
@@ -9001,6 +8870,9 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: documentsDelete
       summary: Delete document
@@ -9024,6 +8896,9 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
+      x-crud: true
+      x-crud-delete: true
   /v1/documents/{id}/upload-url:
     post:
       operationId: documentsUploadUrl
@@ -9059,6 +8934,7 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
   /v1/documents/{id}/download-url:
     get:
       operationId: documentsDownloadUrl
@@ -9089,6 +8965,7 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
   /v1/documents/{id}/legal-hold:
     post:
       operationId: documentsLegalHold
@@ -9134,6 +9011,7 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
   /v1/documents/{id}/archive:
     post:
       operationId: documentsArchive
@@ -9173,6 +9051,7 @@ paths:
       - DEP-06
       - ONB-02
       x-service: document-service
+      x-table: document
   /v1/document-templates:
     get:
       operationId: documentTemplatesList
@@ -9254,21 +9133,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DocumentTemplate'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DocumentTemplatePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9277,6 +9142,9 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: documentTemplatesCreate
       summary: Create document template
@@ -9312,6 +9180,9 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
+      x-crud: true
+      x-crud-create: true
   /v1/document-templates/{id}:
     get:
       operationId: documentTemplatesGet
@@ -9346,6 +9217,9 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: documentTemplatesUpdate
       summary: Update document template
@@ -9384,6 +9258,9 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
+      x-crud: true
+      x-crud-update: true
   /v1/document-templates/{id}/preview:
     post:
       operationId: documentTemplatesPreview
@@ -9424,6 +9301,7 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
   /v1/document-templates/{id}/publish:
     post:
       operationId: documentTemplatesPublish
@@ -9462,6 +9340,7 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
   /v1/document-templates/{id}/retire:
     post:
       operationId: documentTemplatesRetire
@@ -9500,6 +9379,7 @@ paths:
       - DEP-06
       - LND-01
       x-service: document-service
+      x-table: document_template
   /v1/generated-documents:
     get:
       operationId: generatedDocumentsList
@@ -9571,21 +9451,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/GeneratedDocument'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/GeneratedDocumentPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9593,6 +9459,9 @@ paths:
       x-requirements:
       - DEP-06
       x-service: document-service
+      x-table: generated_document
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: generatedDocumentsCreate
       summary: Create generated document
@@ -9627,6 +9496,9 @@ paths:
       x-requirements:
       - DEP-06
       x-service: document-service
+      x-table: generated_document
+      x-crud: true
+      x-crud-create: true
   /v1/generated-documents/{id}:
     get:
       operationId: generatedDocumentsGet
@@ -9659,6 +9531,9 @@ paths:
       x-requirements:
       - DEP-06
       x-service: document-service
+      x-table: generated_document
+      x-crud: true
+      x-crud-get: true
   /v1/esign-requests:
     get:
       operationId: esignRequestsList
@@ -9732,21 +9607,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/EsignRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/EsignRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9755,6 +9616,9 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: esignRequestsCreate
       summary: Create esign request
@@ -9790,6 +9654,9 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
+      x-crud: true
+      x-crud-create: true
   /v1/esign-requests/{id}:
     get:
       operationId: esignRequestsGet
@@ -9823,6 +9690,9 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
+      x-crud: true
+      x-crud-get: true
   /v1/esign-requests/{id}/send:
     post:
       operationId: esignRequestsSend
@@ -9861,6 +9731,7 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
   /v1/esign-requests/{id}/remind:
     post:
       operationId: esignRequestsRemind
@@ -9899,6 +9770,7 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
   /v1/esign-requests/{id}/cancel:
     post:
       operationId: esignRequestsCancel
@@ -9943,6 +9815,7 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
   /v1/esign-requests/callbacks/{provider}/events:
     post:
       operationId: esignRequestsCallbacksEvents
@@ -9982,6 +9855,7 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
+      x-table: esign_request
   /v1/approval-policies:
     get:
       operationId: approvalPoliciesList
@@ -10041,21 +9915,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalPolicy'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApprovalPolicyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10063,6 +9923,9 @@ paths:
       x-requirements:
       - LIM-02
       x-service: workflow-service
+      x-table: approval_policy
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: approvalPoliciesCreate
       summary: Create approval policie
@@ -10097,6 +9960,9 @@ paths:
       x-requirements:
       - LIM-02
       x-service: workflow-service
+      x-table: approval_policy
+      x-crud: true
+      x-crud-create: true
   /v1/approval-policies/{id}:
     get:
       operationId: approvalPoliciesGet
@@ -10130,6 +9996,9 @@ paths:
       x-requirements:
       - LIM-02
       x-service: workflow-service
+      x-table: approval_policy
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: approvalPoliciesUpdate
       summary: Update approval policie
@@ -10167,6 +10036,9 @@ paths:
       x-requirements:
       - LIM-02
       x-service: workflow-service
+      x-table: approval_policy
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: approvalPoliciesDelete
       summary: Delete approval policie
@@ -10188,6 +10060,9 @@ paths:
       x-requirements:
       - LIM-02
       x-service: workflow-service
+      x-table: approval_policy
+      x-crud: true
+      x-crud-delete: true
   /v1/approval-requests:
     get:
       operationId: approvalRequestsList
@@ -10269,21 +10144,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApprovalRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10292,6 +10153,9 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: approvalRequestsCreate
       summary: Create approval request
@@ -10327,6 +10191,9 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
+      x-crud: true
+      x-crud-create: true
   /v1/approval-requests/{id}:
     get:
       operationId: approvalRequestsGet
@@ -10360,6 +10227,9 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
+      x-crud: true
+      x-crud-get: true
   /v1/approval-requests/{id}/approve:
     post:
       operationId: approvalRequestsApprove
@@ -10404,6 +10274,7 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
   /v1/approval-requests/{id}/reject:
     post:
       operationId: approvalRequestsReject
@@ -10448,6 +10319,7 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
   /v1/approval-requests/{id}/request-changes:
     post:
       operationId: approvalRequestsRequestChanges
@@ -10492,6 +10364,7 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
   /v1/approval-requests/{id}/cancel:
     post:
       operationId: approvalRequestsCancel
@@ -10536,6 +10409,7 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
   /v1/approval-requests/{id}/decisions:
     get:
       operationId: approvalRequestsDecisions
@@ -10560,21 +10434,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalDecision'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApprovalDecisionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10585,6 +10445,7 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
   /v1/approval-requests/inbox:
     get:
       operationId: approvalRequestsInbox
@@ -10603,21 +10464,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/ApprovalRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10628,6 +10475,7 @@ paths:
       - ADM-03
       - LIM-02
       x-service: workflow-service
+      x-table: approval_request
   /v1/workflows/definitions:
     get:
       operationId: workflowDefinitionsList
@@ -10686,21 +10534,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WorkflowDefinition'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WorkflowDefinitionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10709,6 +10543,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_definition
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: workflowDefinitionsCreate
       summary: Create workflow definition
@@ -10744,6 +10581,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_definition
+      x-crud: true
+      x-crud-create: true
   /v1/workflows/definitions/{id}:
     get:
       operationId: workflowDefinitionsGet
@@ -10778,6 +10618,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_definition
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: workflowDefinitionsUpdate
       summary: Update workflow definition
@@ -10816,6 +10659,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_definition
+      x-crud: true
+      x-crud-update: true
   /v1/workflows/definitions/{id}/publish:
     post:
       operationId: workflowDefinitionsPublish
@@ -10854,6 +10700,7 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_definition
   /v1/workflows/definitions/{id}/deprecate:
     post:
       operationId: workflowDefinitionsDeprecate
@@ -10892,6 +10739,7 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_definition
   /v1/workflows/instances:
     get:
       operationId: workflowInstancesList
@@ -10968,21 +10816,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WorkflowInstance'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WorkflowInstancePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10991,6 +10825,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_instance
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: workflowInstancesCreate
       summary: Create workflow instance
@@ -11026,6 +10863,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_instance
+      x-crud: true
+      x-crud-create: true
   /v1/workflows/instances/{id}:
     get:
       operationId: workflowInstancesGet
@@ -11059,6 +10899,9 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_instance
+      x-crud: true
+      x-crud-get: true
   /v1/workflows/instances/{id}/signal:
     post:
       operationId: workflowInstancesSignal
@@ -11103,6 +10946,7 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_instance
   /v1/workflows/instances/{id}/cancel:
     post:
       operationId: workflowInstancesCancel
@@ -11147,6 +10991,7 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_instance
   /v1/workflows/instances/{id}/retry:
     post:
       operationId: workflowInstancesRetry
@@ -11185,6 +11030,7 @@ paths:
       - ONB-01
       - SRV-01
       x-service: workflow-service
+      x-table: workflow_instance
   /v1/tasks:
     get:
       operationId: tasksList
@@ -11279,21 +11125,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WorkTask'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WorkTaskPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11303,6 +11135,9 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
+      x-crud: true
+      x-crud-list: true
   /v1/tasks/{id}:
     get:
       operationId: tasksGet
@@ -11338,6 +11173,9 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: tasksUpdate
       summary: Update task
@@ -11377,6 +11215,9 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
+      x-crud: true
+      x-crud-update: true
   /v1/tasks/{id}/claim:
     post:
       operationId: tasksClaim
@@ -11416,6 +11257,7 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
   /v1/tasks/{id}/release:
     post:
       operationId: tasksRelease
@@ -11455,6 +11297,7 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
   /v1/tasks/{id}/assign:
     post:
       operationId: tasksAssign
@@ -11500,6 +11343,7 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
   /v1/tasks/{id}/complete:
     post:
       operationId: tasksComplete
@@ -11545,6 +11389,7 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
   /v1/tasks/{id}/escalate:
     post:
       operationId: tasksEscalate
@@ -11590,6 +11435,7 @@ paths:
       - ONB-05
       - SRV-01
       x-service: workflow-service
+      x-table: work_task
   /v1/notifications:
     get:
       operationId: notificationsList
@@ -11691,21 +11537,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Notification'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/NotificationPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11714,6 +11546,9 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: notificationsCreate
       summary: Create notification
@@ -11749,6 +11584,9 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
+      x-crud: true
+      x-crud-create: true
   /v1/notifications/{id}:
     get:
       operationId: notificationsGet
@@ -11782,6 +11620,9 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
+      x-crud: true
+      x-crud-get: true
   /v1/notifications/{id}/resend:
     post:
       operationId: notificationsResend
@@ -11820,6 +11661,7 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
   /v1/notifications/{id}/cancel:
     post:
       operationId: notificationsCancel
@@ -11858,6 +11700,7 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
   /v1/notifications/{id}/mark-read:
     post:
       operationId: notificationsMarkRead
@@ -11896,6 +11739,7 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
   /v1/notifications/{id}/attempts:
     get:
       operationId: notificationsAttempts
@@ -11920,21 +11764,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/NotificationDeliveryAttempt'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/NotificationDeliveryAttemptPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -11945,6 +11775,7 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
   /v1/notifications/send-templated:
     post:
       operationId: notificationsSendTemplated
@@ -11983,6 +11814,7 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
   /v1/notifications/provider-callbacks/{provider}/events:
     post:
       operationId: notificationsProviderCallbacksEvents
@@ -12022,6 +11854,7 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
+      x-table: notification
   /v1/notification-templates:
     get:
       operationId: notificationTemplatesList
@@ -12109,21 +11942,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/NotificationTemplate'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/NotificationTemplatePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12131,6 +11950,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: notificationTemplatesCreate
       summary: Create notification template
@@ -12165,6 +11987,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-create: true
   /v1/notification-templates/{id}:
     get:
       operationId: notificationTemplatesGet
@@ -12198,6 +12023,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: notificationTemplatesUpdate
       summary: Update notification template
@@ -12235,6 +12063,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
+      x-crud: true
+      x-crud-update: true
   /v1/notification-templates/{id}/preview:
     post:
       operationId: notificationTemplatesPreview
@@ -12274,6 +12105,7 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
   /v1/notification-templates/{id}/publish:
     post:
       operationId: notificationTemplatesPublish
@@ -12311,6 +12143,7 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
   /v1/notification-templates/{id}/test-send:
     post:
       operationId: notificationTemplatesTestSend
@@ -12350,6 +12183,7 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_template
   /v1/notification-providers:
     get:
       operationId: notificationProvidersList
@@ -12416,21 +12250,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/NotificationProvider'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/NotificationProviderPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12438,6 +12258,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: notificationProvidersCreate
       summary: Create notification provider
@@ -12472,6 +12295,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-create: true
   /v1/notification-providers/{id}:
     get:
       operationId: notificationProvidersGet
@@ -12505,6 +12331,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: notificationProvidersUpdate
       summary: Update notification provider
@@ -12542,6 +12371,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: notificationProvidersDelete
       summary: Delete notification provider
@@ -12563,6 +12395,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_provider
+      x-crud: true
+      x-crud-delete: true
   /v1/notification-providers/{id}/test:
     post:
       operationId: notificationProvidersTest
@@ -12602,6 +12437,7 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_provider
   /v1/notification-rules:
     get:
       operationId: notificationRulesList
@@ -12667,21 +12503,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/NotificationRule'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/NotificationRulePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12689,6 +12511,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: notificationRulesCreate
       summary: Create notification rule
@@ -12723,6 +12548,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-create: true
   /v1/notification-rules/{id}:
     get:
       operationId: notificationRulesGet
@@ -12756,6 +12584,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: notificationRulesUpdate
       summary: Update notification rule
@@ -12793,6 +12624,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: notificationRulesDelete
       summary: Delete notification rule
@@ -12814,6 +12648,9 @@ paths:
       x-requirements:
       - NOT-01
       x-service: notification-service
+      x-table: notification_rule
+      x-crud: true
+      x-crud-delete: true
   /v1/notification-preferences:
     get:
       operationId: notificationPreferencesList
@@ -12897,21 +12734,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/NotificationPreference'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/NotificationPreferencePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12919,6 +12742,9 @@ paths:
       x-requirements:
       - NOT-02
       x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: notificationPreferencesCreate
       summary: Create notification preference
@@ -12953,6 +12779,9 @@ paths:
       x-requirements:
       - NOT-02
       x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-create: true
   /v1/notification-preferences/{id}:
     get:
       operationId: notificationPreferencesGet
@@ -12986,6 +12815,9 @@ paths:
       x-requirements:
       - NOT-02
       x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: notificationPreferencesUpdate
       summary: Update notification preference
@@ -13023,6 +12855,9 @@ paths:
       x-requirements:
       - NOT-02
       x-service: notification-service
+      x-table: notification_preference
+      x-crud: true
+      x-crud-update: true
   /v1/webhook-endpoints:
     get:
       operationId: webhookEndpointsList
@@ -13088,21 +12923,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WebhookEndpoint'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WebhookEndpointPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13110,6 +12931,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: webhookEndpointsCreate
       summary: Create webhook endpoint
@@ -13144,6 +12968,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
+      x-crud: true
+      x-crud-create: true
   /v1/webhook-endpoints/{id}:
     get:
       operationId: webhookEndpointsGet
@@ -13177,6 +13004,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: webhookEndpointsUpdate
       summary: Update webhook endpoint
@@ -13214,6 +13044,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: webhookEndpointsDelete
       summary: Delete webhook endpoint
@@ -13235,6 +13068,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
+      x-crud: true
+      x-crud-delete: true
   /v1/webhook-endpoints/{id}/rotate-secret:
     post:
       operationId: webhookEndpointsRotateSecret
@@ -13268,6 +13104,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
   /v1/webhook-endpoints/{id}/enable:
     post:
       operationId: webhookEndpointsEnable
@@ -13305,6 +13142,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
   /v1/webhook-endpoints/{id}/disable:
     post:
       operationId: webhookEndpointsDisable
@@ -13348,6 +13186,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
   /v1/webhook-endpoints/{id}/test:
     post:
       operationId: webhookEndpointsTest
@@ -13391,6 +13230,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_endpoint
   /v1/webhook-subscriptions:
     get:
       operationId: webhookSubscriptionsList
@@ -13450,21 +13290,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WebhookSubscription'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WebhookSubscriptionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13472,6 +13298,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_subscription
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: webhookSubscriptionsCreate
       summary: Create webhook subscription
@@ -13506,6 +13335,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_subscription
+      x-crud: true
+      x-crud-create: true
   /v1/webhook-subscriptions/{id}:
     get:
       operationId: webhookSubscriptionsGet
@@ -13539,6 +13371,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_subscription
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: webhookSubscriptionsUpdate
       summary: Update webhook subscription
@@ -13576,6 +13411,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_subscription
+      x-crud: true
+      x-crud-update: true
     delete:
       operationId: webhookSubscriptionsDelete
       summary: Delete webhook subscription
@@ -13597,6 +13435,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_subscription
+      x-crud: true
+      x-crud-delete: true
   /v1/webhook-deliveries:
     get:
       operationId: webhookDeliveriesList
@@ -13667,21 +13508,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WebhookDelivery'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WebhookDeliveryPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13689,6 +13516,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_delivery
+      x-crud: true
+      x-crud-list: true
   /v1/webhook-deliveries/{id}:
     get:
       operationId: webhookDeliveriesGet
@@ -13721,6 +13551,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_delivery
+      x-crud: true
+      x-crud-get: true
   /v1/webhook-deliveries/{id}/retry:
     post:
       operationId: webhookDeliveriesRetry
@@ -13758,6 +13591,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_delivery
   /v1/webhook-deliveries/{id}/attempts:
     get:
       operationId: webhookDeliveriesAttempts
@@ -13782,21 +13616,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WebhookDeliveryAttempt'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WebhookDeliveryAttemptPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13806,6 +13626,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_delivery
   /v1/event-replays:
     get:
       operationId: eventReplaysList
@@ -13867,21 +13688,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WebhookReplayJob'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/WebhookReplayJobPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13889,6 +13696,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_replay_job
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: eventReplaysCreate
       summary: Create event replay
@@ -13923,6 +13733,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_replay_job
+      x-crud: true
+      x-crud-create: true
   /v1/event-replays/{id}:
     get:
       operationId: eventReplaysGet
@@ -13955,6 +13768,9 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_replay_job
+      x-crud: true
+      x-crud-get: true
   /v1/event-replays/{id}/cancel:
     post:
       operationId: eventReplaysCancel
@@ -13992,6 +13808,7 @@ paths:
       x-requirements:
       - API-01
       x-service: webhook-service
+      x-table: webhook_replay_job
   /v1/audit-events:
     get:
       operationId: auditEventsList
@@ -14087,21 +13904,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AuditEvent'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AuditEventPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14109,6 +13912,9 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_event
+      x-crud: true
+      x-crud-list: true
   /v1/audit-events/{id}:
     get:
       operationId: auditEventsGet
@@ -14141,6 +13947,9 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_event
+      x-crud: true
+      x-crud-get: true
   /v1/audit-events/verify-chain:
     post:
       operationId: auditEventsVerifyChain
@@ -14174,6 +13983,7 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_event
   /v1/audit-events/search:
     post:
       operationId: auditEventsSearch
@@ -14193,21 +14003,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AuditEvent'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AuditEventPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14227,6 +14023,7 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_event
   /v1/audit-retention-policies:
     get:
       operationId: auditRetentionPoliciesList
@@ -14282,21 +14079,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AuditRetentionPolicy'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/AuditRetentionPolicyPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14304,6 +14087,9 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: auditRetentionPoliciesCreate
       summary: Create audit retention policie
@@ -14338,6 +14124,9 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-create: true
   /v1/audit-retention-policies/{id}:
     get:
       operationId: auditRetentionPoliciesGet
@@ -14371,6 +14160,9 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: auditRetentionPoliciesUpdate
       summary: Update audit retention policie
@@ -14408,6 +14200,9 @@ paths:
       x-requirements:
       - ADM-03
       x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-update: true
   /v1/data-exports:
     get:
       operationId: dataExportsList
@@ -14484,21 +14279,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DataExportRequest'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/DataExportRequestPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14507,6 +14288,9 @@ paths:
       - ADM-03
       - CIF-04
       x-service: audit-service
+      x-table: data_export_request
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: dataExportsCreate
       summary: Create data export
@@ -14542,6 +14326,9 @@ paths:
       - ADM-03
       - CIF-04
       x-service: audit-service
+      x-table: data_export_request
+      x-crud: true
+      x-crud-create: true
   /v1/data-exports/{id}:
     get:
       operationId: dataExportsGet
@@ -14575,6 +14362,9 @@ paths:
       - ADM-03
       - CIF-04
       x-service: audit-service
+      x-table: data_export_request
+      x-crud: true
+      x-crud-get: true
   /v1/data-exports/{id}/download-url:
     get:
       operationId: dataExportsDownloadUrl
@@ -14604,6 +14394,7 @@ paths:
       - ADM-03
       - CIF-04
       x-service: audit-service
+      x-table: data_export_request
   /v1/data-exports/{id}/cancel:
     post:
       operationId: dataExportsCancel
@@ -14648,6 +14439,7 @@ paths:
       - ADM-03
       - CIF-04
       x-service: audit-service
+      x-table: data_export_request
   /v1/billing/price-plans:
     get:
       operationId: pricePlansList
@@ -14714,21 +14506,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/PricePlan'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/PricePlanPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14736,6 +14514,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: pricePlansCreate
       summary: Create price plan
@@ -14770,6 +14551,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-create: true
   /v1/billing/price-plans/{id}:
     get:
       operationId: pricePlansGet
@@ -14803,6 +14587,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: pricePlansUpdate
       summary: Update price plan
@@ -14840,6 +14627,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-update: true
   /v1/billing/subscriptions:
     get:
       operationId: subscriptionsList
@@ -14900,21 +14690,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantSubscription'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantSubscriptionPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14922,6 +14698,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: subscriptionsCreate
       summary: Create subscription
@@ -14956,6 +14735,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-create: true
   /v1/billing/subscriptions/{id}:
     get:
       operationId: subscriptionsGet
@@ -14989,6 +14771,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-get: true
     patch:
       operationId: subscriptionsUpdate
       summary: Update subscription
@@ -15026,6 +14811,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-update: true
   /v1/billing/subscriptions/{id}/change-plan:
     post:
       operationId: subscriptionsChangePlan
@@ -15069,6 +14857,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_subscription
   /v1/billing/subscriptions/{id}/cancel:
     post:
       operationId: subscriptionsCancel
@@ -15112,6 +14901,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_subscription
   /v1/billing/usage:
     get:
       operationId: usageList
@@ -15184,21 +14974,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UsageRecord'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/UsageRecordPage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -15206,6 +14982,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: usage_record
+      x-crud: true
+      x-crud-list: true
     post:
       operationId: usageCreate
       summary: Create usage
@@ -15240,6 +15019,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: usage_record
+      x-crud: true
+      x-crud-create: true
   /v1/billing/usage/{id}:
     get:
       operationId: usageGet
@@ -15272,6 +15054,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: usage_record
+      x-crud: true
+      x-crud-get: true
   /v1/billing/usage/summary:
     get:
       operationId: usageSummary
@@ -15294,6 +15079,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: usage_record
   /v1/billing/invoices:
     get:
       operationId: invoicesList
@@ -15360,21 +15146,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantInvoice'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantInvoicePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -15382,6 +15154,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
+      x-crud: true
+      x-crud-list: true
   /v1/billing/invoices/{id}:
     get:
       operationId: invoicesGet
@@ -15414,6 +15189,9 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
+      x-crud: true
+      x-crud-get: true
   /v1/billing/invoices/{id}/issue:
     post:
       operationId: invoicesIssue
@@ -15451,6 +15229,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
   /v1/billing/invoices/{id}/void:
     post:
       operationId: invoicesVoid
@@ -15494,6 +15273,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
   /v1/billing/invoices/{id}/record-payment:
     post:
       operationId: invoicesRecordPayment
@@ -15537,6 +15317,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
   /v1/billing/invoices/{id}/lines:
     get:
       operationId: invoicesLines
@@ -15561,21 +15342,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/TenantInvoiceLine'
-                  next_cursor:
-                    type:
-                    - string
-                    - 'null'
-                  has_more:
-                    type: boolean
-                required:
-                - data
-                - has_more
+                $ref: '#/components/schemas/TenantInvoiceLinePage'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -15585,6 +15352,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
   /v1/billing/invoices/generate:
     post:
       operationId: invoicesGenerate
@@ -15618,6 +15386,7 @@ paths:
       x-requirements:
       - ADM-05
       x-service: billing-service
+      x-table: tenant_invoice
 components:
   parameters:
     CreatedAfter:
@@ -15740,6 +15509,24 @@ components:
       - status
       - code
       type: object
+    CellPage:
+      type: object
+      description: One page of Cell results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Cell'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CellsDrainRequest:
       type: object
       properties:
@@ -15748,6 +15535,24 @@ components:
           maxLength: 255
       required:
       - reason
+    TenantPage:
+      type: object
+      description: One page of Tenant results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     TenantsSuspendRequest:
       type: object
       properties:
@@ -15775,6 +15580,24 @@ components:
           format: date-time
       required:
       - cell_id
+    TenantPlacementPage:
+      type: object
+      description: One page of TenantPlacement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantPlacement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     TenantsProvisionFromTemplateRequest:
       type: object
       properties:
@@ -15820,6 +15643,24 @@ components:
       - default_currency
       - default_country
       - primary_contact_email
+    TenantModulePage:
+      type: object
+      description: One page of TenantModule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantModule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ModulesEnableRequest:
       type: object
       properties:
@@ -15834,6 +15675,42 @@ components:
           maxLength: 255
       required:
       - reason
+    LegalEntityPage:
+      type: object
+      description: One page of LegalEntity results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalEntity'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    BranchPage:
+      type: object
+      description: One page of Branch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Branch'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     BranchesCloseRequest:
       type: object
       properties:
@@ -15846,6 +15723,42 @@ components:
       required:
       - closed_on
       - reason
+    TenantSettingPage:
+      type: object
+      description: One page of TenantSetting results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantSetting'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FeatureFlagPage:
+      type: object
+      description: One page of FeatureFlag results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeatureFlag'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     FeatureFlagsEvaluateRequest:
       type: object
       properties:
@@ -15861,6 +15774,42 @@ components:
       required:
       - subject_type
       - subject_id
+    TenantBrandingPage:
+      type: object
+      description: One page of TenantBranding results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantBranding'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AppUserPage:
+      type: object
+      description: One page of AppUser results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppUser'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     UsersLockRequest:
       type: object
       properties:
@@ -15893,6 +15842,24 @@ components:
           maxLength: 255
       required:
       - reason
+    UserRolePage:
+      type: object
+      description: One page of UserRole results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserRole'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     UserRolesElevateRequest:
       type: object
       properties:
@@ -15909,6 +15876,42 @@ components:
       - role_id
       - duration_minutes
       - justification
+    RolePage:
+      type: object
+      description: One page of Role results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RolePermissionPage:
+      type: object
+      description: One page of RolePermission results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RolePermission'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     RolesPermissionsRequest:
       type: object
       properties:
@@ -15932,6 +15935,42 @@ components:
       required:
       - code
       - name
+    PermissionPage:
+      type: object
+      description: One page of Permission results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AccessPolicyPage:
+      type: object
+      description: One page of AccessPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AccessPoliciesSimulateRequest:
       type: object
       properties:
@@ -15948,6 +15987,42 @@ components:
       - user_id
       - action
       - resource
+    SsoProviderPage:
+      type: object
+      description: One page of SsoProvider results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SsoProvider'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MfaFactorPage:
+      type: object
+      description: One page of MfaFactor results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MfaFactor'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     MfaFactorsVerifyRequest:
       type: object
       properties:
@@ -15957,6 +16032,24 @@ components:
         assertion:
           type: object
           additionalProperties: true
+    UserSessionPage:
+      type: object
+      description: One page of UserSession results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSession'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     SessionsRevokeRequest:
       type: object
       properties:
@@ -15977,6 +16070,24 @@ components:
       required:
       - user_id
       - reason
+    ApiClientPage:
+      type: object
+      description: One page of ApiClient results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiClient'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ApiClientsSuspendRequest:
       type: object
       properties:
@@ -15985,6 +16096,24 @@ components:
           maxLength: 255
       required:
       - reason
+    ApiKeyPage:
+      type: object
+      description: One page of ApiKey results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKey'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ApiKeysRotateRequest:
       type: object
       properties:
@@ -15999,6 +16128,78 @@ components:
           maxLength: 255
       required:
       - reason
+    OauthScopePage:
+      type: object
+      description: One page of OauthScope results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OauthScope'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RateLimitPolicyPage:
+      type: object
+      description: One page of RateLimitPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateLimitPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ApiRequestLogPage:
+      type: object
+      description: One page of ApiRequestLog results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiRequestLog'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CustomFieldDefinitionPage:
+      type: object
+      description: One page of CustomFieldDefinition results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomFieldDefinition'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CustomFieldDefinitionsValidateRequest:
       type: object
       properties:
@@ -16011,6 +16212,24 @@ components:
       required:
       - table_name
       - values
+    ConfigEntryPage:
+      type: object
+      description: One page of ConfigEntry results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigEntry'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ConfigEntriesSubmitRequest:
       type: object
       properties:
@@ -16027,6 +16246,24 @@ components:
           maxLength: 500
       required:
       - reason
+    ConfigChangePage:
+      type: object
+      description: One page of ConfigChange results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigChange'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ConfigEntriesExportRequest:
       type: object
       properties:
@@ -16041,6 +16278,24 @@ components:
           additionalProperties: true
       required:
       - bundle
+    CountryPackPage:
+      type: object
+      description: One page of CountryPack results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountryPack'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CountryPacksInstallRequest:
       type: object
       properties:
@@ -16052,6 +16307,24 @@ components:
           additionalProperties: true
       required:
       - legal_entity_id
+    TenantCountryPackPage:
+      type: object
+      description: One page of TenantCountryPack results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantCountryPack'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     InstalledCountryPacksUpgradeRequest:
       type: object
       properties:
@@ -16068,6 +16341,24 @@ components:
           maxLength: 255
       required:
       - reason
+    TaxRateRulePage:
+      type: object
+      description: One page of TaxRateRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxRateRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     TaxRateRulesCalculateRequest:
       type: object
       properties:
@@ -16081,7 +16372,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -16094,6 +16386,78 @@ components:
       - applies_to
       - amount
       - currency
+    CurrencyPage:
+      type: object
+      description: One page of Currency results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Currency'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CountryPage:
+      type: object
+      description: One page of Country results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Country'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LanguagePage:
+      type: object
+      description: One page of Language results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Language'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    HolidayCalendarPage:
+      type: object
+      description: One page of HolidayCalendar results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/HolidayCalendar'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     HolidayCalendarsImportRequest:
       type: object
       properties:
@@ -16105,13 +16469,68 @@ components:
           maxLength: 64
       required:
       - year
+    HolidayPage:
+      type: object
+      description: One page of Holiday results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Holiday'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FxRateSourcePage:
+      type: object
+      description: One page of FxRateSource results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FxRateSource'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    FxRatePage:
+      type: object
+      description: One page of FxRate results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FxRate'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     FxRatesConvertRequest:
       type: object
       properties:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         from_currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -16141,6 +16560,24 @@ components:
           additionalProperties: true
       required:
       - rates
+    BankDirectoryPage:
+      type: object
+      description: One page of BankDirectory results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BankDirectory'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     BanksValidateAccountRequest:
       type: object
       properties:
@@ -16157,6 +16594,60 @@ components:
       required:
       - account_number
       - country
+    MccCodePage:
+      type: object
+      description: One page of MccCode results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MccCode'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PurposeCodePage:
+      type: object
+      description: One page of PurposeCode results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurposeCode'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    DocumentPage:
+      type: object
+      description: One page of Document results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Document'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     DocumentsLegalHoldRequest:
       type: object
       properties:
@@ -16168,6 +16659,24 @@ components:
       required:
       - legal_hold
       - reason
+    DocumentTemplatePage:
+      type: object
+      description: One page of DocumentTemplate results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentTemplate'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     DocumentTemplatesPreviewRequest:
       type: object
       properties:
@@ -16176,6 +16685,42 @@ components:
           additionalProperties: true
       required:
       - data
+    GeneratedDocumentPage:
+      type: object
+      description: One page of GeneratedDocument results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneratedDocument'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    EsignRequestPage:
+      type: object
+      description: One page of EsignRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EsignRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     EsignRequestsCancelRequest:
       type: object
       properties:
@@ -16192,6 +16737,42 @@ components:
           additionalProperties: true
       required:
       - payload
+    ApprovalPolicyPage:
+      type: object
+      description: One page of ApprovalPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ApprovalRequestPage:
+      type: object
+      description: One page of ApprovalRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     ApprovalRequestsApproveRequest:
       type: object
       properties:
@@ -16220,6 +16801,60 @@ components:
         reason:
           type: string
           maxLength: 255
+    ApprovalDecisionPage:
+      type: object
+      description: One page of ApprovalDecision results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalDecision'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WorkflowDefinitionPage:
+      type: object
+      description: One page of WorkflowDefinition results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowDefinition'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WorkflowInstancePage:
+      type: object
+      description: One page of WorkflowInstance results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowInstance'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     WorkflowInstancesSignalRequest:
       type: object
       properties:
@@ -16239,6 +16874,24 @@ components:
           maxLength: 255
       required:
       - reason
+    WorkTaskPage:
+      type: object
+      description: One page of WorkTask results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkTask'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     TasksAssignRequest:
       type: object
       properties:
@@ -16266,6 +16919,42 @@ components:
           maxLength: 255
       required:
       - reason
+    NotificationPage:
+      type: object
+      description: One page of Notification results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationDeliveryAttemptPage:
+      type: object
+      description: One page of NotificationDeliveryAttempt results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationDeliveryAttempt'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     NotificationsSendTemplatedRequest:
       type: object
       properties:
@@ -16308,6 +16997,24 @@ components:
           additionalProperties: true
       required:
       - payload
+    NotificationTemplatePage:
+      type: object
+      description: One page of NotificationTemplate results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationTemplate'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     NotificationTemplatesPreviewRequest:
       type: object
       properties:
@@ -16324,6 +17031,24 @@ components:
           maxLength: 320
       required:
       - destination
+    NotificationProviderPage:
+      type: object
+      description: One page of NotificationProvider results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationProvider'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     NotificationProvidersTestRequest:
       type: object
       properties:
@@ -16332,6 +17057,60 @@ components:
           maxLength: 320
       required:
       - destination
+    NotificationRulePage:
+      type: object
+      description: One page of NotificationRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    NotificationPreferencePage:
+      type: object
+      description: One page of NotificationPreference results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationPreference'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookEndpointPage:
+      type: object
+      description: One page of WebhookEndpoint results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookEndpoint'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     WebhookEndpointsDisableRequest:
       type: object
       properties:
@@ -16346,6 +17125,96 @@ components:
           maxLength: 128
       required:
       - event_type
+    WebhookSubscriptionPage:
+      type: object
+      description: One page of WebhookSubscription results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookSubscription'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookDeliveryPage:
+      type: object
+      description: One page of WebhookDelivery results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDelivery'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookDeliveryAttemptPage:
+      type: object
+      description: One page of WebhookDeliveryAttempt results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDeliveryAttempt'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WebhookReplayJobPage:
+      type: object
+      description: One page of WebhookReplayJob results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookReplayJob'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    AuditEventPage:
+      type: object
+      description: One page of AuditEvent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AuditEventsVerifyChainRequest:
       type: object
       properties:
@@ -16366,6 +17235,42 @@ components:
           additionalProperties: true
       required:
       - query
+    AuditRetentionPolicyPage:
+      type: object
+      description: One page of AuditRetentionPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRetentionPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    DataExportRequestPage:
+      type: object
+      description: One page of DataExportRequest results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataExportRequest'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     DataExportsCancelRequest:
       type: object
       properties:
@@ -16374,6 +17279,42 @@ components:
           maxLength: 255
       required:
       - reason
+    PricePlanPage:
+      type: object
+      description: One page of PricePlan results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricePlan'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TenantSubscriptionPage:
+      type: object
+      description: One page of TenantSubscription results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantSubscription'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     SubscriptionsChangePlanRequest:
       type: object
       properties:
@@ -16394,6 +17335,42 @@ components:
           maxLength: 255
       required:
       - reason
+    UsageRecordPage:
+      type: object
+      description: One page of UsageRecord results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageRecord'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TenantInvoicePage:
+      type: object
+      description: One page of TenantInvoice results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantInvoice'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     InvoicesVoidRequest:
       type: object
       properties:
@@ -16408,7 +17385,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
         paid_at:
           type: string
           format: date-time
@@ -16418,6 +17396,24 @@ components:
       required:
       - amount
       - paid_at
+    TenantInvoiceLinePage:
+      type: object
+      description: One page of TenantInvoiceLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantInvoiceLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     InvoicesGenerateRequest:
       type: object
       properties:
@@ -18234,7 +19230,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount, for threshold routing
         currency:
           type:
@@ -18392,7 +19389,8 @@ components:
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount, for threshold routing
         currency:
           type: string
@@ -19065,14 +20063,16 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         phone:
           type:
@@ -19225,12 +20225,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         phone:
           type: string
@@ -19353,12 +20355,14 @@ components:
         latitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Latitude
         longitude:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Longitude
         phone:
           type: string
@@ -20454,7 +21458,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Smallest cash denomination, e.g. 0.05
         is_crypto:
           type: boolean
@@ -20528,7 +21533,8 @@ components:
         cash_rounding_increment:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Smallest cash denomination, e.g. 0.05
         is_crypto:
           type: boolean
@@ -20585,7 +21591,8 @@ components:
         cash_rounding_increment:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Smallest cash denomination, e.g. 0.05
         is_crypto:
           type: boolean
@@ -22424,12 +23431,14 @@ components:
         rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Units of quote per 1 base
         inverse_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Units of base per 1 quote
         as_of_date:
           type: string
@@ -22514,12 +23523,14 @@ components:
         rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Units of quote per 1 base
         inverse_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Units of base per 1 quote
         as_of_date:
           type: string
@@ -24419,7 +25430,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Provider cost
           readOnly: true
         cost_currency:
@@ -26001,7 +27013,8 @@ components:
         platform_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed fee per period
         included_active_accounts:
           type: integer
@@ -26010,7 +27023,8 @@ components:
         price_per_active_account:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Price per extra active account
         metric_prices:
           type: object
@@ -26103,7 +27117,8 @@ components:
         platform_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed fee per period
         included_active_accounts:
           type: integer
@@ -26112,7 +27127,8 @@ components:
         price_per_active_account:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Price per extra active account
         metric_prices:
           type: object
@@ -26184,7 +27200,8 @@ components:
         platform_fee:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Fixed fee per period
         included_active_accounts:
           type: integer
@@ -26193,7 +27210,8 @@ components:
         price_per_active_account:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Price per extra active account
         metric_prices:
           type: object
@@ -27231,7 +28249,8 @@ components:
         rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Rate as a fraction, e.g. 0.15
         applies_to:
           type: string
@@ -27248,7 +28267,8 @@ components:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount below which no tax applies
         currency:
           type:
@@ -27346,7 +28366,8 @@ components:
         rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Rate as a fraction, e.g. 0.15
         applies_to:
           type: string
@@ -27359,7 +28380,8 @@ components:
         threshold_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount below which no tax applies
         currency:
           type: string
@@ -27437,7 +28459,8 @@ components:
         rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Rate as a fraction, e.g. 0.15
         applies_to:
           type: string
@@ -27450,7 +28473,8 @@ components:
         threshold_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Amount below which no tax applies
         currency:
           type: string
@@ -28545,25 +29569,29 @@ components:
         subtotal:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Before tax
           readOnly: true
         tax_amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Tax
           readOnly: true
         total:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Total due
           readOnly: true
         amount_paid:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Paid so far
           readOnly: true
         status:
@@ -28706,12 +29734,14 @@ components:
         unit_price:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Unit price
         amount:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Line amount
         tier:
           type:
@@ -29304,14 +30334,16 @@ components:
         discount_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Negotiated discount (fraction)
         committed_monthly_spend:
           type:
           - string
           - 'null'
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum commitment
         custom_prices:
           type:
@@ -29407,12 +30439,14 @@ components:
         discount_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Negotiated discount (fraction)
         committed_monthly_spend:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum commitment
         custom_prices:
           type: object
@@ -29487,12 +30521,14 @@ components:
         discount_rate:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Negotiated discount (fraction)
         committed_monthly_spend:
           type: string
           format: decimal
-          pattern: ^-?\d+(\.\d+)?$
+          examples:
+          - '125.50'
           description: Minimum commitment
         custom_prices:
           type: object
@@ -29590,6 +30626,7 @@ components:
           type: string
           maxLength: 128
           description: Dedupe key from the reporting service
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -29663,10 +30700,6 @@ components:
           type: object
           additionalProperties: true
           description: Breakdown, e.g. by legal entity or environment
-        idempotency_key:
-          type: string
-          maxLength: 128
-          description: Dedupe key from the reporting service
         custom_field_1:
           type: string
           maxLength: 500
@@ -29692,7 +30725,6 @@ components:
       - period_date
       - quantity
       - service_name
-      - idempotency_key
     UserRole:
       type: object
       description: Assignment of a role to a user, scoped to the tenant, a legal entity or a branch, optionally time-bound

@@ -1,0 +1,4571 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    NostroAccount:
+      description: Nostro / vostro / settlement / prefunding account held at a correspondent, central bank or partner
+      properties:
+        account_number:
+          description: Account number / IBAN
+          maxLength: 64
+          type: string
+        account_type:
+          description: Kind of account
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        institution_bic:
+          description: Institution BIC
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        institution_name:
+          description: Holding institution
+          maxLength: 140
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        ledger_account_id:
+          description: Mirror ledger account
+          format: uuid
+          type: string
+        min_balance:
+          description: Minimum balance before alerting
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Account name
+          maxLength: 120
+          type: string
+        payment_rail_id:
+          description: Rail it funds
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        target_balance:
+          description: Target balance for top-up
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - account_type
+      - institution_name
+      - account_number
+      - currency
+      - ledger_account_id
+      - min_balance
+      - is_active
+      type: object
+    NostroAccountCreate:
+      properties:
+        account_number:
+          description: Account number / IBAN
+          maxLength: 64
+          type: string
+        account_type:
+          description: Kind of account
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        institution_bic:
+          description: Institution BIC
+          maxLength: 11
+          type: string
+        institution_name:
+          description: Holding institution
+          maxLength: 140
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        ledger_account_id:
+          description: Mirror ledger account
+          format: uuid
+          type: string
+        min_balance:
+          description: Minimum balance before alerting
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Account name
+          maxLength: 120
+          type: string
+        payment_rail_id:
+          description: Rail it funds
+          format: uuid
+          type: string
+        target_balance:
+          description: Target balance for top-up
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - name
+      - account_type
+      - institution_name
+      - account_number
+      - currency
+      - ledger_account_id
+      type: object
+    NostroAccountPage:
+      description: One page of NostroAccount results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/NostroAccount'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    NostroAccountUpdate:
+      properties:
+        account_number:
+          description: Account number / IBAN
+          maxLength: 64
+          type: string
+        account_type:
+          description: Kind of account
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        institution_bic:
+          description: Institution BIC
+          maxLength: 11
+          type: string
+        institution_name:
+          description: Holding institution
+          maxLength: 140
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        ledger_account_id:
+          description: Mirror ledger account
+          format: uuid
+          type: string
+        min_balance:
+          description: Minimum balance before alerting
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Account name
+          maxLength: 120
+          type: string
+        payment_rail_id:
+          description: Rail it funds
+          format: uuid
+          type: string
+        target_balance:
+          description: Target balance for top-up
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      type: object
+    NostroAccountsTopUpRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - amount
+      type: object
+    PaymentRail:
+      description: A payment rail / scheme the platform can send to or receive from
+      properties:
+        code:
+          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
+          maxLength: 32
+          type: string
+        country:
+          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currencies:
+          additionalProperties: true
+          description: Supported currencies
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        holiday_calendar_id:
+          description: Calendar used for business days
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_instant:
+          description: Real-time rail
+          type: boolean
+        max_amount:
+          description: Scheme maximum per payment
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        message_standard:
+          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
+          maxLength: 32
+          type: string
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        operating_hours:
+          additionalProperties: true
+          description: Opening hours (24x7 or windows)
+          type:
+          - object
+          - 'null'
+        p95_latency_ms:
+          description: p95 end-to-end latency
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        rail_type:
+          description: Kind of rail
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        settlement_account_id:
+          description: Ledger settlement account
+          format: uuid
+          type:
+          - string
+          - 'null'
+        settlement_model:
+          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          type: string
+        success_rate_7d:
+          description: Success rate over the last 7 days
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - rail_type
+      - currencies
+      - message_standard
+      - settlement_model
+      - is_instant
+      - status
+      type: object
+    PaymentRailCreate:
+      properties:
+        code:
+          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
+          maxLength: 32
+          type: string
+        country:
+          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currencies:
+          additionalProperties: true
+          description: Supported currencies
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        holiday_calendar_id:
+          description: Calendar used for business days
+          format: uuid
+          type: string
+        is_instant:
+          description: Real-time rail
+          type: boolean
+        max_amount:
+          description: Scheme maximum per payment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        message_standard:
+          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
+          maxLength: 32
+          type: string
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        operating_hours:
+          additionalProperties: true
+          description: Opening hours (24x7 or windows)
+          type: object
+        rail_type:
+          description: Kind of rail
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+          type: string
+        settlement_account_id:
+          description: Ledger settlement account
+          format: uuid
+          type: string
+        settlement_model:
+          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          type: string
+      required:
+      - code
+      - name
+      - rail_type
+      - currencies
+      - message_standard
+      - settlement_model
+      type: object
+    PaymentRailPage:
+      description: One page of PaymentRail results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PaymentRail'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    PaymentRailUpdate:
+      properties:
+        code:
+          description: Rail code, e.g. SEPA_INST, FPS, FEDNOW, PIX, UPI, NIP, SWIFT
+          maxLength: 32
+          type: string
+        country:
+          description: Country (empty for regional / global rails) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currencies:
+          additionalProperties: true
+          description: Supported currencies
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        holiday_calendar_id:
+          description: Calendar used for business days
+          format: uuid
+          type: string
+        is_instant:
+          description: Real-time rail
+          type: boolean
+        max_amount:
+          description: Scheme maximum per payment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        message_standard:
+          description: ISO20022, ISO8583, NACHA, BACS, PROPRIETARY
+          maxLength: 32
+          type: string
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        operating_hours:
+          additionalProperties: true
+          description: Opening hours (24x7 or windows)
+          type: object
+        rail_type:
+          description: Kind of rail
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+          type: string
+        settlement_account_id:
+          description: Ledger settlement account
+          format: uuid
+          type: string
+        settlement_model:
+          description: RTGS, DNS (deferred net), PREFUNDED, CORRESPONDENT
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          type: string
+      type: object
+    PaymentRailsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    PaymentRoutingRule:
+      description: Rule choosing a rail and adapter for a payment
+      properties:
+        candidate_rail_ids:
+          additionalProperties: true
+          description: Ordered candidate rails
+          type: object
+        conditions:
+          additionalProperties: true
+          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
+          type: object
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fallback_rail_id:
+          description: Rail if candidates are unavailable
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Rule name
+          maxLength: 120
+          type: string
+        priority:
+          description: Lower evaluated first
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        strategy:
+          description: Selection strategy among candidate rails
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type:
+          - string
+          - 'null'
+        valid_to:
+          description: Effective to
+          format: date
+          type:
+          - string
+          - 'null'
+        weights:
+          additionalProperties: true
+          description: Weights for BALANCED strategy (cost, speed, success)
+          type:
+          - object
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - priority
+      - conditions
+      - strategy
+      - candidate_rail_ids
+      - is_active
+      type: object
+    PaymentRoutingRuleCreate:
+      properties:
+        candidate_rail_ids:
+          additionalProperties: true
+          description: Ordered candidate rails
+          type: object
+        conditions:
+          additionalProperties: true
+          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fallback_rail_id:
+          description: Rail if candidates are unavailable
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Rule name
+          maxLength: 120
+          type: string
+        priority:
+          description: Lower evaluated first
+          format: int32
+          type: integer
+        strategy:
+          description: Selection strategy among candidate rails
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+        weights:
+          additionalProperties: true
+          description: Weights for BALANCED strategy (cost, speed, success)
+          type: object
+      required:
+      - name
+      - conditions
+      - candidate_rail_ids
+      type: object
+    PaymentRoutingRulePage:
+      description: One page of PaymentRoutingRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PaymentRoutingRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    PaymentRoutingRuleUpdate:
+      properties:
+        candidate_rail_ids:
+          additionalProperties: true
+          description: Ordered candidate rails
+          type: object
+        conditions:
+          additionalProperties: true
+          description: Match conditions (payment_type, currency, country, amount band, priority, customer segment)
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fallback_rail_id:
+          description: Rail if candidates are unavailable
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Rule name
+          maxLength: 120
+          type: string
+        priority:
+          description: Lower evaluated first
+          format: int32
+          type: integer
+        strategy:
+          description: Selection strategy among candidate rails
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+        weights:
+          additionalProperties: true
+          description: Weights for BALANCED strategy (cost, speed, success)
+          type: object
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    RailAdapter:
+      description: Technical connection to a rail (direct participant, sponsor bank, aggregator API)
+      properties:
+        config:
+          additionalProperties: true
+          description: Adapter-specific configuration
+          type:
+          - object
+          - 'null'
+        connection_type:
+          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        endpoint_url:
+          description: Endpoint
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_primary:
+          description: Primary adapter for the rail
+          type: boolean
+        last_heartbeat_at:
+          description: Last successful heartbeat
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        name:
+          description: Adapter name
+          maxLength: 120
+          type: string
+        participant_id:
+          description: Our participant / member id on the rail
+          maxLength: 35
+          type:
+          - string
+          - 'null'
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        provider:
+          description: Sponsor bank or aggregator
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payment_rail_id
+      - name
+      - connection_type
+      - is_primary
+      - status
+      type: object
+    RailAdapterCreate:
+      properties:
+        config:
+          additionalProperties: true
+          description: Adapter-specific configuration
+          type: object
+        connection_type:
+          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        endpoint_url:
+          description: Endpoint
+          maxLength: 500
+          type: string
+        is_primary:
+          description: Primary adapter for the rail
+          type: boolean
+        name:
+          description: Adapter name
+          maxLength: 120
+          type: string
+        participant_id:
+          description: Our participant / member id on the rail
+          maxLength: 35
+          type: string
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        provider:
+          description: Sponsor bank or aggregator
+          maxLength: 64
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          type: string
+      required:
+      - payment_rail_id
+      - name
+      - connection_type
+      type: object
+    RailAdapterPage:
+      description: One page of RailAdapter results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RailAdapter'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RailAdapterUpdate:
+      properties:
+        config:
+          additionalProperties: true
+          description: Adapter-specific configuration
+          type: object
+        connection_type:
+          description: DIRECT, SPONSOR_BANK, AGGREGATOR, SWIFT_ALLIANCE, API
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        endpoint_url:
+          description: Endpoint
+          maxLength: 500
+          type: string
+        is_primary:
+          description: Primary adapter for the rail
+          type: boolean
+        name:
+          description: Adapter name
+          maxLength: 120
+          type: string
+        participant_id:
+          description: Our participant / member id on the rail
+          maxLength: 35
+          type: string
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        provider:
+          description: Sponsor bank or aggregator
+          maxLength: 64
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+          type: string
+      type: object
+    RailCutoff:
+      description: Cut-off times per rail, payment type and currency
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (empty = all) (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cutoff_time:
+          description: Local time HH:MM
+          maxLength: 5
+          type: string
+        days_of_week:
+          additionalProperties: true
+          description: Days it applies to
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        next_day_rollover:
+          description: After cut-off, roll to next business day
+          type: boolean
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        payment_type:
+          description: Payment type (empty = all)
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payment_rail_id
+      - cutoff_time
+      - timezone
+      - next_day_rollover
+      type: object
+    RailCutoffCreate:
+      properties:
+        currency:
+          description: Currency (empty = all) (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoff_time:
+          description: Local time HH:MM
+          maxLength: 5
+          type: string
+        days_of_week:
+          additionalProperties: true
+          description: Days it applies to
+          type: object
+        next_day_rollover:
+          description: After cut-off, roll to next business day
+          type: boolean
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        payment_type:
+          description: Payment type (empty = all)
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+      required:
+      - payment_rail_id
+      - cutoff_time
+      - timezone
+      type: object
+    RailCutoffPage:
+      description: One page of RailCutoff results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RailCutoff'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RailCutoffUpdate:
+      properties:
+        currency:
+          description: Currency (empty = all) (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoff_time:
+          description: Local time HH:MM
+          maxLength: 5
+          type: string
+        days_of_week:
+          additionalProperties: true
+          description: Days it applies to
+          type: object
+        next_day_rollover:
+          description: After cut-off, roll to next business day
+          type: boolean
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        payment_type:
+          description: Payment type (empty = all)
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+      type: object
+    RailLiquidityPosition:
+      description: Intraday liquidity position per nostro / rail, refreshed from statements and flows
+      properties:
+        as_of:
+          description: Position time
+          format: date-time
+          type: string
+        available_liquidity:
+          description: Balance minus reserved outflows
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        breach:
+          description: Below minimum balance
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        current_balance:
+          description: Current balance
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        nostro_account_id:
+          description: Account
+          format: uuid
+          type: string
+        opening_balance:
+          description: Opening balance
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        projected_inflows:
+          description: Expected inflows
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        projected_outflows:
+          description: Expected outflows
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - nostro_account_id
+      - as_of
+      - opening_balance
+      - projected_inflows
+      - projected_outflows
+      - current_balance
+      - available_liquidity
+      - currency
+      - breach
+      type: object
+    RailLiquidityPositionPage:
+      description: One page of RailLiquidityPosition results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RailLiquidityPosition'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RailMessage:
+      description: Raw message exchanged with a rail (pacs, pain, camt, ISO 8583, NACHA). Append-only, for audit and replay.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Inbound or outbound
+          enum:
+          - INBOUND
+          - OUTBOUND
+          type: string
+        error:
+          description: Error detail
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        message_id:
+          description: Message id (MsgId)
+          maxLength: 64
+          type: string
+        message_type:
+          description: e.g. pacs.008.001.08, pacs.002, camt.056, pain.001
+          maxLength: 32
+          type: string
+        payload_hash:
+          description: SHA-256 of the payload
+          maxLength: 64
+          type: string
+        payload_uri:
+          description: Encrypted payload location (object storage)
+          maxLength: 500
+          type: string
+        payment_id:
+          description: Related payment
+          format: uuid
+          type:
+          - string
+          - 'null'
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        rail_settlement_batch_id:
+          description: Batch, for batch rails
+          format: uuid
+          type:
+          - string
+          - 'null'
+        signature_valid:
+          description: Signature verification result
+          type:
+          - boolean
+          - 'null'
+        status:
+          description: Processing status
+          enum:
+          - RECEIVED
+          - PARSED
+          - SENT
+          - ACKNOWLEDGED
+          - NACKED
+          - FAILED
+          type: string
+      required:
+      - id
+      - created_at
+      - payment_rail_id
+      - direction
+      - message_type
+      - message_id
+      - status
+      - payload_uri
+      - payload_hash
+      type: object
+    RailMessagePage:
+      description: One page of RailMessage results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RailMessage'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RailMessagesReplayRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    RailParticipant:
+      description: Bank / PSP directory entry (BIC, clearing codes, rail reachability)
+      properties:
+        bic:
+          description: BIC
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        clearing_id:
+          description: Sort code, ABA routing number, IFSC, ISPB
+          maxLength: 35
+          type:
+          - string
+          - 'null'
+        clearing_system:
+          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Institution name
+          maxLength: 140
+          type: string
+        reachable_rails:
+          additionalProperties: true
+          description: Rail codes the participant is reachable on
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source:
+          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Directory validity start
+          format: date
+          type:
+          - string
+          - 'null'
+        valid_to:
+          description: Directory validity end
+          format: date
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - country
+      type: object
+    RailParticipantCreate:
+      properties:
+        bic:
+          description: BIC
+          maxLength: 11
+          type: string
+        clearing_id:
+          description: Sort code, ABA routing number, IFSC, ISPB
+          maxLength: 35
+          type: string
+        clearing_system:
+          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
+          maxLength: 16
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        name:
+          description: Institution name
+          maxLength: 140
+          type: string
+        reachable_rails:
+          additionalProperties: true
+          description: Rail codes the participant is reachable on
+          type: object
+        source:
+          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
+          maxLength: 32
+          type: string
+        valid_from:
+          description: Directory validity start
+          format: date
+          type: string
+        valid_to:
+          description: Directory validity end
+          format: date
+          type: string
+      required:
+      - name
+      - country
+      type: object
+    RailParticipantPage:
+      description: One page of RailParticipant results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RailParticipant'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RailParticipantUpdate:
+      properties:
+        bic:
+          description: BIC
+          maxLength: 11
+          type: string
+        clearing_id:
+          description: Sort code, ABA routing number, IFSC, ISPB
+          maxLength: 35
+          type: string
+        clearing_system:
+          description: Clearing system (GBDSC, USABA, INFSC, BRPIX...)
+          maxLength: 16
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        name:
+          description: Institution name
+          maxLength: 140
+          type: string
+        reachable_rails:
+          additionalProperties: true
+          description: Rail codes the participant is reachable on
+          type: object
+        source:
+          description: SWIFT_BIC_DIRECTORY, EPC_REGISTER, FED_E_PAYMENTS, RBI, BCB
+          maxLength: 32
+          type: string
+        valid_from:
+          description: Directory validity start
+          format: date
+          type: string
+        valid_to:
+          description: Directory validity end
+          format: date
+          type: string
+      type: object
+    RailParticipantsLookupRequest:
+      properties:
+        bic:
+          maxLength: 11
+          type: string
+        clearing_id:
+          maxLength: 35
+          type: string
+        clearing_system:
+          maxLength: 16
+          type: string
+        iban:
+          maxLength: 34
+          type: string
+      type: object
+    RailSettlementBatch:
+      description: Settlement cycle / batch on a rail (net positions, files submitted)
+      properties:
+        closed_at:
+          description: Time closed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        credit_count:
+          description: Credits in the batch
+          format: int32
+          readOnly: true
+          type: integer
+        credit_total:
+          description: Sum of credits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cycle_id:
+          description: Rail settlement cycle id
+          maxLength: 64
+          type: string
+        debit_count:
+          description: Debits in the batch
+          format: int32
+          readOnly: true
+          type: integer
+        debit_total:
+          description: Sum of debits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Settlement posting
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        net_position:
+          description: Net settlement position
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        payment_rail_id:
+          description: Rail
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        settled_at:
+          description: Time settled
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        settlement_date:
+          description: Settlement date
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - CLOSED
+          - SUBMITTED
+          - SETTLED
+          - FAILED
+          - RECONCILED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payment_rail_id
+      - cycle_id
+      - settlement_date
+      - status
+      - currency
+      - debit_count
+      - credit_count
+      - debit_total
+      - credit_total
+      - net_position
+      type: object
+    RailSettlementBatchPage:
+      description: One page of RailSettlementBatch results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RailSettlementBatch'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RoutingRulesSimulateRequest:
+      properties:
+        payment:
+          additionalProperties: true
+          type: object
+      required:
+      - payment
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            payments:read: Read Payments Hub
+            payments:write: Change Payments Hub
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'ISO 20022-native payments hub. Initiates, screens, approves, routes, submits and settles payments on every
+    rail (instant, batch, RTGS, mobile money, cross-border); manages payees, aliases, bulk files, direct-debit mandates, request-to-pay,
+    payment links and QR codes; runs rail routing, settlement, liquidity and FX.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — routing-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/payment-rails:
+    get:
+      operationId: paymentRailsList
+      summary: List payment rails
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: rail_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - INSTANT
+          - BATCH
+          - RTGS
+          - MOBILE_MONEY
+          - CROSS_BORDER
+          - CARD_PUSH
+          - INTERNAL
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRailPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: paymentRailsCreate
+      summary: Create payment rail
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailCreate'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+      x-crud: true
+      x-crud-create: true
+  /v1/payment-rails/{id}:
+    get:
+      operationId: paymentRailsGet
+      summary: Retrieve payment rail
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: paymentRailsUpdate
+      summary: Update payment rail
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailUpdate'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+      x-crud: true
+      x-crud-update: true
+  /v1/payment-rails/{id}/suspend:
+    post:
+      operationId: paymentRailsSuspend
+      summary: Suspend a rail (routing falls back)
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsSuspendRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+  /v1/payment-rails/{id}/resume:
+    post:
+      operationId: paymentRailsResume
+      summary: Resume a suspended rail
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+  /v1/payment-rails/{id}/cutoffs:
+    get:
+      operationId: paymentRailsCutoffs
+      summary: Cut-offs of the rail
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailCutoffPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+  /v1/payment-rails/{id}/next-execution:
+    get:
+      operationId: paymentRailsNextExecution
+      summary: Next possible execution date and time (?payment_type=&currency=)
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-table: payment_rail
+  /v1/rail-adapters:
+    get:
+      operationId: railAdaptersList
+      summary: List rail adapters
+      tags:
+      - Rail Adapters
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: payment_rail_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - DEGRADED
+          - SUSPENDED
+          - RETIRED
+      - name: connection_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailAdapterPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-02
+      x-service: routing-service
+      x-table: rail_adapter
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: railAdaptersCreate
+      summary: Create rail adapter
+      tags:
+      - Rail Adapters
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailAdapter'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailAdapterCreate'
+      x-requirements:
+      - PAY-02
+      x-service: routing-service
+      x-table: rail_adapter
+      x-crud: true
+      x-crud-create: true
+  /v1/rail-adapters/{id}:
+    get:
+      operationId: railAdaptersGet
+      summary: Retrieve rail adapter
+      tags:
+      - Rail Adapters
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailAdapter'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      x-service: routing-service
+      x-table: rail_adapter
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: railAdaptersUpdate
+      summary: Update rail adapter
+      tags:
+      - Rail Adapters
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailAdapter'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailAdapterUpdate'
+      x-requirements:
+      - PAY-02
+      x-service: routing-service
+      x-table: rail_adapter
+      x-crud: true
+      x-crud-update: true
+  /v1/rail-adapters/{id}/test-connection:
+    post:
+      operationId: railAdaptersTestConnection
+      summary: Send a heartbeat / echo to the rail
+      tags:
+      - Rail Adapters
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-02
+      x-service: routing-service
+      x-table: rail_adapter
+  /v1/rail-adapters/{id}/rotate-credentials:
+    post:
+      operationId: railAdaptersRotateCredentials
+      summary: Rotate certificates and keys
+      tags:
+      - Rail Adapters
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailAdapter'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-02
+      x-service: routing-service
+      x-table: rail_adapter
+  /v1/rail-cutoffs:
+    get:
+      operationId: railCutoffsList
+      summary: List rail cutoffs
+      tags:
+      - Rail Cutoffs
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: payment_rail_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: payment_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - INTERNAL_TRANSFER
+          - P2P
+          - DOMESTIC
+          - INSTANT
+          - CROSS_BORDER
+          - BULK_ITEM
+          - PAYROLL
+          - DIRECT_DEBIT
+          - REQUEST_TO_PAY
+          - BILL_PAYMENT
+          - QR_PAYMENT
+          - LINK_PAYMENT
+          - REFUND
+          - RETURN
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailCutoffPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_cutoff
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: railCutoffsCreate
+      summary: Create rail cutoff
+      tags:
+      - Rail Cutoffs
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailCutoff'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailCutoffCreate'
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_cutoff
+      x-crud: true
+      x-crud-create: true
+  /v1/rail-cutoffs/{id}:
+    get:
+      operationId: railCutoffsGet
+      summary: Retrieve rail cutoff
+      tags:
+      - Rail Cutoffs
+      security:
+      - oauth2:
+        - payments:read
+      parameters: &id008
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailCutoff'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_cutoff
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: railCutoffsUpdate
+      summary: Update rail cutoff
+      tags:
+      - Rail Cutoffs
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailCutoff'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailCutoffUpdate'
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_cutoff
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: railCutoffsDelete
+      summary: Delete rail cutoff
+      tags:
+      - Rail Cutoffs
+      security:
+      - oauth2:
+        - payments:write
+      parameters: *id008
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_cutoff
+      x-crud: true
+      x-crud-delete: true
+  /v1/routing-rules:
+    get:
+      operationId: routingRulesList
+      summary: List routing rules
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: strategy
+        in: query
+        schema:
+          type: string
+          enum:
+          - FIXED
+          - CHEAPEST
+          - FASTEST
+          - MOST_RELIABLE
+          - BALANCED
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRoutingRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-table: payment_routing_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: routingRulesCreate
+      summary: Create routing rule
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRoutingRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRoutingRuleCreate'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-table: payment_routing_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/routing-rules/{id}:
+    get:
+      operationId: routingRulesGet
+      summary: Retrieve routing rule
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:read
+      parameters: &id010
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRoutingRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-table: payment_routing_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: routingRulesUpdate
+      summary: Update routing rule
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRoutingRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRoutingRuleUpdate'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-table: payment_routing_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: routingRulesDelete
+      summary: Delete routing rule
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters: *id010
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-table: payment_routing_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/routing-rules/simulate:
+    post:
+      operationId: routingRulesSimulate
+      summary: Show which rail a payment would take and why
+      tags:
+      - Routing Rules
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRail'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutingRulesSimulateRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-08
+      x-service: routing-service
+      x-table: payment_routing_rule
+  /v1/rail-messages:
+    get:
+      operationId: railMessagesList
+      summary: List rail messages
+      tags:
+      - Rail Messages
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: payment_rail_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - INBOUND
+          - OUTBOUND
+      - name: message_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: message_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: payment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RECEIVED
+          - PARSED
+          - SENT
+          - ACKNOWLEDGED
+          - NACKED
+          - FAILED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessagePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-03
+      x-service: routing-service
+      x-table: rail_message
+      x-crud: true
+      x-crud-list: true
+  /v1/rail-messages/{id}:
+    get:
+      operationId: railMessagesGet
+      summary: Retrieve rail message
+      tags:
+      - Rail Messages
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-03
+      x-service: routing-service
+      x-table: rail_message
+      x-crud: true
+      x-crud-get: true
+  /v1/rail-messages/{id}/payload:
+    get:
+      operationId: railMessagesPayload
+      summary: Decrypted raw payload (requires payments:audit scope)
+      tags:
+      - Rail Messages
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-03
+      x-service: routing-service
+      x-table: rail_message
+  /v1/rail-messages/{id}/replay:
+    post:
+      operationId: railMessagesReplay
+      summary: Re-process an inbound message
+      tags:
+      - Rail Messages
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailMessagesReplayRequest'
+      x-requirements:
+      - PAY-03
+      x-service: routing-service
+      x-table: rail_message
+  /v1/rail-settlement-batches:
+    get:
+      operationId: railSettlementBatchesList
+      summary: List rail settlement batches
+      tags:
+      - Rail Settlement Batches
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: payment_rail_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - CLOSED
+          - SUBMITTED
+          - SETTLED
+          - FAILED
+          - RECONCILED
+      - name: settlement_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailSettlementBatchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      - REC-01
+      x-service: routing-service
+      x-table: rail_settlement_batch
+      x-crud: true
+      x-crud-list: true
+  /v1/rail-settlement-batches/{id}:
+    get:
+      operationId: railSettlementBatchesGet
+      summary: Retrieve rail settlement batche
+      tags:
+      - Rail Settlement Batches
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailSettlementBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      - REC-01
+      x-service: routing-service
+      x-table: rail_settlement_batch
+      x-crud: true
+      x-crud-get: true
+  /v1/rail-settlement-batches/{id}/close:
+    post:
+      operationId: railSettlementBatchesClose
+      summary: Close the batch and generate the settlement file
+      tags:
+      - Rail Settlement Batches
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailSettlementBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      - REC-01
+      x-service: routing-service
+      x-table: rail_settlement_batch
+  /v1/rail-settlement-batches/{id}/messages:
+    get:
+      operationId: railSettlementBatchesMessages
+      summary: Messages in the batch
+      tags:
+      - Rail Settlement Batches
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailMessagePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      - REC-01
+      x-service: routing-service
+      x-table: rail_settlement_batch
+  /v1/nostro-accounts:
+    get:
+      operationId: nostroAccountsList
+      summary: List nostro accounts
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: account_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - NOSTRO
+          - VOSTRO
+          - SETTLEMENT
+          - PREFUNDING
+          - CENTRAL_BANK
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: payment_rail_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NostroAccountPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-table: nostro_account
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: nostroAccountsCreate
+      summary: Create nostro account
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NostroAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NostroAccountCreate'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-table: nostro_account
+      x-crud: true
+      x-crud-create: true
+  /v1/nostro-accounts/{id}:
+    get:
+      operationId: nostroAccountsGet
+      summary: Retrieve nostro account
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - &id011
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NostroAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-table: nostro_account
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: nostroAccountsUpdate
+      summary: Update nostro account
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id011
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NostroAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NostroAccountUpdate'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-table: nostro_account
+      x-crud: true
+      x-crud-update: true
+  /v1/nostro-accounts/{id}/positions:
+    get:
+      operationId: nostroAccountsPositions
+      summary: Liquidity positions over time
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPositionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-table: nostro_account
+  /v1/nostro-accounts/{id}/top-up:
+    post:
+      operationId: nostroAccountsTopUp
+      summary: Request a liquidity top-up transfer
+      tags:
+      - Nostro Accounts
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NostroAccountsTopUpRequest'
+      x-requirements:
+      - PAY-05
+      - PAY-06
+      x-service: routing-service
+      x-table: nostro_account
+  /v1/liquidity-positions:
+    get:
+      operationId: liquidityPositionsList
+      summary: List liquidity positions
+      tags:
+      - Liquidity Positions
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: nostro_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: breach
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPositionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_liquidity_position
+      x-crud: true
+      x-crud-list: true
+  /v1/liquidity-positions/{id}:
+    get:
+      operationId: liquidityPositionsGet
+      summary: Retrieve liquidity position
+      tags:
+      - Liquidity Positions
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailLiquidityPosition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-05
+      x-service: routing-service
+      x-table: rail_liquidity_position
+      x-crud: true
+      x-crud-get: true
+  /v1/rail-participants:
+    get:
+      operationId: railParticipantsList
+      summary: List rail participants
+      tags:
+      - Rail Participants
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: bic
+        in: query
+        schema:
+          type: string
+          maxLength: 11
+      - name: clearing_system
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: clearing_id
+        in: query
+        schema:
+          type: string
+          maxLength: 35
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailParticipantPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-02
+      - PAY-04
+      x-service: routing-service
+      x-table: rail_participant
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: railParticipantsCreate
+      summary: Create rail participant
+      tags:
+      - Rail Participants
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailParticipantCreate'
+      x-requirements:
+      - PAY-02
+      - PAY-04
+      x-service: routing-service
+      x-table: rail_participant
+      x-crud: true
+      x-crud-create: true
+  /v1/rail-participants/{id}:
+    get:
+      operationId: railParticipantsGet
+      summary: Retrieve rail participant
+      tags:
+      - Rail Participants
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - &id012
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-02
+      - PAY-04
+      x-service: routing-service
+      x-table: rail_participant
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: railParticipantsUpdate
+      summary: Update rail participant
+      tags:
+      - Rail Participants
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - *id012
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailParticipantUpdate'
+      x-requirements:
+      - PAY-02
+      - PAY-04
+      x-service: routing-service
+      x-table: rail_participant
+      x-crud: true
+      x-crud-update: true
+  /v1/rail-participants/lookup:
+    post:
+      operationId: railParticipantsLookup
+      summary: Look up a bank by BIC, IBAN or clearing id and its reachable rails
+      tags:
+      - Rail Participants
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RailParticipant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RailParticipantsLookupRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-04
+      x-service: routing-service
+      x-table: rail_participant
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A payment rail / scheme the platform can send to or receive from
+  name: Payment Rails
+- description: Technical connection to a rail (direct participant, sponsor bank, aggregator API)
+  name: Rail Adapters
+- description: Cut-off times per rail, payment type and currency
+  name: Rail Cutoffs
+- description: Rule choosing a rail and adapter for a payment
+  name: Routing Rules
+- description: Raw message exchanged with a rail (pacs, pain, camt, ISO 8583, NACHA). Append-only, for audit and replay.
+  name: Rail Messages
+- description: Settlement cycle / batch on a rail (net positions, files submitted)
+  name: Rail Settlement Batches
+- description: Nostro / vostro / settlement / prefunding account held at a correspondent, central bank or partner
+  name: Nostro Accounts
+- description: Intraday liquidity position per nostro / rail, refreshed from statements and flows
+  name: Liquidity Positions
+- description: Bank / PSP directory entry (BIC, clearing codes, rail reachability)
+  name: Rail Participants

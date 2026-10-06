@@ -1,0 +1,3897 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    KycCheck:
+      description: One verification call to a provider (OCR, liveness, face match, database, registry, address)
+      properties:
+        check_type:
+          description: Check type
+          enum:
+          - DOCUMENT_OCR
+          - DOCUMENT_AUTHENTICITY
+          - LIVENESS
+          - FACE_MATCH
+          - DATABASE_VERIFICATION
+          - ADDRESS_VERIFICATION
+          - PHONE_VERIFICATION
+          - EMAIL_VERIFICATION
+          - REGISTRY_LOOKUP
+          - UBO_DISCOVERY
+          - TAX_ID_VERIFICATION
+          - BANK_ACCOUNT_VERIFICATION
+          type: string
+        completed_at:
+          description: Completion time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        cost:
+          description: Provider cost of the check
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        cost_currency:
+          description: Currency of the cost (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        kyc_document_id:
+          description: Document checked
+          format: uuid
+          type:
+          - string
+          - 'null'
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        kyc_provider_id:
+          description: Provider
+          format: uuid
+          type: string
+        onboarding_application_id:
+          description: Application that requested it
+          format: uuid
+          type:
+          - string
+          - 'null'
+        provider_reference:
+          description: Provider's check id
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        reason_codes:
+          additionalProperties: true
+          description: Provider reason codes
+          type:
+          - object
+          - 'null'
+        requested_at:
+          description: Request time
+          format: date-time
+          type: string
+        result_summary:
+          description: Human-readable outcome
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        score:
+          description: Provider score / confidence 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - PASSED
+          - FAILED
+          - INCONCLUSIVE
+          - ERROR
+          - EXPIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - kyc_profile_id
+      - check_type
+      - kyc_provider_id
+      - status
+      - requested_at
+      type: object
+    KycCheckCreate:
+      properties:
+        check_type:
+          description: Check type
+          enum:
+          - DOCUMENT_OCR
+          - DOCUMENT_AUTHENTICITY
+          - LIVENESS
+          - FACE_MATCH
+          - DATABASE_VERIFICATION
+          - ADDRESS_VERIFICATION
+          - PHONE_VERIFICATION
+          - EMAIL_VERIFICATION
+          - REGISTRY_LOOKUP
+          - UBO_DISCOVERY
+          - TAX_ID_VERIFICATION
+          - BANK_ACCOUNT_VERIFICATION
+          type: string
+        completed_at:
+          description: Completion time
+          format: date-time
+          type: string
+        cost:
+          description: Provider cost of the check
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        cost_currency:
+          description: Currency of the cost (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        kyc_document_id:
+          description: Document checked
+          format: uuid
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        kyc_provider_id:
+          description: Provider
+          format: uuid
+          type: string
+        onboarding_application_id:
+          description: Application that requested it
+          format: uuid
+          type: string
+        provider_reference:
+          description: Provider's check id
+          maxLength: 128
+          type: string
+        reason_codes:
+          additionalProperties: true
+          description: Provider reason codes
+          type: object
+        requested_at:
+          description: Request time
+          format: date-time
+          type: string
+        result_summary:
+          description: Human-readable outcome
+          maxLength: 500
+          type: string
+        score:
+          description: Provider score / confidence 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - PASSED
+          - FAILED
+          - INCONCLUSIVE
+          - ERROR
+          - EXPIRED
+          type: string
+      required:
+      - kyc_profile_id
+      - check_type
+      - kyc_provider_id
+      type: object
+    KycCheckPage:
+      description: One page of KycCheck results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycCheck'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycChecksProviderCallbacksEventsRequest:
+      properties:
+        payload:
+          additionalProperties: true
+          type: object
+      required:
+      - payload
+      type: object
+    KycChecksRetryRequest:
+      properties:
+        use_fallback:
+          type: boolean
+      type: object
+    KycDocument:
+      description: Identity, address or corporate document captured for KYC/KYB
+      properties:
+        back_document_id:
+          description: Stored file (back side)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        captured_channel:
+          description: Capture channel
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        document_id:
+          description: Stored file (front)
+          format: uuid
+          type: string
+        document_number:
+          description: Document number from OCR or entry
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        document_type:
+          description: Document type
+          enum:
+          - NATIONAL_ID
+          - PASSPORT
+          - DRIVING_LICENCE
+          - RESIDENCE_PERMIT
+          - UTILITY_BILL
+          - BANK_STATEMENT
+          - PROOF_OF_INCOME
+          - CERTIFICATE_OF_INCORPORATION
+          - ARTICLES_OF_ASSOCIATION
+          - SHAREHOLDER_REGISTER
+          - BOARD_RESOLUTION
+          - TAX_CERTIFICATE
+          - SELFIE
+          - OTHER
+          type: string
+        expiry_date:
+          description: Expiry date
+          format: date
+          type:
+          - string
+          - 'null'
+        extracted_data:
+          additionalProperties: true
+          description: OCR / MRZ extracted fields
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        issue_date:
+          description: Issue date
+          format: date
+          type:
+          - string
+          - 'null'
+        issuing_country:
+          description: Issuing country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        rejection_reason:
+          description: Reason when rejected
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - UPLOADED
+          - PROCESSING
+          - ACCEPTED
+          - REJECTED
+          - EXPIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - kyc_profile_id
+      - customer_id
+      - document_type
+      - document_id
+      - status
+      type: object
+    KycDocumentCreate:
+      properties:
+        back_document_id:
+          description: Stored file (back side)
+          format: uuid
+          type: string
+        captured_channel:
+          description: Capture channel
+          enum:
+          - MOBILE_APP
+          - WEB
+          - USSD
+          - AGENT
+          - BRANCH
+          - API
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        document_id:
+          description: Stored file (front)
+          format: uuid
+          type: string
+        document_number:
+          description: Document number from OCR or entry
+          maxLength: 64
+          type: string
+        document_type:
+          description: Document type
+          enum:
+          - NATIONAL_ID
+          - PASSPORT
+          - DRIVING_LICENCE
+          - RESIDENCE_PERMIT
+          - UTILITY_BILL
+          - BANK_STATEMENT
+          - PROOF_OF_INCOME
+          - CERTIFICATE_OF_INCORPORATION
+          - ARTICLES_OF_ASSOCIATION
+          - SHAREHOLDER_REGISTER
+          - BOARD_RESOLUTION
+          - TAX_CERTIFICATE
+          - SELFIE
+          - OTHER
+          type: string
+        expiry_date:
+          description: Expiry date
+          format: date
+          type: string
+        extracted_data:
+          additionalProperties: true
+          description: OCR / MRZ extracted fields
+          type: object
+        issue_date:
+          description: Issue date
+          format: date
+          type: string
+        issuing_country:
+          description: Issuing country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        rejection_reason:
+          description: Reason when rejected
+          maxLength: 255
+          type: string
+        status:
+          description: Status
+          enum:
+          - UPLOADED
+          - PROCESSING
+          - ACCEPTED
+          - REJECTED
+          - EXPIRED
+          type: string
+      required:
+      - kyc_profile_id
+      - customer_id
+      - document_type
+      - document_id
+      type: object
+    KycDocumentPage:
+      description: One page of KycDocument results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycDocument'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycDocumentsAcceptRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    KycDocumentsRejectRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    KycProfile:
+      description: 'The KYC state of a customer: verification status, risk level and next review date'
+      properties:
+        achieved_tier:
+          description: Highest tier the evidence supports
+          enum:
+          - TIER_0
+          - TIER_1
+          - TIER_2
+          - TIER_3
+          readOnly: true
+          type: string
+        address_verified:
+          description: Address verified
+          readOnly: true
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        edd_completed_at:
+          description: EDD completion
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        edd_required:
+          description: Enhanced due diligence required
+          readOnly: true
+          type: boolean
+        expires_at:
+          description: Earliest expiry of supporting documents
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        identity_verified:
+          description: Identity verified
+          readOnly: true
+          type: boolean
+        last_reviewed_by:
+          description: Last reviewer
+          format: uuid
+          type:
+          - string
+          - 'null'
+        next_review_date:
+          description: Next periodic review
+          format: date
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        notes:
+          description: Analyst notes
+          type:
+          - string
+          - 'null'
+        risk_level:
+          description: Current risk level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        risk_score:
+          description: Current risk score 0..1000
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        screening_clear:
+          description: No open screening matches
+          readOnly: true
+          type: boolean
+        status:
+          description: Status
+          enum:
+          - NOT_STARTED
+          - IN_PROGRESS
+          - VERIFIED
+          - REFER
+          - REJECTED
+          - EXPIRED
+          - REVIEW_DUE
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        verified_at:
+          description: Last full verification
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - status
+      - achieved_tier
+      - identity_verified
+      - address_verified
+      - screening_clear
+      - edd_required
+      type: object
+    KycProfilePage:
+      description: One page of KycProfile results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycProfile'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycProfilesCompleteEddRequest:
+      properties:
+        notes:
+          type: string
+      required:
+      - notes
+      type: object
+    KycProfilesRequireEddRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    KycProvider:
+      description: Configured external KYC/KYB provider (e.g. Onfido, Jumio, Sumsub, Smile ID, registry APIs)
+      properties:
+        base_url:
+          description: API base URL
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        capabilities:
+          additionalProperties: true
+          description: Supported capabilities (KycProviderCapability values)
+          type: object
+        code:
+          description: Provider code
+          maxLength: 40
+          type: string
+        countries:
+          additionalProperties: true
+          description: Countries supported
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_fallback:
+          description: Used only when the primary provider fails
+          type: boolean
+        name:
+          description: Provider name
+          maxLength: 120
+          type: string
+        priority:
+          description: Routing priority (lower first)
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        timeout_ms:
+          description: Request timeout
+          format: int32
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - capabilities
+      - priority
+      - timeout_ms
+      - is_active
+      - is_fallback
+      type: object
+    KycProviderCreate:
+      properties:
+        base_url:
+          description: API base URL
+          maxLength: 500
+          type: string
+        capabilities:
+          additionalProperties: true
+          description: Supported capabilities (KycProviderCapability values)
+          type: object
+        code:
+          description: Provider code
+          maxLength: 40
+          type: string
+        countries:
+          additionalProperties: true
+          description: Countries supported
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_fallback:
+          description: Used only when the primary provider fails
+          type: boolean
+        name:
+          description: Provider name
+          maxLength: 120
+          type: string
+        priority:
+          description: Routing priority (lower first)
+          format: int32
+          type: integer
+        timeout_ms:
+          description: Request timeout
+          format: int32
+          type: integer
+      required:
+      - code
+      - name
+      - capabilities
+      type: object
+    KycProviderPage:
+      description: One page of KycProvider results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycProvider'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycProviderUpdate:
+      properties:
+        base_url:
+          description: API base URL
+          maxLength: 500
+          type: string
+        capabilities:
+          additionalProperties: true
+          description: Supported capabilities (KycProviderCapability values)
+          type: object
+        code:
+          description: Provider code
+          maxLength: 40
+          type: string
+        countries:
+          additionalProperties: true
+          description: Countries supported
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_fallback:
+          description: Used only when the primary provider fails
+          type: boolean
+        name:
+          description: Provider name
+          maxLength: 120
+          type: string
+        priority:
+          description: Routing priority (lower first)
+          format: int32
+          type: integer
+        timeout_ms:
+          description: Request timeout
+          format: int32
+          type: integer
+      type: object
+    KycReview:
+      description: Periodic or event-driven KYC review (refresh) of a customer
+      properties:
+        assigned_to:
+          description: Analyst
+          format: uuid
+          type:
+          - string
+          - 'null'
+        completed_at:
+          description: Completion
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        customer_outreach_at:
+          description: Time the customer was asked to update information
+          format: date-time
+          type:
+          - string
+          - 'null'
+        due_date:
+          description: Due date
+          format: date
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        outcome:
+          description: NO_CHANGE, UPDATED, EDD_REQUIRED, EXIT_RELATIONSHIP
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        outcome_notes:
+          description: Notes
+          type:
+          - string
+          - 'null'
+        restrictions_applied:
+          additionalProperties: true
+          description: Restrictions applied when overdue (e.g. debit block)
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - SCHEDULED
+          - DUE
+          - IN_PROGRESS
+          - COMPLETED
+          - OVERDUE
+          - CANCELLED
+          type: string
+        trigger:
+          description: Trigger
+          enum:
+          - PERIODIC
+          - DOCUMENT_EXPIRY
+          - RISK_CHANGE
+          - SCREENING_HIT
+          - CUSTOMER_CHANGE
+          - REGULATOR_REQUEST
+          - MANUAL
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - kyc_profile_id
+      - customer_id
+      - trigger
+      - status
+      - due_date
+      type: object
+    KycReviewCreate:
+      properties:
+        assigned_to:
+          description: Analyst
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        customer_outreach_at:
+          description: Time the customer was asked to update information
+          format: date-time
+          type: string
+        due_date:
+          description: Due date
+          format: date
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        outcome:
+          description: NO_CHANGE, UPDATED, EDD_REQUIRED, EXIT_RELATIONSHIP
+          maxLength: 40
+          type: string
+        outcome_notes:
+          description: Notes
+          type: string
+        restrictions_applied:
+          additionalProperties: true
+          description: Restrictions applied when overdue (e.g. debit block)
+          type: object
+        status:
+          description: Status
+          enum:
+          - SCHEDULED
+          - DUE
+          - IN_PROGRESS
+          - COMPLETED
+          - OVERDUE
+          - CANCELLED
+          type: string
+        trigger:
+          description: Trigger
+          enum:
+          - PERIODIC
+          - DOCUMENT_EXPIRY
+          - RISK_CHANGE
+          - SCREENING_HIT
+          - CUSTOMER_CHANGE
+          - REGULATOR_REQUEST
+          - MANUAL
+          type: string
+      required:
+      - kyc_profile_id
+      - customer_id
+      - trigger
+      - due_date
+      type: object
+    KycReviewPage:
+      description: One page of KycReview results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycReview'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycReviewUpdate:
+      properties:
+        assigned_to:
+          description: Analyst
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        customer_outreach_at:
+          description: Time the customer was asked to update information
+          format: date-time
+          type: string
+        due_date:
+          description: Due date
+          format: date
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        outcome:
+          description: NO_CHANGE, UPDATED, EDD_REQUIRED, EXIT_RELATIONSHIP
+          maxLength: 40
+          type: string
+        outcome_notes:
+          description: Notes
+          type: string
+        restrictions_applied:
+          additionalProperties: true
+          description: Restrictions applied when overdue (e.g. debit block)
+          type: object
+        status:
+          description: Status
+          enum:
+          - SCHEDULED
+          - DUE
+          - IN_PROGRESS
+          - COMPLETED
+          - OVERDUE
+          - CANCELLED
+          type: string
+        trigger:
+          description: Trigger
+          enum:
+          - PERIODIC
+          - DOCUMENT_EXPIRY
+          - RISK_CHANGE
+          - SCREENING_HIT
+          - CUSTOMER_CHANGE
+          - REGULATOR_REQUEST
+          - MANUAL
+          type: string
+      type: object
+    KycReviewsAssignRequest:
+      properties:
+        assigned_to:
+          format: uuid
+          type: string
+      required:
+      - assigned_to
+      type: object
+    KycReviewsCompleteRequest:
+      properties:
+        outcome:
+          maxLength: 40
+          type: string
+        outcome_notes:
+          type: string
+      required:
+      - outcome
+      type: object
+    KycReviewsRequestUpdateRequest:
+      properties:
+        message:
+          maxLength: 1000
+          type: string
+      type: object
+    KycRiskAssessment:
+      description: Customer risk rating with its factors (country, product, channel, occupation, PEP, behaviour). Append-only.
+      properties:
+        assessed_by:
+          description: Analyst for manual assessments
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        factors:
+          additionalProperties: true
+          description: Factor contributions and inputs
+          type: object
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        model_version:
+          description: Risk model version
+          maxLength: 32
+          type: string
+        override_level:
+          description: Manual override
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type:
+          - string
+          - 'null'
+        override_reason:
+          description: Reason for override
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        risk_level:
+          description: Resulting level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        score:
+          description: Score 0..1000
+          format: int32
+          type: integer
+        trigger:
+          description: Why the assessment ran
+          enum:
+          - PERIODIC
+          - DOCUMENT_EXPIRY
+          - RISK_CHANGE
+          - SCREENING_HIT
+          - CUSTOMER_CHANGE
+          - REGULATOR_REQUEST
+          - MANUAL
+          type: string
+      required:
+      - id
+      - created_at
+      - kyc_profile_id
+      - customer_id
+      - model_version
+      - score
+      - risk_level
+      - factors
+      - trigger
+      type: object
+    KycRiskAssessmentCreate:
+      properties:
+        assessed_by:
+          description: Analyst for manual assessments
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        factors:
+          additionalProperties: true
+          description: Factor contributions and inputs
+          type: object
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        model_version:
+          description: Risk model version
+          maxLength: 32
+          type: string
+        override_level:
+          description: Manual override
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        override_reason:
+          description: Reason for override
+          maxLength: 255
+          type: string
+        risk_level:
+          description: Resulting level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        score:
+          description: Score 0..1000
+          format: int32
+          type: integer
+        trigger:
+          description: Why the assessment ran
+          enum:
+          - PERIODIC
+          - DOCUMENT_EXPIRY
+          - RISK_CHANGE
+          - SCREENING_HIT
+          - CUSTOMER_CHANGE
+          - REGULATOR_REQUEST
+          - MANUAL
+          type: string
+      required:
+      - kyc_profile_id
+      - customer_id
+      - model_version
+      - score
+      - risk_level
+      - factors
+      - trigger
+      type: object
+    KycRiskAssessmentPage:
+      description: One page of KycRiskAssessment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycRiskAssessment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycScreening:
+      description: PEP, sanctions, adverse-media and watchlist screening of a customer at onboarding and on change
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer screened
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        kyc_provider_id:
+          description: Provider (empty = internal engine)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        list_versions:
+          additionalProperties: true
+          description: Versions of the lists screened against
+          type:
+          - object
+          - 'null'
+        match_count:
+          description: Potential matches
+          format: int32
+          type: integer
+        matches:
+          additionalProperties: true
+          description: Candidate matches with list, score and reasons
+          type:
+          - object
+          - 'null'
+        ongoing_monitoring:
+          description: Enrolled in continuous monitoring
+          type: boolean
+        review_comment:
+          description: Disposition rationale
+          type:
+          - string
+          - 'null'
+        reviewed_at:
+          description: Review time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        reviewed_by:
+          description: Reviewer
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        screened_name:
+          description: Name as screened
+          maxLength: 255
+          type: string
+        screening_type:
+          description: Screening type
+          enum:
+          - SANCTIONS
+          - PEP
+          - ADVERSE_MEDIA
+          - WATCHLIST
+          - INTERNAL_BLACKLIST
+          type: string
+        status:
+          description: Outcome
+          enum:
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          type: string
+        trigger:
+          description: ONBOARDING, DATA_CHANGE, LIST_UPDATE, PERIODIC, MANUAL
+          maxLength: 40
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - kyc_profile_id
+      - customer_id
+      - screening_type
+      - trigger
+      - screened_name
+      - status
+      - match_count
+      - ongoing_monitoring
+      type: object
+    KycScreeningCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer screened
+          format: uuid
+          type: string
+        kyc_profile_id:
+          description: KYC profile
+          format: uuid
+          type: string
+        kyc_provider_id:
+          description: Provider (empty = internal engine)
+          format: uuid
+          type: string
+        list_versions:
+          additionalProperties: true
+          description: Versions of the lists screened against
+          type: object
+        match_count:
+          description: Potential matches
+          format: int32
+          type: integer
+        matches:
+          additionalProperties: true
+          description: Candidate matches with list, score and reasons
+          type: object
+        ongoing_monitoring:
+          description: Enrolled in continuous monitoring
+          type: boolean
+        review_comment:
+          description: Disposition rationale
+          type: string
+        reviewed_at:
+          description: Review time
+          format: date-time
+          type: string
+        reviewed_by:
+          description: Reviewer
+          format: uuid
+          type: string
+        screened_name:
+          description: Name as screened
+          maxLength: 255
+          type: string
+        screening_type:
+          description: Screening type
+          enum:
+          - SANCTIONS
+          - PEP
+          - ADVERSE_MEDIA
+          - WATCHLIST
+          - INTERNAL_BLACKLIST
+          type: string
+        status:
+          description: Outcome
+          enum:
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          type: string
+        trigger:
+          description: ONBOARDING, DATA_CHANGE, LIST_UPDATE, PERIODIC, MANUAL
+          maxLength: 40
+          type: string
+      required:
+      - kyc_profile_id
+      - customer_id
+      - screening_type
+      - trigger
+      - screened_name
+      - status
+      type: object
+    KycScreeningPage:
+      description: One page of KycScreening results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/KycScreening'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    KycScreeningsDispositionRequest:
+      properties:
+        review_comment:
+          type: string
+        status:
+          enum:
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          type: string
+      required:
+      - status
+      - review_comment
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            party:read: Read Customer and Onboarding
+            party:write: Change Customer and Onboarding
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            party:read: Read Customer and Onboarding
+            party:write: Change Customer and Onboarding
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Single customer view for individuals and businesses (CIF), relationships and UBOs, tiered KYC, devices and
+    credentials, consent and privacy, configurable onboarding journeys, and KYC/KYB checks through pluggable providers.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — kyc-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/kyc/providers:
+    get:
+      operationId: kycProvidersList
+      summary: List kyc providers
+      tags:
+      - Kyc Providers
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProviderPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: kycProvidersCreate
+      summary: Create kyc provider
+      tags:
+      - Kyc Providers
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycProviderCreate'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-create: true
+  /v1/kyc/providers/{id}:
+    get:
+      operationId: kycProvidersGet
+      summary: Retrieve kyc provider
+      tags:
+      - Kyc Providers
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: kycProvidersUpdate
+      summary: Update kyc provider
+      tags:
+      - Kyc Providers
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycProviderUpdate'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_provider
+      x-crud: true
+      x-crud-update: true
+  /v1/kyc/providers/{id}/test-connection:
+    post:
+      operationId: kycProvidersTestConnection
+      summary: Test provider credentials and connectivity
+      tags:
+      - Kyc Providers
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_provider
+  /v1/kyc/profiles:
+    get:
+      operationId: kycProfilesList
+      summary: List kyc profiles
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - NOT_STARTED
+          - IN_PROGRESS
+          - VERIFIED
+          - REFER
+          - REJECTED
+          - EXPIRED
+          - REVIEW_DUE
+      - name: risk_level
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+      - name: edd_required
+        in: query
+        schema:
+          type: boolean
+      - name: next_review_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfilePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+      x-crud: true
+      x-crud-list: true
+  /v1/kyc/profiles/{id}:
+    get:
+      operationId: kycProfilesGet
+      summary: Retrieve kyc profile
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+      x-crud: true
+      x-crud-get: true
+  /v1/kyc/profiles/{id}/evaluate:
+    post:
+      operationId: kycProfilesEvaluate
+      summary: Re-evaluate tier, risk and status from current evidence
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+  /v1/kyc/profiles/{id}/require-edd:
+    post:
+      operationId: kycProfilesRequireEdd
+      summary: Flag enhanced due diligence
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycProfilesRequireEddRequest'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+  /v1/kyc/profiles/{id}/complete-edd:
+    post:
+      operationId: kycProfilesCompleteEdd
+      summary: Record EDD completion
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycProfile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycProfilesCompleteEddRequest'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+  /v1/kyc/profiles/{id}/checks:
+    get:
+      operationId: kycProfilesChecks
+      summary: Checks run for this profile
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycCheckPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+  /v1/kyc/profiles/{id}/risk-assessments:
+    get:
+      operationId: kycProfilesRiskAssessments
+      summary: Risk assessment history
+      tags:
+      - Kyc Profiles
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycRiskAssessmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-03
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_profile
+  /v1/kyc/documents:
+    get:
+      operationId: kycDocumentsList
+      summary: List kyc documents
+      tags:
+      - Kyc Documents
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: kyc_profile_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: document_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - NATIONAL_ID
+          - PASSPORT
+          - DRIVING_LICENCE
+          - RESIDENCE_PERMIT
+          - UTILITY_BILL
+          - BANK_STATEMENT
+          - PROOF_OF_INCOME
+          - CERTIFICATE_OF_INCORPORATION
+          - ARTICLES_OF_ASSOCIATION
+          - SHAREHOLDER_REGISTER
+          - BOARD_RESOLUTION
+          - TAX_CERTIFICATE
+          - SELFIE
+          - OTHER
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - UPLOADED
+          - PROCESSING
+          - ACCEPTED
+          - REJECTED
+          - EXPIRED
+      - name: expiry_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycDocumentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_document
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: kycDocumentsCreate
+      summary: Create kyc document
+      tags:
+      - Kyc Documents
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycDocumentCreate'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_document
+      x-crud: true
+      x-crud-create: true
+  /v1/kyc/documents/{id}:
+    get:
+      operationId: kycDocumentsGet
+      summary: Retrieve kyc document
+      tags:
+      - Kyc Documents
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_document
+      x-crud: true
+      x-crud-get: true
+  /v1/kyc/documents/{id}/accept:
+    post:
+      operationId: kycDocumentsAccept
+      summary: Accept a document after manual review
+      tags:
+      - Kyc Documents
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycDocumentsAcceptRequest'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_document
+  /v1/kyc/documents/{id}/reject:
+    post:
+      operationId: kycDocumentsReject
+      summary: Reject a document
+      tags:
+      - Kyc Documents
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycDocument'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycDocumentsRejectRequest'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_document
+  /v1/kyc/checks:
+    get:
+      operationId: kycChecksList
+      summary: List kyc checks
+      tags:
+      - Kyc Checks
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: kyc_profile_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: onboarding_application_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: check_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - DOCUMENT_OCR
+          - DOCUMENT_AUTHENTICITY
+          - LIVENESS
+          - FACE_MATCH
+          - DATABASE_VERIFICATION
+          - ADDRESS_VERIFICATION
+          - PHONE_VERIFICATION
+          - EMAIL_VERIFICATION
+          - REGISTRY_LOOKUP
+          - UBO_DISCOVERY
+          - TAX_ID_VERIFICATION
+          - BANK_ACCOUNT_VERIFICATION
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - PASSED
+          - FAILED
+          - INCONCLUSIVE
+          - ERROR
+          - EXPIRED
+      - name: kyc_provider_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycCheckPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_check
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: kycChecksCreate
+      summary: Create kyc check
+      tags:
+      - Kyc Checks
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycCheck'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycCheckCreate'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_check
+      x-crud: true
+      x-crud-create: true
+  /v1/kyc/checks/{id}:
+    get:
+      operationId: kycChecksGet
+      summary: Retrieve kyc check
+      tags:
+      - Kyc Checks
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycCheck'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_check
+      x-crud: true
+      x-crud-get: true
+  /v1/kyc/checks/{id}/retry:
+    post:
+      operationId: kycChecksRetry
+      summary: Retry a failed or errored check, optionally with the fallback provider
+      tags:
+      - Kyc Checks
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycCheck'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycChecksRetryRequest'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_check
+  /v1/kyc/checks/provider-callbacks/{provider_code}/events:
+    post:
+      operationId: kycChecksProviderCallbacksEvents
+      summary: Provider webhook for asynchronous results
+      tags:
+      - Kyc Checks
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: provider_code
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycChecksProviderCallbacksEventsRequest'
+      x-requirements:
+      - ONB-02
+      - ONB-04
+      x-service: kyc-service
+      x-table: kyc_check
+  /v1/kyc/screenings:
+    get:
+      operationId: kycScreeningsList
+      summary: List kyc screenings
+      tags:
+      - Kyc Screenings
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: kyc_profile_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: screening_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SANCTIONS
+          - PEP
+          - ADVERSE_MEDIA
+          - WATCHLIST
+          - INTERNAL_BLACKLIST
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycScreeningPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: kyc-service
+      x-table: kyc_screening
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: kycScreeningsCreate
+      summary: Create kyc screening
+      tags:
+      - Kyc Screenings
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycScreening'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycScreeningCreate'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: kyc-service
+      x-table: kyc_screening
+      x-crud: true
+      x-crud-create: true
+  /v1/kyc/screenings/{id}:
+    get:
+      operationId: kycScreeningsGet
+      summary: Retrieve kyc screening
+      tags:
+      - Kyc Screenings
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycScreening'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: kyc-service
+      x-table: kyc_screening
+      x-crud: true
+      x-crud-get: true
+  /v1/kyc/screenings/{id}/disposition:
+    post:
+      operationId: kycScreeningsDisposition
+      summary: Mark a potential match as false positive or confirmed
+      tags:
+      - Kyc Screenings
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycScreening'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycScreeningsDispositionRequest'
+      x-requirements:
+      - FRM-03
+      - ONB-03
+      x-service: kyc-service
+      x-table: kyc_screening
+  /v1/kyc/risk-assessments:
+    get:
+      operationId: kycRiskAssessmentsList
+      summary: List kyc risk assessments
+      tags:
+      - Kyc Risk Assessments
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: kyc_profile_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: risk_level
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycRiskAssessmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_risk_assessment
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: kycRiskAssessmentsCreate
+      summary: Create kyc risk assessment
+      tags:
+      - Kyc Risk Assessments
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycRiskAssessment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycRiskAssessmentCreate'
+      x-requirements:
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_risk_assessment
+      x-crud: true
+      x-crud-create: true
+  /v1/kyc/risk-assessments/{id}:
+    get:
+      operationId: kycRiskAssessmentsGet
+      summary: Retrieve kyc risk assessment
+      tags:
+      - Kyc Risk Assessments
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycRiskAssessment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-05
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_risk_assessment
+      x-crud: true
+      x-crud-get: true
+  /v1/kyc/reviews:
+    get:
+      operationId: kycReviewsList
+      summary: List kyc reviews
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: kyc_profile_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - SCHEDULED
+          - DUE
+          - IN_PROGRESS
+          - COMPLETED
+          - OVERDUE
+          - CANCELLED
+      - name: assigned_to
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: due_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - PERIODIC
+          - DOCUMENT_EXPIRY
+          - RISK_CHANGE
+          - SCREENING_HIT
+          - CUSTOMER_CHANGE
+          - REGULATOR_REQUEST
+          - MANUAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReviewPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: kycReviewsCreate
+      summary: Create kyc review
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycReviewCreate'
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-create: true
+  /v1/kyc/reviews/{id}:
+    get:
+      operationId: kycReviewsGet
+      summary: Retrieve kyc review
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: kycReviewsUpdate
+      summary: Update kyc review
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycReviewUpdate'
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+      x-crud: true
+      x-crud-update: true
+  /v1/kyc/reviews/{id}/assign:
+    post:
+      operationId: kycReviewsAssign
+      summary: Assign to an analyst
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycReviewsAssignRequest'
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+  /v1/kyc/reviews/{id}/request-update:
+    post:
+      operationId: kycReviewsRequestUpdate
+      summary: Ask the customer to refresh documents or data
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycReviewsRequestUpdateRequest'
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+  /v1/kyc/reviews/{id}/complete:
+    post:
+      operationId: kycReviewsComplete
+      summary: Complete the review with an outcome
+      tags:
+      - Kyc Reviews
+      security:
+      - oauth2:
+        - party:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KycReview'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycReviewsCompleteRequest'
+      x-requirements:
+      - ONB-06
+      x-service: kyc-service
+      x-table: kyc_review
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Configured external KYC/KYB provider (e.g. Onfido, Jumio, Sumsub, Smile ID, registry APIs)
+  name: Kyc Providers
+- description: 'The KYC state of a customer: verification status, risk level and next review date'
+  name: Kyc Profiles
+- description: Identity, address or corporate document captured for KYC/KYB
+  name: Kyc Documents
+- description: One verification call to a provider (OCR, liveness, face match, database, registry, address)
+  name: Kyc Checks
+- description: PEP, sanctions, adverse-media and watchlist screening of a customer at onboarding and on change
+  name: Kyc Screenings
+- description: Customer risk rating with its factors (country, product, channel, occupation, PEP, behaviour). Append-only.
+  name: Kyc Risk Assessments
+- description: Periodic or event-driven KYC review (refresh) of a customer
+  name: Kyc Reviews

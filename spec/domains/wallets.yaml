@@ -159,7 +159,7 @@ services:
           - "original_transaction_id uuid fk=wallet_transaction | Transaction reversed or refunded"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "hold_id uuid ref=hold ro | Funds hold while pending confirmation"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
           - "description string(255) | Narrative"
           - "customer_note string(160) | Note from payer to payee"
           - "confirmation_expires_at ts ro | Deadline for PIN/OTP confirmation"
@@ -891,7 +891,7 @@ services:
           - "completed_at ts ro | Completion time"
           - "failure_reason string(255) ro | Failure reason"
           - "biller_settlement_id uuid fk=biller_settlement ro | Settlement that paid it out"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
       - name: airtime_topup
@@ -910,7 +910,7 @@ services:
           - "provider_reference string(64) ro | Operator reference"
           - "completed_at ts ro | Completion time"
           - "failure_reason string(255) ro | Failure reason"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
     apis:
@@ -1128,7 +1128,7 @@ services:
           - "approved_by string(64) ro | Approver"
           - "wallet_transaction_id uuid ref=wallet_transaction ro | Refund transaction"
           - "completed_at ts ro | Completion time"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
     apis:
@@ -1571,7 +1571,7 @@ services:
           - "completed_at ts ro | Completion time"
           - "error_code string(32) ro | Switch error code"
           - "error_description string(255) ro | Error description"
-          - "idempotency_key string(128) nn | Client key"
+          - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
     apis:

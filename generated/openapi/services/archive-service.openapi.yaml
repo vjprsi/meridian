@@ -1,0 +1,3119 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    ArchiveJob:
+      description: A run moving aged records from a service database to the archive store
+      properties:
+        bytes_archived:
+          description: Bytes written
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cutoff_date:
+          description: Records older than this date are archived
+          format: date
+          type: string
+        data_classification_id:
+          description: Table archived
+          format: uuid
+          type: string
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        records_archived:
+          description: Records archived
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        records_skipped_hold:
+          description: Records skipped because of legal holds
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        retention_policy_id:
+          description: Policy applied
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Start
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - retention_policy_id
+      - data_classification_id
+      - cutoff_date
+      - status
+      type: object
+    ArchiveJobCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoff_date:
+          description: Records older than this date are archived
+          format: date
+          type: string
+        data_classification_id:
+          description: Table archived
+          format: uuid
+          type: string
+        retention_policy_id:
+          description: Policy applied
+          format: uuid
+          type: string
+      required:
+      - retention_policy_id
+      - data_classification_id
+      - cutoff_date
+      type: object
+    ArchiveJobPage:
+      description: One page of ArchiveJob results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ArchiveJob'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ArchivedObject:
+      description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
+      properties:
+        archive_job_id:
+          description: Job that produced it
+          format: uuid
+          type: string
+        checksum_sha256:
+          description: Integrity checksum
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        database_name:
+          description: Source database
+          maxLength: 64
+          type: string
+        first_record_id:
+          description: First record id in the batch
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_record_id:
+          description: Last record id in the batch
+          format: uuid
+          type: string
+        max_created_at:
+          description: Newest record time
+          format: date-time
+          type: string
+        min_created_at:
+          description: Oldest record time
+          format: date-time
+          type: string
+        record_count:
+          description: Records in the object
+          format: int64
+          type: integer
+        restorable:
+          description: Can be restored for queries
+          type: boolean
+        storage_class:
+          description: Storage tier, e.g. ARCHIVE, DEEP_ARCHIVE
+          maxLength: 32
+          type: string
+        storage_uri:
+          description: Object-store URI (Parquet)
+          maxLength: 500
+          type: string
+        table_name:
+          description: Source table
+          maxLength: 64
+          type: string
+        worm_retain_until:
+          description: Object-lock retention date
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - archive_job_id
+      - database_name
+      - table_name
+      - first_record_id
+      - last_record_id
+      - record_count
+      - min_created_at
+      - max_created_at
+      - storage_uri
+      - storage_class
+      - checksum_sha256
+      - worm_retain_until
+      - restorable
+      type: object
+    ArchivedObjectPage:
+      description: One page of ArchivedObject results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ArchivedObject'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ArchivedObjectsRestoreRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    DataClassification:
+      description: Catalogue entry classifying a table (or column set) by sensitivity and data class
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_class:
+          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
+          maxLength: 64
+          type: string
+        database_name:
+          description: Database
+          maxLength: 64
+          type: string
+        description:
+          description: Notes
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        owner:
+          description: Data owner (business)
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        pii_columns:
+          additionalProperties: true
+          description: Columns holding personal data
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sensitivity:
+          description: Sensitivity
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+          type: string
+        service_name:
+          description: Owning service
+          maxLength: 64
+          type: string
+        steward:
+          description: Data steward
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        table_name:
+          description: Table
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - data_class
+      - service_name
+      - database_name
+      - table_name
+      - sensitivity
+      type: object
+    DataClassificationCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_class:
+          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
+          maxLength: 64
+          type: string
+        database_name:
+          description: Database
+          maxLength: 64
+          type: string
+        description:
+          description: Notes
+          maxLength: 500
+          type: string
+        owner:
+          description: Data owner (business)
+          maxLength: 120
+          type: string
+        pii_columns:
+          additionalProperties: true
+          description: Columns holding personal data
+          type: object
+        sensitivity:
+          description: Sensitivity
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+          type: string
+        service_name:
+          description: Owning service
+          maxLength: 64
+          type: string
+        steward:
+          description: Data steward
+          maxLength: 120
+          type: string
+        table_name:
+          description: Table
+          maxLength: 64
+          type: string
+      required:
+      - data_class
+      - service_name
+      - database_name
+      - table_name
+      - sensitivity
+      type: object
+    DataClassificationPage:
+      description: One page of DataClassification results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DataClassification'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    DataClassificationUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_class:
+          description: Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT
+          maxLength: 64
+          type: string
+        database_name:
+          description: Database
+          maxLength: 64
+          type: string
+        description:
+          description: Notes
+          maxLength: 500
+          type: string
+        owner:
+          description: Data owner (business)
+          maxLength: 120
+          type: string
+        pii_columns:
+          additionalProperties: true
+          description: Columns holding personal data
+          type: object
+        sensitivity:
+          description: Sensitivity
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+          type: string
+        service_name:
+          description: Owning service
+          maxLength: 64
+          type: string
+        steward:
+          description: Data steward
+          maxLength: 120
+          type: string
+        table_name:
+          description: Table
+          maxLength: 64
+          type: string
+      type: object
+    LegalHold:
+      description: A legal or regulatory hold that suspends archival purge and deletion for its scope
+      properties:
+        approval_request_id:
+          description: Approval for placing or releasing
+          format: uuid
+          type:
+          - string
+          - 'null'
+        case_reference:
+          description: External matter or court reference
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer, when scope is a customer
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Hold name / matter
+          maxLength: 160
+          type: string
+        reason:
+          description: Legal basis
+          type: string
+        released_at:
+          description: Release time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        released_by:
+          description: Who released it
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        requested_by:
+          description: Legal / compliance requester
+          maxLength: 120
+          type: string
+        review_on:
+          description: Next review date
+          format: date
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scope_ids:
+          additionalProperties: true
+          description: Ids covered (customers, accounts, cases, tables...)
+          type: object
+        scope_type:
+          description: What the hold covers
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+          type: string
+        starts_on:
+          description: Start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - RELEASED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - scope_type
+      - scope_ids
+      - reason
+      - requested_by
+      - status
+      - starts_on
+      type: object
+    LegalHoldCreate:
+      properties:
+        approval_request_id:
+          description: Approval for placing or releasing
+          format: uuid
+          type: string
+        case_reference:
+          description: External matter or court reference
+          maxLength: 128
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer, when scope is a customer
+          format: uuid
+          type: string
+        name:
+          description: Hold name / matter
+          maxLength: 160
+          type: string
+        reason:
+          description: Legal basis
+          type: string
+        requested_by:
+          description: Legal / compliance requester
+          maxLength: 120
+          type: string
+        review_on:
+          description: Next review date
+          format: date
+          type: string
+        scope_ids:
+          additionalProperties: true
+          description: Ids covered (customers, accounts, cases, tables...)
+          type: object
+        scope_type:
+          description: What the hold covers
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+          type: string
+        starts_on:
+          description: Start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - RELEASED
+          type: string
+      required:
+      - name
+      - scope_type
+      - scope_ids
+      - reason
+      - requested_by
+      - starts_on
+      type: object
+    LegalHoldPage:
+      description: One page of LegalHold results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LegalHold'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LegalHoldUpdate:
+      properties:
+        approval_request_id:
+          description: Approval for placing or releasing
+          format: uuid
+          type: string
+        case_reference:
+          description: External matter or court reference
+          maxLength: 128
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer, when scope is a customer
+          format: uuid
+          type: string
+        name:
+          description: Hold name / matter
+          maxLength: 160
+          type: string
+        reason:
+          description: Legal basis
+          type: string
+        requested_by:
+          description: Legal / compliance requester
+          maxLength: 120
+          type: string
+        review_on:
+          description: Next review date
+          format: date
+          type: string
+        scope_ids:
+          additionalProperties: true
+          description: Ids covered (customers, accounts, cases, tables...)
+          type: object
+        scope_type:
+          description: What the hold covers
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+          type: string
+        starts_on:
+          description: Start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - RELEASED
+          type: string
+      type: object
+    LegalHoldsReleaseRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    PurgeRequest:
+      description: Request to permanently delete or anonymise data that reached end of retention
+      properties:
+        action:
+          description: PURGE or ANONYMISE
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          type: string
+        approval_request_id:
+          description: Maker-checker approval
+          format: uuid
+          type:
+          - string
+          - 'null'
+        blocked_by_hold_id:
+          description: Hold blocking execution
+          format: uuid
+          type:
+          - string
+          - 'null'
+        certificate_document_id:
+          description: Certificate of destruction
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        certificate_hash:
+          description: Hash of the certificate
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_classification_id:
+          description: Table affected
+          format: uuid
+          type:
+          - string
+          - 'null'
+        estimated_records:
+          description: Records selected
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        executed_at:
+          description: Execution time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        record_selector:
+          additionalProperties: true
+          description: Selection criteria / id ranges
+          type: object
+        records_purged:
+          description: Records purged
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        retention_policy_id:
+          description: Policy that triggered it
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scope_description:
+          description: What will be purged
+          maxLength: 500
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - EXECUTING
+          - COMPLETED
+          - FAILED
+          - BLOCKED_BY_HOLD
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - scope_description
+      - record_selector
+      - action
+      - status
+      type: object
+    PurgeRequestCreate:
+      properties:
+        action:
+          description: PURGE or ANONYMISE
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          type: string
+        approval_request_id:
+          description: Maker-checker approval
+          format: uuid
+          type: string
+        blocked_by_hold_id:
+          description: Hold blocking execution
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_classification_id:
+          description: Table affected
+          format: uuid
+          type: string
+        record_selector:
+          additionalProperties: true
+          description: Selection criteria / id ranges
+          type: object
+        retention_policy_id:
+          description: Policy that triggered it
+          format: uuid
+          type: string
+        scope_description:
+          description: What will be purged
+          maxLength: 500
+          type: string
+      required:
+      - scope_description
+      - record_selector
+      - action
+      type: object
+    PurgeRequestPage:
+      description: One page of PurgeRequest results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PurgeRequest'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    PurgeRequestsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    RetentionPolicy:
+      description: How long a data class is kept per jurisdiction and what happens after
+      properties:
+        action:
+          description: Action at end of each phase
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          type: string
+        country_code:
+          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_class:
+          description: Data class covered
+          maxLength: 64
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        legal_entity_id:
+          description: Legal entity (empty = all)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        online_days:
+          description: Days kept in the operational database
+          format: int32
+          type: integer
+        regulation_reference:
+          description: Law or regulation, e.g. AML record keeping
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        requires_approval:
+          description: Purge needs maker-checker
+          type: boolean
+        retention_trigger:
+          description: Event that starts the retention clock
+          enum:
+          - CREATED_AT
+          - RELATIONSHIP_END
+          - ACCOUNT_CLOSURE
+          - TRANSACTION_DATE
+          - CASE_CLOSURE
+          - CUSTOM_EVENT
+          type: string
+        retention_years:
+          description: Total years kept (online + archive)
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - data_class
+      - retention_trigger
+      - online_days
+      - retention_years
+      - action
+      - requires_approval
+      - is_active
+      - valid_from
+      type: object
+    RetentionPolicyCreate:
+      properties:
+        action:
+          description: Action at end of each phase
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          type: string
+        country_code:
+          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_class:
+          description: Data class covered
+          maxLength: 64
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        legal_entity_id:
+          description: Legal entity (empty = all)
+          format: uuid
+          type: string
+        online_days:
+          description: Days kept in the operational database
+          format: int32
+          type: integer
+        regulation_reference:
+          description: Law or regulation, e.g. AML record keeping
+          maxLength: 255
+          type: string
+        requires_approval:
+          description: Purge needs maker-checker
+          type: boolean
+        retention_trigger:
+          description: Event that starts the retention clock
+          enum:
+          - CREATED_AT
+          - RELATIONSHIP_END
+          - ACCOUNT_CLOSURE
+          - TRANSACTION_DATE
+          - CASE_CLOSURE
+          - CUSTOM_EVENT
+          type: string
+        retention_years:
+          description: Total years kept (online + archive)
+          format: int32
+          type: integer
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+      required:
+      - data_class
+      - retention_years
+      - valid_from
+      type: object
+    RetentionPolicyPage:
+      description: One page of RetentionPolicy results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RetentionPolicy'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RetentionPolicyUpdate:
+      properties:
+        action:
+          description: Action at end of each phase
+          enum:
+          - ARCHIVE
+          - ANONYMISE
+          - PURGE
+          - ARCHIVE_THEN_PURGE
+          type: string
+        country_code:
+          description: Jurisdiction (empty = default) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_class:
+          description: Data class covered
+          maxLength: 64
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        legal_entity_id:
+          description: Legal entity (empty = all)
+          format: uuid
+          type: string
+        online_days:
+          description: Days kept in the operational database
+          format: int32
+          type: integer
+        regulation_reference:
+          description: Law or regulation, e.g. AML record keeping
+          maxLength: 255
+          type: string
+        requires_approval:
+          description: Purge needs maker-checker
+          type: boolean
+        retention_trigger:
+          description: Event that starts the retention clock
+          enum:
+          - CREATED_AT
+          - RELATIONSHIP_END
+          - ACCOUNT_CLOSURE
+          - TRANSACTION_DATE
+          - CASE_CLOSURE
+          - CUSTOM_EVENT
+          type: string
+        retention_years:
+          description: Total years kept (online + archive)
+          format: int32
+          type: integer
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners, enterprise
+    search across all entities, and data retention, archival, legal hold and certified purge.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — archive-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/archive/classifications:
+    get:
+      operationId: dataClassificationsList
+      summary: List data classifications
+      tags:
+      - Data Classifications
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: data_class
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: service_name
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: database_name
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: sensitivity
+        in: query
+        schema:
+          type: string
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - RESTRICTED
+          - PCI
+          - PII
+          - SPECIAL_CATEGORY
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataClassificationPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: data_classification
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: dataClassificationsCreate
+      summary: Create data classification
+      tags:
+      - Data Classifications
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataClassification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataClassificationCreate'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: data_classification
+      x-crud: true
+      x-crud-create: true
+  /v1/archive/classifications/{id}:
+    get:
+      operationId: dataClassificationsGet
+      summary: Retrieve data classification
+      tags:
+      - Data Classifications
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataClassification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: data_classification
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: dataClassificationsUpdate
+      summary: Update data classification
+      tags:
+      - Data Classifications
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataClassification'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataClassificationUpdate'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: data_classification
+      x-crud: true
+      x-crud-update: true
+  /v1/archive/classifications/scan:
+    post:
+      operationId: dataClassificationsScan
+      summary: Discover tables and suggest classifications from the spec catalogue
+      tags:
+      - Data Classifications
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: data_classification
+  /v1/archive/retention-policies:
+    get:
+      operationId: retentionPoliciesList
+      summary: List retention policies
+      tags:
+      - Retention Policies
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: data_class
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: country_code
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: retention_policy
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: retentionPoliciesCreate
+      summary: Create retention policie
+      tags:
+      - Retention Policies
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionPolicyCreate'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: retention_policy
+      x-crud: true
+      x-crud-create: true
+  /v1/archive/retention-policies/{id}:
+    get:
+      operationId: retentionPoliciesGet
+      summary: Retrieve retention policie
+      tags:
+      - Retention Policies
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: retention_policy
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: retentionPoliciesUpdate
+      summary: Update retention policie
+      tags:
+      - Retention Policies
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionPolicyUpdate'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: retention_policy
+      x-crud: true
+      x-crud-update: true
+  /v1/archive/retention-policies/{id}/preview:
+    post:
+      operationId: retentionPoliciesPreview
+      summary: Count records that would be archived or purged now
+      tags:
+      - Retention Policies
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: retention_policy
+  /v1/archive/jobs:
+    get:
+      operationId: archiveJobsList
+      summary: List archive jobs
+      tags:
+      - Archive Jobs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: retention_policy_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: data_classification_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveJobPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: archive_job
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: archiveJobsCreate
+      summary: Create archive job
+      tags:
+      - Archive Jobs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveJobCreate'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: archive_job
+      x-crud: true
+      x-crud-create: true
+  /v1/archive/jobs/{id}:
+    get:
+      operationId: archiveJobsGet
+      summary: Retrieve archive job
+      tags:
+      - Archive Jobs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: archive_job
+      x-crud: true
+      x-crud-get: true
+  /v1/archive/jobs/{id}/cancel:
+    post:
+      operationId: archiveJobsCancel
+      summary: Cancel a running job
+      tags:
+      - Archive Jobs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: archive_job
+  /v1/archive/jobs/{id}/objects:
+    get:
+      operationId: archiveJobsObjects
+      summary: Archived objects written by the job
+      tags:
+      - Archive Jobs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivedObjectPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-04
+      x-service: archive-service
+      x-table: archive_job
+  /v1/archive/objects:
+    get:
+      operationId: archivedObjectsList
+      summary: List archived objects
+      tags:
+      - Archived Objects
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: archive_job_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: database_name
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: table_name
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivedObjectPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - OPS-04
+      x-service: archive-service
+      x-table: archived_object
+      x-crud: true
+      x-crud-list: true
+  /v1/archive/objects/{id}:
+    get:
+      operationId: archivedObjectsGet
+      summary: Retrieve archived object
+      tags:
+      - Archived Objects
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivedObject'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - OPS-04
+      x-service: archive-service
+      x-table: archived_object
+      x-crud: true
+      x-crud-get: true
+  /v1/archive/objects/{id}/restore:
+    post:
+      operationId: archivedObjectsRestore
+      summary: Restore an archived batch to a query area
+      tags:
+      - Archived Objects
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchivedObjectsRestoreRequest'
+      x-requirements:
+      - ADM-03
+      - OPS-04
+      x-service: archive-service
+      x-table: archived_object
+  /v1/archive/objects/{id}/verify:
+    post:
+      operationId: archivedObjectsVerify
+      summary: Verify checksum and object-lock of an archive
+      tags:
+      - Archived Objects
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-03
+      - OPS-04
+      x-service: archive-service
+      x-table: archived_object
+  /v1/archive/legal-holds:
+    get:
+      operationId: legalHoldsList
+      summary: List legal holds
+      tags:
+      - Legal Holds
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: scope_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CASE
+          - TABLE
+          - DOCUMENT
+          - TENANT
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - RELEASED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHoldPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: legal_hold
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: legalHoldsCreate
+      summary: Create legal hold
+      tags:
+      - Legal Holds
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldCreate'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: legal_hold
+      x-crud: true
+      x-crud-create: true
+  /v1/archive/legal-holds/{id}:
+    get:
+      operationId: legalHoldsGet
+      summary: Retrieve legal hold
+      tags:
+      - Legal Holds
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: legal_hold
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: legalHoldsUpdate
+      summary: Update legal hold
+      tags:
+      - Legal Holds
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldUpdate'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: legal_hold
+      x-crud: true
+      x-crud-update: true
+  /v1/archive/legal-holds/{id}/release:
+    post:
+      operationId: legalHoldsRelease
+      summary: Release a hold (maker-checker)
+      tags:
+      - Legal Holds
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldsReleaseRequest'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: legal_hold
+  /v1/archive/legal-holds/check:
+    get:
+      operationId: legalHoldsCheck
+      summary: Check whether an entity is under hold (?scope_type=&id=)
+      tags:
+      - Legal Holds
+      security:
+      - oauth2:
+        - operations:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: legal_hold
+  /v1/archive/purge-requests:
+    get:
+      operationId: purgeRequestsList
+      summary: List purge requests
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: retention_policy_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - EXECUTING
+          - COMPLETED
+          - FAILED
+          - BLOCKED_BY_HOLD
+      - name: data_classification_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: purgeRequestsCreate
+      summary: Create purge request
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurgeRequestCreate'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+      x-crud: true
+      x-crud-create: true
+  /v1/archive/purge-requests/{id}:
+    get:
+      operationId: purgeRequestsGet
+      summary: Retrieve purge request
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+      x-crud: true
+      x-crud-get: true
+  /v1/archive/purge-requests/{id}/submit:
+    post:
+      operationId: purgeRequestsSubmit
+      summary: Submit for approval
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+  /v1/archive/purge-requests/{id}/execute:
+    post:
+      operationId: purgeRequestsExecute
+      summary: Execute an approved purge
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+  /v1/archive/purge-requests/{id}/cancel:
+    post:
+      operationId: purgeRequestsCancel
+      summary: Cancel the request
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurgeRequestsCancelRequest'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+  /v1/archive/purge-requests/{id}/certificate:
+    get:
+      operationId: purgeRequestsCertificate
+      summary: Signed URL of the certificate of destruction
+      tags:
+      - Purge Requests
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-04
+      - OPS-04
+      x-service: archive-service
+      x-table: purge_request
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Catalogue entry classifying a table (or column set) by sensitivity and data class
+  name: Data Classifications
+- description: How long a data class is kept per jurisdiction and what happens after
+  name: Retention Policies
+- description: A run moving aged records from a service database to the archive store
+  name: Archive Jobs
+- description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
+  name: Archived Objects
+- description: A legal or regulatory hold that suspends archival purge and deletion for its scope
+  name: Legal Holds
+- description: Request to permanently delete or anonymise data that reached end of retention
+  name: Purge Requests

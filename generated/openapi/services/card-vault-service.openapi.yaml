@@ -1,0 +1,1004 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    CardDataVault:
+      description: Encrypted sensitive card data keyed by PAN token
+      properties:
+        card_id:
+          description: Card
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        dek_key_id:
+          description: Data encryption key used
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_detokenized_at:
+          description: Last detokenisation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        pan_fingerprint:
+          description: Keyed HMAC of the PAN for lookup
+          maxLength: 64
+          type: string
+        pan_token:
+          description: Token of the PAN
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - pan_token
+      - pan_fingerprint
+      - dek_key_id
+      type: object
+    CardVaultAccessLog:
+      description: Immutable log of every detokenisation and reveal request
+      properties:
+        actor_id:
+          description: User or customer for reveal requests
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        caller_service:
+          description: Calling workload identity
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ip_address:
+          description: Caller IP (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        pan_token:
+          description: Token accessed
+          maxLength: 64
+          type: string
+        purpose:
+          description: AUTHORIZATION, TOKENIZATION, REVEAL, BUREAU_FILE, SCHEME_FILE
+          maxLength: 32
+          type: string
+        success:
+          description: Outcome
+          type: boolean
+      required:
+      - id
+      - created_at
+      - pan_token
+      - purpose
+      - caller_service
+      - success
+      type: object
+    CardVaultAccessLogPage:
+      description: One page of CardVaultAccessLog results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardVaultAccessLog'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardVaultKey:
+      description: Key metadata for HSM-held keys (no key material stored)
+      properties:
+        active_from:
+          description: Activation
+          format: date-time
+          type: string
+        algorithm:
+          description: AES-256, TDES, etc.
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        hsm_key_label:
+          description: Label of the key inside the HSM
+          maxLength: 128
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        kcv:
+          description: Key check value
+          maxLength: 6
+          type: string
+        key_type:
+          description: Key purpose
+          enum:
+          - PAN_DEK
+          - CVV_KEY
+          - PIN_KEY
+          - ZPK
+          - CVK
+          - MDK
+          type: string
+        retire_after:
+          description: Scheduled rotation
+          format: date-time
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version:
+          description: Key version
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - key_type
+      - hsm_key_label
+      - kcv
+      - algorithm
+      - version
+      - active_from
+      - is_active
+      type: object
+    CardVaultKeyCreate:
+      properties:
+        active_from:
+          description: Activation
+          format: date-time
+          type: string
+        algorithm:
+          description: AES-256, TDES, etc.
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        hsm_key_label:
+          description: Label of the key inside the HSM
+          maxLength: 128
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        kcv:
+          description: Key check value
+          maxLength: 6
+          type: string
+        key_type:
+          description: Key purpose
+          enum:
+          - PAN_DEK
+          - CVV_KEY
+          - PIN_KEY
+          - ZPK
+          - CVK
+          - MDK
+          type: string
+        retire_after:
+          description: Scheduled rotation
+          format: date-time
+          type: string
+        version:
+          description: Key version
+          format: int32
+          type: integer
+      required:
+      - key_type
+      - hsm_key_label
+      - kcv
+      - algorithm
+      - active_from
+      type: object
+    CardVaultKeyPage:
+      description: One page of CardVaultKey results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardVaultKey'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardVaultRevealRequest:
+      properties:
+        card_id:
+          format: uuid
+          type: string
+        public_key:
+          type: string
+      required:
+      - card_id
+      - public_key
+      type: object
+    CardVaultRotateKeysRequest:
+      properties:
+        key_type:
+          enum:
+          - PAN_DEK
+          - CVV_KEY
+          - PIN_KEY
+          - ZPK
+          - CVK
+          - MDK
+          type: string
+      required:
+      - key_type
+      type: object
+    CardVaultTokenizeRequest:
+      properties:
+        cvv:
+          maxLength: 4
+          type: string
+        expiry_month:
+          format: int32
+          type: integer
+        expiry_year:
+          format: int32
+          type: integer
+        pan:
+          maxLength: 19
+          type: string
+      required:
+      - pan
+      - expiry_month
+      - expiry_year
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
+    vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
+    clearing and settlement, interchange and fees, and scheme disputes.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — card-vault-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/card-vault/{id}:
+    get:
+      operationId: cardVaultGet
+      summary: Retrieve card vault
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_data_vault
+      x-crud: true
+      x-crud-get: true
+  /v1/card-vault/tokenize:
+    post:
+      operationId: cardVaultTokenize
+      summary: Store a PAN and return its token (internal)
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardDataVault'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultTokenizeRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_data_vault
+  /v1/card-vault/reveal:
+    post:
+      operationId: cardVaultReveal
+      summary: Return PAN, CVV and expiry encrypted to the cardholder app's public key (step-up required)
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultRevealRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_data_vault
+  /v1/card-vault/rotate-keys:
+    post:
+      operationId: cardVaultRotateKeys
+      summary: Re-encrypt records under a new DEK (operator only)
+      tags:
+      - Card Vault
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultRotateKeysRequest'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_data_vault
+  /v1/card-vault/keys:
+    get:
+      operationId: cardVaultKeysList
+      summary: List card vault keys
+      tags:
+      - Card Vault Keys
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: key_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - PAN_DEK
+          - CVV_KEY
+          - PIN_KEY
+          - ZPK
+          - CVK
+          - MDK
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardVaultKeyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_vault_key
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardVaultKeysCreate
+      summary: Create card vault key
+      tags:
+      - Card Vault Keys
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardVaultKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardVaultKeyCreate'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_vault_key
+      x-crud: true
+      x-crud-create: true
+  /v1/card-vault/keys/{id}:
+    get:
+      operationId: cardVaultKeysGet
+      summary: Retrieve card vault key
+      tags:
+      - Card Vault Keys
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardVaultKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_vault_key
+      x-crud: true
+      x-crud-get: true
+  /v1/card-vault/access-logs:
+    get:
+      operationId: cardVaultAccessLogsList
+      summary: List card vault access logs
+      tags:
+      - Card Vault Access Logs
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: pan_token
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: purpose
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: caller_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardVaultAccessLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_vault_access_log
+      x-crud: true
+      x-crud-list: true
+  /v1/card-vault/access-logs/{id}:
+    get:
+      operationId: cardVaultAccessLogsGet
+      summary: Retrieve card vault access log
+      tags:
+      - Card Vault Access Logs
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardVaultAccessLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - CRD-07
+      x-service: card-vault-service
+      x-table: card_vault_access_log
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Internal PCI APIs plus a reveal endpoint that returns PAN/CVV inside an encrypted, single-use response for
+    the cardholder app.
+  name: Card Vault
+- description: Key metadata for HSM-held keys (no key material stored)
+  name: Card Vault Keys
+- description: Immutable log of every detokenisation and reveal request
+  name: Card Vault Access Logs

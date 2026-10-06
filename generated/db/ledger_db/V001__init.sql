@@ -150,8 +150,8 @@ CREATE TABLE journal_entry (
   idempotency_key              varchar(128) NOT NULL,
   entry_type                   varchar(40) NOT NULL DEFAULT 'STANDARD' CHECK (entry_type IN ('STANDARD', 'REVERSAL', 'ADJUSTMENT', 'ACCRUAL', 'FEE', 'INTEREST', 'FX', 'TRANSFER', 'CARD_SETTLEMENT', 'PAYMENT', 'LOAN', 'OPENING_BALANCE', 'MIGRATION', 'CORRECTION')),
   description                  varchar(500),
-  effective_at                 timestamptz NOT NULL,
-  value_date                   date NOT NULL,
+  effective_at                 timestamptz NOT NULL DEFAULT now(),
+  value_date                   date NOT NULL DEFAULT now(),
   booked_at                    timestamptz NOT NULL DEFAULT now(),
   reversal_of_id               uuid REFERENCES journal_entry(id),
   source_service               varchar(64) NOT NULL,
@@ -176,14 +176,14 @@ COMMENT ON COLUMN journal_entry.tenant_id IS 'Owning tenant; enforced by row-lev
 COMMENT ON COLUMN journal_entry.created_at IS 'Creation time';
 COMMENT ON COLUMN journal_entry.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN journal_entry.ledger_id IS 'Ledger book';
-COMMENT ON COLUMN journal_entry.idempotency_key IS 'Client key; a replay returns the original entry';
+COMMENT ON COLUMN journal_entry.idempotency_key IS 'Taken from the Idempotency-Key header; a replay returns the original entry';
 COMMENT ON COLUMN journal_entry.entry_type IS 'Business classification';
 COMMENT ON COLUMN journal_entry.description IS 'Narrative shown on statements';
-COMMENT ON COLUMN journal_entry.effective_at IS 'Economic time of the transaction';
-COMMENT ON COLUMN journal_entry.value_date IS 'Date interest starts or stops counting';
+COMMENT ON COLUMN journal_entry.effective_at IS 'Economic time of the transaction (default: now)';
+COMMENT ON COLUMN journal_entry.value_date IS 'Date interest starts or stops counting (default: today)';
 COMMENT ON COLUMN journal_entry.booked_at IS 'Time the ledger committed the entry';
-COMMENT ON COLUMN journal_entry.reversal_of_id IS 'Entry this one reverses';
-COMMENT ON COLUMN journal_entry.source_service IS 'Service that requested the posting';
+COMMENT ON COLUMN journal_entry.reversal_of_id IS 'Entry this one reverses (set by POST /{id}/reverse)';
+COMMENT ON COLUMN journal_entry.source_service IS 'Service or client that requested the posting (from the caller identity)';
 COMMENT ON COLUMN journal_entry.source_type IS 'Business object type, e.g. PAYMENT, CARD_AUTHORIZATION';
 COMMENT ON COLUMN journal_entry.source_id IS 'Business object id';
 COMMENT ON COLUMN journal_entry.correlation_id IS 'Trace / saga correlation id';
@@ -240,12 +240,12 @@ COMMENT ON COLUMN ledger_entry.created_at IS 'Creation time';
 COMMENT ON COLUMN ledger_entry.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN ledger_entry.journal_entry_id IS 'Parent journal entry';
 COMMENT ON COLUMN ledger_entry.ledger_account_id IS 'Account posted to';
-COMMENT ON COLUMN ledger_entry.line_no IS 'Line number within the journal entry';
+COMMENT ON COLUMN ledger_entry.line_no IS 'Line number within the journal entry (order sent)';
 COMMENT ON COLUMN ledger_entry.direction IS 'Debit or credit';
 COMMENT ON COLUMN ledger_entry.amount IS 'Positive amount in the account currency';
 COMMENT ON COLUMN ledger_entry.currency IS 'Account currency';
 COMMENT ON COLUMN ledger_entry.fx_rate IS 'Rate to ledger base currency at posting time';
-COMMENT ON COLUMN ledger_entry.base_amount IS 'Amount in ledger base currency';
+COMMENT ON COLUMN ledger_entry.base_amount IS 'Amount in ledger base currency (amount x fx_rate)';
 COMMENT ON COLUMN ledger_entry.effective_at IS 'Copied from the journal entry for range queries';
 COMMENT ON COLUMN ledger_entry.account_version IS 'Account balance version after this entry (gapless per account)';
 COMMENT ON COLUMN ledger_entry.balance_after IS 'Posted balance of the account after this entry';
@@ -362,7 +362,7 @@ COMMENT ON COLUMN hold.captured_amount IS 'Amount converted into postings';
 COMMENT ON COLUMN hold.status IS 'Lifecycle status';
 COMMENT ON COLUMN hold.source_type IS 'Business object type, e.g. CARD_AUTHORIZATION';
 COMMENT ON COLUMN hold.source_id IS 'Business object id';
-COMMENT ON COLUMN hold.idempotency_key IS 'Client key';
+COMMENT ON COLUMN hold.idempotency_key IS 'Taken from the Idempotency-Key header';
 COMMENT ON COLUMN hold.description IS 'Narrative';
 COMMENT ON COLUMN hold.expires_at IS 'Automatic release time';
 COMMENT ON COLUMN hold.released_at IS 'Time released or expired';

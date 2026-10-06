@@ -1,0 +1,3705 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AccountBalance:
+      description: Current balances per ledger account, updated in the same transaction as each posting
+      properties:
+        account_version:
+          description: Last applied ledger entry version
+          format: int64
+          readOnly: true
+          type: integer
+        available_balance:
+          description: Posted - pending debits + overdraft limit
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Account currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_entry_at:
+          description: Time of the last posting
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        ledger_account_id:
+          description: Account
+          format: uuid
+          type: string
+        pending_credits:
+          description: Pending credits not yet available
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        pending_debits:
+          description: Active holds and pending debits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        posted_balance:
+          description: Posted (ledger) balance in normal-balance terms
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        posted_credits:
+          description: Lifetime posted credits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        posted_debits:
+          description: Lifetime posted debits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_account_id
+      - currency
+      - posted_debits
+      - posted_credits
+      - posted_balance
+      - pending_debits
+      - pending_credits
+      - available_balance
+      - account_version
+      type: object
+    BalanceSnapshot:
+      description: End-of-day balance per account; used for statements, interest and point-in-time queries
+      properties:
+        account_version:
+          description: Last entry version included
+          format: int64
+          type: integer
+        as_of_date:
+          description: Business date of the snapshot
+          format: date
+          type: string
+        available_balance:
+          description: Available balance at end of day
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        closing_balance:
+          description: Balance at end of day
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ledger_account_id:
+          description: Account
+          format: uuid
+          type: string
+        opening_balance:
+          description: Balance at start of day
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        total_credits:
+          description: Credits during the day
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        total_debits:
+          description: Debits during the day
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - ledger_account_id
+      - as_of_date
+      - currency
+      - opening_balance
+      - total_debits
+      - total_credits
+      - closing_balance
+      - available_balance
+      - account_version
+      type: object
+    BalanceSnapshotPage:
+      description: One page of BalanceSnapshot results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BalanceSnapshot'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Hold:
+      description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
+      properties:
+        amount:
+          description: Held amount (can be incremented)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        captured_amount:
+          description: Amount converted into postings
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Narrative
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Automatic release time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        hold_type:
+          description: Reason for the hold
+          enum:
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - MANUAL
+          - LEGAL
+          - CHEQUE
+          - RESERVATION
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Taken from the Idempotency-Key header
+          maxLength: 128
+          readOnly: true
+          type: string
+        ledger_account_id:
+          description: Account the funds are reserved on
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        released_at:
+          description: Time released or expired
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source_id:
+          description: Business object id
+          format: uuid
+          type:
+          - string
+          - 'null'
+        source_type:
+          description: Business object type, e.g. CARD_AUTHORIZATION
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        status:
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - PARTIALLY_CAPTURED
+          - CAPTURED
+          - RELEASED
+          - EXPIRED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_account_id
+      - hold_type
+      - amount
+      - currency
+      - captured_amount
+      - status
+      - idempotency_key
+      type: object
+    HoldCreate:
+      properties:
+        amount:
+          description: Held amount (can be incremented)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Narrative
+          maxLength: 500
+          type: string
+        expires_at:
+          description: Automatic release time
+          format: date-time
+          type: string
+        hold_type:
+          description: Reason for the hold
+          enum:
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - MANUAL
+          - LEGAL
+          - CHEQUE
+          - RESERVATION
+          type: string
+        ledger_account_id:
+          description: Account the funds are reserved on
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        source_id:
+          description: Business object id
+          format: uuid
+          type: string
+        source_type:
+          description: Business object type, e.g. CARD_AUTHORIZATION
+          maxLength: 64
+          type: string
+      required:
+      - ledger_account_id
+      - hold_type
+      - amount
+      - currency
+      type: object
+    HoldEvent:
+      description: Immutable history of a hold (placed, incremented, captured, released, expired)
+      properties:
+        amount:
+          description: Amount affected by this event
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        event_type:
+          description: PLACED, INCREMENTED, CAPTURED, PARTIALLY_CAPTURED, RELEASED, EXPIRED
+          maxLength: 32
+          type: string
+        hold_id:
+          description: Hold
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Posting created on capture
+          format: uuid
+          type:
+          - string
+          - 'null'
+        reason:
+          description: Reason supplied by the caller
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - hold_id
+      - event_type
+      - amount
+      type: object
+    HoldEventPage:
+      description: One page of HoldEvent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/HoldEvent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    HoldPage:
+      description: One page of Hold results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Hold'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    HoldsCaptureRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        counter_account_id:
+          format: uuid
+          type: string
+        description:
+          maxLength: 500
+          type: string
+        release_remainder:
+          type: boolean
+      required:
+      - amount
+      - counter_account_id
+      type: object
+    HoldsIncrementRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - amount
+      type: object
+    HoldsReleaseRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    JournalEntriesBatchRequest:
+      properties:
+        entries:
+          additionalProperties: true
+          type: object
+      required:
+      - entries
+      type: object
+    JournalEntriesReverseRequest:
+      properties:
+        effective_at:
+          format: date-time
+          type: string
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    JournalEntry:
+      description: One balanced, atomic set of ledger entries (a ledger transaction). Append-only.
+      properties:
+        booked_at:
+          description: Time the ledger committed the entry
+          format: date-time
+          readOnly: true
+          type: string
+        correlation_id:
+          description: Trace / saga correlation id
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Narrative shown on statements
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        effective_at:
+          description: 'Economic time of the transaction (default: now)'
+          format: date-time
+          type: string
+        entries:
+          description: Debit and credit lines; must balance per currency
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+          readOnly: true
+          type: array
+        entry_count:
+          description: Number of ledger entries
+          format: int32
+          readOnly: true
+          type: integer
+        entry_type:
+          description: Business classification
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          type: string
+        hash:
+          description: SHA-256 over this entry and the previous hash (tamper evidence)
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Taken from the Idempotency-Key header; a replay returns the original entry
+          maxLength: 128
+          readOnly: true
+          type: string
+        ledger_id:
+          description: Ledger book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        prev_hash:
+          description: Hash of the previous journal entry in the ledger
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        reversal_of_id:
+          description: Entry this one reverses (set by POST /{id}/reverse)
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        source_id:
+          description: Business object id
+          format: uuid
+          type:
+          - string
+          - 'null'
+        source_service:
+          description: Service or client that requested the posting (from the caller identity)
+          maxLength: 64
+          readOnly: true
+          type: string
+        source_type:
+          description: Business object type, e.g. PAYMENT, CARD_AUTHORIZATION
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        total_debits:
+          description: Sum of debits in base currency (equals credits)
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        value_date:
+          description: 'Date interest starts or stops counting (default: today)'
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - ledger_id
+      - idempotency_key
+      - entry_type
+      - effective_at
+      - value_date
+      - booked_at
+      - source_service
+      - entry_count
+      - total_debits
+      type: object
+    JournalEntryCreate:
+      properties:
+        correlation_id:
+          description: Trace / saga correlation id
+          maxLength: 128
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Narrative shown on statements
+          maxLength: 500
+          type: string
+        effective_at:
+          description: 'Economic time of the transaction (default: now)'
+          format: date-time
+          type: string
+        entries:
+          description: Debit and credit lines; must balance per currency
+          items:
+            $ref: '#/components/schemas/LedgerEntryCreate'
+          minItems: 1
+          type: array
+        entry_type:
+          description: Business classification
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          type: string
+        ledger_id:
+          description: Ledger book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        source_id:
+          description: Business object id
+          format: uuid
+          type: string
+        source_type:
+          description: Business object type, e.g. PAYMENT, CARD_AUTHORIZATION
+          maxLength: 64
+          type: string
+        value_date:
+          description: 'Date interest starts or stops counting (default: today)'
+          format: date
+          type: string
+      required:
+      - ledger_id
+      - entries
+      type: object
+    JournalEntryPage:
+      description: One page of JournalEntry results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Ledger:
+      description: A book of accounts for one legal entity (a tenant may run several ledgers)
+      properties:
+        base_currency:
+          description: Reporting currency for base-amount conversion (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        code:
+          description: Short unique code, e.g. MAIN-USD
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Free-text description
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Legal entity that owns this book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - legal_entity_id
+      - base_currency
+      - status
+      type: object
+    LedgerAccount:
+      description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'
+      properties:
+        account_type:
+          description: Accounting class
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type: string
+        allow_negative:
+          description: Whether available balance may go below zero
+          type: boolean
+        closed_at:
+          description: Closing time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        code:
+          description: Account code / number inside the ledger
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Account currency (single-currency accounts) (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        gl_account_id:
+          description: GL control account this account rolls up to
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ledger_id:
+          description: Ledger book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        min_balance:
+          description: Minimum balance that must remain
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        normal_balance:
+          description: Side that increases the balance
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        opened_at:
+          description: Opening time
+          format: date-time
+          type: string
+        overdraft_limit:
+          description: Arranged overdraft; available = balance + limit - holds
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        owner_id:
+          description: Id of the owning business object in its service
+          format: uuid
+          type:
+          - string
+          - 'null'
+        owner_type:
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        parent_id:
+          description: Parent for hierarchies, sub-ledgers and virtual accounts
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Posting restrictions
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ledger_id
+      - code
+      - name
+      - account_type
+      - normal_balance
+      - currency
+      - status
+      - allow_negative
+      - overdraft_limit
+      - min_balance
+      - opened_at
+      type: object
+    LedgerAccountCreate:
+      properties:
+        account_type:
+          description: Accounting class
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type: string
+        allow_negative:
+          description: Whether available balance may go below zero
+          type: boolean
+        closed_at:
+          description: Closing time
+          format: date-time
+          type: string
+        code:
+          description: Account code / number inside the ledger
+          maxLength: 64
+          type: string
+        currency:
+          description: Account currency (single-currency accounts) (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        gl_account_id:
+          description: GL control account this account rolls up to
+          format: uuid
+          type: string
+        ledger_id:
+          description: Ledger book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        min_balance:
+          description: Minimum balance that must remain
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        normal_balance:
+          description: Side that increases the balance
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        opened_at:
+          description: Opening time
+          format: date-time
+          type: string
+        overdraft_limit:
+          description: Arranged overdraft; available = balance + limit - holds
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        owner_id:
+          description: Id of the owning business object in its service
+          format: uuid
+          type: string
+        owner_type:
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+          maxLength: 40
+          type: string
+        parent_id:
+          description: Parent for hierarchies, sub-ledgers and virtual accounts
+          format: uuid
+          type: string
+        status:
+          description: Posting restrictions
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+          type: string
+      required:
+      - ledger_id
+      - code
+      - name
+      - account_type
+      - normal_balance
+      - currency
+      type: object
+    LedgerAccountPage:
+      description: One page of LedgerAccount results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LedgerAccount'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LedgerAccountUpdate:
+      properties:
+        account_type:
+          description: Accounting class
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type: string
+        allow_negative:
+          description: Whether available balance may go below zero
+          type: boolean
+        closed_at:
+          description: Closing time
+          format: date-time
+          type: string
+        code:
+          description: Account code / number inside the ledger
+          maxLength: 64
+          type: string
+        currency:
+          description: Account currency (single-currency accounts) (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        gl_account_id:
+          description: GL control account this account rolls up to
+          format: uuid
+          type: string
+        ledger_id:
+          description: Ledger book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        min_balance:
+          description: Minimum balance that must remain
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        normal_balance:
+          description: Side that increases the balance
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        opened_at:
+          description: Opening time
+          format: date-time
+          type: string
+        overdraft_limit:
+          description: Arranged overdraft; available = balance + limit - holds
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        owner_id:
+          description: Id of the owning business object in its service
+          format: uuid
+          type: string
+        owner_type:
+          description: Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN
+          maxLength: 40
+          type: string
+        parent_id:
+          description: Parent for hierarchies, sub-ledgers and virtual accounts
+          format: uuid
+          type: string
+        status:
+          description: Posting restrictions
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+          type: string
+      type: object
+    LedgerAccountsCloseRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    LedgerAccountsFreezeRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+        status:
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+          type: string
+      required:
+      - status
+      - reason
+      type: object
+    LedgerAccountsUnfreezeRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    LedgerCreate:
+      properties:
+        base_currency:
+          description: Reporting currency for base-amount conversion (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        code:
+          description: Short unique code, e.g. MAIN-USD
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Free-text description
+          type: string
+        legal_entity_id:
+          description: Legal entity that owns this book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+          type: string
+      required:
+      - code
+      - name
+      - legal_entity_id
+      - base_currency
+      type: object
+    LedgerEntry:
+      description: One debit or credit line of a journal entry against one ledger account. Append-only.
+      properties:
+        account_version:
+          description: Account balance version after this entry (gapless per account)
+          format: int64
+          readOnly: true
+          type: integer
+        amount:
+          description: Positive amount in the account currency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        balance_after:
+          description: Posted balance of the account after this entry
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        base_amount:
+          description: Amount in ledger base currency (amount x fx_rate)
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Account currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Line narrative
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Debit or credit
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        effective_at:
+          description: Copied from the journal entry for range queries
+          format: date-time
+          readOnly: true
+          type: string
+        fx_rate:
+          description: Rate to ledger base currency at posting time
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Parent journal entry
+          format: uuid
+          readOnly: true
+          type: string
+        ledger_account_id:
+          description: Account posted to
+          format: uuid
+          type: string
+        line_no:
+          description: Line number within the journal entry (order sent)
+          format: int32
+          readOnly: true
+          type: integer
+      required:
+      - id
+      - created_at
+      - journal_entry_id
+      - ledger_account_id
+      - line_no
+      - direction
+      - amount
+      - currency
+      - base_amount
+      - effective_at
+      - account_version
+      - balance_after
+      type: object
+    LedgerEntryCreate:
+      properties:
+        amount:
+          description: Positive amount in the account currency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Account currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Line narrative
+          maxLength: 500
+          type: string
+        direction:
+          description: Debit or credit
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        fx_rate:
+          description: Rate to ledger base currency at posting time
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        ledger_account_id:
+          description: Account posted to
+          format: uuid
+          type: string
+      required:
+      - ledger_account_id
+      - direction
+      - amount
+      - currency
+      type: object
+    LedgerEntryPage:
+      description: One page of LedgerEntry results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LedgerEntry'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LedgerPage:
+      description: One page of Ledger results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Ledger'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LedgerUpdate:
+      properties:
+        base_currency:
+          description: Reporting currency for base-amount conversion (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        code:
+          description: Short unique code, e.g. MAIN-USD
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Free-text description
+          type: string
+        legal_entity_id:
+          description: Legal entity that owns this book
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+          type: string
+      type: object
+    LedgersLockRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'The single source of truth for money. A real-time, append-only double-entry ledger that every other service
+    posts through, the general ledger and period close, and automated reconciliation.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — ledger-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/ledgers:
+    get:
+      operationId: ledgersList
+      summary: List ledgers
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - LOCKED
+          - ARCHIVED
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: base_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: ledgersCreate
+      summary: Create ledger
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ledger'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerCreate'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-create: true
+  /v1/ledgers/{id}:
+    get:
+      operationId: ledgersGet
+      summary: Retrieve ledger
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ledger'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: ledgersUpdate
+      summary: Update ledger
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ledger'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerUpdate'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+      x-crud: true
+      x-crud-update: true
+  /v1/ledgers/{id}/lock:
+    post:
+      operationId: ledgersLock
+      summary: Lock a ledger against new postings
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ledger'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgersLockRequest'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+  /v1/ledgers/{id}/verify:
+    get:
+      operationId: ledgersVerify
+      summary: 'Verify the ledger: re-sum balances and check the hash chain'
+      tags:
+      - Ledgers
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-05
+      - LED-01
+      x-service: ledger-service
+      x-table: ledger
+  /v1/ledger-accounts:
+    get:
+      operationId: ledgerAccountsList
+      summary: List ledger accounts
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - FROZEN_DEBIT
+          - FROZEN_CREDIT
+          - FROZEN
+          - CLOSED
+      - name: owner_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: owner_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: parent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: gl_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccountPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: ledgerAccountsCreate
+      summary: Create ledger account
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountCreate'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-create: true
+  /v1/ledger-accounts/{id}:
+    get:
+      operationId: ledgerAccountsGet
+      summary: Retrieve ledger account
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: ledgerAccountsUpdate
+      summary: Update ledger account
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountUpdate'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+      x-crud: true
+      x-crud-update: true
+  /v1/ledger-accounts/{id}/balance:
+    get:
+      operationId: ledgerAccountsBalance
+      summary: Current balances (ledger, available, pending)
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountBalance'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/balance-at:
+    get:
+      operationId: ledgerAccountsBalanceAt
+      summary: Point-in-time balance at a timestamp
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: at
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountBalance'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/balance-history:
+    get:
+      operationId: ledgerAccountsBalanceHistory
+      summary: Daily balance snapshots in a date range
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSnapshotPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/entries:
+    get:
+      operationId: ledgerAccountsEntries
+      summary: Ledger entries for this account, newest first
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/freeze:
+    post:
+      operationId: ledgerAccountsFreeze
+      summary: Restrict debits, credits or both
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountsFreezeRequest'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/unfreeze:
+    post:
+      operationId: ledgerAccountsUnfreeze
+      summary: Remove posting restrictions
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountsUnfreezeRequest'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/ledger-accounts/{id}/close:
+    post:
+      operationId: ledgerAccountsClose
+      summary: Close an account with zero balance
+      tags:
+      - Ledger Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAccountsCloseRequest'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      - LED-08
+      x-service: ledger-service
+      x-table: ledger_account
+  /v1/journal-entries:
+    get:
+      operationId: journalEntriesList
+      summary: List journal entries
+      tags:
+      - Journal Entries
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: entry_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+      - name: source_type
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: correlation_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LED-01
+      - LED-05
+      - LED-06
+      - LED-07
+      x-service: ledger-service
+      x-table: journal_entry
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: journalEntriesCreate
+      summary: Create journal entrie
+      tags:
+      - Journal Entries
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntryCreate'
+      x-requirements:
+      - LED-01
+      - LED-05
+      - LED-06
+      - LED-07
+      x-service: ledger-service
+      x-table: journal_entry
+      x-crud: true
+      x-crud-create: true
+  /v1/journal-entries/{id}:
+    get:
+      operationId: journalEntriesGet
+      summary: Retrieve journal entrie
+      tags:
+      - Journal Entries
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-05
+      - LED-06
+      - LED-07
+      x-service: ledger-service
+      x-table: journal_entry
+      x-crud: true
+      x-crud-get: true
+  /v1/journal-entries/{id}/reverse:
+    post:
+      operationId: journalEntriesReverse
+      summary: Reverse a journal entry with a compensating entry
+      tags:
+      - Journal Entries
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntriesReverseRequest'
+      x-requirements:
+      - LED-01
+      - LED-05
+      - LED-06
+      - LED-07
+      x-service: ledger-service
+      x-table: journal_entry
+  /v1/journal-entries/{id}/entries:
+    get:
+      operationId: journalEntriesEntries
+      summary: Lines of a journal entry
+      tags:
+      - Journal Entries
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-05
+      - LED-06
+      - LED-07
+      x-service: ledger-service
+      x-table: journal_entry
+  /v1/journal-entries/batch:
+    post:
+      operationId: journalEntriesBatch
+      summary: Post up to 1,000 journal entries atomically per entry
+      tags:
+      - Journal Entries
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JournalEntriesBatchRequest'
+      x-requirements:
+      - LED-01
+      - LED-05
+      - LED-06
+      - LED-07
+      x-service: ledger-service
+      x-table: journal_entry
+  /v1/ledger-entries:
+    get:
+      operationId: ledgerEntriesList
+      summary: List ledger entries
+      tags:
+      - Ledger Entries
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: journal_entry_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      x-service: ledger-service
+      x-table: ledger_entry
+      x-crud: true
+      x-crud-list: true
+  /v1/ledger-entries/{id}:
+    get:
+      operationId: ledgerEntriesGet
+      summary: Retrieve ledger entrie
+      tags:
+      - Ledger Entries
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-01
+      - LED-02
+      - LED-03
+      x-service: ledger-service
+      x-table: ledger_entry
+      x-crud: true
+      x-crud-get: true
+  /v1/holds:
+    get:
+      operationId: holdsList
+      summary: List holds
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: hold_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - MANUAL
+          - LEGAL
+          - CHEQUE
+          - RESERVATION
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - PARTIALLY_CAPTURED
+          - CAPTURED
+          - RELEASED
+          - EXPIRED
+      - name: source_type
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: holdsCreate
+      summary: Create hold
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldCreate'
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+      x-crud: true
+      x-crud-create: true
+  /v1/holds/{id}:
+    get:
+      operationId: holdsGet
+      summary: Retrieve hold
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+      x-crud: true
+      x-crud-get: true
+  /v1/holds/{id}/increment:
+    post:
+      operationId: holdsIncrement
+      summary: Increase a hold (e.g. incremental card authorisation)
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldsIncrementRequest'
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+  /v1/holds/{id}/capture:
+    post:
+      operationId: holdsCapture
+      summary: 'Capture all or part of a hold: debit the held account, credit the counter account'
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldsCaptureRequest'
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+  /v1/holds/{id}/release:
+    post:
+      operationId: holdsRelease
+      summary: Release the remaining held amount
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HoldsReleaseRequest'
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+  /v1/holds/{id}/events:
+    get:
+      operationId: holdsEvents
+      summary: History of the hold
+      tags:
+      - Holds
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HoldEventPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LED-04
+      x-service: ledger-service
+      x-table: hold
+  /v1/balance-snapshots:
+    get:
+      operationId: balanceSnapshotsList
+      summary: List balance snapshots
+      tags:
+      - Balance Snapshots
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ledger_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: as_of_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSnapshotPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-03
+      - LED-09
+      x-service: ledger-service
+      x-table: balance_snapshot
+      x-crud: true
+      x-crud-list: true
+  /v1/balance-snapshots/{id}:
+    get:
+      operationId: balanceSnapshotsGet
+      summary: Retrieve balance snapshot
+      tags:
+      - Balance Snapshots
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceSnapshot'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - LED-09
+      x-service: ledger-service
+      x-table: balance_snapshot
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A book of accounts for one legal entity (a tenant may run several ledgers)
+  name: Ledgers
+- description: 'An account in the ledger: customer accounts, wallets, cards, loans, internal and GL control accounts'
+  name: Ledger Accounts
+- description: Post balanced transactions. Body carries the entries array (see LedgerEntry).
+  name: Journal Entries
+- description: One debit or credit line of a journal entry against one ledger account. Append-only.
+  name: Ledger Entries
+- description: A reservation of funds (card authorisation, pending payment, legal block) reducing available balance
+  name: Holds
+- description: End-of-day balance per account; used for statements, interest and point-in-time queries
+  name: Balance Snapshots

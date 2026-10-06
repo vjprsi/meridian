@@ -1,0 +1,4058 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    BankDirectory:
+      description: Directory of banks and branches (BIC, national clearing codes, rail participation)
+      properties:
+        address:
+          description: Address
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        bank_name:
+          description: Bank name
+          maxLength: 255
+          type: string
+        bic:
+          description: SWIFT BIC
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        branch_name:
+          description: Branch name
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        city:
+          description: City
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        clearing_system:
+          description: Clearing system, e.g. USABA, GBDSC, INFSC
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        national_clearing_code:
+          description: Routing / sort / IFSC code
+          maxLength: 35
+          type:
+          - string
+          - 'null'
+        rail_participation:
+          additionalProperties: true
+          description: Rails the bank participates in (SEPA_INST, FEDNOW, PIX ...)
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        source:
+          description: Directory source, e.g. SWIFTRef
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        source_updated_at:
+          description: Last refresh from source
+          format: date-time
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - bank_name
+      - country
+      - is_active
+      type: object
+    BankDirectoryPage:
+      description: One page of BankDirectory results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BankDirectory'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BanksValidateAccountRequest:
+      properties:
+        account_number:
+          maxLength: 64
+          type: string
+        clearing_code:
+          maxLength: 35
+          type: string
+        country:
+          description: ISO 3166-1 alpha-2
+          pattern: ^[A-Z]{2}$
+          type: string
+      required:
+      - account_number
+      - country
+      type: object
+    Country:
+      description: ISO 3166 country with banking and compliance attributes
+      properties:
+        address_format:
+          additionalProperties: true
+          description: Address fields and order
+          type:
+          - object
+          - 'null'
+        alpha3:
+          description: ISO 3166-1 alpha-3
+          maxLength: 3
+          type: string
+        code:
+          description: ISO 3166-1 alpha-2 (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency_code:
+          description: Main currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fatf_status:
+          description: FATF list status
+          enum:
+          - NONE
+          - INCREASED_MONITORING
+          - CALL_FOR_ACTION
+          type: string
+        iban_length:
+          description: IBAN length when IBAN is used
+          format: int32
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_eea:
+          description: European Economic Area member
+          type: boolean
+        is_sanctioned:
+          description: Comprehensively sanctioned jurisdiction
+          type: boolean
+        name:
+          description: Short English name
+          maxLength: 120
+          type: string
+        numeric_code:
+          description: ISO 3166-1 numeric
+          maxLength: 3
+          type:
+          - string
+          - 'null'
+        official_name:
+          description: Official name
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        phone_prefix:
+          description: International dialling prefix
+          maxLength: 8
+          type:
+          - string
+          - 'null'
+        postal_code_regex:
+          description: Postal code validation pattern
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        region:
+          description: Region
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sub_region:
+          description: Sub-region
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - alpha3
+      - name
+      - is_eea
+      - is_sanctioned
+      - fatf_status
+      type: object
+    CountryPage:
+      description: One page of Country results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Country'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CountryUpdate:
+      properties:
+        address_format:
+          additionalProperties: true
+          description: Address fields and order
+          type: object
+        alpha3:
+          description: ISO 3166-1 alpha-3
+          maxLength: 3
+          type: string
+        code:
+          description: ISO 3166-1 alpha-2 (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        currency_code:
+          description: Main currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fatf_status:
+          description: FATF list status
+          enum:
+          - NONE
+          - INCREASED_MONITORING
+          - CALL_FOR_ACTION
+          type: string
+        iban_length:
+          description: IBAN length when IBAN is used
+          format: int32
+          type: integer
+        is_eea:
+          description: European Economic Area member
+          type: boolean
+        is_sanctioned:
+          description: Comprehensively sanctioned jurisdiction
+          type: boolean
+        name:
+          description: Short English name
+          maxLength: 120
+          type: string
+        numeric_code:
+          description: ISO 3166-1 numeric
+          maxLength: 3
+          type: string
+        official_name:
+          description: Official name
+          maxLength: 255
+          type: string
+        phone_prefix:
+          description: International dialling prefix
+          maxLength: 8
+          type: string
+        postal_code_regex:
+          description: Postal code validation pattern
+          maxLength: 255
+          type: string
+        region:
+          description: Region
+          maxLength: 64
+          type: string
+        sub_region:
+          description: Sub-region
+          maxLength: 64
+          type: string
+      type: object
+    Currency:
+      description: ISO 4217 currency (plus supported digital currencies)
+      properties:
+        cash_rounding_increment:
+          description: Smallest cash denomination, e.g. 0.05
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        code:
+          description: ISO 4217 alpha code (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Available for new accounts
+          type: boolean
+        is_crypto:
+          description: Digital asset / stablecoin
+          type: boolean
+        minor_units:
+          description: Decimal places
+          format: int32
+          type: integer
+        name:
+          description: English name
+          maxLength: 80
+          type: string
+        numeric_code:
+          description: ISO 4217 numeric code
+          maxLength: 3
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        symbol:
+          description: Display symbol
+          maxLength: 8
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - minor_units
+      - is_crypto
+      - is_active
+      type: object
+    CurrencyCreate:
+      properties:
+        cash_rounding_increment:
+          description: Smallest cash denomination, e.g. 0.05
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        code:
+          description: ISO 4217 alpha code (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Available for new accounts
+          type: boolean
+        is_crypto:
+          description: Digital asset / stablecoin
+          type: boolean
+        minor_units:
+          description: Decimal places
+          format: int32
+          type: integer
+        name:
+          description: English name
+          maxLength: 80
+          type: string
+        numeric_code:
+          description: ISO 4217 numeric code
+          maxLength: 3
+          type: string
+        symbol:
+          description: Display symbol
+          maxLength: 8
+          type: string
+      required:
+      - code
+      - name
+      type: object
+    CurrencyPage:
+      description: One page of Currency results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Currency'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CurrencyUpdate:
+      properties:
+        cash_rounding_increment:
+          description: Smallest cash denomination, e.g. 0.05
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        code:
+          description: ISO 4217 alpha code (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Available for new accounts
+          type: boolean
+        is_crypto:
+          description: Digital asset / stablecoin
+          type: boolean
+        minor_units:
+          description: Decimal places
+          format: int32
+          type: integer
+        name:
+          description: English name
+          maxLength: 80
+          type: string
+        numeric_code:
+          description: ISO 4217 numeric code
+          maxLength: 3
+          type: string
+        symbol:
+          description: Display symbol
+          maxLength: 8
+          type: string
+      type: object
+    FxRate:
+      description: An FX rate observation for a currency pair and rate type (tenant rates include margins). Append-only.
+      properties:
+        as_of_date:
+          description: Business date
+          format: date
+          type: string
+        base_currency:
+          description: Base currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fx_rate_source_id:
+          description: Source
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inverse_rate:
+          description: Units of base per 1 quote
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        quote_currency:
+          description: Quote currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        rate:
+          description: Units of quote per 1 base
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rate_type:
+          description: Mid, buy, sell, cash or revaluation
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
+          type: string
+        valid_from:
+          description: Valid from
+          format: date-time
+          type: string
+        valid_to:
+          description: Valid to (empty = until superseded)
+          format: date-time
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - fx_rate_source_id
+      - base_currency
+      - quote_currency
+      - rate_type
+      - rate
+      - inverse_rate
+      - as_of_date
+      - valid_from
+      type: object
+    FxRateCreate:
+      properties:
+        as_of_date:
+          description: Business date
+          format: date
+          type: string
+        base_currency:
+          description: Base currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fx_rate_source_id:
+          description: Source
+          format: uuid
+          type: string
+        inverse_rate:
+          description: Units of base per 1 quote
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        quote_currency:
+          description: Quote currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        rate:
+          description: Units of quote per 1 base
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        rate_type:
+          description: Mid, buy, sell, cash or revaluation
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
+          type: string
+        valid_from:
+          description: Valid from
+          format: date-time
+          type: string
+        valid_to:
+          description: Valid to (empty = until superseded)
+          format: date-time
+          type: string
+      required:
+      - fx_rate_source_id
+      - base_currency
+      - quote_currency
+      - rate_type
+      - rate
+      - inverse_rate
+      - as_of_date
+      - valid_from
+      type: object
+    FxRatePage:
+      description: One page of FxRate results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FxRate'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FxRateSource:
+      description: A provider of FX rates (market data feed, central bank, treasury desk)
+      properties:
+        code:
+          description: Source code, e.g. ECB, REFINITIV, TREASURY
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        provider:
+          description: Vendor or institution
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        update_frequency_seconds:
+          description: Expected refresh interval
+          format: int32
+          type:
+          - integer
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - provider
+      - is_active
+      type: object
+    FxRateSourceCreate:
+      properties:
+        code:
+          description: Source code, e.g. ECB, REFINITIV, TREASURY
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        provider:
+          description: Vendor or institution
+          maxLength: 64
+          type: string
+        update_frequency_seconds:
+          description: Expected refresh interval
+          format: int32
+          type: integer
+      required:
+      - code
+      - name
+      - provider
+      type: object
+    FxRateSourcePage:
+      description: One page of FxRateSource results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FxRateSource'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FxRateSourceUpdate:
+      properties:
+        code:
+          description: Source code, e.g. ECB, REFINITIV, TREASURY
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        provider:
+          description: Vendor or institution
+          maxLength: 64
+          type: string
+        update_frequency_seconds:
+          description: Expected refresh interval
+          format: int32
+          type: integer
+      type: object
+    FxRatesBulkRequest:
+      properties:
+        rates:
+          additionalProperties: true
+          type: object
+      required:
+      - rates
+      type: object
+    FxRatesConvertRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        from_currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+        rate_type:
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
+          type: string
+        to_currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+      required:
+      - amount
+      - from_currency
+      - to_currency
+      type: object
+    Holiday:
+      description: A non-business day in a calendar
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        holiday_calendar_id:
+          description: Calendar
+          format: uuid
+          type: string
+        holiday_date:
+          description: Date
+          format: date
+          type: string
+        holiday_type:
+          description: Kind
+          enum:
+          - PUBLIC
+          - BANK
+          - RAIL
+          - OBSERVED
+          - AD_HOC
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_half_day:
+          description: Half business day
+          type: boolean
+        name:
+          description: Holiday name
+          maxLength: 160
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - holiday_calendar_id
+      - holiday_date
+      - name
+      - holiday_type
+      - is_half_day
+      type: object
+    HolidayCalendar:
+      description: Business calendar for a country, rail, scheme or market (global or tenant-specific)
+      properties:
+        calendar_type:
+          description: Kind of calendar
+          enum:
+          - COUNTRY
+          - PAYMENT_RAIL
+          - CARD_SCHEME
+          - MARKET
+          - BRANCH
+          - CUSTOM
+          type: string
+        code:
+          description: Calendar code, e.g. KE-PUBLIC, TARGET2, FEDNOW
+          maxLength: 64
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Notes
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        owner_tenant_id:
+          description: Owning tenant for custom calendars (empty = global)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        weekend_days:
+          additionalProperties: true
+          description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
+          type: object
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - calendar_type
+      - timezone
+      - weekend_days
+      type: object
+    HolidayCalendarCreate:
+      properties:
+        calendar_type:
+          description: Kind of calendar
+          enum:
+          - COUNTRY
+          - PAYMENT_RAIL
+          - CARD_SCHEME
+          - MARKET
+          - BRANCH
+          - CUSTOM
+          type: string
+        code:
+          description: Calendar code, e.g. KE-PUBLIC, TARGET2, FEDNOW
+          maxLength: 64
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Notes
+          maxLength: 500
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        owner_tenant_id:
+          description: Owning tenant for custom calendars (empty = global)
+          format: uuid
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+        weekend_days:
+          additionalProperties: true
+          description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
+          type: object
+      required:
+      - code
+      - name
+      - calendar_type
+      - timezone
+      - weekend_days
+      type: object
+    HolidayCalendarPage:
+      description: One page of HolidayCalendar results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/HolidayCalendar'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    HolidayCalendarUpdate:
+      properties:
+        calendar_type:
+          description: Kind of calendar
+          enum:
+          - COUNTRY
+          - PAYMENT_RAIL
+          - CARD_SCHEME
+          - MARKET
+          - BRANCH
+          - CUSTOM
+          type: string
+        code:
+          description: Calendar code, e.g. KE-PUBLIC, TARGET2, FEDNOW
+          maxLength: 64
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Notes
+          maxLength: 500
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        owner_tenant_id:
+          description: Owning tenant for custom calendars (empty = global)
+          format: uuid
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+        weekend_days:
+          additionalProperties: true
+          description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
+          type: object
+      type: object
+    HolidayCalendarsImportRequest:
+      properties:
+        source:
+          maxLength: 64
+          type: string
+        year:
+          format: int32
+          type: integer
+      required:
+      - year
+      type: object
+    HolidayCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        holiday_calendar_id:
+          description: Calendar
+          format: uuid
+          type: string
+        holiday_date:
+          description: Date
+          format: date
+          type: string
+        holiday_type:
+          description: Kind
+          enum:
+          - PUBLIC
+          - BANK
+          - RAIL
+          - OBSERVED
+          - AD_HOC
+          type: string
+        is_half_day:
+          description: Half business day
+          type: boolean
+        name:
+          description: Holiday name
+          maxLength: 160
+          type: string
+      required:
+      - holiday_calendar_id
+      - holiday_date
+      - name
+      type: object
+    HolidayPage:
+      description: One page of Holiday results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Holiday'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    HolidayUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        holiday_calendar_id:
+          description: Calendar
+          format: uuid
+          type: string
+        holiday_date:
+          description: Date
+          format: date
+          type: string
+        holiday_type:
+          description: Kind
+          enum:
+          - PUBLIC
+          - BANK
+          - RAIL
+          - OBSERVED
+          - AD_HOC
+          type: string
+        is_half_day:
+          description: Half business day
+          type: boolean
+        name:
+          description: Holiday name
+          maxLength: 160
+          type: string
+      type: object
+    Language:
+      description: Supported language / locale
+      properties:
+        code:
+          description: BCP 47 tag, e.g. sw-KE
+          maxLength: 10
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Available
+          type: boolean
+        is_rtl:
+          description: Right-to-left script
+          type: boolean
+        name:
+          description: English name
+          maxLength: 80
+          type: string
+        native_name:
+          description: Name in the language
+          maxLength: 80
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - is_rtl
+      - is_active
+      type: object
+    LanguageCreate:
+      properties:
+        code:
+          description: BCP 47 tag, e.g. sw-KE
+          maxLength: 10
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Available
+          type: boolean
+        is_rtl:
+          description: Right-to-left script
+          type: boolean
+        name:
+          description: English name
+          maxLength: 80
+          type: string
+        native_name:
+          description: Name in the language
+          maxLength: 80
+          type: string
+      required:
+      - code
+      - name
+      type: object
+    LanguagePage:
+      description: One page of Language results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Language'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LanguageUpdate:
+      properties:
+        code:
+          description: BCP 47 tag, e.g. sw-KE
+          maxLength: 10
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Available
+          type: boolean
+        is_rtl:
+          description: Right-to-left script
+          type: boolean
+        name:
+          description: English name
+          maxLength: 80
+          type: string
+        native_name:
+          description: Name in the language
+          maxLength: 80
+          type: string
+      type: object
+    MccCode:
+      description: ISO 18245 merchant category code with risk attributes
+      properties:
+        category:
+          description: Category group
+          maxLength: 80
+          type:
+          - string
+          - 'null'
+        code:
+          description: MCC
+          maxLength: 4
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          maxLength: 255
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_high_risk:
+          description: High-risk category (gambling, crypto ...)
+          type: boolean
+        is_quasi_cash:
+          description: Quasi-cash
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - description
+      - is_high_risk
+      - is_quasi_cash
+      type: object
+    MccCodePage:
+      description: One page of MccCode results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MccCode'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    PurposeCode:
+      description: ISO 20022 external purpose code for payments
+      properties:
+        category:
+          description: Category
+          maxLength: 80
+          type:
+          - string
+          - 'null'
+        code:
+          description: ISO 20022 purpose code, e.g. SALA
+          maxLength: 4
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      type: object
+    PurposeCodePage:
+      description: One page of PurposeCode results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PurposeCode'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — reference-data-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/reference/currencies:
+    get:
+      operationId: currenciesList
+      summary: List currencies
+      tags:
+      - Currencies
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: code
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: is_crypto
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: currenciesCreate
+      summary: Create currencie
+      tags:
+      - Currencies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyCreate'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-create: true
+  /v1/reference/currencies/{id}:
+    get:
+      operationId: currenciesGet
+      summary: Retrieve currencie
+      tags:
+      - Currencies
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: currenciesUpdate
+      summary: Update currencie
+      tags:
+      - Currencies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyUpdate'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      x-service: reference-data-service
+      x-table: currency
+      x-crud: true
+      x-crud-update: true
+  /v1/reference/countries:
+    get:
+      operationId: countriesList
+      summary: List countries
+      tags:
+      - Countries
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: code
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: region
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_eea
+        in: query
+        schema:
+          type: boolean
+      - name: is_sanctioned
+        in: query
+        schema:
+          type: boolean
+      - name: fatf_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - NONE
+          - INCREASED_MONITORING
+          - CALL_FOR_ACTION
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: country
+      x-crud: true
+      x-crud-list: true
+  /v1/reference/countries/{id}:
+    get:
+      operationId: countriesGet
+      summary: Retrieve countrie
+      tags:
+      - Countries
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Country'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: country
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: countriesUpdate
+      summary: Update countrie
+      tags:
+      - Countries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Country'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CountryUpdate'
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: country
+      x-crud: true
+      x-crud-update: true
+  /v1/reference/languages:
+    get:
+      operationId: languagesList
+      summary: List languages
+      tags:
+      - Languages
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguagePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: languagesCreate
+      summary: Create language
+      tags:
+      - Languages
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Language'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LanguageCreate'
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-create: true
+  /v1/reference/languages/{id}:
+    get:
+      operationId: languagesGet
+      summary: Retrieve language
+      tags:
+      - Languages
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Language'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: languagesUpdate
+      summary: Update language
+      tags:
+      - Languages
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Language'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LanguageUpdate'
+      x-requirements:
+      - ADM-04
+      x-service: reference-data-service
+      x-table: language
+      x-crud: true
+      x-crud-update: true
+  /v1/reference/holiday-calendars:
+    get:
+      operationId: holidayCalendarsList
+      summary: List holiday calendars
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: calendar_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - COUNTRY
+          - PAYMENT_RAIL
+          - CARD_SCHEME
+          - MARKET
+          - BRANCH
+          - CUSTOM
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: owner_tenant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendarPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: holidayCalendarsCreate
+      summary: Create holiday calendar
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendar'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayCalendarCreate'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-create: true
+  /v1/reference/holiday-calendars/{id}:
+    get:
+      operationId: holidayCalendarsGet
+      summary: Retrieve holiday calendar
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendar'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: holidayCalendarsUpdate
+      summary: Update holiday calendar
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendar'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayCalendarUpdate'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+      x-crud: true
+      x-crud-update: true
+  /v1/reference/holiday-calendars/{id}/is-business-day:
+    get:
+      operationId: holidayCalendarsIsBusinessDay
+      summary: Whether a date is a business day (?date=)
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+  /v1/reference/holiday-calendars/{id}/next-business-day:
+    get:
+      operationId: holidayCalendarsNextBusinessDay
+      summary: Next business day after a date, with offset (?date=&days=)
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+  /v1/reference/holiday-calendars/{id}/import:
+    post:
+      operationId: holidayCalendarsImport
+      summary: Import holidays from a file or provider feed
+      tags:
+      - Holiday Calendars
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayCalendarsImportRequest'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday_calendar
+  /v1/reference/holidays:
+    get:
+      operationId: holidaysList
+      summary: List holidays
+      tags:
+      - Holidays
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: holiday_calendar_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: holiday_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: holiday_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - PUBLIC
+          - BANK
+          - RAIL
+          - OBSERVED
+          - AD_HOC
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: holidaysCreate
+      summary: Create holiday
+      tags:
+      - Holidays
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holiday'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayCreate'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-create: true
+  /v1/reference/holidays/{id}:
+    get:
+      operationId: holidaysGet
+      summary: Retrieve holiday
+      tags:
+      - Holidays
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id010
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holiday'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: holidaysUpdate
+      summary: Update holiday
+      tags:
+      - Holidays
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Holiday'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayUpdate'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: holidaysDelete
+      summary: Delete holiday
+      tags:
+      - Holidays
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id010
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-05
+      x-service: reference-data-service
+      x-table: holiday
+      x-crud: true
+      x-crud-delete: true
+  /v1/reference/fx-rate-sources:
+    get:
+      operationId: fxRateSourcesList
+      summary: List fx rate sources
+      tags:
+      - Fx Rate Sources
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRateSourcePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fxRateSourcesCreate
+      summary: Create fx rate source
+      tags:
+      - Fx Rate Sources
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRateSource'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxRateSourceCreate'
+      x-requirements:
+      - ADM-04
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-create: true
+  /v1/reference/fx-rate-sources/{id}:
+    get:
+      operationId: fxRateSourcesGet
+      summary: Retrieve fx rate source
+      tags:
+      - Fx Rate Sources
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id011
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRateSource'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: fxRateSourcesUpdate
+      summary: Update fx rate source
+      tags:
+      - Fx Rate Sources
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id011
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRateSource'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxRateSourceUpdate'
+      x-requirements:
+      - ADM-04
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate_source
+      x-crud: true
+      x-crud-update: true
+  /v1/reference/fx-rates:
+    get:
+      operationId: fxRatesList
+      summary: List fx rates
+      tags:
+      - Fx Rates
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: base_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: quote_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: rate_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
+      - name: as_of_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: fx_rate_source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRatePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - LED-03
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fxRatesCreate
+      summary: Create fx rate
+      tags:
+      - Fx Rates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxRateCreate'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate
+      x-crud: true
+      x-crud-create: true
+  /v1/reference/fx-rates/{id}:
+    get:
+      operationId: fxRatesGet
+      summary: Retrieve fx rate
+      tags:
+      - Fx Rates
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate
+      x-crud: true
+      x-crud-get: true
+  /v1/reference/fx-rates/latest:
+    get:
+      operationId: fxRatesLatest
+      summary: Latest rate for a pair and type (?base=&quote=&type=)
+      tags:
+      - Fx Rates
+      security:
+      - oauth2:
+        - platform:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRate'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate
+  /v1/reference/fx-rates/convert:
+    post:
+      operationId: fxRatesConvert
+      summary: Convert an amount using current rates
+      tags:
+      - Fx Rates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxRatesConvertRequest'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate
+  /v1/reference/fx-rates/bulk:
+    post:
+      operationId: fxRatesBulk
+      summary: Load a batch of rates
+      tags:
+      - Fx Rates
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxRatesBulkRequest'
+      x-requirements:
+      - ADM-04
+      - LED-03
+      - PAY-06
+      x-service: reference-data-service
+      x-table: fx_rate
+  /v1/reference/banks:
+    get:
+      operationId: banksList
+      summary: List banks
+      tags:
+      - Banks
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: bic
+        in: query
+        schema:
+          type: string
+          maxLength: 11
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: national_clearing_code
+        in: query
+        schema:
+          type: string
+          maxLength: 35
+      - name: clearing_system
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankDirectoryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - PAY-02
+      x-service: reference-data-service
+      x-table: bank_directory
+      x-crud: true
+      x-crud-list: true
+  /v1/reference/banks/{id}:
+    get:
+      operationId: banksGet
+      summary: Retrieve bank
+      tags:
+      - Banks
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankDirectory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-02
+      x-service: reference-data-service
+      x-table: bank_directory
+      x-crud: true
+      x-crud-get: true
+  /v1/reference/banks/validate-account:
+    post:
+      operationId: banksValidateAccount
+      summary: Validate IBAN / account number and resolve the bank
+      tags:
+      - Banks
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BanksValidateAccountRequest'
+      x-requirements:
+      - ADM-04
+      - PAY-02
+      x-service: reference-data-service
+      x-table: bank_directory
+  /v1/reference/mcc-codes:
+    get:
+      operationId: mccCodesList
+      summary: List mcc codes
+      tags:
+      - Mcc Codes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: category
+        in: query
+        schema:
+          type: string
+          maxLength: 80
+      - name: is_high_risk
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MccCodePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - CRD-04
+      x-service: reference-data-service
+      x-table: mcc_code
+      x-crud: true
+      x-crud-list: true
+  /v1/reference/mcc-codes/{id}:
+    get:
+      operationId: mccCodesGet
+      summary: Retrieve mcc code
+      tags:
+      - Mcc Codes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MccCode'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - CRD-04
+      x-service: reference-data-service
+      x-table: mcc_code
+      x-crud: true
+      x-crud-get: true
+  /v1/reference/purpose-codes:
+    get:
+      operationId: purposeCodesList
+      summary: List purpose codes
+      tags:
+      - Purpose Codes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: category
+        in: query
+        schema:
+          type: string
+          maxLength: 80
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurposeCodePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - PAY-03
+      x-service: reference-data-service
+      x-table: purpose_code
+      x-crud: true
+      x-crud-list: true
+  /v1/reference/purpose-codes/{id}:
+    get:
+      operationId: purposeCodesGet
+      summary: Retrieve purpose code
+      tags:
+      - Purpose Codes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurposeCode'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - PAY-03
+      x-service: reference-data-service
+      x-table: purpose_code
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: ISO 4217 currency (plus supported digital currencies)
+  name: Currencies
+- description: ISO 3166 country with banking and compliance attributes
+  name: Countries
+- description: Supported language / locale
+  name: Languages
+- description: Business calendar for a country, rail, scheme or market (global or tenant-specific)
+  name: Holiday Calendars
+- description: A non-business day in a calendar
+  name: Holidays
+- description: A provider of FX rates (market data feed, central bank, treasury desk)
+  name: Fx Rate Sources
+- description: An FX rate observation for a currency pair and rate type (tenant rates include margins). Append-only.
+  name: Fx Rates
+- description: Directory of banks and branches (BIC, national clearing codes, rail participation)
+  name: Banks
+- description: ISO 18245 merchant category code with risk attributes
+  name: Mcc Codes
+- description: ISO 20022 external purpose code for payments
+  name: Purpose Codes

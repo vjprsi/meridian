@@ -190,6 +190,13 @@ def build(path: Path, domains, enums, endpoints, events, apps, plan, api_by_tabl
             task(f"UI-{app['id']}-{slug(sc['name'])}", sc.get("phase", app.get("phase", 1)), "channels", app["id"],
                  "UI", f"{app['name']}: {sc['name']}", sc.get("priority", "P1"), sc.get("est", 2),
                  dep=f"APP-{app['id']}-SHELL")
+    # plan.yaml 'status' rules: {glob pattern on task ID: status}; the most specific (longest) pattern wins.
+    import fnmatch
+    rules = sorted((plan.get("status") or {}).items(), key=lambda kv: len(kv[0]))
+    for t in tasks:
+        matched = [st for pat, st in rules if fnmatch.fnmatchcase(t[0], pat)]
+        if matched and t[7] == "Not started":
+            t[7] = matched[-1]
     h = ["ID", "Phase", "Domain", "Service / App", "Type", "Task", "Depends on", "Status", "Owner", "Priority",
          "Est. days", "Start", "Due", "Done on", "Notes"]
     write_table(ws, h, tasks, widths={"Task": 80, "Notes": 30, "Start": 12, "Due": 12, "Done on": 12,

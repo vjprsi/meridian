@@ -1,0 +1,3550 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AccountingPeriod:
+      description: Accounting period per legal entity; closing is a logical cut-off with no downtime
+      properties:
+        approved_by:
+          description: Who approved the close (checker)
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        closed_at:
+          description: Time the period was closed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        closed_by:
+          description: Who closed it (maker)
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        end_date:
+          description: Last business date
+          format: date
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        period_type:
+          description: Day, month, quarter or year
+          enum:
+          - DAY
+          - MONTH
+          - QUARTER
+          - YEAR
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        start_date:
+          description: First business date
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - SOFT_CLOSED
+          - CLOSED
+          - REOPENED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - period_type
+      - start_date
+      - end_date
+      - status
+      type: object
+    AccountingPeriodCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        end_date:
+          description: Last business date
+          format: date
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        period_type:
+          description: Day, month, quarter or year
+          enum:
+          - DAY
+          - MONTH
+          - QUARTER
+          - YEAR
+          type: string
+        start_date:
+          description: First business date
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - SOFT_CLOSED
+          - CLOSED
+          - REOPENED
+          type: string
+      required:
+      - legal_entity_id
+      - period_type
+      - start_date
+      - end_date
+      type: object
+    AccountingPeriodPage:
+      description: One page of AccountingPeriod results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AccountingPeriod'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AccountingPeriodsApproveCloseRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    AccountingPeriodsReopenRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    EclProvision:
+      description: IFRS 9 expected credit loss provision per exposure and reporting date
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        ead:
+          description: Exposure at default
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        ecl_amount:
+          description: Expected credit loss
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        exposure_id:
+          description: Loan / account id
+          format: uuid
+          type: string
+        exposure_type:
+          description: LOAN, CREDIT_LINE, CARD, OVERDRAFT
+          maxLength: 32
+          type: string
+        gl_journal_id:
+          description: Provision posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        lgd:
+          description: Loss given default
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        model_version:
+          description: Model version used
+          maxLength: 32
+          type: string
+        pd:
+          description: Probability of default (12-month or lifetime)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        reporting_date:
+          description: Reporting date
+          format: date
+          type: string
+        stage:
+          description: IFRS 9 stage
+          enum:
+          - STAGE_1
+          - STAGE_2
+          - STAGE_3
+          - POCI
+          type: string
+      required:
+      - id
+      - created_at
+      - legal_entity_id
+      - reporting_date
+      - exposure_type
+      - exposure_id
+      - stage
+      - ead
+      - pd
+      - lgd
+      - ecl_amount
+      - currency
+      - model_version
+      type: object
+    EclProvisionPage:
+      description: One page of EclProvision results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/EclProvision'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    EclProvisionsCalculateRequest:
+      properties:
+        legal_entity_id:
+          format: uuid
+          type: string
+        reporting_date:
+          format: date
+          type: string
+      required:
+      - legal_entity_id
+      - reporting_date
+      type: object
+    ErpExport:
+      description: GL export batch sent to an external ERP (SAP, Oracle, NetSuite)
+      properties:
+        accounting_period_id:
+          description: Period
+          format: uuid
+          type: string
+        checksum:
+          description: SHA-256 of the file
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        file_uri:
+          description: Location of the generated file
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        line_count:
+          description: Lines exported
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        target_system:
+          description: SAP, ORACLE, NETSUITE, DYNAMICS, CSV
+          maxLength: 32
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - accounting_period_id
+      - target_system
+      - status
+      type: object
+    ErpExportCreate:
+      properties:
+        accounting_period_id:
+          description: Period
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        target_system:
+          description: SAP, ORACLE, NETSUITE, DYNAMICS, CSV
+          maxLength: 32
+          type: string
+      required:
+      - legal_entity_id
+      - accounting_period_id
+      - target_system
+      type: object
+    ErpExportPage:
+      description: One page of ErpExport results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ErpExport'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    GlAccount:
+      description: General ledger account in a legal entity's chart of accounts
+      properties:
+        account_class:
+          description: Accounting class
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - CONTINGENT
+          type: string
+        code:
+          description: GL code, e.g. 2100-010
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Restrict to one currency; empty = multi-currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        erp_code:
+          description: Mapping code for the ERP
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_postable:
+          description: Leaf accounts accept postings; headers do not
+          type: boolean
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        level:
+          description: Depth in the hierarchy
+          format: int32
+          type: integer
+        name:
+          description: GL account name
+          maxLength: 160
+          type: string
+        parent_id:
+          description: Parent node in the chart
+          format: uuid
+          type:
+          - string
+          - 'null'
+        regulatory_code:
+          description: Mapping code for regulatory returns
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - code
+      - name
+      - account_class
+      - level
+      - is_postable
+      - status
+      type: object
+    GlAccountCreate:
+      properties:
+        account_class:
+          description: Accounting class
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - CONTINGENT
+          type: string
+        code:
+          description: GL code, e.g. 2100-010
+          maxLength: 32
+          type: string
+        currency:
+          description: Restrict to one currency; empty = multi-currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        erp_code:
+          description: Mapping code for the ERP
+          maxLength: 64
+          type: string
+        is_postable:
+          description: Leaf accounts accept postings; headers do not
+          type: boolean
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        level:
+          description: Depth in the hierarchy
+          format: int32
+          type: integer
+        name:
+          description: GL account name
+          maxLength: 160
+          type: string
+        parent_id:
+          description: Parent node in the chart
+          format: uuid
+          type: string
+        regulatory_code:
+          description: Mapping code for regulatory returns
+          maxLength: 64
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          type: string
+      required:
+      - legal_entity_id
+      - code
+      - name
+      - account_class
+      type: object
+    GlAccountPage:
+      description: One page of GlAccount results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/GlAccount'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    GlAccountUpdate:
+      properties:
+        account_class:
+          description: Accounting class
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - CONTINGENT
+          type: string
+        code:
+          description: GL code, e.g. 2100-010
+          maxLength: 32
+          type: string
+        currency:
+          description: Restrict to one currency; empty = multi-currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        erp_code:
+          description: Mapping code for the ERP
+          maxLength: 64
+          type: string
+        is_postable:
+          description: Leaf accounts accept postings; headers do not
+          type: boolean
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        level:
+          description: Depth in the hierarchy
+          format: int32
+          type: integer
+        name:
+          description: GL account name
+          maxLength: 160
+          type: string
+        parent_id:
+          description: Parent node in the chart
+          format: uuid
+          type: string
+        regulatory_code:
+          description: Mapping code for regulatory returns
+          maxLength: 64
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+          type: string
+      type: object
+    GlBalance:
+      description: GL balance per account, period and currency, aggregated in real time from ledger events
+      properties:
+        accounting_period_id:
+          description: Period
+          format: uuid
+          type: string
+        base_closing_balance:
+          description: Closing balance in entity base currency
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        closing_balance:
+          description: Closing balance
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        credits:
+          description: Period credits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        debits:
+          description: Period debits
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        gl_account_id:
+          description: GL account
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_event_at:
+          description: Last ledger event applied
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        opening_balance:
+          description: Opening balance
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - gl_account_id
+      - accounting_period_id
+      - currency
+      - opening_balance
+      - debits
+      - credits
+      - closing_balance
+      - base_closing_balance
+      type: object
+    GlBalancePage:
+      description: One page of GlBalance results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/GlBalance'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    GlJournal:
+      description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+      properties:
+        accounting_period_id:
+          description: Period
+          format: uuid
+          type: string
+        approved_by:
+          description: Checker for manual journals
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Narrative
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_type:
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
+          maxLength: 32
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        source_journal_entry_id:
+          description: Ledger journal entry, when derived
+          format: uuid
+          type:
+          - string
+          - 'null'
+        value_date:
+          description: Value date
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - legal_entity_id
+      - accounting_period_id
+      - journal_type
+      - value_date
+      type: object
+    GlJournalCreate:
+      properties:
+        accounting_period_id:
+          description: Period
+          format: uuid
+          type: string
+        approved_by:
+          description: Checker for manual journals
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Narrative
+          maxLength: 500
+          type: string
+        journal_type:
+          description: AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION
+          maxLength: 32
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        source_journal_entry_id:
+          description: Ledger journal entry, when derived
+          format: uuid
+          type: string
+        value_date:
+          description: Value date
+          format: date
+          type: string
+      required:
+      - legal_entity_id
+      - accounting_period_id
+      - journal_type
+      - value_date
+      type: object
+    GlJournalLine:
+      description: Debit or credit line of a GL journal. Append-only.
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        base_amount:
+          description: Amount in entity base currency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        branch_id:
+          description: Branch dimension
+          format: uuid
+          type:
+          - string
+          - 'null'
+        cost_center:
+          description: Cost centre
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Debit or credit
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        gl_account_id:
+          description: GL account
+          format: uuid
+          type: string
+        gl_journal_id:
+          description: GL journal
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        product_id:
+          description: Product dimension
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - gl_journal_id
+      - gl_account_id
+      - direction
+      - amount
+      - currency
+      - base_amount
+      type: object
+    GlJournalLinePage:
+      description: One page of GlJournalLine results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/GlJournalLine'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    GlJournalPage:
+      description: One page of GlJournal results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/GlJournal'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    GlJournalsApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    GlMappingRule:
+      description: Maps ledger account types / products / transaction types to GL accounts
+      properties:
+        balance_sign:
+          description: 'POSITIVE or NEGATIVE: route overdrawn balances to an asset GL'
+          maxLength: 10
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        entry_type:
+          description: Journal entry type (empty = any)
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          type:
+          - string
+          - 'null'
+        gl_account_id:
+          description: Target GL account
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ledger_account_type:
+          description: Ledger account class (empty = any)
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        owner_type:
+          description: Owning business object type (empty = any)
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        priority:
+          description: Lower wins when several rules match
+          format: int32
+          type: integer
+        product_id:
+          description: Product (empty = any)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - priority
+      - gl_account_id
+      - valid_from
+      type: object
+    GlMappingRuleCreate:
+      properties:
+        balance_sign:
+          description: 'POSITIVE or NEGATIVE: route overdrawn balances to an asset GL'
+          maxLength: 10
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        entry_type:
+          description: Journal entry type (empty = any)
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          type: string
+        gl_account_id:
+          description: Target GL account
+          format: uuid
+          type: string
+        ledger_account_type:
+          description: Ledger account class (empty = any)
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        owner_type:
+          description: Owning business object type (empty = any)
+          maxLength: 40
+          type: string
+        priority:
+          description: Lower wins when several rules match
+          format: int32
+          type: integer
+        product_id:
+          description: Product (empty = any)
+          format: uuid
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+      required:
+      - legal_entity_id
+      - gl_account_id
+      - valid_from
+      type: object
+    GlMappingRulePage:
+      description: One page of GlMappingRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/GlMappingRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    GlMappingRuleUpdate:
+      properties:
+        balance_sign:
+          description: 'POSITIVE or NEGATIVE: route overdrawn balances to an asset GL'
+          maxLength: 10
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        entry_type:
+          description: Journal entry type (empty = any)
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          type: string
+        gl_account_id:
+          description: Target GL account
+          format: uuid
+          type: string
+        ledger_account_type:
+          description: Ledger account class (empty = any)
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        owner_type:
+          description: Owning business object type (empty = any)
+          maxLength: 40
+          type: string
+        priority:
+          description: Lower wins when several rules match
+          format: int32
+          type: integer
+        product_id:
+          description: Product (empty = any)
+          format: uuid
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+      type: object
+    GlMappingRulesSimulateRequest:
+      properties:
+        entry_type:
+          enum:
+          - STANDARD
+          - REVERSAL
+          - ADJUSTMENT
+          - ACCRUAL
+          - FEE
+          - INTEREST
+          - FX
+          - TRANSFER
+          - CARD_SETTLEMENT
+          - PAYMENT
+          - LOAN
+          - OPENING_BALANCE
+          - MIGRATION
+          - CORRECTION
+          type: string
+        ledger_account_type:
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - OFF_BALANCE
+          type: string
+        owner_type:
+          maxLength: 40
+          type: string
+        product_id:
+          format: uuid
+          type: string
+      type: object
+    PeriodCloseRun:
+      description: Execution of an EOD / EOM / EOY close with its checklist steps
+      properties:
+        accounting_period_id:
+          description: Period being closed
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Start time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Run status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        steps:
+          additionalProperties: true
+          description: 'Checklist: accruals, revaluation, provisions, recon checks, trial balance'
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - accounting_period_id
+      - status
+      type: object
+    PeriodCloseRunPage:
+      description: One page of PeriodCloseRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PeriodCloseRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            ledger:read: Read Ledger and Accounting
+            ledger:write: Change Ledger and Accounting
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'The single source of truth for money. A real-time, append-only double-entry ledger that every other service
+    posts through, the general ledger and period close, and automated reconciliation.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — gl-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/gl/accounts:
+    get:
+      operationId: glAccountsList
+      summary: List gl accounts
+      tags:
+      - Gl Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_class
+        in: query
+        schema:
+          type: string
+          enum:
+          - ASSET
+          - LIABILITY
+          - EQUITY
+          - INCOME
+          - EXPENSE
+          - CONTINGENT
+      - name: parent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - CLOSED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlAccountPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - GL-01
+      x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: glAccountsCreate
+      summary: Create gl account
+      tags:
+      - Gl Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlAccountCreate'
+      x-requirements:
+      - GL-01
+      x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-create: true
+  /v1/gl/accounts/{id}:
+    get:
+      operationId: glAccountsGet
+      summary: Retrieve gl account
+      tags:
+      - Gl Accounts
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-01
+      x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: glAccountsUpdate
+      summary: Update gl account
+      tags:
+      - Gl Accounts
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlAccountUpdate'
+      x-requirements:
+      - GL-01
+      x-service: gl-service
+      x-table: gl_account
+      x-crud: true
+      x-crud-update: true
+  /v1/gl/mapping-rules:
+    get:
+      operationId: glMappingRulesList
+      summary: List gl mapping rules
+      tags:
+      - Gl Mapping Rules
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: product_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: gl_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlMappingRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-01
+      - GL-02
+      x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: glMappingRulesCreate
+      summary: Create gl mapping rule
+      tags:
+      - Gl Mapping Rules
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlMappingRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlMappingRuleCreate'
+      x-requirements:
+      - GL-01
+      - GL-02
+      x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/gl/mapping-rules/{id}:
+    get:
+      operationId: glMappingRulesGet
+      summary: Retrieve gl mapping rule
+      tags:
+      - Gl Mapping Rules
+      security:
+      - oauth2:
+        - ledger:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlMappingRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-01
+      - GL-02
+      x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: glMappingRulesUpdate
+      summary: Update gl mapping rule
+      tags:
+      - Gl Mapping Rules
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlMappingRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlMappingRuleUpdate'
+      x-requirements:
+      - GL-01
+      - GL-02
+      x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: glMappingRulesDelete
+      summary: Delete gl mapping rule
+      tags:
+      - Gl Mapping Rules
+      security:
+      - oauth2:
+        - ledger:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-01
+      - GL-02
+      x-service: gl-service
+      x-table: gl_mapping_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/gl/mapping-rules/simulate:
+    post:
+      operationId: glMappingRulesSimulate
+      summary: Show which GL account a posting would map to
+      tags:
+      - Gl Mapping Rules
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlMappingRulesSimulateRequest'
+      x-requirements:
+      - GL-01
+      - GL-02
+      x-service: gl-service
+      x-table: gl_mapping_rule
+  /v1/gl/periods:
+    get:
+      operationId: accountingPeriodsList
+      summary: List accounting periods
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: period_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - DAY
+          - MONTH
+          - QUARTER
+          - YEAR
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - SOFT_CLOSED
+          - CLOSED
+          - REOPENED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriodPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: accountingPeriodsCreate
+      summary: Create accounting period
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriod'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountingPeriodCreate'
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+      x-crud: true
+      x-crud-create: true
+  /v1/gl/periods/{id}:
+    get:
+      operationId: accountingPeriodsGet
+      summary: Retrieve accounting period
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriod'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/periods/{id}/close:
+    post:
+      operationId: accountingPeriodsClose
+      summary: Start the period close (maker)
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+  /v1/gl/periods/{id}/approve-close:
+    post:
+      operationId: accountingPeriodsApproveClose
+      summary: Approve the close (checker)
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriod'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountingPeriodsApproveCloseRequest'
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+  /v1/gl/periods/{id}/reopen:
+    post:
+      operationId: accountingPeriodsReopen
+      summary: Reopen a closed period (requires approval)
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountingPeriod'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountingPeriodsReopenRequest'
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+  /v1/gl/periods/{id}/trial-balance:
+    get:
+      operationId: accountingPeriodsTrialBalance
+      summary: Trial balance for the period
+      tags:
+      - Accounting Periods
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlBalancePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      x-service: gl-service
+      x-table: accounting_period
+  /v1/gl/balances:
+    get:
+      operationId: glBalancesList
+      summary: List gl balances
+      tags:
+      - Gl Balances
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: gl_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: accounting_period_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlBalancePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - GL-03
+      x-service: gl-service
+      x-table: gl_balance
+      x-crud: true
+      x-crud-list: true
+  /v1/gl/balances/{id}:
+    get:
+      operationId: glBalancesGet
+      summary: Retrieve gl balance
+      tags:
+      - Gl Balances
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlBalance'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - GL-03
+      x-service: gl-service
+      x-table: gl_balance
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/journals:
+    get:
+      operationId: glJournalsList
+      summary: List gl journals
+      tags:
+      - Gl Journals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: accounting_period_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: journal_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: source_journal_entry_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-table: gl_journal
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: glJournalsCreate
+      summary: Create gl journal
+      tags:
+      - Gl Journals
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlJournalCreate'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-table: gl_journal
+      x-crud: true
+      x-crud-create: true
+  /v1/gl/journals/{id}:
+    get:
+      operationId: glJournalsGet
+      summary: Retrieve gl journal
+      tags:
+      - Gl Journals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-table: gl_journal
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/journals/{id}/lines:
+    get:
+      operationId: glJournalsLines
+      summary: Lines of a GL journal
+      tags:
+      - Gl Journals
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournalLinePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-table: gl_journal
+  /v1/gl/journals/{id}/approve:
+    post:
+      operationId: glJournalsApprove
+      summary: Approve a manual GL journal (checker)
+      tags:
+      - Gl Journals
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlJournal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GlJournalsApproveRequest'
+      x-requirements:
+      - GL-02
+      - GL-05
+      x-service: gl-service
+      x-table: gl_journal
+  /v1/gl/close-runs:
+    get:
+      operationId: periodCloseRunsList
+      summary: List period close runs
+      tags:
+      - Period Close Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: accounting_period_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-03
+      - GL-04
+      x-service: gl-service
+      x-table: period_close_run
+      x-crud: true
+      x-crud-list: true
+  /v1/gl/close-runs/{id}:
+    get:
+      operationId: periodCloseRunsGet
+      summary: Retrieve period close run
+      tags:
+      - Period Close Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-03
+      - GL-04
+      x-service: gl-service
+      x-table: period_close_run
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/ecl-provisions:
+    get:
+      operationId: eclProvisionsList
+      summary: List ecl provisions
+      tags:
+      - Ecl Provisions
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reporting_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: stage
+        in: query
+        schema:
+          type: string
+          enum:
+          - STAGE_1
+          - STAGE_2
+          - STAGE_3
+          - POCI
+      - name: exposure_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: exposure_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EclProvisionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-04
+      x-service: gl-service
+      x-table: ecl_provision
+      x-crud: true
+      x-crud-list: true
+  /v1/gl/ecl-provisions/{id}:
+    get:
+      operationId: eclProvisionsGet
+      summary: Retrieve ecl provision
+      tags:
+      - Ecl Provisions
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EclProvision'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-04
+      x-service: gl-service
+      x-table: ecl_provision
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/ecl-provisions/calculate:
+    post:
+      operationId: eclProvisionsCalculate
+      summary: Run the ECL calculation for a reporting date
+      tags:
+      - Ecl Provisions
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodCloseRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EclProvisionsCalculateRequest'
+      x-requirements:
+      - GL-04
+      x-service: gl-service
+      x-table: ecl_provision
+  /v1/gl/erp-exports:
+    get:
+      operationId: erpExportsList
+      summary: List erp exports
+      tags:
+      - Erp Exports
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: accounting_period_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErpExportPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - GL-06
+      x-service: gl-service
+      x-table: erp_export
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: erpExportsCreate
+      summary: Create erp export
+      tags:
+      - Erp Exports
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErpExport'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErpExportCreate'
+      x-requirements:
+      - GL-06
+      x-service: gl-service
+      x-table: erp_export
+      x-crud: true
+      x-crud-create: true
+  /v1/gl/erp-exports/{id}:
+    get:
+      operationId: erpExportsGet
+      summary: Retrieve erp export
+      tags:
+      - Erp Exports
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErpExport'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-06
+      x-service: gl-service
+      x-table: erp_export
+      x-crud: true
+      x-crud-get: true
+  /v1/gl/erp-exports/{id}/download:
+    get:
+      operationId: erpExportsDownload
+      summary: Signed URL to download the export file
+      tags:
+      - Erp Exports
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-06
+      x-service: gl-service
+      x-table: erp_export
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: General ledger account in a legal entity's chart of accounts
+  name: Gl Accounts
+- description: Maps ledger account types / products / transaction types to GL accounts
+  name: Gl Mapping Rules
+- description: Accounting period per legal entity; closing is a logical cut-off with no downtime
+  name: Accounting Periods
+- description: GL balance per account, period and currency, aggregated in real time from ledger events
+  name: Gl Balances
+- description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+  name: Gl Journals
+- description: Execution of an EOD / EOM / EOY close with its checklist steps
+  name: Period Close Runs
+- description: IFRS 9 expected credit loss provision per exposure and reporting date
+  name: Ecl Provisions
+- description: GL export batch sent to an external ERP (SAP, Oracle, NetSuite)
+  name: Erp Exports

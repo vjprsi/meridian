@@ -1,0 +1,1497 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AuditEvent:
+      description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
+      properties:
+        action:
+          description: Action, e.g. payments.payment.approve
+          maxLength: 128
+          type: string
+        actor_display:
+          description: Actor display name at the time
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        actor_id:
+          description: Actor id
+          maxLength: 64
+          type: string
+        actor_type:
+          description: Actor type
+          enum:
+          - STAFF_USER
+          - CUSTOMER
+          - API_CLIENT
+          - SERVICE
+          - SYSTEM
+          - PLATFORM_OPERATOR
+          - AGENT
+          type: string
+        after_state:
+          additionalProperties: true
+          description: State after (PII masked)
+          type:
+          - object
+          - 'null'
+        approval_request_id:
+          description: Approval, if maker-checker
+          format: uuid
+          type:
+          - string
+          - 'null'
+        before_state:
+          additionalProperties: true
+          description: State before (PII masked)
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        hash:
+          description: SHA-256 over this event and prev_hash
+          maxLength: 64
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        impersonator_id:
+          description: Operator acting on behalf of the actor
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        ip_address:
+          description: Client IP (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type:
+          - string
+          - 'null'
+        occurred_at:
+          description: Time of the action
+          format: date-time
+          type: string
+        outcome:
+          description: Outcome
+          enum:
+          - SUCCESS
+          - FAILURE
+          - DENIED
+          type: string
+        prev_hash:
+          description: Hash of the previous event
+          maxLength: 64
+          readOnly: true
+          type: string
+        reason:
+          description: Reason or justification
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        request_id:
+          description: Request id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        resource_id:
+          description: Resource id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        resource_type:
+          description: Resource type
+          maxLength: 64
+          type: string
+        sequence_no:
+          description: Gapless sequence per tenant
+          format: int64
+          readOnly: true
+          type: integer
+        service_name:
+          description: Service that emitted the event
+          maxLength: 64
+          type: string
+        session_id:
+          description: Session id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        trace_id:
+          description: Trace id
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        user_agent:
+          description: User agent
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - occurred_at
+      - sequence_no
+      - actor_type
+      - actor_id
+      - action
+      - resource_type
+      - outcome
+      - service_name
+      - hash
+      - prev_hash
+      type: object
+    AuditEventPage:
+      description: One page of AuditEvent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AuditEventsSearchRequest:
+      properties:
+        query:
+          additionalProperties: true
+          type: object
+      required:
+      - query
+      type: object
+    AuditEventsVerifyChainRequest:
+      properties:
+        from_sequence:
+          format: int64
+          type: integer
+        to_sequence:
+          format: int64
+          type: integer
+      required:
+      - from_sequence
+      - to_sequence
+      type: object
+    AuditRetentionPolicy:
+      description: Retention rule for audit and business records per resource type and jurisdiction
+      properties:
+        archive_after_days:
+          description: Move to cold storage after
+          format: int32
+          type: integer
+        country:
+          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_basis:
+          description: Regulation requiring retention
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        resource_type:
+          description: Resource type (or * for default)
+          maxLength: 64
+          type: string
+        retention_years:
+          description: Years to retain
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - retention_years
+      - archive_after_days
+      type: object
+    AuditRetentionPolicyCreate:
+      properties:
+        archive_after_days:
+          description: Move to cold storage after
+          format: int32
+          type: integer
+        country:
+          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        legal_basis:
+          description: Regulation requiring retention
+          maxLength: 255
+          type: string
+        resource_type:
+          description: Resource type (or * for default)
+          maxLength: 64
+          type: string
+        retention_years:
+          description: Years to retain
+          format: int32
+          type: integer
+      required:
+      - resource_type
+      type: object
+    AuditRetentionPolicyPage:
+      description: One page of AuditRetentionPolicy results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AuditRetentionPolicy'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AuditRetentionPolicyUpdate:
+      properties:
+        archive_after_days:
+          description: Move to cold storage after
+          format: int32
+          type: integer
+        country:
+          description: Jurisdiction (empty = all) (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        legal_basis:
+          description: Regulation requiring retention
+          maxLength: 255
+          type: string
+        resource_type:
+          description: Resource type (or * for default)
+          maxLength: 64
+          type: string
+        retention_years:
+          description: Years to retain
+          format: int32
+          type: integer
+      type: object
+    DataExportRequest:
+      description: Export of audit or personal data for regulators, auditors or data-subject requests
+      properties:
+        approval_request_id:
+          description: Approval (four-eyes)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_id:
+          description: Export file
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        due_date:
+          description: Legal deadline (e.g. 30 days for DSAR)
+          format: date
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Download link expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        export_type:
+          description: Kind of export
+          enum:
+          - AUDIT_LOG
+          - DATA_SUBJECT_ACCESS
+          - DATA_PORTABILITY
+          - REGULATOR_EXTRACT
+          - LEGAL_DISCOVERY
+          type: string
+        filters:
+          additionalProperties: true
+          description: Additional filters
+          type:
+          - object
+          - 'null'
+        from_time:
+          description: Range start
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        requested_for:
+          description: Recipient, e.g. Central Bank inspection team
+          maxLength: 255
+          type: string
+        row_count:
+          description: Rows exported
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        subject_id:
+          description: Subject id
+          format: uuid
+          type:
+          - string
+          - 'null'
+        subject_type:
+          description: Subject type for DSAR (CUSTOMER)
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        to_time:
+          description: Range end
+          format: date-time
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - export_type
+      - requested_for
+      - status
+      type: object
+    DataExportRequestCreate:
+      properties:
+        approval_request_id:
+          description: Approval (four-eyes)
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        due_date:
+          description: Legal deadline (e.g. 30 days for DSAR)
+          format: date
+          type: string
+        expires_at:
+          description: Download link expiry
+          format: date-time
+          type: string
+        export_type:
+          description: Kind of export
+          enum:
+          - AUDIT_LOG
+          - DATA_SUBJECT_ACCESS
+          - DATA_PORTABILITY
+          - REGULATOR_EXTRACT
+          - LEGAL_DISCOVERY
+          type: string
+        filters:
+          additionalProperties: true
+          description: Additional filters
+          type: object
+        from_time:
+          description: Range start
+          format: date-time
+          type: string
+        requested_for:
+          description: Recipient, e.g. Central Bank inspection team
+          maxLength: 255
+          type: string
+        subject_id:
+          description: Subject id
+          format: uuid
+          type: string
+        subject_type:
+          description: Subject type for DSAR (CUSTOMER)
+          maxLength: 40
+          type: string
+        to_time:
+          description: Range end
+          format: date-time
+          type: string
+      required:
+      - export_type
+      - requested_for
+      type: object
+    DataExportRequestPage:
+      description: One page of DataExportRequest results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DataExportRequest'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    DataExportsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — audit-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/audit-events:
+    get:
+      operationId: auditEventsList
+      summary: List audit events
+      tags:
+      - Audit Events
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: actor_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - STAFF_USER
+          - CUSTOMER
+          - API_CLIENT
+          - SERVICE
+          - SYSTEM
+          - PLATFORM_OPERATOR
+          - AGENT
+      - name: actor_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: action
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: resource_type
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: resource_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: outcome
+        in: query
+        schema:
+          type: string
+          enum:
+          - SUCCESS
+          - FAILURE
+          - DENIED
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: request_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_event
+      x-crud: true
+      x-crud-list: true
+  /v1/audit-events/{id}:
+    get:
+      operationId: auditEventsGet
+      summary: Retrieve audit event
+      tags:
+      - Audit Events
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEvent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_event
+      x-crud: true
+      x-crud-get: true
+  /v1/audit-events/verify-chain:
+    post:
+      operationId: auditEventsVerifyChain
+      summary: Verify the hash chain for a range
+      tags:
+      - Audit Events
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditEventsVerifyChainRequest'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_event
+  /v1/audit-events/search:
+    post:
+      operationId: auditEventsSearch
+      summary: Full-text and structured search over audit events
+      tags:
+      - Audit Events
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditEventsSearchRequest'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_event
+  /v1/audit-retention-policies:
+    get:
+      operationId: auditRetentionPoliciesList
+      summary: List audit retention policies
+      tags:
+      - Audit Retention Policies
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: resource_type
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRetentionPolicyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: auditRetentionPoliciesCreate
+      summary: Create audit retention policie
+      tags:
+      - Audit Retention Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRetentionPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditRetentionPolicyCreate'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-create: true
+  /v1/audit-retention-policies/{id}:
+    get:
+      operationId: auditRetentionPoliciesGet
+      summary: Retrieve audit retention policie
+      tags:
+      - Audit Retention Policies
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRetentionPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: auditRetentionPoliciesUpdate
+      summary: Update audit retention policie
+      tags:
+      - Audit Retention Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRetentionPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditRetentionPolicyUpdate'
+      x-requirements:
+      - ADM-03
+      x-service: audit-service
+      x-table: audit_retention_policy
+      x-crud: true
+      x-crud-update: true
+  /v1/data-exports:
+    get:
+      operationId: dataExportsList
+      summary: List data exports
+      tags:
+      - Data Exports
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: export_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - AUDIT_LOG
+          - DATA_SUBJECT_ACCESS
+          - DATA_PORTABILITY
+          - REGULATOR_EXTRACT
+          - LEGAL_DISCOVERY
+      - name: subject_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: subject_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportRequestPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - CIF-04
+      x-service: audit-service
+      x-table: data_export_request
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: dataExportsCreate
+      summary: Create data export
+      tags:
+      - Data Exports
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataExportRequestCreate'
+      x-requirements:
+      - ADM-03
+      - CIF-04
+      x-service: audit-service
+      x-table: data_export_request
+      x-crud: true
+      x-crud-create: true
+  /v1/data-exports/{id}:
+    get:
+      operationId: dataExportsGet
+      summary: Retrieve data export
+      tags:
+      - Data Exports
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - CIF-04
+      x-service: audit-service
+      x-table: data_export_request
+      x-crud: true
+      x-crud-get: true
+  /v1/data-exports/{id}/download-url:
+    get:
+      operationId: dataExportsDownloadUrl
+      summary: Signed download URL once approved and complete
+      tags:
+      - Data Exports
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - CIF-04
+      x-service: audit-service
+      x-table: data_export_request
+  /v1/data-exports/{id}/cancel:
+    post:
+      operationId: dataExportsCancel
+      summary: Cancel a pending export
+      tags:
+      - Data Exports
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataExportsCancelRequest'
+      x-requirements:
+      - ADM-03
+      - CIF-04
+      x-service: audit-service
+      x-table: data_export_request
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: One audited action. Append-only and hash-chained per tenant; stored on WORM storage.
+  name: Audit Events
+- description: Retention rule for audit and business records per resource type and jurisdiction
+  name: Audit Retention Policies
+- description: Export of audit or personal data for regulators, auditors or data-subject requests
+  name: Data Exports

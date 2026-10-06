@@ -1,0 +1,741 @@
+domain: operations
+title: "Operations: Batch, Files, Search and Archive"
+phase: 1
+description: >
+  Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners,
+  enterprise search across all entities, and data retention, archival, legal hold and certified purge.
+
+enums:
+  BusinessDayState: [OPEN, CUT_OFF, EOD_RUNNING, EOD_FAILED, CLOSED]
+  EodCycleType: [EOD, EOM, EOQ, EOY, INTRADAY]
+  EodJobType: [INTEREST_ACCRUAL, INTEREST_CAPITALISATION, FEE_CHARGING, DORMANCY, STATEMENTS, LOAN_ACCRUAL,
+               DELINQUENCY_AGEING, ECL_PROVISION, RECONCILIATION, FX_REVALUATION, GL_CLOSE, REGULATORY_REPORTS,
+               BALANCE_SNAPSHOT, STANDING_ORDERS, TERM_DEPOSIT_MATURITY, CARD_STATEMENT_CYCLE, ARCHIVAL, CUSTOM]
+  EodFailurePolicy: [STOP_CYCLE, CONTINUE, RETRY_THEN_STOP, RETRY_THEN_CONTINUE]
+  JobScheduleStatus: [ACTIVE, PAUSED, DISABLED]
+  FileChannelProtocol: [SFTP, FTPS, S3, AZURE_BLOB, GCS, HTTPS_API, AS2, CONNECT_DIRECT, EMAIL]
+  FileChannelDirection: [INBOUND, OUTBOUND, BOTH]
+  FileChannelCounterpartyType: [BANK, CARD_SCHEME, PAYMENT_RAIL, CREDIT_BUREAU, CARD_BUREAU, REGULATOR, PARTNER,
+                                ERP, BILLER, OTHER]
+  FileFormatKind: [FIXED_WIDTH, CSV, JSON, XML_ISO20022, NACHA, SWIFT_MT, BAI2, ISO8583_BATCH, XLSX, CUSTOM]
+  InboundFileStatus: [RECEIVED, SCANNING, QUARANTINED, DECRYPTING, VALIDATING, ROUTED, PROCESSED, REJECTED, FAILED]
+  OutboundFileStatus: [REQUESTED, GENERATING, GENERATED, ENCRYPTING, QUEUED, DELIVERING, DELIVERED, ACKNOWLEDGED,
+                       FAILED, CANCELLED]
+  VirusScanStatus: [PENDING, CLEAN, INFECTED, ERROR, SKIPPED]
+  FileTransferAction: [CONNECT, LIST, DOWNLOAD, UPLOAD, DECRYPT, ENCRYPT, SCAN, VALIDATE, ROUTE, ACK, DELETE_REMOTE,
+                       ERROR]
+  SearchEntityType: [CUSTOMER, DEPOSIT_ACCOUNT, WALLET, CARD, LOAN, PAYMENT, WALLET_TRANSACTION, SERVICE_CASE,
+                     AML_CASE, MERCHANT, AGENT, DOCUMENT, LEDGER_ACCOUNT]
+  SearchIndexStatus: [BUILDING, ACTIVE, REINDEXING, DEGRADED, RETIRED]
+  SearchIndexJobType: [FULL_REINDEX, INCREMENTAL, ALIAS_SWAP, DELETE_BY_QUERY]
+  DataSensitivity: [PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED, PCI, PII, SPECIAL_CATEGORY]
+  RetentionTrigger: [CREATED_AT, RELATIONSHIP_END, ACCOUNT_CLOSURE, TRANSACTION_DATE, CASE_CLOSURE, CUSTOM_EVENT]
+  RetentionAction: [ARCHIVE, ANONYMISE, PURGE, ARCHIVE_THEN_PURGE]
+  LegalHoldStatus: [ACTIVE, RELEASED]
+  LegalHoldScope: [CUSTOMER, ACCOUNT, CASE, TABLE, DOCUMENT, TENANT]
+  PurgeRequestStatus: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, COMPLETED, FAILED, BLOCKED_BY_HOLD]
+
+services:
+  # ------------------------------------------------------------------ business-day-service
+  - name: business-day-service
+    database: business_day_db
+    description: >
+      Owns the business date per legal entity, orchestrates EOD/EOM/EOQ/EOY job graphs with dependencies,
+      parallelism, retries and restart-from-failure, performs the date roll, and schedules non-EOD batch jobs
+      with distributed locks. Jobs execute in the owning services; this service coordinates them (Temporal).
+    tables:
+      - name: business_day
+        prefix: bdy
+        description: Current and historical business date per legal entity with its processing state
+        fr: [OPS-01, GL-03]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "business_date date nn | Business date"
+          - "state enum:BusinessDayState nn default=OPEN | Processing state"
+          - "holiday_calendar_id uuid ref=holiday_calendar | Calendar used to compute the next business date"
+          - "is_current bool nn default=false | True for the open business date of the entity"
+          - "opened_at ts nn default=now ro | When the date was opened"
+          - "cut_off_at ts ro | When transaction cut-off was applied"
+          - "closed_at ts ro | When the date was closed"
+          - "next_business_date date ro | Next business date after the date roll"
+          - "is_month_end bool nn default=false ro | EOM processing applies"
+          - "is_quarter_end bool nn default=false ro | EOQ processing applies"
+          - "is_year_end bool nn default=false ro | EOY processing applies"
+          - "notes string(500) | Operator notes"
+        unique: [[tenant_id, legal_entity_id, business_date]]
+
+      - name: eod_job_definition
+        prefix: ejd
+        description: A step in an end-of-period job graph, executed by an owning service
+        fr: [OPS-01, GL-03, DEP-06]
+        columns:
+          - "legal_entity_id uuid ref=legal_entity idx | Legal entity (empty = all entities)"
+          - "code string(64) nn uq | Job code, e.g. DEP_INTEREST_ACCRUAL"
+          - "name string(160) nn | Display name"
+          - "job_type enum:EodJobType nn | Kind of job"
+          - "cycle_types json nn | Cycles the job runs in, e.g. [EOD, EOM]"
+          - "owning_service string(64) nn | Service that executes the job, e.g. deposit-service"
+          - "endpoint string(255) nn | Internal command/topic the orchestrator invokes"
+          - "depends_on json | Codes of jobs that must finish first"
+          - "sequence int nn default=100 | Ordering hint within the same dependency level"
+          - "parallelism int nn default=1 | Number of partitions run in parallel"
+          - "partition_key string(64) | Partitioning key, e.g. ACCOUNT_ID_HASH"
+          - "timeout_minutes int nn default=60 | Maximum run time per attempt"
+          - "max_retries int nn default=3 | Automatic retries before the failure policy applies"
+          - "failure_policy enum:EodFailurePolicy nn default=RETRY_THEN_STOP | What happens on final failure"
+          - "is_critical bool nn default=true | Blocks the date roll when it fails"
+          - "is_active bool nn default=true | Active"
+          - "parameters json | Default parameters passed to the job"
+
+      - name: eod_run
+        prefix: eod
+        description: Execution of a full end-of-period cycle for one legal entity and business date
+        fr: [OPS-01, GL-03]
+        columns:
+          - "business_day_id uuid nn fk=business_day idx | Business date being processed"
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "cycle_type enum:EodCycleType nn default=EOD | Cycle"
+          - "status enum:RunStatus nn default=QUEUED ro | Run status"
+          - "triggered_by string(64) | User or SCHEDULER"
+          - "workflow_id string(128) ro | Temporal workflow id"
+          - "started_at ts ro | Start time"
+          - "finished_at ts ro | End time"
+          - "jobs_total int ro | Jobs in the plan"
+          - "jobs_succeeded int ro | Jobs succeeded"
+          - "jobs_failed int ro | Jobs failed"
+          - "is_restart bool nn default=false | Restarted from a failed run"
+          - "restart_of_id uuid fk=eod_run | Failed run this one restarts"
+          - "error text ro | Summary of the failure"
+
+      - name: eod_job_run
+        prefix: ejr
+        description: Execution of one job (or partition) inside an EOD run
+        fr: [OPS-01]
+        columns:
+          - "eod_run_id uuid nn fk=eod_run idx | Parent run"
+          - "eod_job_definition_id uuid nn fk=eod_job_definition idx | Job definition"
+          - "partition_no int nn default=0 | Partition number"
+          - "attempt int nn default=1 | Attempt number"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "started_at ts ro | Start time"
+          - "finished_at ts ro | End time"
+          - "duration_ms bigint ro | Duration"
+          - "records_processed bigint ro | Records processed"
+          - "records_failed bigint ro | Records failed"
+          - "checkpoint json ro | Last checkpoint for restart"
+          - "error_code string(64) ro | Error code"
+          - "error text ro | Error details"
+          - "skipped_by string(64) | User who manually skipped the job"
+          - "skip_reason string(500) | Why the job was skipped"
+
+      - name: date_roll
+        prefix: drl
+        description: Record of moving a legal entity from one business date to the next. Append-only.
+        immutable: true
+        fr: [OPS-01, GL-03]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
+          - "from_business_date date nn | Date closed"
+          - "to_business_date date nn | Date opened"
+          - "eod_run_id uuid fk=eod_run | EOD run that completed before the roll"
+          - "forced bool nn default=false | Rolled despite failed non-critical jobs"
+          - "approved_by string(64) | Checker for a forced roll"
+          - "approval_request_id uuid ref=approval_request | Approval for a forced roll"
+
+      - name: job_schedule
+        prefix: jsc
+        description: Cron schedule for non-EOD batch jobs (sweeps, report generation, file pulls, reindexing)
+        fr: [OPS-01]
+        columns:
+          - "code string(64) nn uq | Schedule code"
+          - "name string(160) nn | Display name"
+          - "owning_service string(64) nn | Service that runs the job"
+          - "endpoint string(255) nn | Command/topic invoked"
+          - "cron_expression string(64) nn | Cron expression"
+          - "time_zone string(64) nn default=UTC | IANA time zone"
+          - "business_days_only bool nn default=false | Skip non-business days"
+          - "holiday_calendar_id uuid ref=holiday_calendar | Calendar for business-day checks"
+          - "status enum:JobScheduleStatus nn default=ACTIVE | Status"
+          - "parameters json | Parameters passed to the job"
+          - "last_run_at ts ro | Last execution start"
+          - "last_run_status enum:RunStatus ro | Last execution status"
+          - "next_run_at ts ro | Next planned execution"
+          - "misfire_policy string(32) nn default=RUN_ONCE | RUN_ONCE, SKIP or RUN_ALL after downtime"
+
+      - name: job_schedule_run
+        prefix: jsr
+        description: One execution of a scheduled batch job. Append-only.
+        immutable: true
+        fr: [OPS-01]
+        columns:
+          - "job_schedule_id uuid nn fk=job_schedule idx | Schedule"
+          - "scheduled_for ts nn | Planned time"
+          - "started_at ts | Start time"
+          - "finished_at ts | End time"
+          - "status enum:RunStatus nn | Outcome"
+          - "records_processed bigint | Records processed"
+          - "error text | Error details"
+
+      - name: batch_job_lock
+        prefix: bjl
+        description: Distributed lock preventing concurrent execution of the same batch job or partition
+        fr: [OPS-01]
+        columns:
+          - "lock_key string(160) nn uq | Job / partition key"
+          - "holder string(128) nn | Instance id holding the lock"
+          - "acquired_at ts nn default=now | Acquired"
+          - "expires_at ts nn | Lease expiry"
+          - "fencing_token bigint nn default=0 | Monotonic token to reject stale holders"
+
+    apis:
+      - resource: business-days
+        path: /v1/operations/business-days
+        table: business_day
+        ops: [list, get]
+        filters: [legal_entity_id, business_date, state, is_current]
+        actions:
+          - "GET /current | Current business date per legal entity (?legal_entity_id=) | | business_day"
+          - "POST /{id}/cut-off | Apply transaction cut-off for the business date | reason string(255)"
+          - "POST /{id}/start-eod | Start the end-of-day cycle | cycle_type enum:EodCycleType | eod_run"
+          - "POST /{id}/roll | Roll to the next business date after EOD | forced bool, reason string(500) | date_roll"
+          - "POST /{id}/reopen | Reopen a closed business date (requires approval) | reason string(500) nn"
+      - resource: eod-job-definitions
+        path: /v1/operations/eod-jobs
+        table: eod_job_definition
+        ops: [list, get, create, update, delete]
+        filters: [legal_entity_id, job_type, owning_service, is_active]
+        actions:
+          - "GET /graph | Dependency graph of jobs for a cycle (?cycle_type=) | | none"
+          - "POST /validate | Validate the graph for cycles and missing dependencies | | none"
+      - resource: eod-runs
+        path: /v1/operations/eod-runs
+        table: eod_run
+        ops: [list, get]
+        filters: [business_day_id, legal_entity_id, cycle_type, status]
+        actions:
+          - "GET /{id}/jobs | Job executions of the run | | eod_job_run[]"
+          - "POST /{id}/restart | Restart from the failed jobs | | eod_run"
+          - "POST /{id}/cancel | Cancel a running cycle | reason string(255) nn"
+      - resource: eod-job-runs
+        path: /v1/operations/eod-job-runs
+        table: eod_job_run
+        ops: [list, get]
+        filters: [eod_run_id, eod_job_definition_id, status]
+        actions:
+          - "POST /{id}/retry | Retry a failed job | "
+          - "POST /{id}/skip | Skip a failed non-critical job (maker-checker) | reason string(500) nn"
+      - resource: date-rolls
+        path: /v1/operations/date-rolls
+        table: date_roll
+        ops: [list, get]
+        filters: [legal_entity_id, from_business_date]
+      - resource: job-schedules
+        path: /v1/operations/job-schedules
+        table: job_schedule
+        ops: [list, get, create, update, delete]
+        filters: [owning_service, status]
+        actions:
+          - "POST /{id}/run-now | Trigger an immediate run | parameters json | job_schedule_run"
+          - "POST /{id}/pause | Pause the schedule"
+          - "POST /{id}/resume | Resume the schedule"
+          - "GET /{id}/runs | Execution history | | job_schedule_run[]"
+      - resource: batch-job-locks
+        path: /v1/operations/batch-locks
+        table: batch_job_lock
+        ops: [list, get]
+        filters: [lock_key, holder]
+        actions:
+          - "POST /{id}/force-release | Force-release a stale lock | reason string(255) nn | none"
+
+    events:
+      - "operations.business_day.opened | business_day | A business date was opened"
+      - "operations.business_day.cut_off | business_day | Transaction cut-off applied for a business date"
+      - "operations.business_day.closed | business_day | A business date was closed"
+      - "operations.eod_run.started | eod_run | An end-of-period cycle started"
+      - "operations.eod_run.completed | eod_run | An end-of-period cycle finished"
+      - "operations.eod_run.failed | eod_run | An end-of-period cycle failed"
+      - "operations.eod_job_run.requested | eod_job_run | A job was dispatched to its owning service"
+      - "operations.eod_job_run.failed | eod_job_run | A job failed after retries"
+      - "operations.date_roll.completed | date_roll | The business date rolled forward"
+      - "operations.job_schedule_run.completed | job_schedule_run | A scheduled batch job finished"
+
+  # ------------------------------------------------------------------ file-gateway-service
+  - name: file-gateway-service
+    database: file_gateway_db
+    description: >
+      Managed file transfer with banks, schemes, bureaus, regulators and partners over SFTP, FTPS, S3, AS2 and
+      APIs: PGP encryption, virus scanning, format validation, routing of inbound files to consumer services,
+      generation and delivery of outbound files, acknowledgements and a complete transfer audit trail.
+    tables:
+      - name: file_channel
+        prefix: fch
+        description: A configured endpoint for exchanging files with a counterparty
+        fr: [OPS-02]
+        columns:
+          - "code string(64) nn uq | Channel code"
+          - "name string(160) nn | Display name"
+          - "counterparty_type enum:FileChannelCounterpartyType nn | Counterparty kind"
+          - "counterparty_name string(160) | Counterparty name"
+          - "legal_entity_id uuid ref=legal_entity | Legal entity"
+          - "protocol enum:FileChannelProtocol nn | Transfer protocol"
+          - "direction enum:FileChannelDirection nn | Inbound, outbound or both"
+          - "host string(255) | Host / bucket / base URL"
+          - "port int | Port"
+          - "remote_inbound_path string(500) | Remote folder to pull from"
+          - "remote_outbound_path string(500) | Remote folder to push to"
+          - "username string(128) | Login user"
+          - "credential_secret_ref string(255) nn secret | Vault path of password or private key"
+          - "host_key_fingerprint string(128) | Expected SFTP host key fingerprint"
+          - "pgp_encrypt_key_ref string(255) secret | Vault ref of counterparty public key for outbound encryption"
+          - "pgp_decrypt_key_ref string(255) secret | Vault ref of our private key for inbound decryption"
+          - "pgp_sign bool nn default=false | Sign outbound files"
+          - "poll_cron string(64) | Polling schedule for inbound files"
+          - "file_name_pattern string(255) | Regex of inbound file names to pick up"
+          - "delete_after_download bool nn default=false | Remove remote file after successful download"
+          - "ip_allowlist json | Allowed source IPs for push channels"
+          - "is_active bool nn default=true | Active"
+          - "last_connected_at ts ro | Last successful connection"
+          - "health_status string(32) ro | UP, DEGRADED or DOWN"
+
+      - name: file_format_definition
+        prefix: ffd
+        description: Layout of a file type (record types, fields, positions, validation) used to parse or generate files
+        fr: [OPS-02, DEP-06]
+        columns:
+          - "code string(64) nn uq | Format code, e.g. NACHA_PPD, CAMT053_V08"
+          - "name string(160) nn | Display name"
+          - "format_kind enum:FileFormatKind nn | Format family"
+          - "version string(32) nn default=1 | Layout version"
+          - "encoding string(32) nn default=UTF-8 | Character encoding"
+          - "record_length int | Fixed record length (fixed-width formats)"
+          - "delimiter string(4) | Field delimiter (CSV)"
+          - "has_header bool nn default=false | First line is a header"
+          - "schema_definition json nn | Record types, fields, positions, types and validation rules"
+          - "xsd_document_id uuid ref=document | XSD for XML formats"
+          - "sample_document_id uuid ref=document | Sample file"
+          - "is_active bool nn default=true | Active"
+
+      - name: file_route
+        prefix: frt
+        description: Routing rule sending matching inbound files to a consumer service
+        fr: [OPS-02]
+        columns:
+          - "file_channel_id uuid fk=file_channel idx | Channel (empty = any)"
+          - "name string(160) nn | Rule name"
+          - "priority int nn default=100 | Lower wins"
+          - "file_name_pattern string(255) nn | Regex on file name"
+          - "file_format_definition_id uuid fk=file_format_definition | Expected format"
+          - "target_service string(64) nn | Consumer service, e.g. reconciliation-service"
+          - "target_topic string(160) nn | Kafka topic or command endpoint"
+          - "require_virus_scan bool nn default=true | Scan before routing"
+          - "is_active bool nn default=true | Active"
+
+      - name: inbound_file
+        prefix: ifl
+        description: A file received from a counterparty
+        fr: [OPS-02]
+        columns:
+          - "file_channel_id uuid nn fk=file_channel idx | Channel received on"
+          - "file_route_id uuid fk=file_route | Route applied"
+          - "file_format_definition_id uuid fk=file_format_definition | Detected format"
+          - "original_file_name string(255) nn | Name as received"
+          - "remote_path string(500) | Remote location"
+          - "storage_uri string(500) nn ro | Object-store location of the raw file"
+          - "size_bytes bigint nn ro | Size"
+          - "checksum_sha256 string(64) nn ro | SHA-256 of the raw file"
+          - "received_at ts nn default=now ro | Receipt time"
+          - "was_encrypted bool nn default=false ro | PGP-encrypted on receipt"
+          - "signature_valid bool ro | PGP signature check result"
+          - "virus_scan_status enum:VirusScanStatus nn default=PENDING ro | Antivirus result"
+          - "virus_scan_detail string(500) ro | Signature name when infected"
+          - "status enum:InboundFileStatus nn default=RECEIVED ro | Processing status"
+          - "record_count int ro | Records detected"
+          - "consumer_reference string(128) ro | Id assigned by the consuming service"
+          - "processed_at ts ro | Processing completed"
+          - "error text ro | Error details"
+          - "document_id uuid ref=document | Document record for retention"
+        unique: [[tenant_id, file_channel_id, checksum_sha256]]
+
+      - name: outbound_file
+        prefix: ofl
+        description: A file generated for and delivered to a counterparty
+        fr: [OPS-02, DEP-06]
+        columns:
+          - "file_channel_id uuid nn fk=file_channel idx | Delivery channel"
+          - "file_format_definition_id uuid fk=file_format_definition | Format"
+          - "requested_by_service string(64) nn | Service that requested the file"
+          - "source_reference string(128) idx | Batch / run id in the requesting service"
+          - "file_name string(255) nn | File name to deliver"
+          - "storage_uri string(500) ro | Object-store location"
+          - "size_bytes bigint ro | Size"
+          - "checksum_sha256 string(64) ro | SHA-256"
+          - "record_count int ro | Records"
+          - "control_totals json ro | Control totals (count, sum) written in the trailer"
+          - "encrypt bool nn default=true | PGP-encrypt before delivery"
+          - "status enum:OutboundFileStatus nn default=REQUESTED ro | Status"
+          - "scheduled_for ts | Earliest delivery time (e.g. scheme window)"
+          - "delivered_at ts ro | Delivered"
+          - "delivery_attempts int nn default=0 ro | Attempts"
+          - "acknowledged_at ts ro | Counterparty acknowledgement time"
+          - "ack_reference string(128) ro | Acknowledgement reference"
+          - "error text ro | Last error"
+
+      - name: file_transfer_log
+        prefix: ftl
+        description: Immutable audit of every action on a file or channel
+        immutable: true
+        fr: [OPS-02, ADM-03]
+        columns:
+          - "file_channel_id uuid fk=file_channel idx | Channel"
+          - "inbound_file_id uuid fk=inbound_file idx | Inbound file"
+          - "outbound_file_id uuid fk=outbound_file idx | Outbound file"
+          - "action enum:FileTransferAction nn | Action"
+          - "success bool nn | Outcome"
+          - "remote_address string(64) | Remote IP / host"
+          - "bytes_transferred bigint | Bytes"
+          - "duration_ms int | Duration"
+          - "message string(1000) | Detail"
+          - "actor string(64) | System or user"
+
+    apis:
+      - resource: file-channels
+        path: /v1/files/channels
+        table: file_channel
+        ops: [list, get, create, update]
+        filters: [counterparty_type, protocol, direction, is_active]
+        actions:
+          - "POST /{id}/test-connection | Test connectivity and credentials | | none"
+          - "POST /{id}/poll-now | Poll the remote inbound folder now | | none"
+          - "POST /{id}/rotate-credentials | Rotate stored credentials | credential_secret_ref string(255) nn"
+          - "POST /{id}/disable | Disable the channel | reason string(255) nn"
+      - resource: file-formats
+        path: /v1/files/formats
+        table: file_format_definition
+        ops: [list, get, create, update]
+        filters: [format_kind, is_active]
+        actions:
+          - "POST /{id}/validate-sample | Parse an uploaded sample against the layout | document_id uuid nn | none"
+      - resource: file-routes
+        path: /v1/files/routes
+        table: file_route
+        ops: [list, get, create, update, delete]
+        filters: [file_channel_id, target_service, is_active]
+        actions:
+          - "POST /simulate | Show which route a file name would match | file_name string(255) nn, file_channel_id uuid | file_route"
+      - resource: inbound-files
+        path: /v1/files/inbound
+        table: inbound_file
+        ops: [list, get, create]
+        filters: [file_channel_id, status, virus_scan_status, file_format_definition_id]
+        actions:
+          - "POST /{id}/reprocess | Route and process the file again | "
+          - "POST /{id}/release-quarantine | Release a quarantined file after review (maker-checker) | reason string(500) nn"
+          - "GET /{id}/download | Signed URL for the raw file | | none"
+          - "GET /{id}/logs | Transfer audit for the file | | file_transfer_log[]"
+      - resource: outbound-files
+        path: /v1/files/outbound
+        table: outbound_file
+        ops: [list, get, create]
+        filters: [file_channel_id, status, requested_by_service, source_reference]
+        actions:
+          - "POST /{id}/redeliver | Deliver the file again | reason string(255)"
+          - "POST /{id}/cancel | Cancel before delivery | reason string(255) nn"
+          - "POST /{id}/acknowledge | Record a counterparty acknowledgement | ack_reference string(128) nn"
+          - "GET /{id}/download | Signed URL for the generated file | | none"
+      - resource: file-transfer-logs
+        path: /v1/files/transfer-logs
+        table: file_transfer_log
+        ops: [list, get]
+        filters: [file_channel_id, inbound_file_id, outbound_file_id, action, success]
+
+    events:
+      - "operations.inbound_file.received | inbound_file | A file was received from a counterparty"
+      - "operations.inbound_file.quarantined | inbound_file | A file failed virus scanning and was quarantined"
+      - "operations.inbound_file.routed | inbound_file | A file was routed to its consumer service"
+      - "operations.inbound_file.processed | inbound_file | The consumer finished processing a file"
+      - "operations.outbound_file.generated | outbound_file | An outbound file was generated"
+      - "operations.outbound_file.delivered | outbound_file | An outbound file was delivered"
+      - "operations.outbound_file.failed | outbound_file | Delivery failed after retries"
+      - "operations.file_channel.health_changed | file_channel | A channel's connectivity health changed"
+
+  # ------------------------------------------------------------------ search-service
+  - name: search-service
+    database: search_db
+    description: >
+      Enterprise search across customers, accounts, wallets, cards, loans, payments and cases. Maintains
+      OpenSearch indices fed by domain events (CDC), with versioned mappings, zero-downtime reindexing via
+      alias swaps, synonyms, field-level masking by role, and saved searches per user.
+    tables:
+      - name: search_index
+        prefix: sxi
+        description: Definition of a searchable index for one entity type
+        fr: [OPS-03]
+        columns:
+          - "entity_type enum:SearchEntityType nn uq | Entity indexed"
+          - "alias_name string(128) nn | Read alias used by queries"
+          - "physical_index string(160) nn ro | Current physical index behind the alias"
+          - "mapping_version int nn default=1 | Version of the field mapping"
+          - "mapping json nn | OpenSearch mapping and analysers"
+          - "source_topics json nn | Event topics feeding the index"
+          - "searchable_fields json nn | Fields matched by free-text search with boosts"
+          - "masked_fields json | Fields masked unless the caller holds a PII permission"
+          - "status enum:SearchIndexStatus nn default=BUILDING ro | Status"
+          - "document_count bigint ro | Documents indexed"
+          - "lag_seconds int ro | Event-to-index lag"
+          - "last_indexed_at ts ro | Last document indexed"
+
+      - name: search_index_job
+        prefix: sij
+        description: A reindex, incremental catch-up or alias swap job
+        fr: [OPS-03]
+        columns:
+          - "search_index_id uuid nn fk=search_index idx | Index"
+          - "job_type enum:SearchIndexJobType nn | Job type"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "target_index string(160) ro | Physical index being built"
+          - "from_timestamp ts | Start of the range for incremental jobs"
+          - "documents_processed bigint ro | Documents processed"
+          - "documents_failed bigint ro | Documents failed"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Error details"
+
+      - name: search_synonym
+        prefix: ssy
+        description: Synonym set applied to search analysers (e.g. abbreviations, transliterations)
+        fr: [OPS-03]
+        columns:
+          - "search_index_id uuid fk=search_index idx | Index (empty = all)"
+          - "language_code string(8) | Language"
+          - "terms json nn | Equivalent terms, e.g. [mohammed, muhammad, mohamed]"
+          - "is_active bool nn default=true | Active"
+
+      - name: saved_search
+        prefix: svs
+        description: A saved search query of a staff user, optionally shared with a role
+        fr: [OPS-03]
+        columns:
+          - "app_user_id uuid nn ref=app_user idx | Owner"
+          - "name string(160) nn | Name"
+          - "entity_types json nn | Entity types searched"
+          - "query_text string(500) | Free text"
+          - "filters json | Structured filters"
+          - "sort json | Sort order"
+          - "shared_with_role_id uuid ref=role | Role it is shared with"
+          - "is_pinned bool nn default=false | Pinned in the console"
+          - "last_used_at ts ro | Last use"
+
+    apis:
+      - resource: search
+        path: /v1/search
+        table: search_index
+        description: Federated search across entity types with masking by caller permissions
+        ops: []
+        actions:
+          - "POST /query | Search across entity types (free text + filters, paged) | query_text string(500), entity_types json, filters json, limit int, cursor string(255) | none"
+          - "GET /suggest | Type-ahead suggestions (?q=&entity_type=) | | none"
+      - resource: search-indexes
+        path: /v1/search/indexes
+        table: search_index
+        ops: [list, get, create, update]
+        filters: [entity_type, status]
+        actions:
+          - "POST /{id}/reindex | Start a full zero-downtime reindex | | search_index_job"
+          - "POST /{id}/catch-up | Re-apply events from a timestamp | from_timestamp ts nn | search_index_job"
+          - "GET /{id}/stats | Document count, lag and health | | search_index"
+      - resource: search-index-jobs
+        path: /v1/search/jobs
+        table: search_index_job
+        ops: [list, get]
+        filters: [search_index_id, job_type, status]
+        actions:
+          - "POST /{id}/cancel | Cancel a running job | "
+      - resource: search-synonyms
+        path: /v1/search/synonyms
+        table: search_synonym
+        ops: [list, get, create, update, delete]
+        filters: [search_index_id, language_code, is_active]
+      - resource: saved-searches
+        path: /v1/search/saved
+        table: saved_search
+        ops: [list, get, create, update, delete]
+        filters: [app_user_id, shared_with_role_id, is_pinned]
+        actions:
+          - "POST /{id}/run | Execute a saved search | limit int, cursor string(255) | none"
+
+    events:
+      - "operations.search_index.reindexed | search_index | An index finished a full reindex and swapped its alias"
+      - "operations.search_index.degraded | search_index | Index lag or errors exceeded thresholds"
+
+  # ------------------------------------------------------------------ archive-service
+  - name: archive-service
+    database: archive_db
+    description: >
+      Data lifecycle management: data classification catalogue, retention policies per data class and
+      jurisdiction, archival of aged records to immutable object storage with manifests, legal holds that
+      override retention, anonymisation, and approved purges with certificates of destruction.
+    tables:
+      - name: data_classification
+        prefix: dcl
+        description: Catalogue entry classifying a table (or column set) by sensitivity and data class
+        fr: [OPS-04]
+        columns:
+          - "data_class string(64) nn | Data class, e.g. TRANSACTION, KYC, CARD, COMMUNICATION, AUDIT"
+          - "service_name string(64) nn | Owning service"
+          - "database_name string(64) nn | Database"
+          - "table_name string(64) nn | Table"
+          - "sensitivity enum:DataSensitivity nn | Sensitivity"
+          - "pii_columns json | Columns holding personal data"
+          - "owner string(120) | Data owner (business)"
+          - "steward string(120) | Data steward"
+          - "description string(500) | Notes"
+        unique: [[tenant_id, database_name, table_name]]
+
+      - name: retention_policy
+        prefix: rtp
+        description: How long a data class is kept per jurisdiction and what happens after
+        fr: [OPS-04]
+        columns:
+          - "data_class string(64) nn idx | Data class covered"
+          - "country_code country | Jurisdiction (empty = default)"
+          - "legal_entity_id uuid ref=legal_entity | Legal entity (empty = all)"
+          - "retention_trigger enum:RetentionTrigger nn default=CREATED_AT | Event that starts the retention clock"
+          - "online_days int nn default=365 | Days kept in the operational database"
+          - "retention_years int nn | Total years kept (online + archive)"
+          - "action enum:RetentionAction nn default=ARCHIVE_THEN_PURGE | Action at end of each phase"
+          - "regulation_reference string(255) | Law or regulation, e.g. AML record keeping"
+          - "requires_approval bool nn default=true | Purge needs maker-checker"
+          - "is_active bool nn default=true | Active"
+          - "valid_from date nn | Effective from"
+
+      - name: archive_job
+        prefix: arj
+        description: A run moving aged records from a service database to the archive store
+        fr: [OPS-04]
+        columns:
+          - "retention_policy_id uuid nn fk=retention_policy idx | Policy applied"
+          - "data_classification_id uuid nn fk=data_classification | Table archived"
+          - "cutoff_date date nn | Records older than this date are archived"
+          - "status enum:RunStatus nn default=QUEUED ro | Status"
+          - "records_archived bigint ro | Records archived"
+          - "records_skipped_hold bigint ro | Records skipped because of legal holds"
+          - "bytes_archived bigint ro | Bytes written"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "error text ro | Error details"
+
+      - name: archived_object
+        prefix: aro
+        description: Manifest of an archived batch in immutable (WORM) object storage. Append-only.
+        immutable: true
+        fr: [OPS-04, ADM-03]
+        columns:
+          - "archive_job_id uuid nn fk=archive_job idx | Job that produced it"
+          - "database_name string(64) nn | Source database"
+          - "table_name string(64) nn | Source table"
+          - "first_record_id uuid nn | First record id in the batch"
+          - "last_record_id uuid nn | Last record id in the batch"
+          - "record_count bigint nn | Records in the object"
+          - "min_created_at ts nn | Oldest record time"
+          - "max_created_at ts nn | Newest record time"
+          - "storage_uri string(500) nn | Object-store URI (Parquet)"
+          - "storage_class string(32) nn | Storage tier, e.g. ARCHIVE, DEEP_ARCHIVE"
+          - "checksum_sha256 string(64) nn | Integrity checksum"
+          - "encryption_key_ref string(255) nn secret | KMS key reference"
+          - "worm_retain_until date nn | Object-lock retention date"
+          - "restorable bool nn default=true | Can be restored for queries"
+
+      - name: legal_hold
+        prefix: lgh
+        description: A legal or regulatory hold that suspends archival purge and deletion for its scope
+        fr: [OPS-04, CIF-04]
+        columns:
+          - "name string(160) nn | Hold name / matter"
+          - "scope_type enum:LegalHoldScope nn | What the hold covers"
+          - "scope_ids json nn | Ids covered (customers, accounts, cases, tables...)"
+          - "customer_id uuid ref=customer idx | Customer, when scope is a customer"
+          - "reason text nn | Legal basis"
+          - "requested_by string(120) nn | Legal / compliance requester"
+          - "case_reference string(128) | External matter or court reference"
+          - "status enum:LegalHoldStatus nn default=ACTIVE | Status"
+          - "starts_on date nn | Start"
+          - "review_on date | Next review date"
+          - "released_at ts ro | Release time"
+          - "released_by string(64) ro | Who released it"
+          - "approval_request_id uuid ref=approval_request | Approval for placing or releasing"
+
+      - name: purge_request
+        prefix: prg
+        description: Request to permanently delete or anonymise data that reached end of retention
+        fr: [OPS-04, CIF-04]
+        columns:
+          - "retention_policy_id uuid fk=retention_policy idx | Policy that triggered it"
+          - "data_classification_id uuid fk=data_classification | Table affected"
+          - "scope_description string(500) nn | What will be purged"
+          - "record_selector json nn | Selection criteria / id ranges"
+          - "action enum:RetentionAction nn | PURGE or ANONYMISE"
+          - "estimated_records bigint ro | Records selected"
+          - "status enum:PurgeRequestStatus nn default=DRAFT ro | Status"
+          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "blocked_by_hold_id uuid fk=legal_hold | Hold blocking execution"
+          - "executed_at ts ro | Execution time"
+          - "records_purged bigint ro | Records purged"
+          - "certificate_document_id uuid ref=document ro | Certificate of destruction"
+          - "certificate_hash string(64) ro | Hash of the certificate"
+
+    apis:
+      - resource: data-classifications
+        path: /v1/archive/classifications
+        table: data_classification
+        ops: [list, get, create, update]
+        filters: [data_class, service_name, database_name, sensitivity]
+        actions:
+          - "POST /scan | Discover tables and suggest classifications from the spec catalogue | | none"
+      - resource: retention-policies
+        path: /v1/archive/retention-policies
+        table: retention_policy
+        ops: [list, get, create, update]
+        filters: [data_class, country_code, legal_entity_id, is_active]
+        actions:
+          - "POST /{id}/preview | Count records that would be archived or purged now | | none"
+      - resource: archive-jobs
+        path: /v1/archive/jobs
+        table: archive_job
+        ops: [list, get, create]
+        filters: [retention_policy_id, data_classification_id, status]
+        actions:
+          - "POST /{id}/cancel | Cancel a running job | "
+          - "GET /{id}/objects | Archived objects written by the job | | archived_object[]"
+      - resource: archived-objects
+        path: /v1/archive/objects
+        table: archived_object
+        ops: [list, get]
+        filters: [archive_job_id, database_name, table_name]
+        actions:
+          - "POST /{id}/restore | Restore an archived batch to a query area | reason string(500) nn | none"
+          - "POST /{id}/verify | Verify checksum and object-lock of an archive | | none"
+      - resource: legal-holds
+        path: /v1/archive/legal-holds
+        table: legal_hold
+        ops: [list, get, create, update]
+        filters: [scope_type, customer_id, status]
+        actions:
+          - "POST /{id}/release | Release a hold (maker-checker) | reason string(500) nn"
+          - "GET /check | Check whether an entity is under hold (?scope_type=&id=) | | none"
+      - resource: purge-requests
+        path: /v1/archive/purge-requests
+        table: purge_request
+        ops: [list, get, create]
+        filters: [retention_policy_id, status, data_classification_id]
+        actions:
+          - "POST /{id}/submit | Submit for approval | "
+          - "POST /{id}/execute | Execute an approved purge | | purge_request"
+          - "POST /{id}/cancel | Cancel the request | reason string(255) nn"
+          - "GET /{id}/certificate | Signed URL of the certificate of destruction | | none"
+
+    events:
+      - "operations.archive_job.completed | archive_job | An archival run finished"
+      - "operations.legal_hold.placed | legal_hold | A legal hold was placed"
+      - "operations.legal_hold.released | legal_hold | A legal hold was released"
+      - "operations.purge_request.approved | purge_request | A purge was approved"
+      - "operations.purge_request.completed | purge_request | Data was purged and a certificate issued"

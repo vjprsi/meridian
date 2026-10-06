@@ -1,0 +1,3575 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    FileChannel:
+      description: A configured endpoint for exchanging files with a counterparty
+      properties:
+        code:
+          description: Channel code
+          maxLength: 64
+          type: string
+        counterparty_name:
+          description: Counterparty name
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        counterparty_type:
+          description: Counterparty kind
+          enum:
+          - BANK
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - CREDIT_BUREAU
+          - CARD_BUREAU
+          - REGULATOR
+          - PARTNER
+          - ERP
+          - BILLER
+          - OTHER
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        delete_after_download:
+          description: Remove remote file after successful download
+          type: boolean
+        direction:
+          description: Inbound, outbound or both
+          enum:
+          - INBOUND
+          - OUTBOUND
+          - BOTH
+          type: string
+        file_name_pattern:
+          description: Regex of inbound file names to pick up
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        health_status:
+          description: UP, DEGRADED or DOWN
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        host:
+          description: Host / bucket / base URL
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        host_key_fingerprint:
+          description: Expected SFTP host key fingerprint
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ip_allowlist:
+          additionalProperties: true
+          description: Allowed source IPs for push channels
+          type:
+          - object
+          - 'null'
+        is_active:
+          description: Active
+          type: boolean
+        last_connected_at:
+          description: Last successful connection
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type:
+          - string
+          - 'null'
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        pgp_sign:
+          description: Sign outbound files
+          type: boolean
+        poll_cron:
+          description: Polling schedule for inbound files
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        port:
+          description: Port
+          format: int32
+          type:
+          - integer
+          - 'null'
+        protocol:
+          description: Transfer protocol
+          enum:
+          - SFTP
+          - FTPS
+          - S3
+          - AZURE_BLOB
+          - GCS
+          - HTTPS_API
+          - AS2
+          - CONNECT_DIRECT
+          - EMAIL
+          type: string
+        remote_inbound_path:
+          description: Remote folder to pull from
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        remote_outbound_path:
+          description: Remote folder to push to
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        username:
+          description: Login user
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - counterparty_type
+      - protocol
+      - direction
+      - pgp_sign
+      - delete_after_download
+      - is_active
+      type: object
+    FileChannelCreate:
+      properties:
+        code:
+          description: Channel code
+          maxLength: 64
+          type: string
+        counterparty_name:
+          description: Counterparty name
+          maxLength: 160
+          type: string
+        counterparty_type:
+          description: Counterparty kind
+          enum:
+          - BANK
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - CREDIT_BUREAU
+          - CARD_BUREAU
+          - REGULATOR
+          - PARTNER
+          - ERP
+          - BILLER
+          - OTHER
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        delete_after_download:
+          description: Remove remote file after successful download
+          type: boolean
+        direction:
+          description: Inbound, outbound or both
+          enum:
+          - INBOUND
+          - OUTBOUND
+          - BOTH
+          type: string
+        file_name_pattern:
+          description: Regex of inbound file names to pick up
+          maxLength: 255
+          type: string
+        host:
+          description: Host / bucket / base URL
+          maxLength: 255
+          type: string
+        host_key_fingerprint:
+          description: Expected SFTP host key fingerprint
+          maxLength: 128
+          type: string
+        ip_allowlist:
+          additionalProperties: true
+          description: Allowed source IPs for push channels
+          type: object
+        is_active:
+          description: Active
+          type: boolean
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        pgp_sign:
+          description: Sign outbound files
+          type: boolean
+        poll_cron:
+          description: Polling schedule for inbound files
+          maxLength: 64
+          type: string
+        port:
+          description: Port
+          format: int32
+          type: integer
+        protocol:
+          description: Transfer protocol
+          enum:
+          - SFTP
+          - FTPS
+          - S3
+          - AZURE_BLOB
+          - GCS
+          - HTTPS_API
+          - AS2
+          - CONNECT_DIRECT
+          - EMAIL
+          type: string
+        remote_inbound_path:
+          description: Remote folder to pull from
+          maxLength: 500
+          type: string
+        remote_outbound_path:
+          description: Remote folder to push to
+          maxLength: 500
+          type: string
+        username:
+          description: Login user
+          maxLength: 128
+          type: string
+      required:
+      - code
+      - name
+      - counterparty_type
+      - protocol
+      - direction
+      type: object
+    FileChannelPage:
+      description: One page of FileChannel results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FileChannel'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FileChannelUpdate:
+      properties:
+        code:
+          description: Channel code
+          maxLength: 64
+          type: string
+        counterparty_name:
+          description: Counterparty name
+          maxLength: 160
+          type: string
+        counterparty_type:
+          description: Counterparty kind
+          enum:
+          - BANK
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - CREDIT_BUREAU
+          - CARD_BUREAU
+          - REGULATOR
+          - PARTNER
+          - ERP
+          - BILLER
+          - OTHER
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        delete_after_download:
+          description: Remove remote file after successful download
+          type: boolean
+        direction:
+          description: Inbound, outbound or both
+          enum:
+          - INBOUND
+          - OUTBOUND
+          - BOTH
+          type: string
+        file_name_pattern:
+          description: Regex of inbound file names to pick up
+          maxLength: 255
+          type: string
+        host:
+          description: Host / bucket / base URL
+          maxLength: 255
+          type: string
+        host_key_fingerprint:
+          description: Expected SFTP host key fingerprint
+          maxLength: 128
+          type: string
+        ip_allowlist:
+          additionalProperties: true
+          description: Allowed source IPs for push channels
+          type: object
+        is_active:
+          description: Active
+          type: boolean
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        pgp_sign:
+          description: Sign outbound files
+          type: boolean
+        poll_cron:
+          description: Polling schedule for inbound files
+          maxLength: 64
+          type: string
+        port:
+          description: Port
+          format: int32
+          type: integer
+        protocol:
+          description: Transfer protocol
+          enum:
+          - SFTP
+          - FTPS
+          - S3
+          - AZURE_BLOB
+          - GCS
+          - HTTPS_API
+          - AS2
+          - CONNECT_DIRECT
+          - EMAIL
+          type: string
+        remote_inbound_path:
+          description: Remote folder to pull from
+          maxLength: 500
+          type: string
+        remote_outbound_path:
+          description: Remote folder to push to
+          maxLength: 500
+          type: string
+        username:
+          description: Login user
+          maxLength: 128
+          type: string
+      type: object
+    FileChannelsDisableRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    FileChannelsRotateCredentialsRequest:
+      properties:
+        credential_secret_ref:
+          maxLength: 255
+          type: string
+      required:
+      - credential_secret_ref
+      type: object
+    FileFormatDefinition:
+      description: Layout of a file type (record types, fields, positions, validation) used to parse or generate files
+      properties:
+        code:
+          description: Format code, e.g. NACHA_PPD, CAMT053_V08
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        delimiter:
+          description: Field delimiter (CSV)
+          maxLength: 4
+          type:
+          - string
+          - 'null'
+        encoding:
+          description: Character encoding
+          maxLength: 32
+          type: string
+        format_kind:
+          description: Format family
+          enum:
+          - FIXED_WIDTH
+          - CSV
+          - JSON
+          - XML_ISO20022
+          - NACHA
+          - SWIFT_MT
+          - BAI2
+          - ISO8583_BATCH
+          - XLSX
+          - CUSTOM
+          type: string
+        has_header:
+          description: First line is a header
+          type: boolean
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        record_length:
+          description: Fixed record length (fixed-width formats)
+          format: int32
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sample_document_id:
+          description: Sample file
+          format: uuid
+          type:
+          - string
+          - 'null'
+        schema_definition:
+          additionalProperties: true
+          description: Record types, fields, positions, types and validation rules
+          type: object
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version:
+          description: Layout version
+          maxLength: 32
+          type: string
+        xsd_document_id:
+          description: XSD for XML formats
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - format_kind
+      - version
+      - encoding
+      - has_header
+      - schema_definition
+      - is_active
+      type: object
+    FileFormatDefinitionCreate:
+      properties:
+        code:
+          description: Format code, e.g. NACHA_PPD, CAMT053_V08
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        delimiter:
+          description: Field delimiter (CSV)
+          maxLength: 4
+          type: string
+        encoding:
+          description: Character encoding
+          maxLength: 32
+          type: string
+        format_kind:
+          description: Format family
+          enum:
+          - FIXED_WIDTH
+          - CSV
+          - JSON
+          - XML_ISO20022
+          - NACHA
+          - SWIFT_MT
+          - BAI2
+          - ISO8583_BATCH
+          - XLSX
+          - CUSTOM
+          type: string
+        has_header:
+          description: First line is a header
+          type: boolean
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        record_length:
+          description: Fixed record length (fixed-width formats)
+          format: int32
+          type: integer
+        sample_document_id:
+          description: Sample file
+          format: uuid
+          type: string
+        schema_definition:
+          additionalProperties: true
+          description: Record types, fields, positions, types and validation rules
+          type: object
+        version:
+          description: Layout version
+          maxLength: 32
+          type: string
+        xsd_document_id:
+          description: XSD for XML formats
+          format: uuid
+          type: string
+      required:
+      - code
+      - name
+      - format_kind
+      - schema_definition
+      type: object
+    FileFormatDefinitionPage:
+      description: One page of FileFormatDefinition results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FileFormatDefinition'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FileFormatDefinitionUpdate:
+      properties:
+        code:
+          description: Format code, e.g. NACHA_PPD, CAMT053_V08
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        delimiter:
+          description: Field delimiter (CSV)
+          maxLength: 4
+          type: string
+        encoding:
+          description: Character encoding
+          maxLength: 32
+          type: string
+        format_kind:
+          description: Format family
+          enum:
+          - FIXED_WIDTH
+          - CSV
+          - JSON
+          - XML_ISO20022
+          - NACHA
+          - SWIFT_MT
+          - BAI2
+          - ISO8583_BATCH
+          - XLSX
+          - CUSTOM
+          type: string
+        has_header:
+          description: First line is a header
+          type: boolean
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        record_length:
+          description: Fixed record length (fixed-width formats)
+          format: int32
+          type: integer
+        sample_document_id:
+          description: Sample file
+          format: uuid
+          type: string
+        schema_definition:
+          additionalProperties: true
+          description: Record types, fields, positions, types and validation rules
+          type: object
+        version:
+          description: Layout version
+          maxLength: 32
+          type: string
+        xsd_document_id:
+          description: XSD for XML formats
+          format: uuid
+          type: string
+      type: object
+    FileFormatsValidateSampleRequest:
+      properties:
+        document_id:
+          format: uuid
+          type: string
+      required:
+      - document_id
+      type: object
+    FileRoute:
+      description: Routing rule sending matching inbound files to a consumer service
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        file_channel_id:
+          description: Channel (empty = any)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        file_format_definition_id:
+          description: Expected format
+          format: uuid
+          type:
+          - string
+          - 'null'
+        file_name_pattern:
+          description: Regex on file name
+          maxLength: 255
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Rule name
+          maxLength: 160
+          type: string
+        priority:
+          description: Lower wins
+          format: int32
+          type: integer
+        require_virus_scan:
+          description: Scan before routing
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        target_service:
+          description: Consumer service, e.g. reconciliation-service
+          maxLength: 64
+          type: string
+        target_topic:
+          description: Kafka topic or command endpoint
+          maxLength: 160
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - priority
+      - file_name_pattern
+      - target_service
+      - target_topic
+      - require_virus_scan
+      - is_active
+      type: object
+    FileRouteCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        file_channel_id:
+          description: Channel (empty = any)
+          format: uuid
+          type: string
+        file_format_definition_id:
+          description: Expected format
+          format: uuid
+          type: string
+        file_name_pattern:
+          description: Regex on file name
+          maxLength: 255
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Rule name
+          maxLength: 160
+          type: string
+        priority:
+          description: Lower wins
+          format: int32
+          type: integer
+        require_virus_scan:
+          description: Scan before routing
+          type: boolean
+        target_service:
+          description: Consumer service, e.g. reconciliation-service
+          maxLength: 64
+          type: string
+        target_topic:
+          description: Kafka topic or command endpoint
+          maxLength: 160
+          type: string
+      required:
+      - name
+      - file_name_pattern
+      - target_service
+      - target_topic
+      type: object
+    FileRoutePage:
+      description: One page of FileRoute results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FileRoute'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FileRouteUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        file_channel_id:
+          description: Channel (empty = any)
+          format: uuid
+          type: string
+        file_format_definition_id:
+          description: Expected format
+          format: uuid
+          type: string
+        file_name_pattern:
+          description: Regex on file name
+          maxLength: 255
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Rule name
+          maxLength: 160
+          type: string
+        priority:
+          description: Lower wins
+          format: int32
+          type: integer
+        require_virus_scan:
+          description: Scan before routing
+          type: boolean
+        target_service:
+          description: Consumer service, e.g. reconciliation-service
+          maxLength: 64
+          type: string
+        target_topic:
+          description: Kafka topic or command endpoint
+          maxLength: 160
+          type: string
+      type: object
+    FileRoutesSimulateRequest:
+      properties:
+        file_channel_id:
+          format: uuid
+          type: string
+        file_name:
+          maxLength: 255
+          type: string
+      required:
+      - file_name
+      type: object
+    FileTransferLog:
+      description: Immutable audit of every action on a file or channel
+      properties:
+        action:
+          description: Action
+          enum:
+          - CONNECT
+          - LIST
+          - DOWNLOAD
+          - UPLOAD
+          - DECRYPT
+          - ENCRYPT
+          - SCAN
+          - VALIDATE
+          - ROUTE
+          - ACK
+          - DELETE_REMOTE
+          - ERROR
+          type: string
+        actor:
+          description: System or user
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        bytes_transferred:
+          description: Bytes
+          format: int64
+          type:
+          - integer
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        duration_ms:
+          description: Duration
+          format: int32
+          type:
+          - integer
+          - 'null'
+        file_channel_id:
+          description: Channel
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inbound_file_id:
+          description: Inbound file
+          format: uuid
+          type:
+          - string
+          - 'null'
+        message:
+          description: Detail
+          maxLength: 1000
+          type:
+          - string
+          - 'null'
+        outbound_file_id:
+          description: Outbound file
+          format: uuid
+          type:
+          - string
+          - 'null'
+        remote_address:
+          description: Remote IP / host
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        success:
+          description: Outcome
+          type: boolean
+      required:
+      - id
+      - created_at
+      - action
+      - success
+      type: object
+    FileTransferLogPage:
+      description: One page of FileTransferLog results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FileTransferLog'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    InboundFile:
+      description: A file received from a counterparty
+      properties:
+        checksum_sha256:
+          description: SHA-256 of the raw file
+          maxLength: 64
+          readOnly: true
+          type: string
+        consumer_reference:
+          description: Id assigned by the consuming service
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_id:
+          description: Document record for retention
+          format: uuid
+          type:
+          - string
+          - 'null'
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        file_channel_id:
+          description: Channel received on
+          format: uuid
+          type: string
+        file_format_definition_id:
+          description: Detected format
+          format: uuid
+          type:
+          - string
+          - 'null'
+        file_route_id:
+          description: Route applied
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        original_file_name:
+          description: Name as received
+          maxLength: 255
+          type: string
+        processed_at:
+          description: Processing completed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        received_at:
+          description: Receipt time
+          format: date-time
+          readOnly: true
+          type: string
+        record_count:
+          description: Records detected
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        remote_path:
+          description: Remote location
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        signature_valid:
+          description: PGP signature check result
+          readOnly: true
+          type:
+          - boolean
+          - 'null'
+        size_bytes:
+          description: Size
+          format: int64
+          readOnly: true
+          type: integer
+        status:
+          description: Processing status
+          enum:
+          - RECEIVED
+          - SCANNING
+          - QUARANTINED
+          - DECRYPTING
+          - VALIDATING
+          - ROUTED
+          - PROCESSED
+          - REJECTED
+          - FAILED
+          readOnly: true
+          type: string
+        storage_uri:
+          description: Object-store location of the raw file
+          maxLength: 500
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        virus_scan_detail:
+          description: Signature name when infected
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        virus_scan_status:
+          description: Antivirus result
+          enum:
+          - PENDING
+          - CLEAN
+          - INFECTED
+          - ERROR
+          - SKIPPED
+          readOnly: true
+          type: string
+        was_encrypted:
+          description: PGP-encrypted on receipt
+          readOnly: true
+          type: boolean
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - file_channel_id
+      - original_file_name
+      - storage_uri
+      - size_bytes
+      - checksum_sha256
+      - received_at
+      - was_encrypted
+      - virus_scan_status
+      - status
+      type: object
+    InboundFileCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        document_id:
+          description: Document record for retention
+          format: uuid
+          type: string
+        file_channel_id:
+          description: Channel received on
+          format: uuid
+          type: string
+        file_format_definition_id:
+          description: Detected format
+          format: uuid
+          type: string
+        file_route_id:
+          description: Route applied
+          format: uuid
+          type: string
+        original_file_name:
+          description: Name as received
+          maxLength: 255
+          type: string
+        remote_path:
+          description: Remote location
+          maxLength: 500
+          type: string
+      required:
+      - file_channel_id
+      - original_file_name
+      type: object
+    InboundFilePage:
+      description: One page of InboundFile results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/InboundFile'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    InboundFilesReleaseQuarantineRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    OutboundFile:
+      description: A file generated for and delivered to a counterparty
+      properties:
+        ack_reference:
+          description: Acknowledgement reference
+          maxLength: 128
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        acknowledged_at:
+          description: Counterparty acknowledgement time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        checksum_sha256:
+          description: SHA-256
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        control_totals:
+          additionalProperties: true
+          description: Control totals (count, sum) written in the trailer
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        delivered_at:
+          description: Delivered
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        delivery_attempts:
+          description: Attempts
+          format: int32
+          readOnly: true
+          type: integer
+        encrypt:
+          description: PGP-encrypt before delivery
+          type: boolean
+        error:
+          description: Last error
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        file_channel_id:
+          description: Delivery channel
+          format: uuid
+          type: string
+        file_format_definition_id:
+          description: Format
+          format: uuid
+          type:
+          - string
+          - 'null'
+        file_name:
+          description: File name to deliver
+          maxLength: 255
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        record_count:
+          description: Records
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        requested_by_service:
+          description: Service that requested the file
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scheduled_for:
+          description: Earliest delivery time (e.g. scheme window)
+          format: date-time
+          type:
+          - string
+          - 'null'
+        size_bytes:
+          description: Size
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        source_reference:
+          description: Batch / run id in the requesting service
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - GENERATING
+          - GENERATED
+          - ENCRYPTING
+          - QUEUED
+          - DELIVERING
+          - DELIVERED
+          - ACKNOWLEDGED
+          - FAILED
+          - CANCELLED
+          readOnly: true
+          type: string
+        storage_uri:
+          description: Object-store location
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - file_channel_id
+      - requested_by_service
+      - file_name
+      - encrypt
+      - status
+      - delivery_attempts
+      type: object
+    OutboundFileCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        encrypt:
+          description: PGP-encrypt before delivery
+          type: boolean
+        file_channel_id:
+          description: Delivery channel
+          format: uuid
+          type: string
+        file_format_definition_id:
+          description: Format
+          format: uuid
+          type: string
+        file_name:
+          description: File name to deliver
+          maxLength: 255
+          type: string
+        requested_by_service:
+          description: Service that requested the file
+          maxLength: 64
+          type: string
+        scheduled_for:
+          description: Earliest delivery time (e.g. scheme window)
+          format: date-time
+          type: string
+        source_reference:
+          description: Batch / run id in the requesting service
+          maxLength: 128
+          type: string
+      required:
+      - file_channel_id
+      - requested_by_service
+      - file_name
+      type: object
+    OutboundFilePage:
+      description: One page of OutboundFile results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/OutboundFile'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    OutboundFilesAcknowledgeRequest:
+      properties:
+        ack_reference:
+          maxLength: 128
+          type: string
+      required:
+      - ack_reference
+      type: object
+    OutboundFilesCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    OutboundFilesRedeliverRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners, enterprise
+    search across all entities, and data retention, archival, legal hold and certified purge.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — file-gateway-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/files/channels:
+    get:
+      operationId: fileChannelsList
+      summary: List file channels
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: counterparty_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - BANK
+          - CARD_SCHEME
+          - PAYMENT_RAIL
+          - CREDIT_BUREAU
+          - CARD_BUREAU
+          - REGULATOR
+          - PARTNER
+          - ERP
+          - BILLER
+          - OTHER
+      - name: protocol
+        in: query
+        schema:
+          type: string
+          enum:
+          - SFTP
+          - FTPS
+          - S3
+          - AZURE_BLOB
+          - GCS
+          - HTTPS_API
+          - AS2
+          - CONNECT_DIRECT
+          - EMAIL
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - INBOUND
+          - OUTBOUND
+          - BOTH
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChannelPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fileChannelsCreate
+      summary: Create file channel
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChannel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileChannelCreate'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+      x-crud: true
+      x-crud-create: true
+  /v1/files/channels/{id}:
+    get:
+      operationId: fileChannelsGet
+      summary: Retrieve file channel
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChannel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: fileChannelsUpdate
+      summary: Update file channel
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChannel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileChannelUpdate'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+      x-crud: true
+      x-crud-update: true
+  /v1/files/channels/{id}/test-connection:
+    post:
+      operationId: fileChannelsTestConnection
+      summary: Test connectivity and credentials
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+  /v1/files/channels/{id}/poll-now:
+    post:
+      operationId: fileChannelsPollNow
+      summary: Poll the remote inbound folder now
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+  /v1/files/channels/{id}/rotate-credentials:
+    post:
+      operationId: fileChannelsRotateCredentials
+      summary: Rotate stored credentials
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChannel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileChannelsRotateCredentialsRequest'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+  /v1/files/channels/{id}/disable:
+    post:
+      operationId: fileChannelsDisable
+      summary: Disable the channel
+      tags:
+      - File Channels
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChannel'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileChannelsDisableRequest'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_channel
+  /v1/files/formats:
+    get:
+      operationId: fileFormatsList
+      summary: List file formats
+      tags:
+      - File Formats
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: format_kind
+        in: query
+        schema:
+          type: string
+          enum:
+          - FIXED_WIDTH
+          - CSV
+          - JSON
+          - XML_ISO20022
+          - NACHA
+          - SWIFT_MT
+          - BAI2
+          - ISO8583_BATCH
+          - XLSX
+          - CUSTOM
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileFormatDefinitionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_format_definition
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fileFormatsCreate
+      summary: Create file format
+      tags:
+      - File Formats
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileFormatDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileFormatDefinitionCreate'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_format_definition
+      x-crud: true
+      x-crud-create: true
+  /v1/files/formats/{id}:
+    get:
+      operationId: fileFormatsGet
+      summary: Retrieve file format
+      tags:
+      - File Formats
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileFormatDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_format_definition
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: fileFormatsUpdate
+      summary: Update file format
+      tags:
+      - File Formats
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileFormatDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileFormatDefinitionUpdate'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_format_definition
+      x-crud: true
+      x-crud-update: true
+  /v1/files/formats/{id}/validate-sample:
+    post:
+      operationId: fileFormatsValidateSample
+      summary: Parse an uploaded sample against the layout
+      tags:
+      - File Formats
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileFormatsValidateSampleRequest'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_format_definition
+  /v1/files/routes:
+    get:
+      operationId: fileRoutesList
+      summary: List file routes
+      tags:
+      - File Routes
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: file_channel_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: target_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRoutePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_route
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: fileRoutesCreate
+      summary: Create file route
+      tags:
+      - File Routes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRoute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileRouteCreate'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_route
+      x-crud: true
+      x-crud-create: true
+  /v1/files/routes/{id}:
+    get:
+      operationId: fileRoutesGet
+      summary: Retrieve file route
+      tags:
+      - File Routes
+      security:
+      - oauth2:
+        - operations:read
+      parameters: &id008
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRoute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_route
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: fileRoutesUpdate
+      summary: Update file route
+      tags:
+      - File Routes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRoute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileRouteUpdate'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_route
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: fileRoutesDelete
+      summary: Delete file route
+      tags:
+      - File Routes
+      security:
+      - oauth2:
+        - operations:write
+      parameters: *id008
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_route
+      x-crud: true
+      x-crud-delete: true
+  /v1/files/routes/simulate:
+    post:
+      operationId: fileRoutesSimulate
+      summary: Show which route a file name would match
+      tags:
+      - File Routes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRoute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileRoutesSimulateRequest'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_route
+  /v1/files/inbound:
+    get:
+      operationId: inboundFilesList
+      summary: List inbound files
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: file_channel_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RECEIVED
+          - SCANNING
+          - QUARANTINED
+          - DECRYPTING
+          - VALIDATING
+          - ROUTED
+          - PROCESSED
+          - REJECTED
+          - FAILED
+      - name: virus_scan_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - CLEAN
+          - INFECTED
+          - ERROR
+          - SKIPPED
+      - name: file_format_definition_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFilePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: inboundFilesCreate
+      summary: Create inbound file
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundFileCreate'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+      x-crud: true
+      x-crud-create: true
+  /v1/files/inbound/{id}:
+    get:
+      operationId: inboundFilesGet
+      summary: Retrieve inbound file
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+      x-crud: true
+      x-crud-get: true
+  /v1/files/inbound/{id}/reprocess:
+    post:
+      operationId: inboundFilesReprocess
+      summary: Route and process the file again
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+  /v1/files/inbound/{id}/release-quarantine:
+    post:
+      operationId: inboundFilesReleaseQuarantine
+      summary: Release a quarantined file after review (maker-checker)
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundFilesReleaseQuarantineRequest'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+  /v1/files/inbound/{id}/download:
+    get:
+      operationId: inboundFilesDownload
+      summary: Signed URL for the raw file
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+  /v1/files/inbound/{id}/logs:
+    get:
+      operationId: inboundFilesLogs
+      summary: Transfer audit for the file
+      tags:
+      - Inbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileTransferLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: inbound_file
+  /v1/files/outbound:
+    get:
+      operationId: outboundFilesList
+      summary: List outbound files
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: file_channel_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - GENERATING
+          - GENERATED
+          - ENCRYPTING
+          - QUEUED
+          - DELIVERING
+          - DELIVERED
+          - ACKNOWLEDGED
+          - FAILED
+          - CANCELLED
+      - name: requested_by_service
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: source_reference
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFilePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: outboundFilesCreate
+      summary: Create outbound file
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboundFileCreate'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+      x-crud: true
+      x-crud-create: true
+  /v1/files/outbound/{id}:
+    get:
+      operationId: outboundFilesGet
+      summary: Retrieve outbound file
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+      x-crud: true
+      x-crud-get: true
+  /v1/files/outbound/{id}/redeliver:
+    post:
+      operationId: outboundFilesRedeliver
+      summary: Deliver the file again
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboundFilesRedeliverRequest'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+  /v1/files/outbound/{id}/cancel:
+    post:
+      operationId: outboundFilesCancel
+      summary: Cancel before delivery
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboundFilesCancelRequest'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+  /v1/files/outbound/{id}/acknowledge:
+    post:
+      operationId: outboundFilesAcknowledge
+      summary: Record a counterparty acknowledgement
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutboundFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboundFilesAcknowledgeRequest'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+  /v1/files/outbound/{id}/download:
+    get:
+      operationId: outboundFilesDownload
+      summary: Signed URL for the generated file
+      tags:
+      - Outbound Files
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: outbound_file
+  /v1/files/transfer-logs:
+    get:
+      operationId: fileTransferLogsList
+      summary: List file transfer logs
+      tags:
+      - File Transfer Logs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: file_channel_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: inbound_file_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: outbound_file_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: action
+        in: query
+        schema:
+          type: string
+          enum:
+          - CONNECT
+          - LIST
+          - DOWNLOAD
+          - UPLOAD
+          - DECRYPT
+          - ENCRYPT
+          - SCAN
+          - VALIDATE
+          - ROUTE
+          - ACK
+          - DELETE_REMOTE
+          - ERROR
+      - name: success
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileTransferLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_transfer_log
+      x-crud: true
+      x-crud-list: true
+  /v1/files/transfer-logs/{id}:
+    get:
+      operationId: fileTransferLogsGet
+      summary: Retrieve file transfer log
+      tags:
+      - File Transfer Logs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileTransferLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - OPS-02
+      x-service: file-gateway-service
+      x-table: file_transfer_log
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A configured endpoint for exchanging files with a counterparty
+  name: File Channels
+- description: Layout of a file type (record types, fields, positions, validation) used to parse or generate files
+  name: File Formats
+- description: Routing rule sending matching inbound files to a consumer service
+  name: File Routes
+- description: A file received from a counterparty
+  name: Inbound Files
+- description: A file generated for and delivered to a counterparty
+  name: Outbound Files
+- description: Immutable audit of every action on a file or channel
+  name: File Transfer Logs

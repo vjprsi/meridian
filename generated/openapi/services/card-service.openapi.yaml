@@ -1,0 +1,6413 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Card:
+      description: A payment card. Holds only tokens and masked data; PAN and CVV live in the vault.
+      properties:
+        activated_at:
+          description: Activation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        bin:
+          description: BIN
+          maxLength: 11
+          readOnly: true
+          type: string
+        business_customer_id:
+          description: Company for business / corporate cards
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_product_id:
+          description: Product
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        cardholder_name:
+          description: Name as embossed
+          maxLength: 26
+          type: string
+        closed_at:
+          description: Closure time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        credit_line_id:
+          description: Linked credit line (credit cards)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Cardholder customer
+          format: uuid
+          type: string
+        deposit_account_id:
+          description: Linked deposit account (debit cards)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        expiry_month:
+          description: Expiry month 1-12
+          format: int32
+          readOnly: true
+          type: integer
+        expiry_year:
+          description: Expiry year (4 digits)
+          format: int32
+          readOnly: true
+          type: integer
+        form_factor:
+          description: Virtual or physical
+          enum:
+          - VIRTUAL
+          - PHYSICAL
+          type: string
+        frozen_at:
+          description: Last freeze time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last4:
+          description: Last four digits
+          maxLength: 4
+          readOnly: true
+          type: string
+        ledger_account_id:
+          description: Ledger account authorisations hold and post against
+          format: uuid
+          type: string
+        linked_account_type:
+          description: Kind of funding account
+          enum:
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CREDIT_LINE
+          - PREPAID_LEDGER
+          - JIT_PROGRAM
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        nickname:
+          description: Cardholder nickname
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        pan_fingerprint:
+          description: Keyed hash of the PAN for de-duplication and lookup
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        pan_token:
+          description: Vault token of the PAN
+          maxLength: 64
+          readOnly: true
+          type: string
+        pin_set:
+          description: Whether a PIN has been set
+          readOnly: true
+          type: boolean
+        pin_try_count:
+          description: Consecutive wrong PIN attempts
+          format: int32
+          readOnly: true
+          type: integer
+        replaces_card_id:
+          description: Card this one replaced
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sequence_number:
+          description: PAN sequence number (PSN)
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Lifecycle status
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+          type: string
+        status_reason:
+          description: Reason for the current status
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_id:
+          description: Linked wallet (prepaid / wallet cards)
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_program_id
+      - card_product_id
+      - customer_id
+      - pan_token
+      - bin
+      - last4
+      - expiry_month
+      - expiry_year
+      - sequence_number
+      - cardholder_name
+      - form_factor
+      - status
+      - linked_account_type
+      - ledger_account_id
+      - pin_set
+      - pin_try_count
+      type: object
+    CardAuthorization:
+      description: One authorisation message and its decision (auth, incremental, reversal, advice)
+      properties:
+        acquirer_id:
+          description: Acquiring institution id (DE32)
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        approved_amount:
+          description: Approved amount (partial approvals)
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        auth_code:
+          description: Approval code (DE38)
+          maxLength: 6
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        avs_result:
+          description: Address verification result
+          maxLength: 1
+          type:
+          - string
+          - 'null'
+        billing_amount:
+          description: Amount in card billing currency (DE6)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        billing_currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        card_present:
+          description: Card present
+          type: boolean
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        card_token_id:
+          description: Network token used, if any
+          format: uuid
+          type:
+          - string
+          - 'null'
+        cardholder_present:
+          description: Cardholder present
+          type: boolean
+        channel:
+          description: Channel
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        cleared_amount:
+          description: Amount cleared so far
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        conversion_rate:
+          description: Billing conversion rate
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Cardholder
+          format: uuid
+          type:
+          - string
+          - 'null'
+        cvv_result:
+          description: CVV2 verification result
+          maxLength: 1
+          type:
+          - string
+          - 'null'
+        decision:
+          description: Decision
+          enum:
+          - APPROVED
+          - DECLINED
+          - PARTIAL
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        decline_reason:
+          description: Internal decline reason
+          enum:
+          - INSUFFICIENT_FUNDS
+          - CARD_INACTIVE
+          - CARD_FROZEN
+          - CARD_EXPIRED
+          - INVALID_PIN
+          - PIN_TRIES_EXCEEDED
+          - CONTROL_MCC
+          - CONTROL_MERCHANT
+          - CONTROL_COUNTRY
+          - CONTROL_CHANNEL
+          - LIMIT_EXCEEDED
+          - VELOCITY_EXCEEDED
+          - FRAUD_SUSPECTED
+          - JIT_DECLINED
+          - JIT_TIMEOUT
+          - INVALID_CVV
+          - INVALID_EXPIRY
+          - THREEDS_FAILED
+          - SYSTEM_ERROR
+          - OTHER
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        eci:
+          description: Electronic commerce indicator
+          maxLength: 2
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Time the hold auto-releases
+          format: date-time
+          type:
+          - string
+          - 'null'
+        fraud_alert_id:
+          description: Fraud alert raised
+          format: uuid
+          type:
+          - string
+          - 'null'
+        fraud_score:
+          description: Fraud score 0-1000
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        fx_markup:
+          description: Issuer FX markup
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        hold_id:
+          description: Ledger hold placed
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_international:
+          description: Cross-border
+          type: boolean
+        is_recurring:
+          description: Recurring / credential on file
+          type: boolean
+        jit_latency_ms:
+          description: JIT round-trip latency
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        jit_result:
+          description: JIT outcome
+          enum:
+          - APPROVED
+          - DECLINED
+          - TIMEOUT
+          - ERROR
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        jit_used:
+          description: JIT funding was called
+          readOnly: true
+          type: boolean
+        mcc:
+          description: Merchant category code
+          maxLength: 4
+          type:
+          - string
+          - 'null'
+        merchant_city:
+          description: Merchant city
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        merchant_country:
+          description: Merchant country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        merchant_id:
+          description: Card acceptor id (DE42)
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        merchant_name:
+          description: Card acceptor name
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        message_type:
+          description: Message type
+          enum:
+          - AUTHORIZATION
+          - FINANCIAL
+          - INCREMENTAL
+          - REVERSAL
+          - PARTIAL_REVERSAL
+          - ADVICE
+          - BALANCE_INQUIRY
+          - ACCOUNT_VERIFICATION
+          - REFUND_AUTH
+          type: string
+        mti:
+          description: ISO 8583 message type indicator
+          maxLength: 4
+          type: string
+        network_transaction_id:
+          description: Scheme transaction id (trace id / banknet ref)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        parent_authorization_id:
+          description: Original auth for incremental, reversal or advice
+          format: uuid
+          type:
+          - string
+          - 'null'
+        pin_verified:
+          description: PIN verification outcome
+          type:
+          - boolean
+          - 'null'
+        pos_entry_mode:
+          description: POS entry mode
+          enum:
+          - CHIP
+          - CONTACTLESS
+          - MAGSTRIPE
+          - MANUAL
+          - ECOMMERCE
+          - CREDENTIAL_ON_FILE
+          - TOKEN
+          - FALLBACK
+          - UNKNOWN
+          type: string
+        processing_code:
+          description: ISO 8583 DE3
+          maxLength: 6
+          type:
+          - string
+          - 'null'
+        processing_time_ms:
+          description: End-to-end decision time inside Meridian
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        raw_message:
+          additionalProperties: true
+          description: Parsed ISO 8583 fields (sensitive fields removed)
+          type:
+          - object
+          - 'null'
+        response_code:
+          description: ISO response code (DE39)
+          maxLength: 3
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        rrn:
+          description: Retrieval reference number (DE37)
+          maxLength: 12
+          type:
+          - string
+          - 'null'
+        settlement_amount:
+          description: Settlement amount (DE5)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        settlement_currency:
+          description: Settlement currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        stan:
+          description: System trace audit number (DE11)
+          maxLength: 12
+          type:
+          - string
+          - 'null'
+        stand_in:
+          description: Decided in stand-in
+          readOnly: true
+          type: boolean
+        status:
+          description: Lifecycle status
+          enum:
+          - PENDING
+          - APPROVED
+          - DECLINED
+          - REVERSED
+          - PARTIALLY_REVERSED
+          - EXPIRED
+          - CLEARED
+          - PARTIALLY_CLEARED
+          readOnly: true
+          type: string
+        terminal_id:
+          description: Terminal id (DE41)
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        threeds_authentication_id:
+          description: 3DS authentication
+          format: uuid
+          type:
+          - string
+          - 'null'
+        transaction_amount:
+          description: Amount in transaction currency (DE4)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        transaction_currency:
+          description: Transaction currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - card_program_id
+      - message_type
+      - mti
+      - pos_entry_mode
+      - channel
+      - card_present
+      - cardholder_present
+      - transaction_amount
+      - transaction_currency
+      - billing_amount
+      - billing_currency
+      - status
+      - jit_used
+      - stand_in
+      - is_recurring
+      - is_international
+      - cleared_amount
+      type: object
+    CardAuthorizationPage:
+      description: One page of CardAuthorization results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardAuthorization'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardBureau:
+      description: Card manufacturing / personalisation bureau configuration
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cutoff_time:
+          description: Daily file cut-off HH:MM
+          maxLength: 5
+          type:
+          - string
+          - 'null'
+        endpoint:
+          description: SFTP host or API base URL
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        file_format:
+          description: Personalisation file format
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Bureau name
+          maxLength: 120
+          type: string
+        protocol:
+          description: Integration method
+          enum:
+          - SFTP_FILE
+          - API
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        supported_countries:
+          additionalProperties: true
+          description: Countries it ships to
+          type:
+          - object
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - protocol
+      - is_active
+      type: object
+    CardBureauCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoff_time:
+          description: Daily file cut-off HH:MM
+          maxLength: 5
+          type: string
+        endpoint:
+          description: SFTP host or API base URL
+          maxLength: 500
+          type: string
+        file_format:
+          description: Personalisation file format
+          maxLength: 32
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Bureau name
+          maxLength: 120
+          type: string
+        protocol:
+          description: Integration method
+          enum:
+          - SFTP_FILE
+          - API
+          type: string
+        supported_countries:
+          additionalProperties: true
+          description: Countries it ships to
+          type: object
+      required:
+      - name
+      - protocol
+      type: object
+    CardBureauPage:
+      description: One page of CardBureau results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardBureau'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardBureauUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        cutoff_time:
+          description: Daily file cut-off HH:MM
+          maxLength: 5
+          type: string
+        endpoint:
+          description: SFTP host or API base URL
+          maxLength: 500
+          type: string
+        file_format:
+          description: Personalisation file format
+          maxLength: 32
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Bureau name
+          maxLength: 120
+          type: string
+        protocol:
+          description: Integration method
+          enum:
+          - SFTP_FILE
+          - API
+          type: string
+        supported_countries:
+          additionalProperties: true
+          description: Countries it ships to
+          type: object
+      type: object
+    CardControl:
+      description: A spending control on a card or on all cards of a program
+      properties:
+        card_id:
+          description: Card (empty = program-wide)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_program_id:
+          description: Program for program-wide controls
+          format: uuid
+          type:
+          - string
+          - 'null'
+        channel:
+          description: Channel the control applies to
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        control_type:
+          description: Control type
+          enum:
+          - MCC_ALLOW
+          - MCC_DENY
+          - MERCHANT_ALLOW
+          - MERCHANT_DENY
+          - COUNTRY_ALLOW
+          - COUNTRY_DENY
+          - CHANNEL_ALLOW
+          - CHANNEL_DENY
+          - AMOUNT_MAX
+          - TIME_WINDOW
+          - CURRENCY_ALLOW
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency of max_amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        max_amount:
+          description: Maximum transaction amount for AMOUNT_MAX
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        time_window:
+          additionalProperties: true
+          description: Allowed days and hours for TIME_WINDOW
+          type:
+          - object
+          - 'null'
+        timezone:
+          description: IANA timezone for time windows
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Start
+          format: date-time
+          type:
+          - string
+          - 'null'
+        valid_to:
+          description: End
+          format: date-time
+          type:
+          - string
+          - 'null'
+        values:
+          additionalProperties: true
+          description: MCCs, merchant ids, countries, currencies or channels
+          type:
+          - object
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - control_type
+      - channel
+      - is_active
+      type: object
+    CardControlCreate:
+      properties:
+        card_id:
+          description: Card (empty = program-wide)
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program for program-wide controls
+          format: uuid
+          type: string
+        channel:
+          description: Channel the control applies to
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        control_type:
+          description: Control type
+          enum:
+          - MCC_ALLOW
+          - MCC_DENY
+          - MERCHANT_ALLOW
+          - MERCHANT_DENY
+          - COUNTRY_ALLOW
+          - COUNTRY_DENY
+          - CHANNEL_ALLOW
+          - CHANNEL_DENY
+          - AMOUNT_MAX
+          - TIME_WINDOW
+          - CURRENCY_ALLOW
+          type: string
+        currency:
+          description: Currency of max_amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        max_amount:
+          description: Maximum transaction amount for AMOUNT_MAX
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        time_window:
+          additionalProperties: true
+          description: Allowed days and hours for TIME_WINDOW
+          type: object
+        timezone:
+          description: IANA timezone for time windows
+          maxLength: 64
+          type: string
+        valid_from:
+          description: Start
+          format: date-time
+          type: string
+        valid_to:
+          description: End
+          format: date-time
+          type: string
+        values:
+          additionalProperties: true
+          description: MCCs, merchant ids, countries, currencies or channels
+          type: object
+      required:
+      - control_type
+      type: object
+    CardControlPage:
+      description: One page of CardControl results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardControl'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardControlUpdate:
+      properties:
+        card_id:
+          description: Card (empty = program-wide)
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program for program-wide controls
+          format: uuid
+          type: string
+        channel:
+          description: Channel the control applies to
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        control_type:
+          description: Control type
+          enum:
+          - MCC_ALLOW
+          - MCC_DENY
+          - MERCHANT_ALLOW
+          - MERCHANT_DENY
+          - COUNTRY_ALLOW
+          - COUNTRY_DENY
+          - CHANNEL_ALLOW
+          - CHANNEL_DENY
+          - AMOUNT_MAX
+          - TIME_WINDOW
+          - CURRENCY_ALLOW
+          type: string
+        currency:
+          description: Currency of max_amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        max_amount:
+          description: Maximum transaction amount for AMOUNT_MAX
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        time_window:
+          additionalProperties: true
+          description: Allowed days and hours for TIME_WINDOW
+          type: object
+        timezone:
+          description: IANA timezone for time windows
+          maxLength: 64
+          type: string
+        valid_from:
+          description: Start
+          format: date-time
+          type: string
+        valid_to:
+          description: End
+          format: date-time
+          type: string
+        values:
+          additionalProperties: true
+          description: MCCs, merchant ids, countries, currencies or channels
+          type: object
+      type: object
+    CardCreate:
+      properties:
+        business_customer_id:
+          description: Company for business / corporate cards
+          format: uuid
+          type: string
+        card_product_id:
+          description: Product
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        cardholder_name:
+          description: Name as embossed
+          maxLength: 26
+          type: string
+        credit_line_id:
+          description: Linked credit line (credit cards)
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Cardholder customer
+          format: uuid
+          type: string
+        deposit_account_id:
+          description: Linked deposit account (debit cards)
+          format: uuid
+          type: string
+        form_factor:
+          description: Virtual or physical
+          enum:
+          - VIRTUAL
+          - PHYSICAL
+          type: string
+        ledger_account_id:
+          description: Ledger account authorisations hold and post against
+          format: uuid
+          type: string
+        linked_account_type:
+          description: Kind of funding account
+          enum:
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CREDIT_LINE
+          - PREPAID_LEDGER
+          - JIT_PROGRAM
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        nickname:
+          description: Cardholder nickname
+          maxLength: 64
+          type: string
+        replaces_card_id:
+          description: Card this one replaced
+          format: uuid
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+          type: string
+        status_reason:
+          description: Reason for the current status
+          maxLength: 255
+          type: string
+        wallet_id:
+          description: Linked wallet (prepaid / wallet cards)
+          format: uuid
+          type: string
+      required:
+      - card_program_id
+      - card_product_id
+      - customer_id
+      - cardholder_name
+      - form_factor
+      - linked_account_type
+      - ledger_account_id
+      type: object
+    CardOrder:
+      description: A physical card production and shipping order
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 255
+          type: string
+        address_line2:
+          description: Address line 2
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        bureau_reference:
+          description: Bureau batch / job reference
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        card_bureau_id:
+          description: Bureau
+          format: uuid
+          type: string
+        card_id:
+          description: Card being produced
+          format: uuid
+          type: string
+        carrier:
+          description: Courier
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        city:
+          description: City
+          maxLength: 120
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        delivered_at:
+          description: Delivered time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        phone:
+          description: Contact phone for courier (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        recipient_name:
+          description: Recipient
+          maxLength: 120
+          type: string
+        region:
+          description: State / region
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sent_to_bureau_at:
+          description: File / API submission time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        shipped_at:
+          description: Shipped time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        shipping_method:
+          description: Shipping method
+          enum:
+          - STANDARD
+          - EXPRESS
+          - COURIER
+          - BRANCH_PICKUP
+          type: string
+        status:
+          description: Order status
+          enum:
+          - PENDING
+          - SENT_TO_BUREAU
+          - IN_PRODUCTION
+          - SHIPPED
+          - DELIVERED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+          type: string
+        tracking_number:
+          description: Courier tracking number
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - card_bureau_id
+      - status
+      - shipping_method
+      - recipient_name
+      - address_line1
+      - city
+      - country
+      type: object
+    CardOrderPage:
+      description: One page of CardOrder results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardOrder'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardOrderUpdate:
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 255
+          type: string
+        address_line2:
+          description: Address line 2
+          maxLength: 255
+          type: string
+        card_bureau_id:
+          description: Bureau
+          format: uuid
+          type: string
+        card_id:
+          description: Card being produced
+          format: uuid
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        phone:
+          description: Contact phone for courier (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        recipient_name:
+          description: Recipient
+          maxLength: 120
+          type: string
+        region:
+          description: State / region
+          maxLength: 120
+          type: string
+        shipping_method:
+          description: Shipping method
+          enum:
+          - STANDARD
+          - EXPRESS
+          - COURIER
+          - BRANCH_PICKUP
+          type: string
+        status:
+          description: Order status
+          enum:
+          - PENDING
+          - SENT_TO_BUREAU
+          - IN_PRODUCTION
+          - SHIPPED
+          - DELIVERED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+          type: string
+      type: object
+    CardOrdersCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    CardOrdersReshipRequest:
+      properties:
+        address:
+          additionalProperties: true
+          type: object
+        shipping_method:
+          enum:
+          - STANDARD
+          - EXPRESS
+          - COURIER
+          - BRANCH_PICKUP
+          type: string
+      type: object
+    CardPage:
+      description: One page of Card results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Card'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardPinEvent:
+      description: Immutable log of PIN set, change, reset and verification events (no PIN data)
+      properties:
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        channel:
+          description: APP, ATM, POS, IVR, CONSOLE
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        device_id:
+          description: Customer device
+          format: uuid
+          type:
+          - string
+          - 'null'
+        event_type:
+          description: Event type
+          enum:
+          - SET
+          - CHANGE
+          - RESET
+          - VERIFY_SUCCESS
+          - VERIFY_FAILURE
+          - UNBLOCK
+          - VIEW
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ip_address:
+          description: Client IP (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        success:
+          description: Outcome
+          type: boolean
+      required:
+      - id
+      - created_at
+      - card_id
+      - event_type
+      - success
+      type: object
+    CardPinEventPage:
+      description: One page of CardPinEvent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardPinEvent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardProduct:
+      description: A card product inside a program (design, plastic, validity, PIN and fee settings)
+      properties:
+        atm_enabled:
+          description: ATM withdrawals allowed
+          type: boolean
+        card_bureau_id:
+          description: Default bureau for physical cards
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_design_id:
+          description: Artwork / design reference
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        code:
+          description: Product code
+          maxLength: 32
+          type: string
+        contactless_enabled:
+          description: Contactless allowed
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        ecom_enabled:
+          description: E-commerce allowed
+          type: boolean
+        expiry_years:
+          description: Validity in years
+          format: int32
+          type: integer
+        form_factors:
+          additionalProperties: true
+          description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
+          type: object
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        international_enabled:
+          description: Cross-border allowed
+          type: boolean
+        max_cards_per_customer:
+          description: Active card cap per customer
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        pin_policy:
+          description: PIN requirement
+          enum:
+          - REQUIRED
+          - OPTIONAL
+          - NONE
+          type: string
+        plastic_type:
+          description: PVC, RECYCLED_PVC, METAL
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        product_id:
+          description: Product catalogue entry (pricing, fees)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_program_id
+      - code
+      - name
+      - form_factors
+      - expiry_years
+      - pin_policy
+      - contactless_enabled
+      - atm_enabled
+      - ecom_enabled
+      - international_enabled
+      - max_cards_per_customer
+      - status
+      type: object
+    CardProductCreate:
+      properties:
+        atm_enabled:
+          description: ATM withdrawals allowed
+          type: boolean
+        card_bureau_id:
+          description: Default bureau for physical cards
+          format: uuid
+          type: string
+        card_design_id:
+          description: Artwork / design reference
+          maxLength: 64
+          type: string
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        code:
+          description: Product code
+          maxLength: 32
+          type: string
+        contactless_enabled:
+          description: Contactless allowed
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        ecom_enabled:
+          description: E-commerce allowed
+          type: boolean
+        expiry_years:
+          description: Validity in years
+          format: int32
+          type: integer
+        form_factors:
+          additionalProperties: true
+          description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
+          type: object
+        international_enabled:
+          description: Cross-border allowed
+          type: boolean
+        max_cards_per_customer:
+          description: Active card cap per customer
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        pin_policy:
+          description: PIN requirement
+          enum:
+          - REQUIRED
+          - OPTIONAL
+          - NONE
+          type: string
+        plastic_type:
+          description: PVC, RECYCLED_PVC, METAL
+          maxLength: 32
+          type: string
+        product_id:
+          description: Product catalogue entry (pricing, fees)
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+      required:
+      - card_program_id
+      - code
+      - name
+      - form_factors
+      type: object
+    CardProductPage:
+      description: One page of CardProduct results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardProduct'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardProductUpdate:
+      properties:
+        atm_enabled:
+          description: ATM withdrawals allowed
+          type: boolean
+        card_bureau_id:
+          description: Default bureau for physical cards
+          format: uuid
+          type: string
+        card_design_id:
+          description: Artwork / design reference
+          maxLength: 64
+          type: string
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        code:
+          description: Product code
+          maxLength: 32
+          type: string
+        contactless_enabled:
+          description: Contactless allowed
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        ecom_enabled:
+          description: E-commerce allowed
+          type: boolean
+        expiry_years:
+          description: Validity in years
+          format: int32
+          type: integer
+        form_factors:
+          additionalProperties: true
+          description: Allowed form factors, e.g. [VIRTUAL, PHYSICAL]
+          type: object
+        international_enabled:
+          description: Cross-border allowed
+          type: boolean
+        max_cards_per_customer:
+          description: Active card cap per customer
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        pin_policy:
+          description: PIN requirement
+          enum:
+          - REQUIRED
+          - OPTIONAL
+          - NONE
+          type: string
+        plastic_type:
+          description: PVC, RECYCLED_PVC, METAL
+          maxLength: 32
+          type: string
+        product_id:
+          description: Product catalogue entry (pricing, fees)
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+      type: object
+    CardProgram:
+      description: A card program on a BIN range with a scheme, funding model and sponsor
+      properties:
+        bin:
+          description: Issuer BIN (6 or 8 digits)
+          maxLength: 11
+          type: string
+        bin_range_end:
+          description: Last PAN prefix in the range
+          maxLength: 19
+          type: string
+        bin_range_start:
+          description: First PAN prefix in the range
+          maxLength: 19
+          type: string
+        code:
+          description: Short program code
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        default_controls:
+          additionalProperties: true
+          description: Controls applied to every new card
+          type:
+          - object
+          - 'null'
+        funding_model:
+          description: How authorisations are funded
+          enum:
+          - DEBIT
+          - PREPAID
+          - CREDIT
+          - JIT
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        jit_timeout_ms:
+          description: JIT response budget in milliseconds
+          format: int32
+          type: integer
+        jit_webhook_url:
+          description: JIT funding endpoint of the client
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        launched_at:
+          description: Go-live time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        ledger_account_id:
+          description: Program settlement / funding account
+          format: uuid
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Issuing legal entity
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type:
+          - object
+          - 'null'
+        name:
+          description: Program name
+          maxLength: 120
+          type: string
+        pan_length:
+          description: PAN length
+          format: int32
+          type: integer
+        processor_member_id:
+          description: Scheme member / ICA / BID
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        program_type:
+          description: Program segment
+          enum:
+          - CONSUMER
+          - BUSINESS
+          - CORPORATE
+          - EXPENSE
+          - GIFT
+          - PAYROLL
+          - GOVERNMENT
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scheme:
+          description: Card scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        sponsor_bank:
+          description: Sponsor / BIN sponsor bank
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        stand_in_enabled:
+          description: Approve under stand-in rules when the core is unavailable
+          type: boolean
+        stand_in_max_amount:
+          description: Maximum amount approved in stand-in
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        status:
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - CERTIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - legal_entity_id
+      - scheme
+      - program_type
+      - funding_model
+      - bin
+      - bin_range_start
+      - bin_range_end
+      - pan_length
+      - currency
+      - jit_timeout_ms
+      - stand_in_enabled
+      - status
+      type: object
+    CardProgramCreate:
+      properties:
+        bin:
+          description: Issuer BIN (6 or 8 digits)
+          maxLength: 11
+          type: string
+        bin_range_end:
+          description: Last PAN prefix in the range
+          maxLength: 19
+          type: string
+        bin_range_start:
+          description: First PAN prefix in the range
+          maxLength: 19
+          type: string
+        code:
+          description: Short program code
+          maxLength: 32
+          type: string
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        default_controls:
+          additionalProperties: true
+          description: Controls applied to every new card
+          type: object
+        funding_model:
+          description: How authorisations are funded
+          enum:
+          - DEBIT
+          - PREPAID
+          - CREDIT
+          - JIT
+          type: string
+        jit_timeout_ms:
+          description: JIT response budget in milliseconds
+          format: int32
+          type: integer
+        jit_webhook_url:
+          description: JIT funding endpoint of the client
+          maxLength: 500
+          type: string
+        ledger_account_id:
+          description: Program settlement / funding account
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Issuing legal entity
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        name:
+          description: Program name
+          maxLength: 120
+          type: string
+        pan_length:
+          description: PAN length
+          format: int32
+          type: integer
+        processor_member_id:
+          description: Scheme member / ICA / BID
+          maxLength: 32
+          type: string
+        program_type:
+          description: Program segment
+          enum:
+          - CONSUMER
+          - BUSINESS
+          - CORPORATE
+          - EXPENSE
+          - GIFT
+          - PAYROLL
+          - GOVERNMENT
+          type: string
+        scheme:
+          description: Card scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        sponsor_bank:
+          description: Sponsor / BIN sponsor bank
+          maxLength: 120
+          type: string
+        stand_in_enabled:
+          description: Approve under stand-in rules when the core is unavailable
+          type: boolean
+        stand_in_max_amount:
+          description: Maximum amount approved in stand-in
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - CERTIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          type: string
+      required:
+      - code
+      - name
+      - legal_entity_id
+      - scheme
+      - funding_model
+      - bin
+      - bin_range_start
+      - bin_range_end
+      - currency
+      type: object
+    CardProgramPage:
+      description: One page of CardProgram results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardProgram'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardProgramUpdate:
+      properties:
+        bin:
+          description: Issuer BIN (6 or 8 digits)
+          maxLength: 11
+          type: string
+        bin_range_end:
+          description: Last PAN prefix in the range
+          maxLength: 19
+          type: string
+        bin_range_start:
+          description: First PAN prefix in the range
+          maxLength: 19
+          type: string
+        code:
+          description: Short program code
+          maxLength: 32
+          type: string
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        default_controls:
+          additionalProperties: true
+          description: Controls applied to every new card
+          type: object
+        funding_model:
+          description: How authorisations are funded
+          enum:
+          - DEBIT
+          - PREPAID
+          - CREDIT
+          - JIT
+          type: string
+        jit_timeout_ms:
+          description: JIT response budget in milliseconds
+          format: int32
+          type: integer
+        jit_webhook_url:
+          description: JIT funding endpoint of the client
+          maxLength: 500
+          type: string
+        ledger_account_id:
+          description: Program settlement / funding account
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Issuing legal entity
+          format: uuid
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        name:
+          description: Program name
+          maxLength: 120
+          type: string
+        pan_length:
+          description: PAN length
+          format: int32
+          type: integer
+        processor_member_id:
+          description: Scheme member / ICA / BID
+          maxLength: 32
+          type: string
+        program_type:
+          description: Program segment
+          enum:
+          - CONSUMER
+          - BUSINESS
+          - CORPORATE
+          - EXPENSE
+          - GIFT
+          - PAYROLL
+          - GOVERNMENT
+          type: string
+        scheme:
+          description: Card scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        sponsor_bank:
+          description: Sponsor / BIN sponsor bank
+          maxLength: 120
+          type: string
+        stand_in_enabled:
+          description: Approve under stand-in rules when the core is unavailable
+          type: boolean
+        stand_in_max_amount:
+          description: Maximum amount approved in stand-in
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - DRAFT
+          - CERTIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          type: string
+      type: object
+    CardProgramsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    CardReplacement:
+      description: A request to replace a card (lost, stolen, damaged, expiring)
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fee_charged:
+          description: Whether a replacement fee was charged
+          type: boolean
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        keep_pan:
+          description: Reissue with the same PAN (new expiry)
+          type: boolean
+        new_card_id:
+          description: Replacement card
+          format: uuid
+          type:
+          - string
+          - 'null'
+        old_card_id:
+          description: Card being replaced
+          format: uuid
+          type: string
+        reason:
+          description: Reason
+          enum:
+          - LOST
+          - STOLEN
+          - DAMAGED
+          - EXPIRING
+          - FRAUD
+          - NAME_CHANGE
+          - OTHER
+          type: string
+        requested_by:
+          description: Requester
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - old_card_id
+      - reason
+      - keep_pan
+      - fee_charged
+      type: object
+    CardReplacementPage:
+      description: One page of CardReplacement results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardReplacement'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardSpendLimit:
+      description: Amount and velocity limits per period on a card or program
+      properties:
+        card_id:
+          description: Card (empty = program-wide)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_program_id:
+          description: Program for program-wide limits
+          format: uuid
+          type:
+          - string
+          - 'null'
+        channel:
+          description: Channel
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        max_amount:
+          description: Maximum cumulative amount in the period
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        max_count:
+          description: Maximum number of transactions in the period
+          format: int32
+          type:
+          - integer
+          - 'null'
+        period:
+          description: Limit period
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          type: string
+        period_start:
+          description: Start of the current period
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        used_amount:
+          description: Amount used in the current period
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        used_count:
+          description: Transactions in the current period
+          format: int32
+          readOnly: true
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - period
+      - channel
+      - currency
+      - used_amount
+      - used_count
+      - is_active
+      type: object
+    CardSpendLimitCreate:
+      properties:
+        card_id:
+          description: Card (empty = program-wide)
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program for program-wide limits
+          format: uuid
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        max_amount:
+          description: Maximum cumulative amount in the period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        max_count:
+          description: Maximum number of transactions in the period
+          format: int32
+          type: integer
+        period:
+          description: Limit period
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          type: string
+      required:
+      - period
+      - currency
+      type: object
+    CardSpendLimitPage:
+      description: One page of CardSpendLimit results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardSpendLimit'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardSpendLimitUpdate:
+      properties:
+        card_id:
+          description: Card (empty = program-wide)
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program for program-wide limits
+          format: uuid
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        max_amount:
+          description: Maximum cumulative amount in the period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        max_count:
+          description: Maximum number of transactions in the period
+          format: int32
+          type: integer
+        period:
+          description: Limit period
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          type: string
+      type: object
+    CardStatementCycle:
+      description: Billing cycle of a credit card, linked to the credit line in lending
+      properties:
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        cash_advances:
+          description: Cash advances in the cycle
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        closing_balance:
+          description: Statement balance
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        credit_line_id:
+          description: Credit line
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        cycle_end:
+          description: Cycle end
+          format: date
+          type: string
+        cycle_start:
+          description: Cycle start
+          format: date
+          type: string
+        due_date:
+          description: Payment due date
+          format: date
+          type: string
+        fees:
+          description: Fees in the cycle
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interest:
+          description: Interest charged
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        minimum_due:
+          description: Minimum payment due
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        opening_balance:
+          description: Opening balance
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        payments:
+          description: Payments received
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        purchases:
+          description: Purchases in the cycle
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        statement_document_id:
+          description: Generated statement PDF
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - CLOSED
+          - BILLED
+          - PAID
+          - OVERDUE
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - credit_line_id
+      - cycle_start
+      - cycle_end
+      - due_date
+      - opening_balance
+      - purchases
+      - cash_advances
+      - fees
+      - interest
+      - payments
+      - closing_balance
+      - minimum_due
+      - currency
+      - status
+      type: object
+    CardStatementCyclePage:
+      description: One page of CardStatementCycle results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardStatementCycle'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardStatusHistory:
+      description: Immutable history of card status changes
+      properties:
+        actor_id:
+          description: User, customer or system that made the change
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        channel:
+          description: API, CONSOLE, APP, IVR, SYSTEM
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        from_status:
+          description: Previous status
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        reason:
+          description: Reason
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        to_status:
+          description: New status
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+          type: string
+      required:
+      - id
+      - created_at
+      - card_id
+      - to_status
+      type: object
+    CardStatusHistoryPage:
+      description: One page of CardStatusHistory results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardStatusHistory'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardUpdate:
+      properties:
+        business_customer_id:
+          description: Company for business / corporate cards
+          format: uuid
+          type: string
+        card_product_id:
+          description: Product
+          format: uuid
+          type: string
+        card_program_id:
+          description: Program
+          format: uuid
+          type: string
+        cardholder_name:
+          description: Name as embossed
+          maxLength: 26
+          type: string
+        credit_line_id:
+          description: Linked credit line (credit cards)
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Cardholder customer
+          format: uuid
+          type: string
+        deposit_account_id:
+          description: Linked deposit account (debit cards)
+          format: uuid
+          type: string
+        form_factor:
+          description: Virtual or physical
+          enum:
+          - VIRTUAL
+          - PHYSICAL
+          type: string
+        ledger_account_id:
+          description: Ledger account authorisations hold and post against
+          format: uuid
+          type: string
+        linked_account_type:
+          description: Kind of funding account
+          enum:
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CREDIT_LINE
+          - PREPAID_LEDGER
+          - JIT_PROGRAM
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Client-defined key/value metadata
+          type: object
+        nickname:
+          description: Cardholder nickname
+          maxLength: 64
+          type: string
+        replaces_card_id:
+          description: Card this one replaced
+          format: uuid
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+          type: string
+        status_reason:
+          description: Reason for the current status
+          maxLength: 255
+          type: string
+        wallet_id:
+          description: Linked wallet (prepaid / wallet cards)
+          format: uuid
+          type: string
+      type: object
+    CardsActivateRequest:
+      properties:
+        activation_code:
+          maxLength: 16
+          type: string
+      type: object
+    CardsBlockRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+        status:
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+          type: string
+      required:
+      - status
+      - reason
+      type: object
+    CardsCloseRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    CardsFreezeRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    CardsOrderPhysicalRequest:
+      properties:
+        address:
+          additionalProperties: true
+          type: object
+        shipping_method:
+          enum:
+          - STANDARD
+          - EXPRESS
+          - COURIER
+          - BRANCH_PICKUP
+          type: string
+      required:
+      - address
+      type: object
+    CardsPinRequest:
+      properties:
+        encrypted_pin_block:
+          maxLength: 128
+          type: string
+        key_id:
+          maxLength: 64
+          type: string
+      required:
+      - encrypted_pin_block
+      - key_id
+      type: object
+    CardsPinUnblockRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    CardsReplaceRequest:
+      properties:
+        form_factor:
+          enum:
+          - VIRTUAL
+          - PHYSICAL
+          type: string
+        keep_pan:
+          type: boolean
+        reason:
+          enum:
+          - LOST
+          - STOLEN
+          - DAMAGED
+          - EXPIRING
+          - FRAUD
+          - NAME_CHANGE
+          - OTHER
+          type: string
+      required:
+      - reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
+    vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
+    clearing and settlement, interchange and fees, and scheme disputes.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — card-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/card-programs:
+    get:
+      operationId: cardProgramsList
+      summary: List card programs
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: scheme
+        in: query
+        schema:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+      - name: funding_model
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEBIT
+          - PREPAID
+          - CREDIT
+          - JIT
+      - name: program_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CONSUMER
+          - BUSINESS
+          - CORPORATE
+          - EXPENSE
+          - GIFT
+          - PAYROLL
+          - GOVERNMENT
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - CERTIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgramPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardProgramsCreate
+      summary: Create card program
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProgramCreate'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+      x-crud: true
+      x-crud-create: true
+  /v1/card-programs/{id}:
+    get:
+      operationId: cardProgramsGet
+      summary: Retrieve card program
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardProgramsUpdate
+      summary: Update card program
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProgramUpdate'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+      x-crud: true
+      x-crud-update: true
+  /v1/card-programs/{id}/activate:
+    post:
+      operationId: cardProgramsActivate
+      summary: Activate a certified program
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+  /v1/card-programs/{id}/suspend:
+    post:
+      operationId: cardProgramsSuspend
+      summary: Suspend all authorisations on a program
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProgramsSuspendRequest'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+  /v1/card-programs/{id}/cards:
+    get:
+      operationId: cardProgramsCards
+      summary: Cards issued on the program
+      tags:
+      - Card Programs
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-01
+      x-service: card-service
+      x-table: card_program
+  /v1/card-products:
+    get:
+      operationId: cardProductsList
+      summary: List card products
+      tags:
+      - Card Products
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProductPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-01
+      - CRD-02
+      x-service: card-service
+      x-table: card_product
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardProductsCreate
+      summary: Create card product
+      tags:
+      - Card Products
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProductCreate'
+      x-requirements:
+      - CRD-01
+      - CRD-02
+      x-service: card-service
+      x-table: card_product
+      x-crud: true
+      x-crud-create: true
+  /v1/card-products/{id}:
+    get:
+      operationId: cardProductsGet
+      summary: Retrieve card product
+      tags:
+      - Card Products
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-01
+      - CRD-02
+      x-service: card-service
+      x-table: card_product
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardProductsUpdate
+      summary: Update card product
+      tags:
+      - Card Products
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardProduct'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardProductUpdate'
+      x-requirements:
+      - CRD-01
+      - CRD-02
+      x-service: card-service
+      x-table: card_product
+      x-crud: true
+      x-crud-update: true
+  /v1/card-bureaus:
+    get:
+      operationId: cardBureausList
+      summary: List card bureaus
+      tags:
+      - Card Bureaus
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardBureauPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_bureau
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardBureausCreate
+      summary: Create card bureau
+      tags:
+      - Card Bureaus
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardBureau'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardBureauCreate'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_bureau
+      x-crud: true
+      x-crud-create: true
+  /v1/card-bureaus/{id}:
+    get:
+      operationId: cardBureausGet
+      summary: Retrieve card bureau
+      tags:
+      - Card Bureaus
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardBureau'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_bureau
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardBureausUpdate
+      summary: Update card bureau
+      tags:
+      - Card Bureaus
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardBureau'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardBureauUpdate'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_bureau
+      x-crud: true
+      x-crud-update: true
+  /v1/cards:
+    get:
+      operationId: cardsList
+      summary: List cards
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_product_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - CREATED
+          - ACTIVE
+          - FROZEN
+          - BLOCKED
+          - LOST
+          - STOLEN
+          - EXPIRED
+          - CLOSED
+          - REPLACED
+      - name: form_factor
+        in: query
+        schema:
+          type: string
+          enum:
+          - VIRTUAL
+          - PHYSICAL
+      - name: last4
+        in: query
+        schema:
+          type: string
+          maxLength: 4
+      - name: ledger_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: linked_account_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CREDIT_LINE
+          - PREPAID_LEDGER
+          - JIT_PROGRAM
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardsCreate
+      summary: Create card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardCreate'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+      x-crud: true
+      x-crud-create: true
+  /v1/cards/{id}:
+    get:
+      operationId: cardsGet
+      summary: Retrieve card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardsUpdate
+      summary: Update card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardUpdate'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+      x-crud: true
+      x-crud-update: true
+  /v1/cards/{id}/activate:
+    post:
+      operationId: cardsActivate
+      summary: Activate a card (physical cards may require last4 / activation code)
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsActivateRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/freeze:
+    post:
+      operationId: cardsFreeze
+      summary: Temporarily freeze the card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsFreezeRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/unfreeze:
+    post:
+      operationId: cardsUnfreeze
+      summary: Unfreeze the card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/block:
+    post:
+      operationId: cardsBlock
+      summary: Permanently block (lost, stolen, fraud)
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsBlockRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/close:
+    post:
+      operationId: cardsClose
+      summary: Close the card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsCloseRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/replace:
+    post:
+      operationId: cardsReplace
+      summary: Replace a card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardReplacement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsReplaceRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/renew:
+    post:
+      operationId: cardsRenew
+      summary: Renew an expiring card with a new expiry date
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/order-physical:
+    post:
+      operationId: cardsOrderPhysical
+      summary: Order a physical card for a virtual card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsOrderPhysicalRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/pin:
+    post:
+      operationId: cardsPin
+      summary: Set or change the PIN (PIN block encrypted under the session key)
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsPinRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/pin/unblock:
+    post:
+      operationId: cardsPinUnblock
+      summary: Reset PIN try counter
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardsPinUnblockRequest'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/status-history:
+    get:
+      operationId: cardsStatusHistory
+      summary: Status history
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardStatusHistoryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/pin-events:
+    get:
+      operationId: cardsPinEvents
+      summary: PIN event log
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardPinEventPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/authorizations:
+    get:
+      operationId: cardsAuthorizations
+      summary: Authorisations on the card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardAuthorizationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/controls:
+    get:
+      operationId: cardsControls
+      summary: Controls on the card
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardControlPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/cards/{id}/limits:
+    get:
+      operationId: cardsLimits
+      summary: Spend limits and usage
+      tags:
+      - Cards
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSpendLimitPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      - CRD-07
+      x-service: card-service
+      x-table: card
+  /v1/card-orders:
+    get:
+      operationId: cardOrdersList
+      summary: List card orders
+      tags:
+      - Card Orders
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_bureau_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - SENT_TO_BUREAU
+          - IN_PRODUCTION
+          - SHIPPED
+          - DELIVERED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrderPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_order
+      x-crud: true
+      x-crud-list: true
+  /v1/card-orders/{id}:
+    get:
+      operationId: cardOrdersGet
+      summary: Retrieve card order
+      tags:
+      - Card Orders
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_order
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardOrdersUpdate
+      summary: Update card order
+      tags:
+      - Card Orders
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardOrderUpdate'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_order
+      x-crud: true
+      x-crud-update: true
+  /v1/card-orders/{id}/cancel:
+    post:
+      operationId: cardOrdersCancel
+      summary: Cancel an order not yet sent to the bureau
+      tags:
+      - Card Orders
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardOrdersCancelRequest'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_order
+  /v1/card-orders/{id}/reship:
+    post:
+      operationId: cardOrdersReship
+      summary: Reship a returned card
+      tags:
+      - Card Orders
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardOrdersReshipRequest'
+      x-requirements:
+      - CRD-02
+      x-service: card-service
+      x-table: card_order
+  /v1/card-controls:
+    get:
+      operationId: cardControlsList
+      summary: List card controls
+      tags:
+      - Card Controls
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: control_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - MCC_ALLOW
+          - MCC_DENY
+          - MERCHANT_ALLOW
+          - MERCHANT_DENY
+          - COUNTRY_ALLOW
+          - COUNTRY_DENY
+          - CHANNEL_ALLOW
+          - CHANNEL_DENY
+          - AMOUNT_MAX
+          - TIME_WINDOW
+          - CURRENCY_ALLOW
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardControlPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-04
+      x-service: card-service
+      x-table: card_control
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardControlsCreate
+      summary: Create card control
+      tags:
+      - Card Controls
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardControl'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardControlCreate'
+      x-requirements:
+      - CRD-04
+      x-service: card-service
+      x-table: card_control
+      x-crud: true
+      x-crud-create: true
+  /v1/card-controls/{id}:
+    get:
+      operationId: cardControlsGet
+      summary: Retrieve card control
+      tags:
+      - Card Controls
+      security:
+      - oauth2:
+        - cards:read
+      parameters: &id011
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardControl'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-04
+      x-service: card-service
+      x-table: card_control
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardControlsUpdate
+      summary: Update card control
+      tags:
+      - Card Controls
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardControl'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardControlUpdate'
+      x-requirements:
+      - CRD-04
+      x-service: card-service
+      x-table: card_control
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: cardControlsDelete
+      summary: Delete card control
+      tags:
+      - Card Controls
+      security:
+      - oauth2:
+        - cards:write
+      parameters: *id011
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-04
+      x-service: card-service
+      x-table: card_control
+      x-crud: true
+      x-crud-delete: true
+  /v1/card-spend-limits:
+    get:
+      operationId: cardSpendLimitsList
+      summary: List card spend limits
+      tags:
+      - Card Spend Limits
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: period
+        in: query
+        schema:
+          type: string
+          enum:
+          - PER_TRANSACTION
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - ECOM
+          - POS
+          - ATM
+          - CONTACTLESS
+          - MOTO
+          - RECURRING
+          - ANY
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSpendLimitPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-04
+      - LIM-01
+      x-service: card-service
+      x-table: card_spend_limit
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardSpendLimitsCreate
+      summary: Create card spend limit
+      tags:
+      - Card Spend Limits
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSpendLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardSpendLimitCreate'
+      x-requirements:
+      - CRD-04
+      - LIM-01
+      x-service: card-service
+      x-table: card_spend_limit
+      x-crud: true
+      x-crud-create: true
+  /v1/card-spend-limits/{id}:
+    get:
+      operationId: cardSpendLimitsGet
+      summary: Retrieve card spend limit
+      tags:
+      - Card Spend Limits
+      security:
+      - oauth2:
+        - cards:read
+      parameters: &id013
+      - &id012
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSpendLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-04
+      - LIM-01
+      x-service: card-service
+      x-table: card_spend_limit
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cardSpendLimitsUpdate
+      summary: Update card spend limit
+      tags:
+      - Card Spend Limits
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - *id012
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSpendLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardSpendLimitUpdate'
+      x-requirements:
+      - CRD-04
+      - LIM-01
+      x-service: card-service
+      x-table: card_spend_limit
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: cardSpendLimitsDelete
+      summary: Delete card spend limit
+      tags:
+      - Card Spend Limits
+      security:
+      - oauth2:
+        - cards:write
+      parameters: *id013
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-04
+      - LIM-01
+      x-service: card-service
+      x-table: card_spend_limit
+      x-crud: true
+      x-crud-delete: true
+  /v1/card-replacements:
+    get:
+      operationId: cardReplacementsList
+      summary: List card replacements
+      tags:
+      - Card Replacements
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: old_card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: new_card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reason
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOST
+          - STOLEN
+          - DAMAGED
+          - EXPIRING
+          - FRAUD
+          - NAME_CHANGE
+          - OTHER
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardReplacementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-07
+      x-service: card-service
+      x-table: card_replacement
+      x-crud: true
+      x-crud-list: true
+  /v1/card-replacements/{id}:
+    get:
+      operationId: cardReplacementsGet
+      summary: Retrieve card replacement
+      tags:
+      - Card Replacements
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardReplacement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-07
+      x-service: card-service
+      x-table: card_replacement
+      x-crud: true
+      x-crud-get: true
+  /v1/card-statement-cycles:
+    get:
+      operationId: cardStatementCyclesList
+      summary: List card statement cycles
+      tags:
+      - Card Statement Cycles
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: credit_line_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - CLOSED
+          - BILLED
+          - PAID
+          - OVERDUE
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardStatementCyclePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-01
+      - LND-03
+      x-service: card-service
+      x-table: card_statement_cycle
+      x-crud: true
+      x-crud-list: true
+  /v1/card-statement-cycles/{id}:
+    get:
+      operationId: cardStatementCyclesGet
+      summary: Retrieve card statement cycle
+      tags:
+      - Card Statement Cycles
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardStatementCycle'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-01
+      - LND-03
+      x-service: card-service
+      x-table: card_statement_cycle
+      x-crud: true
+      x-crud-get: true
+  /v1/card-statement-cycles/{id}/close:
+    post:
+      operationId: cardStatementCyclesClose
+      summary: Close the cycle and produce the statement
+      tags:
+      - Card Statement Cycles
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardStatementCycle'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-01
+      - LND-03
+      x-service: card-service
+      x-table: card_statement_cycle
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A card program on a BIN range with a scheme, funding model and sponsor
+  name: Card Programs
+- description: A card product inside a program (design, plastic, validity, PIN and fee settings)
+  name: Card Products
+- description: Card manufacturing / personalisation bureau configuration
+  name: Card Bureaus
+- description: Issue and manage cards. Sensitive card data is shown only through the vault reveal endpoint.
+  name: Cards
+- description: A physical card production and shipping order
+  name: Card Orders
+- description: A spending control on a card or on all cards of a program
+  name: Card Controls
+- description: Amount and velocity limits per period on a card or program
+  name: Card Spend Limits
+- description: A request to replace a card (lost, stolen, damaged, expiring)
+  name: Card Replacements
+- description: Billing cycle of a credit card, linked to the credit line in lending
+  name: Card Statement Cycles

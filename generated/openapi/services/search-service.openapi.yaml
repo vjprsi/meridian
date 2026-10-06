@@ -1,0 +1,2102 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    SavedSearch:
+      description: A saved search query of a staff user, optionally shared with a role
+      properties:
+        app_user_id:
+          description: Owner
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        entity_types:
+          additionalProperties: true
+          description: Entity types searched
+          type: object
+        filters:
+          additionalProperties: true
+          description: Structured filters
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_pinned:
+          description: Pinned in the console
+          type: boolean
+        last_used_at:
+          description: Last use
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        query_text:
+          description: Free text
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        shared_with_role_id:
+          description: Role it is shared with
+          format: uuid
+          type:
+          - string
+          - 'null'
+        sort:
+          additionalProperties: true
+          description: Sort order
+          type:
+          - object
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - app_user_id
+      - name
+      - entity_types
+      - is_pinned
+      type: object
+    SavedSearchCreate:
+      properties:
+        app_user_id:
+          description: Owner
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        entity_types:
+          additionalProperties: true
+          description: Entity types searched
+          type: object
+        filters:
+          additionalProperties: true
+          description: Structured filters
+          type: object
+        is_pinned:
+          description: Pinned in the console
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        query_text:
+          description: Free text
+          maxLength: 500
+          type: string
+        shared_with_role_id:
+          description: Role it is shared with
+          format: uuid
+          type: string
+        sort:
+          additionalProperties: true
+          description: Sort order
+          type: object
+      required:
+      - app_user_id
+      - name
+      - entity_types
+      type: object
+    SavedSearchPage:
+      description: One page of SavedSearch results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SavedSearch'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SavedSearchUpdate:
+      properties:
+        app_user_id:
+          description: Owner
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        entity_types:
+          additionalProperties: true
+          description: Entity types searched
+          type: object
+        filters:
+          additionalProperties: true
+          description: Structured filters
+          type: object
+        is_pinned:
+          description: Pinned in the console
+          type: boolean
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        query_text:
+          description: Free text
+          maxLength: 500
+          type: string
+        shared_with_role_id:
+          description: Role it is shared with
+          format: uuid
+          type: string
+        sort:
+          additionalProperties: true
+          description: Sort order
+          type: object
+      type: object
+    SavedSearchesRunRequest:
+      properties:
+        cursor:
+          maxLength: 255
+          type: string
+        limit:
+          format: int32
+          type: integer
+      type: object
+    SearchIndex:
+      description: Definition of a searchable index for one entity type
+      properties:
+        alias_name:
+          description: Read alias used by queries
+          maxLength: 128
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_count:
+          description: Documents indexed
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        entity_type:
+          description: Entity indexed
+          enum:
+          - CUSTOMER
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CARD
+          - LOAN
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - SERVICE_CASE
+          - AML_CASE
+          - MERCHANT
+          - AGENT
+          - DOCUMENT
+          - LEDGER_ACCOUNT
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        lag_seconds:
+          description: Event-to-index lag
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        last_indexed_at:
+          description: Last document indexed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        mapping:
+          additionalProperties: true
+          description: OpenSearch mapping and analysers
+          type: object
+        mapping_version:
+          description: Version of the field mapping
+          format: int32
+          type: integer
+        masked_fields:
+          additionalProperties: true
+          description: Fields masked unless the caller holds a PII permission
+          type:
+          - object
+          - 'null'
+        physical_index:
+          description: Current physical index behind the alias
+          maxLength: 160
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        searchable_fields:
+          additionalProperties: true
+          description: Fields matched by free-text search with boosts
+          type: object
+        source_topics:
+          additionalProperties: true
+          description: Event topics feeding the index
+          type: object
+        status:
+          description: Status
+          enum:
+          - BUILDING
+          - ACTIVE
+          - REINDEXING
+          - DEGRADED
+          - RETIRED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - entity_type
+      - alias_name
+      - physical_index
+      - mapping_version
+      - mapping
+      - source_topics
+      - searchable_fields
+      - status
+      type: object
+    SearchIndexCreate:
+      properties:
+        alias_name:
+          description: Read alias used by queries
+          maxLength: 128
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        entity_type:
+          description: Entity indexed
+          enum:
+          - CUSTOMER
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CARD
+          - LOAN
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - SERVICE_CASE
+          - AML_CASE
+          - MERCHANT
+          - AGENT
+          - DOCUMENT
+          - LEDGER_ACCOUNT
+          type: string
+        mapping:
+          additionalProperties: true
+          description: OpenSearch mapping and analysers
+          type: object
+        mapping_version:
+          description: Version of the field mapping
+          format: int32
+          type: integer
+        masked_fields:
+          additionalProperties: true
+          description: Fields masked unless the caller holds a PII permission
+          type: object
+        searchable_fields:
+          additionalProperties: true
+          description: Fields matched by free-text search with boosts
+          type: object
+        source_topics:
+          additionalProperties: true
+          description: Event topics feeding the index
+          type: object
+      required:
+      - entity_type
+      - alias_name
+      - mapping
+      - source_topics
+      - searchable_fields
+      type: object
+    SearchIndexJob:
+      description: A reindex, incremental catch-up or alias swap job
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        documents_failed:
+          description: Documents failed
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        documents_processed:
+          description: Documents processed
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        from_timestamp:
+          description: Start of the range for incremental jobs
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        job_type:
+          description: Job type
+          enum:
+          - FULL_REINDEX
+          - INCREMENTAL
+          - ALIAS_SWAP
+          - DELETE_BY_QUERY
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        search_index_id:
+          description: Index
+          format: uuid
+          type: string
+        started_at:
+          description: Start
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        target_index:
+          description: Physical index being built
+          maxLength: 160
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - search_index_id
+      - job_type
+      - status
+      type: object
+    SearchIndexJobPage:
+      description: One page of SearchIndexJob results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SearchIndexJob'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SearchIndexPage:
+      description: One page of SearchIndex results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SearchIndex'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SearchIndexUpdate:
+      properties:
+        alias_name:
+          description: Read alias used by queries
+          maxLength: 128
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        entity_type:
+          description: Entity indexed
+          enum:
+          - CUSTOMER
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CARD
+          - LOAN
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - SERVICE_CASE
+          - AML_CASE
+          - MERCHANT
+          - AGENT
+          - DOCUMENT
+          - LEDGER_ACCOUNT
+          type: string
+        mapping:
+          additionalProperties: true
+          description: OpenSearch mapping and analysers
+          type: object
+        mapping_version:
+          description: Version of the field mapping
+          format: int32
+          type: integer
+        masked_fields:
+          additionalProperties: true
+          description: Fields masked unless the caller holds a PII permission
+          type: object
+        searchable_fields:
+          additionalProperties: true
+          description: Fields matched by free-text search with boosts
+          type: object
+        source_topics:
+          additionalProperties: true
+          description: Event topics feeding the index
+          type: object
+      type: object
+    SearchIndexesCatchUpRequest:
+      properties:
+        from_timestamp:
+          format: date-time
+          type: string
+      required:
+      - from_timestamp
+      type: object
+    SearchQueryRequest:
+      properties:
+        cursor:
+          maxLength: 255
+          type: string
+        entity_types:
+          additionalProperties: true
+          type: object
+        filters:
+          additionalProperties: true
+          type: object
+        limit:
+          format: int32
+          type: integer
+        query_text:
+          maxLength: 500
+          type: string
+      type: object
+    SearchSynonym:
+      description: Synonym set applied to search analysers (e.g. abbreviations, transliterations)
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        language_code:
+          description: Language
+          maxLength: 8
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        search_index_id:
+          description: Index (empty = all)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        terms:
+          additionalProperties: true
+          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
+          type: object
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - terms
+      - is_active
+      type: object
+    SearchSynonymCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        language_code:
+          description: Language
+          maxLength: 8
+          type: string
+        search_index_id:
+          description: Index (empty = all)
+          format: uuid
+          type: string
+        terms:
+          additionalProperties: true
+          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
+          type: object
+      required:
+      - terms
+      type: object
+    SearchSynonymPage:
+      description: One page of SearchSynonym results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SearchSynonym'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SearchSynonymUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        language_code:
+          description: Language
+          maxLength: 8
+          type: string
+        search_index_id:
+          description: Index (empty = all)
+          format: uuid
+          type: string
+        terms:
+          additionalProperties: true
+          description: Equivalent terms, e.g. [mohammed, muhammad, mohamed]
+          type: object
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            operations:read: 'Read Operations: Batch, Files, Search and Archive'
+            operations:write: 'Change Operations: Batch, Files, Search and Archive'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Business-day processing and EOD/EOM/EOY batch orchestration, secure file exchange with partners, enterprise
+    search across all entities, and data retention, archival, legal hold and certified purge.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — search-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/search/query:
+    post:
+      operationId: searchQuery
+      summary: Search across entity types (free text + filters, paged)
+      tags:
+      - Search
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchQueryRequest'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+  /v1/search/suggest:
+    get:
+      operationId: searchSuggest
+      summary: Type-ahead suggestions (?q=&entity_type=)
+      tags:
+      - Search
+      security:
+      - oauth2:
+        - operations:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+  /v1/search/indexes:
+    get:
+      operationId: searchIndexesList
+      summary: List search indexes
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: entity_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - DEPOSIT_ACCOUNT
+          - WALLET
+          - CARD
+          - LOAN
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - SERVICE_CASE
+          - AML_CASE
+          - MERCHANT
+          - AGENT
+          - DOCUMENT
+          - LEDGER_ACCOUNT
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - BUILDING
+          - ACTIVE
+          - REINDEXING
+          - DEGRADED
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndexPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: searchIndexesCreate
+      summary: Create search indexe
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndex'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchIndexCreate'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+      x-crud: true
+      x-crud-create: true
+  /v1/search/indexes/{id}:
+    get:
+      operationId: searchIndexesGet
+      summary: Retrieve search indexe
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndex'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: searchIndexesUpdate
+      summary: Update search indexe
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndex'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchIndexUpdate'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+      x-crud: true
+      x-crud-update: true
+  /v1/search/indexes/{id}/reindex:
+    post:
+      operationId: searchIndexesReindex
+      summary: Start a full zero-downtime reindex
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndexJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+  /v1/search/indexes/{id}/catch-up:
+    post:
+      operationId: searchIndexesCatchUp
+      summary: Re-apply events from a timestamp
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndexJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchIndexesCatchUpRequest'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+  /v1/search/indexes/{id}/stats:
+    get:
+      operationId: searchIndexesStats
+      summary: Document count, lag and health
+      tags:
+      - Search Indexes
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndex'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index
+  /v1/search/jobs:
+    get:
+      operationId: searchIndexJobsList
+      summary: List search index jobs
+      tags:
+      - Search Index Jobs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: search_index_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: job_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - FULL_REINDEX
+          - INCREMENTAL
+          - ALIAS_SWAP
+          - DELETE_BY_QUERY
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndexJobPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index_job
+      x-crud: true
+      x-crud-list: true
+  /v1/search/jobs/{id}:
+    get:
+      operationId: searchIndexJobsGet
+      summary: Retrieve search index job
+      tags:
+      - Search Index Jobs
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndexJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index_job
+      x-crud: true
+      x-crud-get: true
+  /v1/search/jobs/{id}/cancel:
+    post:
+      operationId: searchIndexJobsCancel
+      summary: Cancel a running job
+      tags:
+      - Search Index Jobs
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchIndexJob'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_index_job
+  /v1/search/synonyms:
+    get:
+      operationId: searchSynonymsList
+      summary: List search synonyms
+      tags:
+      - Search Synonyms
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: search_index_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: language_code
+        in: query
+        schema:
+          type: string
+          maxLength: 8
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchSynonymPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_synonym
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: searchSynonymsCreate
+      summary: Create search synonym
+      tags:
+      - Search Synonyms
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchSynonym'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchSynonymCreate'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_synonym
+      x-crud: true
+      x-crud-create: true
+  /v1/search/synonyms/{id}:
+    get:
+      operationId: searchSynonymsGet
+      summary: Retrieve search synonym
+      tags:
+      - Search Synonyms
+      security:
+      - oauth2:
+        - operations:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchSynonym'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_synonym
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: searchSynonymsUpdate
+      summary: Update search synonym
+      tags:
+      - Search Synonyms
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchSynonym'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchSynonymUpdate'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_synonym
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: searchSynonymsDelete
+      summary: Delete search synonym
+      tags:
+      - Search Synonyms
+      security:
+      - oauth2:
+        - operations:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: search_synonym
+      x-crud: true
+      x-crud-delete: true
+  /v1/search/saved:
+    get:
+      operationId: savedSearchesList
+      summary: List saved searches
+      tags:
+      - Saved Searches
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: app_user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: shared_with_role_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_pinned
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: saved_search
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: savedSearchesCreate
+      summary: Create saved searche
+      tags:
+      - Saved Searches
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedSearchCreate'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: saved_search
+      x-crud: true
+      x-crud-create: true
+  /v1/search/saved/{id}:
+    get:
+      operationId: savedSearchesGet
+      summary: Retrieve saved searche
+      tags:
+      - Saved Searches
+      security:
+      - oauth2:
+        - operations:read
+      parameters: &id009
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: saved_search
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: savedSearchesUpdate
+      summary: Update saved searche
+      tags:
+      - Saved Searches
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedSearch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedSearchUpdate'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: saved_search
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: savedSearchesDelete
+      summary: Delete saved searche
+      tags:
+      - Saved Searches
+      security:
+      - oauth2:
+        - operations:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: saved_search
+      x-crud: true
+      x-crud-delete: true
+  /v1/search/saved/{id}/run:
+    post:
+      operationId: savedSearchesRun
+      summary: Execute a saved search
+      tags:
+      - Saved Searches
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedSearchesRunRequest'
+      x-requirements:
+      - OPS-03
+      x-service: search-service
+      x-table: saved_search
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Federated search across entity types with masking by caller permissions
+  name: Search
+- description: Definition of a searchable index for one entity type
+  name: Search Indexes
+- description: A reindex, incremental catch-up or alias swap job
+  name: Search Index Jobs
+- description: Synonym set applied to search analysers (e.g. abbreviations, transliterations)
+  name: Search Synonyms
+- description: A saved search query of a staff user, optionally shared with a role
+  name: Saved Searches

@@ -1,0 +1,5435 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    ApprovalRequest:
+      description: A pending sensitive operation awaiting checker approval (four-eyes)
+      properties:
+        action:
+          description: Action
+          maxLength: 40
+          type: string
+        amount:
+          description: Amount, for threshold routing
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        approval_policy_id:
+          description: Policy applied
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approvals_received:
+          description: Approvals received
+          format: int32
+          readOnly: true
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency of the amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        current_level:
+          description: Current approval level
+          format: int32
+          readOnly: true
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decided_at:
+          description: Final decision time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        diff:
+          additionalProperties: true
+          description: Before/after diff for updates
+          type:
+          - object
+          - 'null'
+        executed_at:
+          description: Execution time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        execution_result:
+          additionalProperties: true
+          description: Result or error from executing the operation
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        maker:
+          description: Requesting user
+          maxLength: 64
+          readOnly: true
+          type: string
+        payload:
+          additionalProperties: true
+          description: Operation to execute once approved
+          type: object
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        required_approvals:
+          description: Approvals required
+          format: int32
+          readOnly: true
+          type: integer
+        resource_id:
+          description: Resource id (empty for creates)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        resource_type:
+          description: Resource type
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - EXPIRED
+          - EXECUTED
+          - EXECUTION_FAILED
+          readOnly: true
+          type: string
+        summary:
+          description: Human-readable description of the change
+          type:
+          - string
+          - 'null'
+        title:
+          description: Short title shown in the approvals queue
+          maxLength: 255
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - action
+      - title
+      - payload
+      - priority
+      - status
+      - maker
+      - required_approvals
+      - approvals_received
+      - current_level
+      type: object
+    Branch:
+      description: A branch, service centre or virtual unit of a legal entity
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        address_line2:
+          description: Address line 2
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        branch_type:
+          description: Kind of unit
+          enum:
+          - HEAD_OFFICE
+          - BRANCH
+          - SERVICE_CENTER
+          - VIRTUAL
+          - AGENT_HUB
+          - BACK_OFFICE
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        closed_on:
+          description: Closing date
+          format: date
+          type:
+          - string
+          - 'null'
+        code:
+          description: Branch code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        email:
+          description: Branch email
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        holiday_calendar_id:
+          description: Holiday calendar
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        latitude:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Owning legal entity
+          format: uuid
+          type: string
+        longitude:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        manager_user_id:
+          description: Branch manager
+          format: uuid
+          type:
+          - string
+          - 'null'
+        name:
+          description: Branch name
+          maxLength: 160
+          type: string
+        opened_on:
+          description: Opening date
+          format: date
+          type:
+          - string
+          - 'null'
+        opening_hours:
+          additionalProperties: true
+          description: Opening hours by weekday
+          type:
+          - object
+          - 'null'
+        parent_id:
+          description: Parent unit (region, head office)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        phone:
+          description: Branch phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        region:
+          description: State / province
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        routing_code:
+          description: Sort code / routing / IFSC code
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - TEMPORARILY_CLOSED
+          - CLOSED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - legal_entity_id
+      - code
+      - name
+      - branch_type
+      - country
+      - status
+      type: object
+    BranchCreate:
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 255
+          type: string
+        address_line2:
+          description: Address line 2
+          maxLength: 255
+          type: string
+        branch_type:
+          description: Kind of unit
+          enum:
+          - HEAD_OFFICE
+          - BRANCH
+          - SERVICE_CENTER
+          - VIRTUAL
+          - AGENT_HUB
+          - BACK_OFFICE
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type: string
+        closed_on:
+          description: Closing date
+          format: date
+          type: string
+        code:
+          description: Branch code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        email:
+          description: Branch email
+          format: email
+          maxLength: 320
+          type: string
+        holiday_calendar_id:
+          description: Holiday calendar
+          format: uuid
+          type: string
+        latitude:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        legal_entity_id:
+          description: Owning legal entity
+          format: uuid
+          type: string
+        longitude:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        manager_user_id:
+          description: Branch manager
+          format: uuid
+          type: string
+        name:
+          description: Branch name
+          maxLength: 160
+          type: string
+        opened_on:
+          description: Opening date
+          format: date
+          type: string
+        opening_hours:
+          additionalProperties: true
+          description: Opening hours by weekday
+          type: object
+        parent_id:
+          description: Parent unit (region, head office)
+          format: uuid
+          type: string
+        phone:
+          description: Branch phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        region:
+          description: State / province
+          maxLength: 120
+          type: string
+        routing_code:
+          description: Sort code / routing / IFSC code
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - TEMPORARILY_CLOSED
+          - CLOSED
+          type: string
+      required:
+      - legal_entity_id
+      - code
+      - name
+      - country
+      type: object
+    BranchPage:
+      description: One page of Branch results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Branch'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BranchUpdate:
+      properties:
+        address_line1:
+          description: Address line 1
+          maxLength: 255
+          type: string
+        address_line2:
+          description: Address line 2
+          maxLength: 255
+          type: string
+        branch_type:
+          description: Kind of unit
+          enum:
+          - HEAD_OFFICE
+          - BRANCH
+          - SERVICE_CENTER
+          - VIRTUAL
+          - AGENT_HUB
+          - BACK_OFFICE
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type: string
+        closed_on:
+          description: Closing date
+          format: date
+          type: string
+        code:
+          description: Branch code
+          maxLength: 32
+          type: string
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        email:
+          description: Branch email
+          format: email
+          maxLength: 320
+          type: string
+        holiday_calendar_id:
+          description: Holiday calendar
+          format: uuid
+          type: string
+        latitude:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        legal_entity_id:
+          description: Owning legal entity
+          format: uuid
+          type: string
+        longitude:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        manager_user_id:
+          description: Branch manager
+          format: uuid
+          type: string
+        name:
+          description: Branch name
+          maxLength: 160
+          type: string
+        opened_on:
+          description: Opening date
+          format: date
+          type: string
+        opening_hours:
+          additionalProperties: true
+          description: Opening hours by weekday
+          type: object
+        parent_id:
+          description: Parent unit (region, head office)
+          format: uuid
+          type: string
+        phone:
+          description: Branch phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        region:
+          description: State / province
+          maxLength: 120
+          type: string
+        routing_code:
+          description: Sort code / routing / IFSC code
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - TEMPORARILY_CLOSED
+          - CLOSED
+          type: string
+      type: object
+    BranchesCloseRequest:
+      properties:
+        closed_on:
+          format: date
+          type: string
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - closed_on
+      - reason
+      type: object
+    Cell:
+      description: A deployment cell (full stack slice) in one region that hosts a set of tenants
+      properties:
+        capacity_tenants:
+          description: Maximum tenants for a shared cell
+          format: int32
+          type: integer
+        cloud_provider:
+          description: Cloud or on-premises
+          enum:
+          - AWS
+          - GCP
+          - AZURE
+          - ON_PREMISES
+          type: string
+        code:
+          description: Cell code, e.g. aws-euw1-c03
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_dedicated:
+          description: Dedicated to a single tenant
+          type: boolean
+        kafka_cluster:
+          description: Event backbone cluster
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        kubernetes_cluster:
+          description: Cluster identifier
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        ledger_db_cluster:
+          description: Ledger database cluster
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        metadata:
+          additionalProperties: true
+          description: Operational metadata
+          type:
+          - object
+          - 'null'
+        region:
+          description: Cloud region
+          maxLength: 32
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        standby_region:
+          description: Paired region for failover
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        status:
+          description: Lifecycle status
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - DRAINING
+          - READ_ONLY
+          - DECOMMISSIONED
+          type: string
+        tenant_count:
+          description: Tenants currently placed
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - region
+      - cloud_provider
+      - status
+      - is_dedicated
+      - capacity_tenants
+      - tenant_count
+      type: object
+    CellCreate:
+      properties:
+        capacity_tenants:
+          description: Maximum tenants for a shared cell
+          format: int32
+          type: integer
+        cloud_provider:
+          description: Cloud or on-premises
+          enum:
+          - AWS
+          - GCP
+          - AZURE
+          - ON_PREMISES
+          type: string
+        code:
+          description: Cell code, e.g. aws-euw1-c03
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_dedicated:
+          description: Dedicated to a single tenant
+          type: boolean
+        kafka_cluster:
+          description: Event backbone cluster
+          maxLength: 128
+          type: string
+        kubernetes_cluster:
+          description: Cluster identifier
+          maxLength: 128
+          type: string
+        ledger_db_cluster:
+          description: Ledger database cluster
+          maxLength: 128
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Operational metadata
+          type: object
+        region:
+          description: Cloud region
+          maxLength: 32
+          type: string
+        standby_region:
+          description: Paired region for failover
+          maxLength: 32
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - DRAINING
+          - READ_ONLY
+          - DECOMMISSIONED
+          type: string
+      required:
+      - code
+      - region
+      - cloud_provider
+      type: object
+    CellPage:
+      description: One page of Cell results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Cell'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CellUpdate:
+      properties:
+        capacity_tenants:
+          description: Maximum tenants for a shared cell
+          format: int32
+          type: integer
+        cloud_provider:
+          description: Cloud or on-premises
+          enum:
+          - AWS
+          - GCP
+          - AZURE
+          - ON_PREMISES
+          type: string
+        code:
+          description: Cell code, e.g. aws-euw1-c03
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_dedicated:
+          description: Dedicated to a single tenant
+          type: boolean
+        kafka_cluster:
+          description: Event backbone cluster
+          maxLength: 128
+          type: string
+        kubernetes_cluster:
+          description: Cluster identifier
+          maxLength: 128
+          type: string
+        ledger_db_cluster:
+          description: Ledger database cluster
+          maxLength: 128
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Operational metadata
+          type: object
+        region:
+          description: Cloud region
+          maxLength: 32
+          type: string
+        standby_region:
+          description: Paired region for failover
+          maxLength: 32
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - DRAINING
+          - READ_ONLY
+          - DECOMMISSIONED
+          type: string
+      type: object
+    CellsDrainRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    FeatureFlag:
+      description: Feature flag with targeting rules and gradual rollout
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Purpose
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: When the flag should be removed
+          format: date-time
+          type:
+          - string
+          - 'null'
+        flag_key:
+          description: Flag key
+          maxLength: 128
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_enabled:
+          description: Master switch
+          type: boolean
+        owner:
+          description: Owning team
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        rollout_percentage:
+          description: Percent of subjects that see the feature (0-100)
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        targeting_rules:
+          additionalProperties: true
+          description: Rules by legal entity, segment, user, app version
+          type:
+          - object
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        variants:
+          additionalProperties: true
+          description: Multivariate values
+          type:
+          - object
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - flag_key
+      - is_enabled
+      - rollout_percentage
+      type: object
+    FeatureFlagCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose
+          maxLength: 500
+          type: string
+        expires_at:
+          description: When the flag should be removed
+          format: date-time
+          type: string
+        flag_key:
+          description: Flag key
+          maxLength: 128
+          type: string
+        is_enabled:
+          description: Master switch
+          type: boolean
+        owner:
+          description: Owning team
+          maxLength: 120
+          type: string
+        rollout_percentage:
+          description: Percent of subjects that see the feature (0-100)
+          format: int32
+          type: integer
+        targeting_rules:
+          additionalProperties: true
+          description: Rules by legal entity, segment, user, app version
+          type: object
+        variants:
+          additionalProperties: true
+          description: Multivariate values
+          type: object
+      required:
+      - flag_key
+      type: object
+    FeatureFlagPage:
+      description: One page of FeatureFlag results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FeatureFlag'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FeatureFlagUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose
+          maxLength: 500
+          type: string
+        expires_at:
+          description: When the flag should be removed
+          format: date-time
+          type: string
+        flag_key:
+          description: Flag key
+          maxLength: 128
+          type: string
+        is_enabled:
+          description: Master switch
+          type: boolean
+        owner:
+          description: Owning team
+          maxLength: 120
+          type: string
+        rollout_percentage:
+          description: Percent of subjects that see the feature (0-100)
+          format: int32
+          type: integer
+        targeting_rules:
+          additionalProperties: true
+          description: Rules by legal entity, segment, user, app version
+          type: object
+        variants:
+          additionalProperties: true
+          description: Multivariate values
+          type: object
+      type: object
+    FeatureFlagsEvaluateRequest:
+      properties:
+        context:
+          additionalProperties: true
+          type: object
+        subject_id:
+          maxLength: 64
+          type: string
+        subject_type:
+          maxLength: 40
+          type: string
+      required:
+      - subject_type
+      - subject_id
+      type: object
+    LegalEntity:
+      description: A licensed or registered legal entity of the tenant that owns books, products and customers
+      properties:
+        address_line1:
+          description: Registered address line 1
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        address_line2:
+          description: Registered address line 2
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        base_currency:
+          description: Functional / reporting currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        code:
+          description: Short code
+          maxLength: 32
+          type: string
+        country:
+          description: Country of incorporation (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        fiscal_year_start_month:
+          description: First month of the fiscal year (1-12)
+          format: int32
+          type: integer
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_name:
+          description: Registered legal name
+          maxLength: 255
+          type: string
+        lei:
+          description: Legal Entity Identifier (ISO 17442)
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        license_number:
+          description: Licence number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        license_type:
+          description: E.g. BANK, EMI, PI, MFI, NBFC
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        parent_id:
+          description: Parent entity for group structures
+          format: uuid
+          type:
+          - string
+          - 'null'
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type:
+          - string
+          - 'null'
+        registration_number:
+          description: Company registration number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        regulator:
+          description: Primary regulator
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - DISSOLVED
+          type: string
+        swift_bic:
+          description: BIC, if any
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        tax_id:
+          description: Tax identification number
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        timezone:
+          description: IANA timezone for business dates
+          maxLength: 64
+          type: string
+        trading_name:
+          description: Trading name
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - legal_name
+      - country
+      - base_currency
+      - timezone
+      - fiscal_year_start_month
+      - status
+      type: object
+    LegalEntityCreate:
+      properties:
+        address_line1:
+          description: Registered address line 1
+          maxLength: 255
+          type: string
+        address_line2:
+          description: Registered address line 2
+          maxLength: 255
+          type: string
+        base_currency:
+          description: Functional / reporting currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type: string
+        code:
+          description: Short code
+          maxLength: 32
+          type: string
+        country:
+          description: Country of incorporation (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fiscal_year_start_month:
+          description: First month of the fiscal year (1-12)
+          format: int32
+          type: integer
+        legal_name:
+          description: Registered legal name
+          maxLength: 255
+          type: string
+        lei:
+          description: Legal Entity Identifier (ISO 17442)
+          maxLength: 20
+          type: string
+        license_number:
+          description: Licence number
+          maxLength: 64
+          type: string
+        license_type:
+          description: E.g. BANK, EMI, PI, MFI, NBFC
+          maxLength: 64
+          type: string
+        parent_id:
+          description: Parent entity for group structures
+          format: uuid
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        registration_number:
+          description: Company registration number
+          maxLength: 64
+          type: string
+        regulator:
+          description: Primary regulator
+          maxLength: 120
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - DISSOLVED
+          type: string
+        swift_bic:
+          description: BIC, if any
+          maxLength: 11
+          type: string
+        tax_id:
+          description: Tax identification number
+          maxLength: 64
+          type: string
+        timezone:
+          description: IANA timezone for business dates
+          maxLength: 64
+          type: string
+        trading_name:
+          description: Trading name
+          maxLength: 255
+          type: string
+      required:
+      - code
+      - legal_name
+      - country
+      - base_currency
+      type: object
+    LegalEntityPage:
+      description: One page of LegalEntity results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/LegalEntity'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    LegalEntityUpdate:
+      properties:
+        address_line1:
+          description: Registered address line 1
+          maxLength: 255
+          type: string
+        address_line2:
+          description: Registered address line 2
+          maxLength: 255
+          type: string
+        base_currency:
+          description: Functional / reporting currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        city:
+          description: City
+          maxLength: 120
+          type: string
+        code:
+          description: Short code
+          maxLength: 32
+          type: string
+        country:
+          description: Country of incorporation (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        fiscal_year_start_month:
+          description: First month of the fiscal year (1-12)
+          format: int32
+          type: integer
+        legal_name:
+          description: Registered legal name
+          maxLength: 255
+          type: string
+        lei:
+          description: Legal Entity Identifier (ISO 17442)
+          maxLength: 20
+          type: string
+        license_number:
+          description: Licence number
+          maxLength: 64
+          type: string
+        license_type:
+          description: E.g. BANK, EMI, PI, MFI, NBFC
+          maxLength: 64
+          type: string
+        parent_id:
+          description: Parent entity for group structures
+          format: uuid
+          type: string
+        postal_code:
+          description: Postal code
+          maxLength: 20
+          type: string
+        registration_number:
+          description: Company registration number
+          maxLength: 64
+          type: string
+        regulator:
+          description: Primary regulator
+          maxLength: 120
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - DISSOLVED
+          type: string
+        swift_bic:
+          description: BIC, if any
+          maxLength: 11
+          type: string
+        tax_id:
+          description: Tax identification number
+          maxLength: 64
+          type: string
+        timezone:
+          description: IANA timezone for business dates
+          maxLength: 64
+          type: string
+        trading_name:
+          description: Trading name
+          maxLength: 255
+          type: string
+      type: object
+    ModulesDisableRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    ModulesEnableRequest:
+      properties:
+        config:
+          additionalProperties: true
+          type: object
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    Tenant:
+      description: A client organisation (bank, fintech, telco) using the platform
+      properties:
+        activated_at:
+          description: Activation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        billing_email:
+          description: Billing contact
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        cell_id:
+          description: Home cell
+          format: uuid
+          type:
+          - string
+          - 'null'
+        code:
+          description: Short unique tenant code
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_residency_country:
+          description: Country data must stay in (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        default_country:
+          description: Default country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        default_currency:
+          description: Default currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        default_language:
+          description: Default language (BCP 47)
+          maxLength: 10
+          type: string
+        deployment_model:
+          description: How the tenant is deployed
+          enum:
+          - SAAS_MULTI_TENANT
+          - DEDICATED_CLOUD
+          - SELF_HOSTED
+          type: string
+        environment:
+          description: Sandbox or production tenant
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        home_region:
+          description: Home region for data residency
+          maxLength: 32
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_name:
+          description: Registered legal name
+          maxLength: 255
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Operator metadata
+          type:
+          - object
+          - 'null'
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        primary_contact_email:
+          description: Primary contact
+          format: email
+          maxLength: 320
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Lifecycle status
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - SUSPENDED
+          - OFFBOARDING
+          - TERMINATED
+          type: string
+        suspended_at:
+          description: Suspension time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        suspension_reason:
+          description: Reason for suspension
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        tenant_type:
+          description: Kind of organisation
+          enum:
+          - BANK
+          - FINTECH
+          - TELCO
+          - ENTERPRISE
+          - CENTRAL_BANK
+          - PLATFORM_OPERATOR
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - legal_name
+      - tenant_type
+      - status
+      - deployment_model
+      - home_region
+      - default_currency
+      - default_country
+      - default_language
+      - timezone
+      - environment
+      - primary_contact_email
+      type: object
+    TenantBranding:
+      description: White-label branding per channel (logo, colours, fonts, copy, domains, senders)
+      properties:
+        accent_color:
+          description: Hex colour
+          maxLength: 9
+          type:
+          - string
+          - 'null'
+        app_name:
+          description: Product / app name shown to customers
+          maxLength: 80
+          type: string
+        channel:
+          description: Channel the branding applies to
+          enum:
+          - ALL
+          - MOBILE
+          - WEB
+          - CONSOLE
+          - EMAIL
+          - SMS
+          - USSD
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_domain:
+          description: Custom domain for web apps
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        default_locale:
+          description: Default locale
+          maxLength: 10
+          type: string
+        email_sender_address:
+          description: Email sender address
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        email_sender_name:
+          description: Email sender name
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        font_family:
+          description: Font family
+          maxLength: 80
+          type:
+          - string
+          - 'null'
+        icon_document_id:
+          description: App icon / favicon
+          format: uuid
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Brand per legal entity (empty = tenant-wide)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        logo_document_id:
+          description: Logo
+          format: uuid
+          type:
+          - string
+          - 'null'
+        primary_color:
+          description: 'Hex colour, e.g. #1F3864'
+          maxLength: 9
+          type: string
+        privacy_url:
+          description: Privacy policy URL
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        secondary_color:
+          description: Hex colour
+          maxLength: 9
+          type:
+          - string
+          - 'null'
+        sms_sender_id:
+          description: Alphanumeric SMS sender id
+          maxLength: 11
+          type:
+          - string
+          - 'null'
+        support_email:
+          description: Support email
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        support_phone:
+          description: Support phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        supported_locales:
+          additionalProperties: true
+          description: Enabled locales
+          type:
+          - object
+          - 'null'
+        terms_url:
+          description: Terms and conditions URL
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        theme_tokens:
+          additionalProperties: true
+          description: Full design-token overrides (light and dark)
+          type:
+          - object
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - channel
+      - app_name
+      - primary_color
+      - default_locale
+      type: object
+    TenantBrandingCreate:
+      properties:
+        accent_color:
+          description: Hex colour
+          maxLength: 9
+          type: string
+        app_name:
+          description: Product / app name shown to customers
+          maxLength: 80
+          type: string
+        channel:
+          description: Channel the branding applies to
+          enum:
+          - ALL
+          - MOBILE
+          - WEB
+          - CONSOLE
+          - EMAIL
+          - SMS
+          - USSD
+          type: string
+        custom_domain:
+          description: Custom domain for web apps
+          maxLength: 255
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        default_locale:
+          description: Default locale
+          maxLength: 10
+          type: string
+        email_sender_address:
+          description: Email sender address
+          format: email
+          maxLength: 320
+          type: string
+        email_sender_name:
+          description: Email sender name
+          maxLength: 120
+          type: string
+        font_family:
+          description: Font family
+          maxLength: 80
+          type: string
+        icon_document_id:
+          description: App icon / favicon
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Brand per legal entity (empty = tenant-wide)
+          format: uuid
+          type: string
+        logo_document_id:
+          description: Logo
+          format: uuid
+          type: string
+        primary_color:
+          description: 'Hex colour, e.g. #1F3864'
+          maxLength: 9
+          type: string
+        privacy_url:
+          description: Privacy policy URL
+          maxLength: 500
+          type: string
+        secondary_color:
+          description: Hex colour
+          maxLength: 9
+          type: string
+        sms_sender_id:
+          description: Alphanumeric SMS sender id
+          maxLength: 11
+          type: string
+        support_email:
+          description: Support email
+          format: email
+          maxLength: 320
+          type: string
+        support_phone:
+          description: Support phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        supported_locales:
+          additionalProperties: true
+          description: Enabled locales
+          type: object
+        terms_url:
+          description: Terms and conditions URL
+          maxLength: 500
+          type: string
+        theme_tokens:
+          additionalProperties: true
+          description: Full design-token overrides (light and dark)
+          type: object
+      required:
+      - app_name
+      - primary_color
+      type: object
+    TenantBrandingPage:
+      description: One page of TenantBranding results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantBranding'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantBrandingUpdate:
+      properties:
+        accent_color:
+          description: Hex colour
+          maxLength: 9
+          type: string
+        app_name:
+          description: Product / app name shown to customers
+          maxLength: 80
+          type: string
+        channel:
+          description: Channel the branding applies to
+          enum:
+          - ALL
+          - MOBILE
+          - WEB
+          - CONSOLE
+          - EMAIL
+          - SMS
+          - USSD
+          type: string
+        custom_domain:
+          description: Custom domain for web apps
+          maxLength: 255
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        default_locale:
+          description: Default locale
+          maxLength: 10
+          type: string
+        email_sender_address:
+          description: Email sender address
+          format: email
+          maxLength: 320
+          type: string
+        email_sender_name:
+          description: Email sender name
+          maxLength: 120
+          type: string
+        font_family:
+          description: Font family
+          maxLength: 80
+          type: string
+        icon_document_id:
+          description: App icon / favicon
+          format: uuid
+          type: string
+        legal_entity_id:
+          description: Brand per legal entity (empty = tenant-wide)
+          format: uuid
+          type: string
+        logo_document_id:
+          description: Logo
+          format: uuid
+          type: string
+        primary_color:
+          description: 'Hex colour, e.g. #1F3864'
+          maxLength: 9
+          type: string
+        privacy_url:
+          description: Privacy policy URL
+          maxLength: 500
+          type: string
+        secondary_color:
+          description: Hex colour
+          maxLength: 9
+          type: string
+        sms_sender_id:
+          description: Alphanumeric SMS sender id
+          maxLength: 11
+          type: string
+        support_email:
+          description: Support email
+          format: email
+          maxLength: 320
+          type: string
+        support_phone:
+          description: Support phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        supported_locales:
+          additionalProperties: true
+          description: Enabled locales
+          type: object
+        terms_url:
+          description: Terms and conditions URL
+          maxLength: 500
+          type: string
+        theme_tokens:
+          additionalProperties: true
+          description: Full design-token overrides (light and dark)
+          type: object
+      type: object
+    TenantCreate:
+      properties:
+        billing_email:
+          description: Billing contact
+          format: email
+          maxLength: 320
+          type: string
+        cell_id:
+          description: Home cell
+          format: uuid
+          type: string
+        code:
+          description: Short unique tenant code
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_residency_country:
+          description: Country data must stay in (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        default_country:
+          description: Default country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        default_currency:
+          description: Default currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        default_language:
+          description: Default language (BCP 47)
+          maxLength: 10
+          type: string
+        deployment_model:
+          description: How the tenant is deployed
+          enum:
+          - SAAS_MULTI_TENANT
+          - DEDICATED_CLOUD
+          - SELF_HOSTED
+          type: string
+        environment:
+          description: Sandbox or production tenant
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        home_region:
+          description: Home region for data residency
+          maxLength: 32
+          type: string
+        legal_name:
+          description: Registered legal name
+          maxLength: 255
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Operator metadata
+          type: object
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        primary_contact_email:
+          description: Primary contact
+          format: email
+          maxLength: 320
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - SUSPENDED
+          - OFFBOARDING
+          - TERMINATED
+          type: string
+        tenant_type:
+          description: Kind of organisation
+          enum:
+          - BANK
+          - FINTECH
+          - TELCO
+          - ENTERPRISE
+          - CENTRAL_BANK
+          - PLATFORM_OPERATOR
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+      required:
+      - code
+      - name
+      - legal_name
+      - tenant_type
+      - home_region
+      - default_currency
+      - default_country
+      - primary_contact_email
+      type: object
+    TenantModule:
+      description: Platform modules enabled for the tenant and their module-level configuration
+      properties:
+        config:
+          additionalProperties: true
+          description: Module-level configuration
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        enabled_at:
+          description: When it was enabled
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_enabled:
+          description: Whether the module is enabled
+          type: boolean
+        module:
+          description: Module
+          enum:
+          - LEDGER
+          - DEPOSITS
+          - PAYMENTS
+          - WALLETS
+          - CARDS
+          - LENDING
+          - RISK
+          - REPORTING
+          - OPEN_BANKING
+          - AI
+          - ANALYTICS
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - module
+      - is_enabled
+      type: object
+    TenantModulePage:
+      description: One page of TenantModule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantModule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantModuleUpdate:
+      properties:
+        config:
+          additionalProperties: true
+          description: Module-level configuration
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        is_enabled:
+          description: Whether the module is enabled
+          type: boolean
+        module:
+          description: Module
+          enum:
+          - LEDGER
+          - DEPOSITS
+          - PAYMENTS
+          - WALLETS
+          - CARDS
+          - LENDING
+          - RISK
+          - REPORTING
+          - OPEN_BANKING
+          - AI
+          - ANALYTICS
+          type: string
+      type: object
+    TenantPage:
+      description: One page of Tenant results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Tenant'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantPlacement:
+      description: History of a tenant's placement on cells, including cell-to-cell migrations
+      properties:
+        cell_id:
+          description: Target cell
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        effective_from:
+          description: Start of placement
+          format: date-time
+          type: string
+        effective_to:
+          description: End of placement
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        reason:
+          description: Reason, e.g. initial placement, rebalancing, dedicated upgrade
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Placement status
+          enum:
+          - ACTIVE
+          - MIGRATING
+          - COMPLETED
+          - ROLLED_BACK
+          type: string
+        subject_tenant_id:
+          description: Tenant being placed
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_tenant_id
+      - cell_id
+      - status
+      - effective_from
+      type: object
+    TenantPlacementPage:
+      description: One page of TenantPlacement results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantPlacement'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantSetting:
+      description: Typed tenant-level setting (key/value) used by all services
+      properties:
+        category:
+          description: Grouping for the console
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: What the setting controls
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_sensitive:
+          description: Masked in the console and audit log
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        setting_key:
+          description: Setting key, e.g. payments.default_rail
+          maxLength: 128
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value:
+          additionalProperties: true
+          description: Setting value
+          type: object
+        value_type:
+          description: Value type
+          enum:
+          - STRING
+          - NUMBER
+          - BOOLEAN
+          - JSON
+          - DURATION
+          - AMOUNT
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - setting_key
+      - value
+      - value_type
+      - is_sensitive
+      type: object
+    TenantSettingCreate:
+      properties:
+        category:
+          description: Grouping for the console
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: What the setting controls
+          maxLength: 500
+          type: string
+        is_sensitive:
+          description: Masked in the console and audit log
+          type: boolean
+        setting_key:
+          description: Setting key, e.g. payments.default_rail
+          maxLength: 128
+          type: string
+        value:
+          additionalProperties: true
+          description: Setting value
+          type: object
+        value_type:
+          description: Value type
+          enum:
+          - STRING
+          - NUMBER
+          - BOOLEAN
+          - JSON
+          - DURATION
+          - AMOUNT
+          type: string
+      required:
+      - setting_key
+      - value
+      - value_type
+      type: object
+    TenantSettingPage:
+      description: One page of TenantSetting results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantSetting'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantSettingUpdate:
+      properties:
+        category:
+          description: Grouping for the console
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: What the setting controls
+          maxLength: 500
+          type: string
+        is_sensitive:
+          description: Masked in the console and audit log
+          type: boolean
+        setting_key:
+          description: Setting key, e.g. payments.default_rail
+          maxLength: 128
+          type: string
+        value:
+          additionalProperties: true
+          description: Setting value
+          type: object
+        value_type:
+          description: Value type
+          enum:
+          - STRING
+          - NUMBER
+          - BOOLEAN
+          - JSON
+          - DURATION
+          - AMOUNT
+          type: string
+      type: object
+    TenantUpdate:
+      properties:
+        billing_email:
+          description: Billing contact
+          format: email
+          maxLength: 320
+          type: string
+        cell_id:
+          description: Home cell
+          format: uuid
+          type: string
+        code:
+          description: Short unique tenant code
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_residency_country:
+          description: Country data must stay in (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        default_country:
+          description: Default country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        default_currency:
+          description: Default currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        default_language:
+          description: Default language (BCP 47)
+          maxLength: 10
+          type: string
+        deployment_model:
+          description: How the tenant is deployed
+          enum:
+          - SAAS_MULTI_TENANT
+          - DEDICATED_CLOUD
+          - SELF_HOSTED
+          type: string
+        environment:
+          description: Sandbox or production tenant
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        home_region:
+          description: Home region for data residency
+          maxLength: 32
+          type: string
+        legal_name:
+          description: Registered legal name
+          maxLength: 255
+          type: string
+        metadata:
+          additionalProperties: true
+          description: Operator metadata
+          type: object
+        name:
+          description: Display name
+          maxLength: 160
+          type: string
+        primary_contact_email:
+          description: Primary contact
+          format: email
+          maxLength: 320
+          type: string
+        status:
+          description: Lifecycle status
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - SUSPENDED
+          - OFFBOARDING
+          - TERMINATED
+          type: string
+        tenant_type:
+          description: Kind of organisation
+          enum:
+          - BANK
+          - FINTECH
+          - TELCO
+          - ENTERPRISE
+          - CENTRAL_BANK
+          - PLATFORM_OPERATOR
+          type: string
+        timezone:
+          description: IANA timezone
+          maxLength: 64
+          type: string
+      type: object
+    TenantsMigrateRequest:
+      properties:
+        cell_id:
+          format: uuid
+          type: string
+        scheduled_at:
+          format: date-time
+          type: string
+      required:
+      - cell_id
+      type: object
+    TenantsProvisionFromTemplateRequest:
+      properties:
+        code:
+          maxLength: 32
+          type: string
+        default_country:
+          description: ISO 3166-1 alpha-2
+          pattern: ^[A-Z]{2}$
+          type: string
+        default_currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+        legal_name:
+          maxLength: 255
+          type: string
+        name:
+          maxLength: 160
+          type: string
+        primary_contact_email:
+          format: email
+          maxLength: 320
+          type: string
+        template_code:
+          maxLength: 64
+          type: string
+        tenant_type:
+          enum:
+          - BANK
+          - FINTECH
+          - TELCO
+          - ENTERPRISE
+          - CENTRAL_BANK
+          - PLATFORM_OPERATOR
+          type: string
+      required:
+      - template_code
+      - code
+      - name
+      - legal_name
+      - tenant_type
+      - default_currency
+      - default_country
+      - primary_contact_email
+      type: object
+    TenantsReinstateRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    TenantsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — tenant-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/platform/cells:
+    get:
+      operationId: cellsList
+      summary: List cells
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: region
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: cloud_provider
+        in: query
+        schema:
+          type: string
+          enum:
+          - AWS
+          - GCP
+          - AZURE
+          - ON_PREMISES
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - DRAINING
+          - READ_ONLY
+          - DECOMMISSIONED
+      - name: is_dedicated
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CellPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cellsCreate
+      summary: Create cell
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CellCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-create: true
+  /v1/platform/cells/{id}:
+    get:
+      operationId: cellsGet
+      summary: Retrieve cell
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: cellsUpdate
+      summary: Update cell
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CellUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: cell
+      x-crud: true
+      x-crud-update: true
+  /v1/platform/cells/{id}/drain:
+    post:
+      operationId: cellsDrain
+      summary: Stop placing new tenants on the cell
+      tags:
+      - Cells
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cell'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CellsDrainRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: cell
+  /v1/platform/tenants:
+    get:
+      operationId: tenantsList
+      summary: List tenants
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PROVISIONING
+          - ACTIVE
+          - SUSPENDED
+          - OFFBOARDING
+          - TERMINATED
+      - name: tenant_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - BANK
+          - FINTECH
+          - TELCO
+          - ENTERPRISE
+          - CENTRAL_BANK
+          - PLATFORM_OPERATOR
+      - name: deployment_model
+        in: query
+        schema:
+          type: string
+          enum:
+          - SAAS_MULTI_TENANT
+          - DEDICATED_CLOUD
+          - SELF_HOSTED
+      - name: cell_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: environment
+        in: query
+        schema:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tenantsCreate
+      summary: Create tenant
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-create: true
+  /v1/platform/tenants/{id}:
+    get:
+      operationId: tenantsGet
+      summary: Retrieve tenant
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: tenantsUpdate
+      summary: Update tenant
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+      x-crud: true
+      x-crud-update: true
+  /v1/platform/tenants/{id}/activate:
+    post:
+      operationId: tenantsActivate
+      summary: Activate a provisioned tenant
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+  /v1/platform/tenants/{id}/suspend:
+    post:
+      operationId: tenantsSuspend
+      summary: Suspend a tenant (all APIs return 403)
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantsSuspendRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+  /v1/platform/tenants/{id}/reinstate:
+    post:
+      operationId: tenantsReinstate
+      summary: Lift a suspension
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantsReinstateRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+  /v1/platform/tenants/{id}/migrate:
+    post:
+      operationId: tenantsMigrate
+      summary: Move the tenant to another cell
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPlacement'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantsMigrateRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+  /v1/platform/tenants/{id}/placements:
+    get:
+      operationId: tenantsPlacements
+      summary: Placement history
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPlacementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+  /v1/platform/tenants/provision-from-template:
+    post:
+      operationId: tenantsProvisionFromTemplate
+      summary: Provision a tenant from a template bank in minutes
+      tags:
+      - Tenants
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantsProvisionFromTemplateRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant
+  /v1/modules:
+    get:
+      operationId: modulesList
+      summary: List modules
+      tags:
+      - Modules
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: module
+        in: query
+        schema:
+          type: string
+          enum:
+          - LEDGER
+          - DEPOSITS
+          - PAYMENTS
+          - WALLETS
+          - CARDS
+          - LENDING
+          - RISK
+          - REPORTING
+          - OPEN_BANKING
+          - AI
+          - ANALYTICS
+      - name: is_enabled
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantModulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_module
+      x-crud: true
+      x-crud-list: true
+  /v1/modules/{id}:
+    get:
+      operationId: modulesGet
+      summary: Retrieve module
+      tags:
+      - Modules
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantModule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_module
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: modulesUpdate
+      summary: Update module
+      tags:
+      - Modules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantModule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantModuleUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_module
+      x-crud: true
+      x-crud-update: true
+  /v1/modules/{id}/enable:
+    post:
+      operationId: modulesEnable
+      summary: Enable a module (maker-checker)
+      tags:
+      - Modules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModulesEnableRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_module
+  /v1/modules/{id}/disable:
+    post:
+      operationId: modulesDisable
+      summary: Disable a module (maker-checker)
+      tags:
+      - Modules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModulesDisableRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_module
+  /v1/legal-entities:
+    get:
+      operationId: legalEntitiesList
+      summary: List legal entities
+      tags:
+      - Legal Entities
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - DISSOLVED
+      - name: parent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: base_currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalEntityPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      - GL-05
+      x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: legalEntitiesCreate
+      summary: Create legal entitie
+      tags:
+      - Legal Entities
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalEntity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalEntityCreate'
+      x-requirements:
+      - ADM-01
+      - GL-05
+      x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-create: true
+  /v1/legal-entities/{id}:
+    get:
+      operationId: legalEntitiesGet
+      summary: Retrieve legal entitie
+      tags:
+      - Legal Entities
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalEntity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      - GL-05
+      x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: legalEntitiesUpdate
+      summary: Update legal entitie
+      tags:
+      - Legal Entities
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalEntity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalEntityUpdate'
+      x-requirements:
+      - ADM-01
+      - GL-05
+      x-service: tenant-service
+      x-table: legal_entity
+      x-crud: true
+      x-crud-update: true
+  /v1/branches:
+    get:
+      operationId: branchesList
+      summary: List branches
+      tags:
+      - Branches
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: branch_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - HEAD_OFFICE
+          - BRANCH
+          - SERVICE_CENTER
+          - VIRTUAL
+          - AGENT_HUB
+          - BACK_OFFICE
+      - name: parent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - TEMPORARILY_CLOSED
+          - CLOSED
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: city
+        in: query
+        schema:
+          type: string
+          maxLength: 120
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: branchesCreate
+      summary: Create branche
+      tags:
+      - Branches
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-create: true
+  /v1/branches/{id}:
+    get:
+      operationId: branchesGet
+      summary: Retrieve branche
+      tags:
+      - Branches
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id009
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: branchesUpdate
+      summary: Update branche
+      tags:
+      - Branches
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id009
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: branch
+      x-crud: true
+      x-crud-update: true
+  /v1/branches/{id}/close:
+    post:
+      operationId: branchesClose
+      summary: Close a branch
+      tags:
+      - Branches
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchesCloseRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: branch
+  /v1/settings:
+    get:
+      operationId: settingsList
+      summary: List settings
+      tags:
+      - Settings
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: setting_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: category
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSettingPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: settingsCreate
+      summary: Create setting
+      tags:
+      - Settings
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSetting'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantSettingCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-create: true
+  /v1/settings/{id}:
+    get:
+      operationId: settingsGet
+      summary: Retrieve setting
+      tags:
+      - Settings
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id011
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSetting'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: settingsUpdate
+      summary: Update setting
+      tags:
+      - Settings
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSetting'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantSettingUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: settingsDelete
+      summary: Delete setting
+      tags:
+      - Settings
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id011
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_setting
+      x-crud: true
+      x-crud-delete: true
+  /v1/feature-flags:
+    get:
+      operationId: featureFlagsList
+      summary: List feature flags
+      tags:
+      - Feature Flags
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: flag_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: is_enabled
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlagPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: featureFlagsCreate
+      summary: Create feature flag
+      tags:
+      - Feature Flags
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlag'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeatureFlagCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-create: true
+  /v1/feature-flags/{id}:
+    get:
+      operationId: featureFlagsGet
+      summary: Retrieve feature flag
+      tags:
+      - Feature Flags
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id013
+      - &id012
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlag'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: featureFlagsUpdate
+      summary: Update feature flag
+      tags:
+      - Feature Flags
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id012
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureFlag'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeatureFlagUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: featureFlagsDelete
+      summary: Delete feature flag
+      tags:
+      - Feature Flags
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id013
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: feature_flag
+      x-crud: true
+      x-crud-delete: true
+  /v1/feature-flags/evaluate:
+    post:
+      operationId: featureFlagsEvaluate
+      summary: Evaluate flags for a subject
+      tags:
+      - Feature Flags
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeatureFlagsEvaluateRequest'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: feature_flag
+  /v1/branding:
+    get:
+      operationId: brandingList
+      summary: List branding
+      tags:
+      - Branding
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: channel
+        in: query
+        schema:
+          type: string
+          enum:
+          - ALL
+          - MOBILE
+          - WEB
+          - CONSOLE
+          - EMAIL
+          - SMS
+          - USSD
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantBrandingPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: brandingCreate
+      summary: Create branding
+      tags:
+      - Branding
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantBranding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantBrandingCreate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-create: true
+  /v1/branding/{id}:
+    get:
+      operationId: brandingGet
+      summary: Retrieve branding
+      tags:
+      - Branding
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id014
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantBranding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: brandingUpdate
+      summary: Update branding
+      tags:
+      - Branding
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id014
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantBranding'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantBrandingUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_branding
+      x-crud: true
+      x-crud-update: true
+  /v1/branding/{id}/preview:
+    get:
+      operationId: brandingPreview
+      summary: Rendered preview of the branding on sample screens
+      tags:
+      - Branding
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: tenant-service
+      x-table: tenant_branding
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Platform-operator API for deployment cells
+  name: Cells
+- description: Platform-operator API for tenant lifecycle
+  name: Tenants
+- description: Platform modules enabled for the tenant and their module-level configuration
+  name: Modules
+- description: A licensed or registered legal entity of the tenant that owns books, products and customers
+  name: Legal Entities
+- description: A branch, service centre or virtual unit of a legal entity
+  name: Branches
+- description: Typed tenant-level setting (key/value) used by all services
+  name: Settings
+- description: Feature flag with targeting rules and gradual rollout
+  name: Feature Flags
+- description: White-label branding per channel (logo, colours, fonts, copy, domains, senders)
+  name: Branding

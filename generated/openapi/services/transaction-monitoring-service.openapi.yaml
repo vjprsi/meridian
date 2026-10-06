@@ -1,0 +1,3815 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AmlCase:
+      description: An AML / fraud / sanctions investigation case consolidating related alerts
+      properties:
+        ai_summary:
+          description: AI-generated case summary with citations
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        assigned_to:
+          description: Investigator
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        case_number:
+          description: Human-readable case number
+          maxLength: 32
+          readOnly: true
+          type: string
+        case_type:
+          description: Case type
+          enum:
+          - AML
+          - FRAUD
+          - SANCTIONS
+          - KYC
+          - MULE
+          - TERRORIST_FINANCING
+          - BRIBERY_CORRUPTION
+          type: string
+        closed_at:
+          description: Closed
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Primary subject
+          format: uuid
+          type:
+          - string
+          - 'null'
+        description:
+          description: Investigation scope
+          type:
+          - string
+          - 'null'
+        due_at:
+          description: Regulatory / internal deadline
+          format: date-time
+          type:
+          - string
+          - 'null'
+        escalated_to:
+          description: MLRO or senior reviewer
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        opened_at:
+          description: Opened
+          format: date-time
+          readOnly: true
+          type: string
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+          type: string
+        risk_score:
+          description: Aggregate risk score 0-1000
+          format: int32
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - PENDING_APPROVAL
+          - ESCALATED
+          - SAR_FILED
+          - CLOSED
+          type: string
+        tags:
+          additionalProperties: true
+          description: Free tags
+          type:
+          - object
+          - 'null'
+        team:
+          description: Team / queue
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        title:
+          description: Short summary
+          maxLength: 255
+          type: string
+        total_amount:
+          description: Total suspicious amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - case_number
+      - case_type
+      - status
+      - priority
+      - title
+      - opened_at
+      type: object
+    CustomerRiskRating:
+      description: Customer AML risk rating (CRR) with contributing factors and next review date
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        factors:
+          additionalProperties: true
+          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          type: object
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        model_version:
+          description: Rating model version
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        next_review_date:
+          description: Periodic review due date (EDD for high risk)
+          format: date
+          type: string
+        override_rating:
+          description: Manual override
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type:
+          - string
+          - 'null'
+        override_reason:
+          description: Override justification
+          type:
+          - string
+          - 'null'
+        rated_at:
+          description: Last rating time
+          format: date-time
+          readOnly: true
+          type: string
+        rated_by:
+          description: SYSTEM or analyst
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        rating:
+          description: AML risk level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        score:
+          description: Risk score 0-1000
+          format: int32
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - rating
+      - score
+      - factors
+      - next_review_date
+      - rated_at
+      type: object
+    CustomerRiskRatingCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        factors:
+          additionalProperties: true
+          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          type: object
+        model_version:
+          description: Rating model version
+          maxLength: 32
+          type: string
+        next_review_date:
+          description: Periodic review due date (EDD for high risk)
+          format: date
+          type: string
+        override_rating:
+          description: Manual override
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        override_reason:
+          description: Override justification
+          type: string
+        rated_by:
+          description: SYSTEM or analyst
+          maxLength: 64
+          type: string
+        rating:
+          description: AML risk level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        score:
+          description: Risk score 0-1000
+          format: int32
+          type: integer
+      required:
+      - customer_id
+      - rating
+      - score
+      - factors
+      - next_review_date
+      type: object
+    CustomerRiskRatingPage:
+      description: One page of CustomerRiskRating results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CustomerRiskRating'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CustomerRiskRatingUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        factors:
+          additionalProperties: true
+          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          type: object
+        model_version:
+          description: Rating model version
+          maxLength: 32
+          type: string
+        next_review_date:
+          description: Periodic review due date (EDD for high risk)
+          format: date
+          type: string
+        override_rating:
+          description: Manual override
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        override_reason:
+          description: Override justification
+          type: string
+        rated_by:
+          description: SYSTEM or analyst
+          maxLength: 64
+          type: string
+        rating:
+          description: AML risk level
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        score:
+          description: Risk score 0-1000
+          format: int32
+          type: integer
+      type: object
+    CustomerRiskRatingsOverrideRequest:
+      properties:
+        override_rating:
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          type: string
+        override_reason:
+          type: string
+      required:
+      - override_rating
+      - override_reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    RiskGraphEntity:
+      description: Node in the risk graph (customer, account, device, IP, phone, beneficiary, ...)
+      properties:
+        community_id:
+          description: Detected community / cluster
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer, when the node belongs to one
+          format: uuid
+          type:
+          - string
+          - 'null'
+        entity_ref:
+          description: Business id or hashed value of the node
+          maxLength: 128
+          type: string
+        entity_type:
+          description: Node type
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - DEVICE
+          - IP_ADDRESS
+          - PHONE
+          - EMAIL
+          - ADDRESS
+          - BENEFICIARY
+          - MERCHANT
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_mule_suspect:
+          description: Flagged by mule detection
+          readOnly: true
+          type: boolean
+        last_seen_at:
+          description: Last activity
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        risk_score:
+          description: Propagated risk score 0-1000
+          format: int32
+          readOnly: true
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - entity_type
+      - entity_ref
+      - risk_score
+      - is_mule_suspect
+      type: object
+    RiskGraphEntityPage:
+      description: One page of RiskGraphEntity results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RiskGraphEntity'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RiskGraphLink:
+      description: Edge between two graph entities (shared device, transfer, shared address, ...)
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        first_seen_at:
+          description: First observed
+          format: date-time
+          readOnly: true
+          type: string
+        from_entity_id:
+          description: Source node
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_seen_at:
+          description: Last observed
+          format: date-time
+          readOnly: true
+          type: string
+        link_type:
+          description: SHARED_DEVICE, TRANSFER, SHARED_ADDRESS, SHARED_PHONE, SHARED_IP, OWNS
+          maxLength: 40
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        to_entity_id:
+          description: Target node
+          format: uuid
+          type: string
+        total_amount:
+          description: Amount transferred along the edge
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        transaction_count:
+          description: Transfers along the edge
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        weight:
+          description: Edge weight
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - from_entity_id
+      - to_entity_id
+      - link_type
+      - weight
+      - transaction_count
+      - total_amount
+      - first_seen_at
+      - last_seen_at
+      type: object
+    RiskGraphLinkPage:
+      description: One page of RiskGraphLink results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RiskGraphLink'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TmAlert:
+      description: AML alert raised by a scenario, with score and aggregate figures
+      properties:
+        account_id:
+          description: Account
+          format: uuid
+          type:
+          - string
+          - 'null'
+        aml_case_id:
+          description: Case opened from the alert
+          format: uuid
+          type:
+          - string
+          - 'null'
+        assigned_to:
+          description: Analyst
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        closed_at:
+          description: Close time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        closed_reason:
+          description: Reason when closed without a case
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        period_end:
+          description: Activity window end
+          format: date-time
+          type: string
+        period_start:
+          description: Activity window start
+          format: date-time
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        score:
+          description: Alert risk score 0-1000
+          format: int32
+          type: integer
+        severity:
+          description: Severity
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - TRIAGED
+          - ESCALATED
+          - CLOSED_NO_ACTION
+          - CLOSED_CASE_OPENED
+          type: string
+        tm_run_id:
+          description: Run that produced the alert
+          format: uuid
+          type:
+          - string
+          - 'null'
+        tm_scenario_id:
+          description: Scenario
+          format: uuid
+          type: string
+        tm_scenario_version_id:
+          description: Scenario version that fired
+          format: uuid
+          type: string
+        total_amount:
+          description: Aggregate amount of contributing transactions
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        transaction_count:
+          description: Number of contributing transactions
+          format: int32
+          type: integer
+        triage_note:
+          description: Level-1 triage note
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - tm_scenario_id
+      - tm_scenario_version_id
+      - customer_id
+      - score
+      - severity
+      - status
+      - total_amount
+      - currency
+      - transaction_count
+      - period_start
+      - period_end
+      type: object
+    TmAlertPage:
+      description: One page of TmAlert results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TmAlert'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TmAlertTransaction:
+      description: A transaction contributing to a TM alert. Append-only.
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        contribution:
+          description: Contribution to the alert score 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        counterparty_country:
+          description: Counterparty country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        counterparty_name:
+          description: Counterparty
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Debit or credit for the customer
+          enum:
+          - DEBIT
+          - CREDIT
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Ledger posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        occurred_at:
+          description: Transaction time
+          format: date-time
+          type: string
+        tm_alert_id:
+          description: Alert
+          format: uuid
+          type: string
+        transaction_id:
+          description: Business transaction id
+          format: uuid
+          type: string
+        transaction_type:
+          description: PAYMENT, CARD, WALLET, CASH, TRANSFER
+          maxLength: 40
+          type: string
+      required:
+      - id
+      - created_at
+      - tm_alert_id
+      - transaction_type
+      - transaction_id
+      - direction
+      - amount
+      - currency
+      - occurred_at
+      type: object
+    TmAlertTransactionPage:
+      description: One page of TmAlertTransaction results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TmAlertTransaction'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TmAlertUpdate:
+      properties:
+        account_id:
+          description: Account
+          format: uuid
+          type: string
+        aml_case_id:
+          description: Case opened from the alert
+          format: uuid
+          type: string
+        assigned_to:
+          description: Analyst
+          maxLength: 64
+          type: string
+        closed_reason:
+          description: Reason when closed without a case
+          maxLength: 255
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        period_end:
+          description: Activity window end
+          format: date-time
+          type: string
+        period_start:
+          description: Activity window start
+          format: date-time
+          type: string
+        score:
+          description: Alert risk score 0-1000
+          format: int32
+          type: integer
+        severity:
+          description: Severity
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+          type: string
+        status:
+          description: Status
+          enum:
+          - OPEN
+          - TRIAGED
+          - ESCALATED
+          - CLOSED_NO_ACTION
+          - CLOSED_CASE_OPENED
+          type: string
+        tm_run_id:
+          description: Run that produced the alert
+          format: uuid
+          type: string
+        tm_scenario_id:
+          description: Scenario
+          format: uuid
+          type: string
+        tm_scenario_version_id:
+          description: Scenario version that fired
+          format: uuid
+          type: string
+        total_amount:
+          description: Aggregate amount of contributing transactions
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        transaction_count:
+          description: Number of contributing transactions
+          format: int32
+          type: integer
+        triage_note:
+          description: Level-1 triage note
+          type: string
+      type: object
+    TmAlertsAssignRequest:
+      properties:
+        assigned_to:
+          maxLength: 64
+          type: string
+      required:
+      - assigned_to
+      type: object
+    TmAlertsCloseRequest:
+      properties:
+        closed_reason:
+          maxLength: 255
+          type: string
+        triage_note:
+          type: string
+      required:
+      - closed_reason
+      - triage_note
+      type: object
+    TmAlertsEscalateRequest:
+      properties:
+        aml_case_id:
+          format: uuid
+          type: string
+        case_type:
+          enum:
+          - AML
+          - FRAUD
+          - SANCTIONS
+          - KYC
+          - MULE
+          - TERRORIST_FINANCING
+          - BRIBERY_CORRUPTION
+          type: string
+        reason:
+          type: string
+      required:
+      - reason
+      type: object
+    TmRun:
+      description: Execution of scenarios in batch, backtest or a streaming checkpoint window
+      properties:
+        alerts_generated:
+          description: Alerts generated
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        from_ts:
+          description: Window start
+          format: date-time
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        mode:
+          description: Batch, backtest or streaming window
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Start
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        tm_scenario_version_id:
+          description: Single scenario version (empty = all active)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        to_ts:
+          description: Window end
+          format: date-time
+          type: string
+        transactions_evaluated:
+          description: Transactions evaluated
+          format: int64
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - mode
+      - from_ts
+      - to_ts
+      - status
+      type: object
+    TmRunCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        from_ts:
+          description: Window start
+          format: date-time
+          type: string
+        mode:
+          description: Batch, backtest or streaming window
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+          type: string
+        tm_scenario_version_id:
+          description: Single scenario version (empty = all active)
+          format: uuid
+          type: string
+        to_ts:
+          description: Window end
+          format: date-time
+          type: string
+      required:
+      - mode
+      - from_ts
+      - to_ts
+      type: object
+    TmRunPage:
+      description: One page of TmRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TmRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TmRunsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    TmScenario:
+      description: AML monitoring scenario (structuring, rapid movement, mule, dormant reactivation, ...)
+      properties:
+        active_version:
+          description: Version currently in force
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        code:
+          description: Scenario code
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_segment:
+          description: Segment it applies to (empty = all)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        description:
+          description: Logic description for auditors
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Scenario name
+          maxLength: 160
+          type: string
+        owner:
+          description: Accountable owner (MLRO team)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        run_mode:
+          description: Streaming or batch
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+          type: string
+        scenario_type:
+          description: Typology
+          enum:
+          - STRUCTURING
+          - RAPID_MOVEMENT
+          - MULE_ACCOUNT
+          - DORMANT_REACTIVATION
+          - HIGH_RISK_JURISDICTION
+          - LARGE_CASH
+          - ROUND_AMOUNTS
+          - FAN_IN
+          - FAN_OUT
+          - PROFILE_DEVIATION
+          - TERRORIST_FINANCING
+          - CUSTOM
+          type: string
+        status:
+          description: Lifecycle
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - scenario_type
+      - status
+      - run_mode
+      type: object
+    TmScenarioCreate:
+      properties:
+        code:
+          description: Scenario code
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_segment:
+          description: Segment it applies to (empty = all)
+          maxLength: 64
+          type: string
+        description:
+          description: Logic description for auditors
+          type: string
+        name:
+          description: Scenario name
+          maxLength: 160
+          type: string
+        owner:
+          description: Accountable owner (MLRO team)
+          maxLength: 64
+          type: string
+        run_mode:
+          description: Streaming or batch
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+          type: string
+        scenario_type:
+          description: Typology
+          enum:
+          - STRUCTURING
+          - RAPID_MOVEMENT
+          - MULE_ACCOUNT
+          - DORMANT_REACTIVATION
+          - HIGH_RISK_JURISDICTION
+          - LARGE_CASH
+          - ROUND_AMOUNTS
+          - FAN_IN
+          - FAN_OUT
+          - PROFILE_DEVIATION
+          - TERRORIST_FINANCING
+          - CUSTOM
+          type: string
+        status:
+          description: Lifecycle
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+          type: string
+      required:
+      - code
+      - name
+      - scenario_type
+      type: object
+    TmScenarioPage:
+      description: One page of TmScenario results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TmScenario'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TmScenarioUpdate:
+      properties:
+        code:
+          description: Scenario code
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_segment:
+          description: Segment it applies to (empty = all)
+          maxLength: 64
+          type: string
+        description:
+          description: Logic description for auditors
+          type: string
+        name:
+          description: Scenario name
+          maxLength: 160
+          type: string
+        owner:
+          description: Accountable owner (MLRO team)
+          maxLength: 64
+          type: string
+        run_mode:
+          description: Streaming or batch
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+          type: string
+        scenario_type:
+          description: Typology
+          enum:
+          - STRUCTURING
+          - RAPID_MOVEMENT
+          - MULE_ACCOUNT
+          - DORMANT_REACTIVATION
+          - HIGH_RISK_JURISDICTION
+          - LARGE_CASH
+          - ROUND_AMOUNTS
+          - FAN_IN
+          - FAN_OUT
+          - PROFILE_DEVIATION
+          - TERRORIST_FINANCING
+          - CUSTOM
+          type: string
+        status:
+          description: Lifecycle
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+          type: string
+      type: object
+    TmScenarioVersion:
+      description: Versioned thresholds and parameters of a scenario (tuning history kept for audit)
+      properties:
+        approval_request_id:
+          description: Maker-checker approval
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Approver
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        effective_from:
+          description: Effective from
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        lookback_days:
+          description: Look-back window in days
+          format: int32
+          type: integer
+        min_amount:
+          description: Minimum aggregate amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        min_count:
+          description: Minimum transaction count
+          format: int32
+          type:
+          - integer
+          - 'null'
+        parameters:
+          additionalProperties: true
+          description: Thresholds and parameters, e.g. amount, count, window
+          type: object
+        risk_weight:
+          description: Weight in alert scoring
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scenario_version:
+          description: Version number
+          format: int32
+          type: integer
+        status:
+          description: Lifecycle
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+          type: string
+        tm_scenario_id:
+          description: Scenario
+          format: uuid
+          type: string
+        tuning_rationale:
+          description: Why thresholds were set or changed (below/above-the-line testing)
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - tm_scenario_id
+      - scenario_version
+      - parameters
+      - lookback_days
+      - risk_weight
+      - status
+      type: object
+    TmScenarioVersionPage:
+      description: One page of TmScenarioVersion results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TmScenarioVersion'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TmScenariosActivateRequest:
+      properties:
+        scenario_version:
+          format: int32
+          type: integer
+      required:
+      - scenario_version
+      type: object
+    TmScenariosBacktestRequest:
+      properties:
+        from_ts:
+          format: date-time
+          type: string
+        scenario_version:
+          format: int32
+          type: integer
+        to_ts:
+          format: date-time
+          type: string
+      required:
+      - scenario_version
+      - from_ts
+      - to_ts
+      type: object
+    TmScenariosRetireRequest:
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+      type: object
+    TmScenariosVersionsRequest:
+      properties:
+        lookback_days:
+          format: int32
+          type: integer
+        min_amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_count:
+          format: int32
+          type: integer
+        parameters:
+          additionalProperties: true
+          type: object
+        risk_weight:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        tuning_rationale:
+          type: string
+      required:
+      - parameters
+      - lookback_days
+      - tuning_rationale
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            risk:read: Read Risk, Fraud, AML and Limits
+            risk:write: Change Risk, Fraud, AML and Limits
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Real-time fraud scoring, transaction monitoring, sanctions and PEP screening, AML case management with SAR/STR
+    filing, and the limits engine. Every payment, card authorisation and wallet movement is scored, screened and limit-checked
+    before money moves.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — transaction-monitoring-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/risk/monitoring/scenarios:
+    get:
+      operationId: tmScenariosList
+      summary: List tm scenarios
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: scenario_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - STRUCTURING
+          - RAPID_MOVEMENT
+          - MULE_ACCOUNT
+          - DORMANT_REACTIVATION
+          - HIGH_RISK_JURISDICTION
+          - LARGE_CASH
+          - ROUND_AMOUNTS
+          - FAN_IN
+          - FAN_OUT
+          - PROFILE_DEVIATION
+          - TERRORIST_FINANCING
+          - CUSTOM
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+      - name: run_mode
+        in: query
+        schema:
+          type: string
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tmScenariosCreate
+      summary: Create tm scenario
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenario'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenarioCreate'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/monitoring/scenarios/{id}:
+    get:
+      operationId: tmScenariosGet
+      summary: Retrieve tm scenario
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenario'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: tmScenariosUpdate
+      summary: Update tm scenario
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenario'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenarioUpdate'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/monitoring/scenarios/{id}/versions:
+    get:
+      operationId: tmScenariosVersions
+      summary: Threshold versions of the scenario
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+    post:
+      operationId: tmScenariosAddVersions
+      summary: Create a new threshold version
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenariosVersionsRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+  /v1/risk/monitoring/scenarios/{id}/activate:
+    post:
+      operationId: tmScenariosActivate
+      summary: Activate a version (maker-checker)
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenario'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenariosActivateRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+  /v1/risk/monitoring/scenarios/{id}/retire:
+    post:
+      operationId: tmScenariosRetire
+      summary: Retire the scenario
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenario'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenariosRetireRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+  /v1/risk/monitoring/scenarios/{id}/backtest:
+    post:
+      operationId: tmScenariosBacktest
+      summary: Backtest a version over a period
+      tags:
+      - Tm Scenarios
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmScenariosBacktestRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario
+  /v1/risk/monitoring/scenario-versions:
+    get:
+      operationId: tmScenarioVersionsList
+      summary: List tm scenario versions
+      tags:
+      - Tm Scenario Versions
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: tm_scenario_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario_version
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/monitoring/scenario-versions/{id}:
+    get:
+      operationId: tmScenarioVersionsGet
+      summary: Retrieve tm scenario version
+      tags:
+      - Tm Scenario Versions
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmScenarioVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_scenario_version
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/monitoring/runs:
+    get:
+      operationId: tmRunsList
+      summary: List tm runs
+      tags:
+      - Tm Runs
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: mode
+        in: query
+        schema:
+          type: string
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: tm_scenario_version_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_run
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tmRunsCreate
+      summary: Create tm run
+      tags:
+      - Tm Runs
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmRunCreate'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_run
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/monitoring/runs/{id}:
+    get:
+      operationId: tmRunsGet
+      summary: Retrieve tm run
+      tags:
+      - Tm Runs
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_run
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/monitoring/runs/{id}/cancel:
+    post:
+      operationId: tmRunsCancel
+      summary: Cancel a queued or running batch
+      tags:
+      - Tm Runs
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmRunsCancelRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_run
+  /v1/risk/monitoring/alerts:
+    get:
+      operationId: tmAlertsList
+      summary: List tm alerts
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - TRIAGED
+          - ESCALATED
+          - CLOSED_NO_ACTION
+          - CLOSED_CASE_OPENED
+      - name: severity
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: tm_scenario_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: assigned_to
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmAlertPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/monitoring/alerts/{id}:
+    get:
+      operationId: tmAlertsGet
+      summary: Retrieve tm alert
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmAlert'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: tmAlertsUpdate
+      summary: Update tm alert
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmAlert'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmAlertUpdate'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/monitoring/alerts/{id}/transactions:
+    get:
+      operationId: tmAlertsTransactions
+      summary: Contributing transactions
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmAlertTransactionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+  /v1/risk/monitoring/alerts/{id}/assign:
+    post:
+      operationId: tmAlertsAssign
+      summary: Assign to an analyst
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmAlert'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmAlertsAssignRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+  /v1/risk/monitoring/alerts/{id}/close:
+    post:
+      operationId: tmAlertsClose
+      summary: Close without a case
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmAlert'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmAlertsCloseRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+  /v1/risk/monitoring/alerts/{id}/escalate:
+    post:
+      operationId: tmAlertsEscalate
+      summary: Open or attach to an AML case
+      tags:
+      - Tm Alerts
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AmlCase'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmAlertsEscalateRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: tm_alert
+  /v1/risk/monitoring/customer-risk-ratings:
+    get:
+      operationId: customerRiskRatingsList
+      summary: List customer risk ratings
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: rating
+        in: query
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+      - name: next_review_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRatingPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: customer_risk_rating
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: customerRiskRatingsCreate
+      summary: Create customer risk rating
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingCreate'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: customer_risk_rating
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/monitoring/customer-risk-ratings/{id}:
+    get:
+      operationId: customerRiskRatingsGet
+      summary: Retrieve customer risk rating
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: customer_risk_rating
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: customerRiskRatingsUpdate
+      summary: Update customer risk rating
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingUpdate'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: customer_risk_rating
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/monitoring/customer-risk-ratings/{id}/recalculate:
+    post:
+      operationId: customerRiskRatingsRecalculate
+      summary: Recalculate the rating from current factors
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: customer_risk_rating
+  /v1/risk/monitoring/customer-risk-ratings/{id}/override:
+    post:
+      operationId: customerRiskRatingsOverride
+      summary: Override the rating with justification (maker-checker)
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingsOverrideRequest'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-table: customer_risk_rating
+  /v1/risk/graph/entities:
+    get:
+      operationId: riskGraphEntitiesList
+      summary: List risk graph entities
+      tags:
+      - Risk Graph Entities
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: entity_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - DEVICE
+          - IP_ADDRESS
+          - PHONE
+          - EMAIL
+          - ADDRESS
+          - BENEFICIARY
+          - MERCHANT
+      - name: entity_ref
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: community_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_mule_suspect
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphEntityPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-table: risk_graph_entity
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/graph/entities/{id}:
+    get:
+      operationId: riskGraphEntitiesGet
+      summary: Retrieve risk graph entitie
+      tags:
+      - Risk Graph Entities
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphEntity'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-table: risk_graph_entity
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/graph/entities/{id}/links:
+    get:
+      operationId: riskGraphEntitiesLinks
+      summary: Edges of a node
+      tags:
+      - Risk Graph Entities
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphLinkPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-table: risk_graph_entity
+  /v1/risk/graph/entities/{id}/network:
+    get:
+      operationId: riskGraphEntitiesNetwork
+      summary: Subgraph around the node (?depth=1..3) for visual investigation
+      tags:
+      - Risk Graph Entities
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-table: risk_graph_entity
+  /v1/risk/graph/links:
+    get:
+      operationId: riskGraphLinksList
+      summary: List risk graph links
+      tags:
+      - Risk Graph Links
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: from_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: to_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: link_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphLinkPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-table: risk_graph_link
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/graph/links/{id}:
+    get:
+      operationId: riskGraphLinksGet
+      summary: Retrieve risk graph link
+      tags:
+      - Risk Graph Links
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-table: risk_graph_link
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: AML monitoring scenario (structuring, rapid movement, mule, dormant reactivation, ...)
+  name: Tm Scenarios
+- description: Versioned thresholds and parameters of a scenario (tuning history kept for audit)
+  name: Tm Scenario Versions
+- description: Execution of scenarios in batch, backtest or a streaming checkpoint window
+  name: Tm Runs
+- description: AML alert raised by a scenario, with score and aggregate figures
+  name: Tm Alerts
+- description: Customer AML risk rating (CRR) with contributing factors and next review date
+  name: Customer Risk Ratings
+- description: Node in the risk graph (customer, account, device, IP, phone, beneficiary, ...)
+  name: Risk Graph Entities
+- description: Edge between two graph entities (shared device, transfer, shared address, ...)
+  name: Risk Graph Links

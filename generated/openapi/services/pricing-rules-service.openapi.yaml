@@ -1,0 +1,2205 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    DecisionTable:
+      description: A named decision (pricing, eligibility, fee, limit, routing) with versions
+      properties:
+        code:
+          description: Decision code, e.g. LOAN_PRICING_GRID
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        current_version_id:
+          description: Published version in use
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        owner_user_id:
+          description: Owner
+          format: uuid
+          type:
+          - string
+          - 'null'
+        purpose:
+          description: What the decision is used for
+          enum:
+          - PRICING
+          - ELIGIBILITY
+          - FEE
+          - LIMIT
+          - ROUTING
+          - RISK
+          - CUSTOM
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - purpose
+      - status
+      type: object
+    DecisionTableCreate:
+      properties:
+        code:
+          description: Decision code, e.g. LOAN_PRICING_GRID
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        owner_user_id:
+          description: Owner
+          format: uuid
+          type: string
+        purpose:
+          description: What the decision is used for
+          enum:
+          - PRICING
+          - ELIGIBILITY
+          - FEE
+          - LIMIT
+          - ROUTING
+          - RISK
+          - CUSTOM
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - RETIRED
+          type: string
+      required:
+      - code
+      - name
+      - purpose
+      type: object
+    DecisionTablePage:
+      description: One page of DecisionTable results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DecisionTable'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    DecisionTableUpdate:
+      properties:
+        code:
+          description: Decision code, e.g. LOAN_PRICING_GRID
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        owner_user_id:
+          description: Owner
+          format: uuid
+          type: string
+        purpose:
+          description: What the decision is used for
+          enum:
+          - PRICING
+          - ELIGIBILITY
+          - FEE
+          - LIMIT
+          - ROUTING
+          - RISK
+          - CUSTOM
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - RETIRED
+          type: string
+      type: object
+    DecisionTableVersion:
+      description: Versioned content of a decision table (inputs, outputs, rules) in DMN form
+      properties:
+        approved_at:
+          description: Approval time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Checker
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        checksum:
+          description: SHA-256 of the content
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decision_table_id:
+          description: Decision table
+          format: uuid
+          type: string
+        dmn_xml:
+          description: Equivalent DMN 1.5 XML for import/export
+          type:
+          - string
+          - 'null'
+        effective_from:
+          description: Start
+          format: date-time
+          type:
+          - string
+          - 'null'
+        effective_to:
+          description: End
+          format: date-time
+          type:
+          - string
+          - 'null'
+        hit_policy:
+          description: DMN hit policy
+          enum:
+          - UNIQUE
+          - FIRST
+          - PRIORITY
+          - ANY
+          - COLLECT
+          - RULE_ORDER
+          - OUTPUT_ORDER
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inputs:
+          additionalProperties: true
+          description: 'Input columns: name, type, expression'
+          type: object
+        outputs:
+          additionalProperties: true
+          description: 'Output columns: name, type, default'
+          type: object
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        rules:
+          additionalProperties: true
+          description: 'Rule rows: input entries, output entries, annotation'
+          type: object
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - RETIRED
+          readOnly: true
+          type: string
+        submitted_by:
+          description: Maker
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version_no:
+          description: Version number
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - decision_table_id
+      - version_no
+      - hit_policy
+      - inputs
+      - outputs
+      - rules
+      - status
+      type: object
+    DecisionTableVersionCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        decision_table_id:
+          description: Decision table
+          format: uuid
+          type: string
+        dmn_xml:
+          description: Equivalent DMN 1.5 XML for import/export
+          type: string
+        effective_from:
+          description: Start
+          format: date-time
+          type: string
+        effective_to:
+          description: End
+          format: date-time
+          type: string
+        hit_policy:
+          description: DMN hit policy
+          enum:
+          - UNIQUE
+          - FIRST
+          - PRIORITY
+          - ANY
+          - COLLECT
+          - RULE_ORDER
+          - OUTPUT_ORDER
+          type: string
+        inputs:
+          additionalProperties: true
+          description: 'Input columns: name, type, expression'
+          type: object
+        outputs:
+          additionalProperties: true
+          description: 'Output columns: name, type, default'
+          type: object
+        rules:
+          additionalProperties: true
+          description: 'Rule rows: input entries, output entries, annotation'
+          type: object
+        version_no:
+          description: Version number
+          format: int32
+          type: integer
+      required:
+      - decision_table_id
+      - version_no
+      - inputs
+      - outputs
+      - rules
+      type: object
+    DecisionTableVersionPage:
+      description: One page of DecisionTableVersion results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/DecisionTableVersion'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    DecisionTableVersionUpdate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        decision_table_id:
+          description: Decision table
+          format: uuid
+          type: string
+        dmn_xml:
+          description: Equivalent DMN 1.5 XML for import/export
+          type: string
+        effective_from:
+          description: Start
+          format: date-time
+          type: string
+        effective_to:
+          description: End
+          format: date-time
+          type: string
+        hit_policy:
+          description: DMN hit policy
+          enum:
+          - UNIQUE
+          - FIRST
+          - PRIORITY
+          - ANY
+          - COLLECT
+          - RULE_ORDER
+          - OUTPUT_ORDER
+          type: string
+        inputs:
+          additionalProperties: true
+          description: 'Input columns: name, type, expression'
+          type: object
+        outputs:
+          additionalProperties: true
+          description: 'Output columns: name, type, default'
+          type: object
+        rules:
+          additionalProperties: true
+          description: 'Rule rows: input entries, output entries, annotation'
+          type: object
+        version_no:
+          description: Version number
+          format: int32
+          type: integer
+      type: object
+    DecisionTableVersionsApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    DecisionTableVersionsRejectRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    DecisionTableVersionsSubmitRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    DecisionTableVersionsTestRequest:
+      properties:
+        test_cases:
+          additionalProperties: true
+          type: object
+      required:
+      - test_cases
+      type: object
+    DecisionTablesEvaluateRequest:
+      properties:
+        inputs:
+          additionalProperties: true
+          type: object
+        subject_id:
+          format: uuid
+          type: string
+        subject_type:
+          maxLength: 64
+          type: string
+      required:
+      - inputs
+      type: object
+    DecisionTablesImportDmnRequest:
+      properties:
+        code:
+          maxLength: 64
+          type: string
+        dmn_xml:
+          type: string
+      required:
+      - dmn_xml
+      - code
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    ProductPriceQuote:
+      description: Price quote given to a customer (rate, fees, APR) valid until expiry
+      properties:
+        accepted_at:
+          description: Time accepted
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        amount:
+          description: Requested amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        apr:
+          description: Annual percentage rate / AER including fees
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        channel:
+          description: Channel
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - USSD
+          - API
+          - CALL_CENTER
+          - PARTNER
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer (empty for anonymous quotes)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        decision_log_id:
+          description: Evaluation that produced the quote
+          format: uuid
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Validity
+          format: date-time
+          type: string
+        fees:
+          additionalProperties: true
+          description: Quoted fees
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interest_rate:
+          description: Quoted annual rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        product_id:
+          description: Product
+          format: uuid
+          type: string
+        product_version_id:
+          description: Version priced
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        term_months:
+          description: Requested term
+          format: int32
+          type:
+          - integer
+          - 'null'
+        total_cost:
+          description: Total cost of credit or total interest earned
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - product_id
+      - product_version_id
+      - currency
+      - interest_rate
+      - expires_at
+      type: object
+    ProductPriceQuoteCreate:
+      properties:
+        amount:
+          description: Requested amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        apr:
+          description: Annual percentage rate / AER including fees
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        channel:
+          description: Channel
+          enum:
+          - MOBILE
+          - WEB
+          - BRANCH
+          - AGENT
+          - USSD
+          - API
+          - CALL_CENTER
+          - PARTNER
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer (empty for anonymous quotes)
+          format: uuid
+          type: string
+        decision_log_id:
+          description: Evaluation that produced the quote
+          format: uuid
+          type: string
+        expires_at:
+          description: Validity
+          format: date-time
+          type: string
+        fees:
+          additionalProperties: true
+          description: Quoted fees
+          type: object
+        interest_rate:
+          description: Quoted annual rate
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        product_id:
+          description: Product
+          format: uuid
+          type: string
+        product_version_id:
+          description: Version priced
+          format: uuid
+          type: string
+        term_months:
+          description: Requested term
+          format: int32
+          type: integer
+        total_cost:
+          description: Total cost of credit or total interest earned
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - product_id
+      - product_version_id
+      - currency
+      - interest_rate
+      - expires_at
+      type: object
+    ProductPriceQuotePage:
+      description: One page of ProductPriceQuote results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ProductPriceQuote'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RuleEvaluationLog:
+      description: Every decision evaluation with inputs, matched rules and outputs (explainability). Append-only.
+      properties:
+        caller_service:
+          description: Service that asked
+          maxLength: 64
+          type: string
+        correlation_id:
+          description: Trace id
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decision_table_id:
+          description: Decision table
+          format: uuid
+          type: string
+        decision_table_version_id:
+          description: Version evaluated
+          format: uuid
+          type: string
+        duration_micros:
+          description: Evaluation time
+          format: int32
+          type: integer
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        inputs:
+          additionalProperties: true
+          description: Input values
+          type: object
+        matched_rules:
+          additionalProperties: true
+          description: Indexes of matched rules
+          type: object
+        outputs:
+          additionalProperties: true
+          description: Output values
+          type: object
+        subject_id:
+          description: Business object id
+          format: uuid
+          type:
+          - string
+          - 'null'
+        subject_type:
+          description: Business object type, e.g. LOAN_APPLICATION
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - decision_table_id
+      - decision_table_version_id
+      - caller_service
+      - inputs
+      - matched_rules
+      - outputs
+      - duration_micros
+      type: object
+    RuleEvaluationLogPage:
+      description: One page of RuleEvaluationLog results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RuleEvaluationLog'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            product:read: Read Product Studio and Pricing
+            product:write: Change Product Studio and Pricing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            product:read: Read Product Studio and Pricing
+            product:write: Change Product Studio and Pricing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Versioned, configuration-driven product catalogue for every product family (deposits, wallets, cards, loans,
+    lines, BNPL, overdrafts), with interest, fees, tax, limits, eligibility, bundles, sandboxed WASM scripts and simulation;
+    plus a DMN-compatible pricing and decision engine.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — pricing-rules-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/decision-tables:
+    get:
+      operationId: decisionTablesList
+      summary: List decision tables
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: purpose
+        in: query
+        schema:
+          type: string
+          enum:
+          - PRICING
+          - ELIGIBILITY
+          - FEE
+          - LIMIT
+          - ROUTING
+          - RISK
+          - CUSTOM
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - RETIRED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTablePage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: decisionTablesCreate
+      summary: Create decision table
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTable'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableCreate'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+      x-crud: true
+      x-crud-create: true
+  /v1/decision-tables/{id}:
+    get:
+      operationId: decisionTablesGet
+      summary: Retrieve decision table
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTable'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: decisionTablesUpdate
+      summary: Update decision table
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTable'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableUpdate'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+      x-crud: true
+      x-crud-update: true
+  /v1/decision-tables/{id}/evaluate:
+    post:
+      operationId: decisionTablesEvaluate
+      summary: Evaluate the published version with inputs
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleEvaluationLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTablesEvaluateRequest'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+  /v1/decision-tables/{id}/versions:
+    get:
+      operationId: decisionTablesVersions
+      summary: Versions of the decision table
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+  /v1/decision-tables/import-dmn:
+    post:
+      operationId: decisionTablesImportDmn
+      summary: Import a DMN 1.5 XML file as a new draft
+      tags:
+      - Decision Tables
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTable'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTablesImportDmnRequest'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table
+  /v1/decision-table-versions:
+    get:
+      operationId: decisionTableVersionsList
+      summary: List decision table versions
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: decision_table_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - PUBLISHED
+          - RETIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: decisionTableVersionsCreate
+      summary: Create decision table version
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableVersionCreate'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+      x-crud: true
+      x-crud-create: true
+  /v1/decision-table-versions/{id}:
+    get:
+      operationId: decisionTableVersionsGet
+      summary: Retrieve decision table version
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: decisionTableVersionsUpdate
+      summary: Update decision table version
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableVersionUpdate'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+      x-crud: true
+      x-crud-update: true
+  /v1/decision-table-versions/{id}/test:
+    post:
+      operationId: decisionTableVersionsTest
+      summary: Evaluate a draft version against test cases
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableVersionsTestRequest'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+  /v1/decision-table-versions/{id}/submit:
+    post:
+      operationId: decisionTableVersionsSubmit
+      summary: Submit for approval (maker)
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableVersionsSubmitRequest'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+  /v1/decision-table-versions/{id}/approve:
+    post:
+      operationId: decisionTableVersionsApprove
+      summary: Approve and publish (checker)
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableVersionsApproveRequest'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+  /v1/decision-table-versions/{id}/reject:
+    post:
+      operationId: decisionTableVersionsReject
+      summary: Reject
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecisionTableVersion'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionTableVersionsRejectRequest'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+  /v1/decision-table-versions/{id}/export-dmn:
+    get:
+      operationId: decisionTableVersionsExportDmn
+      summary: Export as DMN 1.5 XML
+      tags:
+      - Decision Table Versions
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-02
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: decision_table_version
+  /v1/rule-evaluations:
+    get:
+      operationId: ruleEvaluationsList
+      summary: List rule evaluations
+      tags:
+      - Rule Evaluations
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: decision_table_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: subject_type
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: subject_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: correlation_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleEvaluationLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: rule_evaluation_log
+      x-crud: true
+      x-crud-list: true
+  /v1/rule-evaluations/{id}:
+    get:
+      operationId: ruleEvaluationsGet
+      summary: Retrieve rule evaluation
+      tags:
+      - Rule Evaluations
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleEvaluationLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: rule_evaluation_log
+      x-crud: true
+      x-crud-get: true
+  /v1/price-quotes:
+    get:
+      operationId: priceQuotesList
+      summary: List price quotes
+      tags:
+      - Price Quotes
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: product_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPriceQuotePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PRC-04
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: product_price_quote
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: priceQuotesCreate
+      summary: Create price quote
+      tags:
+      - Price Quotes
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPriceQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductPriceQuoteCreate'
+      x-requirements:
+      - PRC-04
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: product_price_quote
+      x-crud: true
+      x-crud-create: true
+  /v1/price-quotes/{id}:
+    get:
+      operationId: priceQuotesGet
+      summary: Retrieve price quote
+      tags:
+      - Price Quotes
+      security:
+      - oauth2:
+        - product:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPriceQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRC-04
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: product_price_quote
+      x-crud: true
+      x-crud-get: true
+  /v1/price-quotes/{id}/accept:
+    post:
+      operationId: priceQuotesAccept
+      summary: Accept a quote (locks the price for origination)
+      tags:
+      - Price Quotes
+      security:
+      - oauth2:
+        - product:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPriceQuote'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PRC-04
+      - PRD-04
+      x-service: pricing-rules-service
+      x-table: product_price_quote
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A named decision (pricing, eligibility, fee, limit, routing) with versions
+  name: Decision Tables
+- description: Versioned content of a decision table (inputs, outputs, rules) in DMN form
+  name: Decision Table Versions
+- description: Every decision evaluation with inputs, matched rules and outputs (explainability). Append-only.
+  name: Rule Evaluations
+- description: Price quote given to a customer (rate, fees, APR) valid until expiry
+  name: Price Quotes

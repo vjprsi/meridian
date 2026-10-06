@@ -1,0 +1,3286 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    ApprovalRequest:
+      description: A pending sensitive operation awaiting checker approval (four-eyes)
+      properties:
+        action:
+          description: Action
+          maxLength: 40
+          type: string
+        amount:
+          description: Amount, for threshold routing
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        approval_policy_id:
+          description: Policy applied
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approvals_received:
+          description: Approvals received
+          format: int32
+          readOnly: true
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency of the amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        current_level:
+          description: Current approval level
+          format: int32
+          readOnly: true
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decided_at:
+          description: Final decision time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        diff:
+          additionalProperties: true
+          description: Before/after diff for updates
+          type:
+          - object
+          - 'null'
+        executed_at:
+          description: Execution time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        execution_result:
+          additionalProperties: true
+          description: Result or error from executing the operation
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        maker:
+          description: Requesting user
+          maxLength: 64
+          readOnly: true
+          type: string
+        payload:
+          additionalProperties: true
+          description: Operation to execute once approved
+          type: object
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        required_approvals:
+          description: Approvals required
+          format: int32
+          readOnly: true
+          type: integer
+        resource_id:
+          description: Resource id (empty for creates)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        resource_type:
+          description: Resource type
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - EXPIRED
+          - EXECUTED
+          - EXECUTION_FAILED
+          readOnly: true
+          type: string
+        summary:
+          description: Human-readable description of the change
+          type:
+          - string
+          - 'null'
+        title:
+          description: Short title shown in the approvals queue
+          maxLength: 255
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - action
+      - title
+      - payload
+      - priority
+      - status
+      - maker
+      - required_approvals
+      - approvals_received
+      - current_level
+      type: object
+    ConfigChange:
+      description: Immutable history of configuration changes with diffs
+      properties:
+        approved_by:
+          description: Checker
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        change_type:
+          description: CREATED, ACTIVATED, ROLLED_BACK, PROMOTED
+          maxLength: 32
+          type: string
+        config_entry_id:
+          description: Version created
+          format: uuid
+          type: string
+        config_key:
+          description: Key
+          maxLength: 128
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        diff:
+          additionalProperties: true
+          description: JSON patch from the previous version
+          type:
+          - object
+          - 'null'
+        from_version:
+          description: Previous version
+          format: int32
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        namespace:
+          description: Namespace
+          maxLength: 64
+          type: string
+        to_version:
+          description: New version
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - config_entry_id
+      - namespace
+      - config_key
+      - to_version
+      - change_type
+      type: object
+    ConfigChangePage:
+      description: One page of ConfigChange results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ConfigChange'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ConfigEntriesExportRequest:
+      properties:
+        namespaces:
+          additionalProperties: true
+          type: object
+      type: object
+    ConfigEntriesImportRequest:
+      properties:
+        bundle:
+          additionalProperties: true
+          type: object
+      required:
+      - bundle
+      type: object
+    ConfigEntriesRollbackRequest:
+      properties:
+        reason:
+          maxLength: 500
+          type: string
+      required:
+      - reason
+      type: object
+    ConfigEntriesSubmitRequest:
+      properties:
+        change_reason:
+          maxLength: 500
+          type: string
+      required:
+      - change_reason
+      type: object
+    ConfigEntry:
+      description: A versioned configuration document (configuration as data); one ACTIVE version per key
+      properties:
+        approval_request_id:
+          description: Maker-checker approval
+          format: uuid
+          type:
+          - string
+          - 'null'
+        change_reason:
+          description: Why it changed
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        config_key:
+          description: Key within the namespace
+          maxLength: 128
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        effective_from:
+          description: When the version takes effect
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        namespace:
+          description: Owning area, e.g. payments, limits, onboarding
+          maxLength: 64
+          type: string
+        promoted_from_environment:
+          description: Source environment when promoted
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUPERSEDED
+          - ROLLED_BACK
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        value:
+          additionalProperties: true
+          description: Configuration document
+          type: object
+        value_schema:
+          additionalProperties: true
+          description: JSON Schema the value must satisfy
+          type:
+          - object
+          - 'null'
+        version:
+          description: Version number
+          format: int32
+          readOnly: true
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - namespace
+      - config_key
+      - version
+      - value
+      - status
+      type: object
+    ConfigEntryCreate:
+      properties:
+        approval_request_id:
+          description: Maker-checker approval
+          format: uuid
+          type: string
+        change_reason:
+          description: Why it changed
+          maxLength: 500
+          type: string
+        config_key:
+          description: Key within the namespace
+          maxLength: 128
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        effective_from:
+          description: When the version takes effect
+          format: date-time
+          type: string
+        namespace:
+          description: Owning area, e.g. payments, limits, onboarding
+          maxLength: 64
+          type: string
+        promoted_from_environment:
+          description: Source environment when promoted
+          maxLength: 32
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUPERSEDED
+          - ROLLED_BACK
+          type: string
+        value:
+          additionalProperties: true
+          description: Configuration document
+          type: object
+        value_schema:
+          additionalProperties: true
+          description: JSON Schema the value must satisfy
+          type: object
+      required:
+      - namespace
+      - config_key
+      - value
+      type: object
+    ConfigEntryPage:
+      description: One page of ConfigEntry results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ConfigEntry'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CountryPack:
+      description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
+      properties:
+        code:
+          description: Pack code, e.g. KE-2026.3
+          maxLength: 32
+          type: string
+        contents:
+          additionalProperties: true
+          description: 'Manifest: report templates, tax rules, calendars, rails, KYC tiers'
+          type: object
+        country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Local currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Name
+          maxLength: 160
+          type: string
+        regulator:
+          description: Main regulator
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        release_notes:
+          description: Release notes
+          type:
+          - string
+          - 'null'
+        released_at:
+          description: Release time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - RELEASED
+          - DEPRECATED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version:
+          description: Semantic version
+          maxLength: 32
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - country
+      - name
+      - version
+      - status
+      - currency
+      - contents
+      type: object
+    CountryPackPage:
+      description: One page of CountryPack results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CountryPack'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CountryPacksInstallRequest:
+      properties:
+        legal_entity_id:
+          format: uuid
+          type: string
+        overrides:
+          additionalProperties: true
+          type: object
+      required:
+      - legal_entity_id
+      type: object
+    CustomFieldDefinition:
+      description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation,
+        UI)
+      properties:
+        allowed_values:
+          additionalProperties: true
+          description: Allowed values when data_type is ENUM
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        data_type:
+          description: Type used to validate the stored string
+          enum:
+          - TEXT
+          - NUMBER
+          - DECIMAL
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - EMAIL
+          - PHONE
+          - URL
+          - ENUM
+          - REFERENCE
+          type: string
+        default_value:
+          description: Default applied on create
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        field_key:
+          description: Stable machine key, e.g. employer_id
+          maxLength: 64
+          type: string
+        help_text:
+          description: Help shown to users
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Disable without deleting history
+          type: boolean
+        is_pii:
+          description: Encrypt and mask like other personal data
+          type: boolean
+        is_required:
+          description: Must be provided on create
+          type: boolean
+        is_searchable:
+          description: Exposed as a list filter in the API and console
+          type: boolean
+        label:
+          description: Display label
+          maxLength: 120
+          type: string
+        label_translations:
+          additionalProperties: true
+          description: Labels per language code
+          type:
+          - object
+          - 'null'
+        max_value:
+          description: Upper bound for NUMBER, DECIMAL, DATE
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        min_value:
+          description: Lower bound for NUMBER, DECIMAL, DATE
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        slot:
+          description: Slot number 1..5 (maps to custom_field_<slot>)
+          format: int32
+          type: integer
+        table_name:
+          description: Table / API resource the slot belongs to, e.g. customer
+          maxLength: 64
+          type: string
+        ui_order:
+          description: Display order
+          format: int32
+          type: integer
+        ui_visible:
+          description: Shown in console and apps
+          type: boolean
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        validation_regex:
+          description: Optional pattern the value must match
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - table_name
+      - slot
+      - field_key
+      - label
+      - data_type
+      - is_required
+      - is_searchable
+      - is_pii
+      - ui_visible
+      - ui_order
+      - is_active
+      type: object
+    CustomFieldDefinitionCreate:
+      properties:
+        allowed_values:
+          additionalProperties: true
+          description: Allowed values when data_type is ENUM
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_type:
+          description: Type used to validate the stored string
+          enum:
+          - TEXT
+          - NUMBER
+          - DECIMAL
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - EMAIL
+          - PHONE
+          - URL
+          - ENUM
+          - REFERENCE
+          type: string
+        default_value:
+          description: Default applied on create
+          maxLength: 500
+          type: string
+        field_key:
+          description: Stable machine key, e.g. employer_id
+          maxLength: 64
+          type: string
+        help_text:
+          description: Help shown to users
+          maxLength: 500
+          type: string
+        is_active:
+          description: Disable without deleting history
+          type: boolean
+        is_pii:
+          description: Encrypt and mask like other personal data
+          type: boolean
+        is_required:
+          description: Must be provided on create
+          type: boolean
+        is_searchable:
+          description: Exposed as a list filter in the API and console
+          type: boolean
+        label:
+          description: Display label
+          maxLength: 120
+          type: string
+        label_translations:
+          additionalProperties: true
+          description: Labels per language code
+          type: object
+        max_value:
+          description: Upper bound for NUMBER, DECIMAL, DATE
+          maxLength: 64
+          type: string
+        min_value:
+          description: Lower bound for NUMBER, DECIMAL, DATE
+          maxLength: 64
+          type: string
+        slot:
+          description: Slot number 1..5 (maps to custom_field_<slot>)
+          format: int32
+          type: integer
+        table_name:
+          description: Table / API resource the slot belongs to, e.g. customer
+          maxLength: 64
+          type: string
+        ui_order:
+          description: Display order
+          format: int32
+          type: integer
+        ui_visible:
+          description: Shown in console and apps
+          type: boolean
+        validation_regex:
+          description: Optional pattern the value must match
+          maxLength: 500
+          type: string
+      required:
+      - table_name
+      - slot
+      - field_key
+      - label
+      type: object
+    CustomFieldDefinitionPage:
+      description: One page of CustomFieldDefinition results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CustomFieldDefinition'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CustomFieldDefinitionUpdate:
+      properties:
+        allowed_values:
+          additionalProperties: true
+          description: Allowed values when data_type is ENUM
+          type: object
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        data_type:
+          description: Type used to validate the stored string
+          enum:
+          - TEXT
+          - NUMBER
+          - DECIMAL
+          - BOOLEAN
+          - DATE
+          - DATETIME
+          - EMAIL
+          - PHONE
+          - URL
+          - ENUM
+          - REFERENCE
+          type: string
+        default_value:
+          description: Default applied on create
+          maxLength: 500
+          type: string
+        field_key:
+          description: Stable machine key, e.g. employer_id
+          maxLength: 64
+          type: string
+        help_text:
+          description: Help shown to users
+          maxLength: 500
+          type: string
+        is_active:
+          description: Disable without deleting history
+          type: boolean
+        is_pii:
+          description: Encrypt and mask like other personal data
+          type: boolean
+        is_required:
+          description: Must be provided on create
+          type: boolean
+        is_searchable:
+          description: Exposed as a list filter in the API and console
+          type: boolean
+        label:
+          description: Display label
+          maxLength: 120
+          type: string
+        label_translations:
+          additionalProperties: true
+          description: Labels per language code
+          type: object
+        max_value:
+          description: Upper bound for NUMBER, DECIMAL, DATE
+          maxLength: 64
+          type: string
+        min_value:
+          description: Lower bound for NUMBER, DECIMAL, DATE
+          maxLength: 64
+          type: string
+        slot:
+          description: Slot number 1..5 (maps to custom_field_<slot>)
+          format: int32
+          type: integer
+        table_name:
+          description: Table / API resource the slot belongs to, e.g. customer
+          maxLength: 64
+          type: string
+        ui_order:
+          description: Display order
+          format: int32
+          type: integer
+        ui_visible:
+          description: Shown in console and apps
+          type: boolean
+        validation_regex:
+          description: Optional pattern the value must match
+          maxLength: 500
+          type: string
+      type: object
+    CustomFieldDefinitionsValidateRequest:
+      properties:
+        table_name:
+          maxLength: 64
+          type: string
+        values:
+          additionalProperties: true
+          type: object
+      required:
+      - table_name
+      - values
+      type: object
+    InstalledCountryPacksUninstallRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    InstalledCountryPacksUpgradeRequest:
+      properties:
+        country_pack_id:
+          format: uuid
+          type: string
+      required:
+      - country_pack_id
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    TaxRateRule:
+      description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
+      properties:
+        applies_to:
+          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
+          maxLength: 64
+          type: string
+        country:
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        country_pack_id:
+          description: Source pack (empty = tenant-defined)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Threshold currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_segment:
+          description: Segment the rule applies to (e.g. NON_RESIDENT)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        legal_entity_id:
+          description: Legal entity (empty = all)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        rate:
+          description: Rate as a fraction, e.g. 0.15
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        tax_gl_code:
+          description: GL code for the tax liability
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        tax_type:
+          description: Tax type
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+          type: string
+        threshold_amount:
+          description: Amount below which no tax applies
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - country
+      - tax_type
+      - name
+      - rate
+      - applies_to
+      - valid_from
+      type: object
+    TaxRateRuleCreate:
+      properties:
+        applies_to:
+          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
+          maxLength: 64
+          type: string
+        country:
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        country_pack_id:
+          description: Source pack (empty = tenant-defined)
+          format: uuid
+          type: string
+        currency:
+          description: Threshold currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_segment:
+          description: Segment the rule applies to (e.g. NON_RESIDENT)
+          maxLength: 64
+          type: string
+        legal_entity_id:
+          description: Legal entity (empty = all)
+          format: uuid
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        rate:
+          description: Rate as a fraction, e.g. 0.15
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        tax_gl_code:
+          description: GL code for the tax liability
+          maxLength: 32
+          type: string
+        tax_type:
+          description: Tax type
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+          type: string
+        threshold_amount:
+          description: Amount below which no tax applies
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+      required:
+      - country
+      - tax_type
+      - name
+      - rate
+      - applies_to
+      - valid_from
+      type: object
+    TaxRateRulePage:
+      description: One page of TaxRateRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TaxRateRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TaxRateRuleUpdate:
+      properties:
+        applies_to:
+          description: INTEREST_PAID, FEE, TRANSFER, LOAN_DISBURSEMENT ...
+          maxLength: 64
+          type: string
+        country:
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type: string
+        country_pack_id:
+          description: Source pack (empty = tenant-defined)
+          format: uuid
+          type: string
+        currency:
+          description: Threshold currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_segment:
+          description: Segment the rule applies to (e.g. NON_RESIDENT)
+          maxLength: 64
+          type: string
+        legal_entity_id:
+          description: Legal entity (empty = all)
+          format: uuid
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        rate:
+          description: Rate as a fraction, e.g. 0.15
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        tax_gl_code:
+          description: GL code for the tax liability
+          maxLength: 32
+          type: string
+        tax_type:
+          description: Tax type
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+          type: string
+        threshold_amount:
+          description: Amount below which no tax applies
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+      type: object
+    TaxRateRulesCalculateRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        applies_to:
+          maxLength: 64
+          type: string
+        country:
+          description: ISO 3166-1 alpha-2
+          pattern: ^[A-Z]{2}$
+          type: string
+        currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+        customer_segment:
+          maxLength: 64
+          type: string
+      required:
+      - country
+      - applies_to
+      - amount
+      - currency
+      type: object
+    TenantCountryPack:
+      description: A country pack installed for a tenant's legal entity, with local overrides
+      properties:
+        country_pack_id:
+          description: Installed pack version
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        installed_at:
+          description: Install time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        overrides:
+          additionalProperties: true
+          description: Tenant overrides of pack defaults
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - INSTALLING
+          - INSTALLED
+          - UPGRADE_AVAILABLE
+          - FAILED
+          - UNINSTALLED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - country_pack_id
+      - legal_entity_id
+      - status
+      type: object
+    TenantCountryPackPage:
+      description: One page of TenantCountryPack results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantCountryPack'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantCountryPackUpdate:
+      properties:
+        country_pack_id:
+          description: Installed pack version
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        legal_entity_id:
+          description: Legal entity
+          format: uuid
+          type: string
+        overrides:
+          additionalProperties: true
+          description: Tenant overrides of pack defaults
+          type: object
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — config-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/config/custom-fields:
+    get:
+      operationId: customFieldDefinitionsList
+      summary: List custom field definitions
+      tags:
+      - Custom Field Definitions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: table_name
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: slot
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: field_key
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomFieldDefinitionPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ADM-01
+      x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: customFieldDefinitionsCreate
+      summary: Create custom field definition
+      tags:
+      - Custom Field Definitions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomFieldDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomFieldDefinitionCreate'
+      x-requirements:
+      - ADM-01
+      x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-create: true
+  /v1/config/custom-fields/{id}:
+    get:
+      operationId: customFieldDefinitionsGet
+      summary: Retrieve custom field definition
+      tags:
+      - Custom Field Definitions
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id006
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomFieldDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: customFieldDefinitionsUpdate
+      summary: Update custom field definition
+      tags:
+      - Custom Field Definitions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomFieldDefinition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomFieldDefinitionUpdate'
+      x-requirements:
+      - ADM-01
+      x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: customFieldDefinitionsDelete
+      summary: Delete custom field definition
+      tags:
+      - Custom Field Definitions
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id006
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      x-service: config-service
+      x-table: custom_field_definition
+      x-crud: true
+      x-crud-delete: true
+  /v1/config/custom-fields/validate:
+    post:
+      operationId: customFieldDefinitionsValidate
+      summary: Validate values against a table's custom field definitions
+      tags:
+      - Custom Field Definitions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomFieldDefinitionsValidateRequest'
+      x-requirements:
+      - ADM-01
+      x-service: config-service
+      x-table: custom_field_definition
+  /v1/config/entries:
+    get:
+      operationId: configEntriesList
+      summary: List config entries
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: namespace
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: config_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - SUPERSEDED
+          - ROLLED_BACK
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigEntryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: configEntriesCreate
+      summary: Create config entrie
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigEntryCreate'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+      x-crud: true
+      x-crud-create: true
+  /v1/config/entries/{id}:
+    get:
+      operationId: configEntriesGet
+      summary: Retrieve config entrie
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+      x-crud: true
+      x-crud-get: true
+  /v1/config/entries/{id}/submit:
+    post:
+      operationId: configEntriesSubmit
+      summary: Submit a draft for approval
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigEntriesSubmitRequest'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/entries/{id}/activate:
+    post:
+      operationId: configEntriesActivate
+      summary: Activate an approved version
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/entries/{id}/rollback:
+    post:
+      operationId: configEntriesRollback
+      summary: Roll back to this version
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigEntry'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigEntriesRollbackRequest'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/entries/{id}/history:
+    get:
+      operationId: configEntriesHistory
+      summary: Change history of the key
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigChangePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/entries/export:
+    post:
+      operationId: configEntriesExport
+      summary: Export configuration for promotion to another environment
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigEntriesExportRequest'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/entries/import:
+    post:
+      operationId: configEntriesImport
+      summary: Import configuration exported from another environment
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigEntriesImportRequest'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/entries/resolve:
+    get:
+      operationId: configEntriesResolve
+      summary: Effective configuration for a namespace (?namespace=)
+      tags:
+      - Config Entries
+      security:
+      - oauth2:
+        - platform:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-01
+      - LIM-02
+      x-service: config-service
+      x-table: config_entry
+  /v1/config/changes:
+    get:
+      operationId: configChangesList
+      summary: List config changes
+      tags:
+      - Config Changes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: config_entry_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: namespace
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: config_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: change_type
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigChangePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-03
+      - LIM-02
+      x-service: config-service
+      x-table: config_change
+      x-crud: true
+      x-crud-list: true
+  /v1/config/changes/{id}:
+    get:
+      operationId: configChangesGet
+      summary: Retrieve config change
+      tags:
+      - Config Changes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigChange'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-03
+      - LIM-02
+      x-service: config-service
+      x-table: config_change
+      x-crud: true
+      x-crud-get: true
+  /v1/config/country-packs:
+    get:
+      operationId: countryPacksList
+      summary: List country packs
+      tags:
+      - Country Packs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - RELEASED
+          - DEPRECATED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryPackPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-04
+      - REG-01
+      x-service: config-service
+      x-table: country_pack
+      x-crud: true
+      x-crud-list: true
+  /v1/config/country-packs/{id}:
+    get:
+      operationId: countryPacksGet
+      summary: Retrieve country pack
+      tags:
+      - Country Packs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryPack'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-04
+      - REG-01
+      x-service: config-service
+      x-table: country_pack
+      x-crud: true
+      x-crud-get: true
+  /v1/config/country-packs/{id}/install:
+    post:
+      operationId: countryPacksInstall
+      summary: Install the pack for a legal entity
+      tags:
+      - Country Packs
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCountryPack'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CountryPacksInstallRequest'
+      x-requirements:
+      - ADM-04
+      - REG-01
+      x-service: config-service
+      x-table: country_pack
+  /v1/config/installed-country-packs:
+    get:
+      operationId: installedCountryPacksList
+      summary: List installed country packs
+      tags:
+      - Installed Country Packs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: country_pack_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - INSTALLING
+          - INSTALLED
+          - UPGRADE_AVAILABLE
+          - FAILED
+          - UNINSTALLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCountryPackPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REG-01
+      x-service: config-service
+      x-table: tenant_country_pack
+      x-crud: true
+      x-crud-list: true
+  /v1/config/installed-country-packs/{id}:
+    get:
+      operationId: installedCountryPacksGet
+      summary: Retrieve installed country pack
+      tags:
+      - Installed Country Packs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCountryPack'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REG-01
+      x-service: config-service
+      x-table: tenant_country_pack
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: installedCountryPacksUpdate
+      summary: Update installed country pack
+      tags:
+      - Installed Country Packs
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCountryPack'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCountryPackUpdate'
+      x-requirements:
+      - REG-01
+      x-service: config-service
+      x-table: tenant_country_pack
+      x-crud: true
+      x-crud-update: true
+  /v1/config/installed-country-packs/{id}/upgrade:
+    post:
+      operationId: installedCountryPacksUpgrade
+      summary: Upgrade to a newer pack version
+      tags:
+      - Installed Country Packs
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCountryPack'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstalledCountryPacksUpgradeRequest'
+      x-requirements:
+      - REG-01
+      x-service: config-service
+      x-table: tenant_country_pack
+  /v1/config/installed-country-packs/{id}/uninstall:
+    post:
+      operationId: installedCountryPacksUninstall
+      summary: Uninstall a pack
+      tags:
+      - Installed Country Packs
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCountryPack'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstalledCountryPacksUninstallRequest'
+      x-requirements:
+      - REG-01
+      x-service: config-service
+      x-table: tenant_country_pack
+  /v1/config/tax-rules:
+    get:
+      operationId: taxRateRulesList
+      summary: List tax rate rules
+      tags:
+      - Tax Rate Rules
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: country
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: tax_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - WITHHOLDING
+          - VAT
+          - GST
+          - STAMP_DUTY
+          - EXCISE
+          - FINANCIAL_TRANSACTION_TAX
+          - LEVY
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: applies_to
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PRC-03
+      x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: taxRateRulesCreate
+      summary: Create tax rate rule
+      tags:
+      - Tax Rate Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxRateRuleCreate'
+      x-requirements:
+      - PRC-03
+      x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/config/tax-rules/{id}:
+    get:
+      operationId: taxRateRulesGet
+      summary: Retrieve tax rate rule
+      tags:
+      - Tax Rate Rules
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id009
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRC-03
+      x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: taxRateRulesUpdate
+      summary: Update tax rate rule
+      tags:
+      - Tax Rate Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRateRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxRateRuleUpdate'
+      x-requirements:
+      - PRC-03
+      x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: taxRateRulesDelete
+      summary: Delete tax rate rule
+      tags:
+      - Tax Rate Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PRC-03
+      x-service: config-service
+      x-table: tax_rate_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/config/tax-rules/calculate:
+    post:
+      operationId: taxRateRulesCalculate
+      summary: Calculate tax for an amount and context
+      tags:
+      - Tax Rate Rules
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaxRateRulesCalculateRequest'
+      x-requirements:
+      - PRC-03
+      x-service: config-service
+      x-table: tax_rate_rule
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Defines what a tenant stores in the custom_field_1..5 slots of any table/API (label, type, validation, UI)
+  name: Custom Field Definitions
+- description: A versioned configuration document (configuration as data); one ACTIVE version per key
+  name: Config Entries
+- description: Immutable history of configuration changes with diffs
+  name: Config Changes
+- description: Released bundle of jurisdiction content (reports, tax rules, holidays, schemes, KYC rules)
+  name: Country Packs
+- description: A country pack installed for a tenant's legal entity, with local overrides
+  name: Installed Country Packs
+- description: Tax rule (withholding tax on interest, VAT/GST on fees, stamp duty) per jurisdiction
+  name: Tax Rate Rules

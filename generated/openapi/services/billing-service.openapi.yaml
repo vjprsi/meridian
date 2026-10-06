@@ -1,0 +1,2304 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    InvoicesGenerateRequest:
+      properties:
+        period_end:
+          format: date
+          type: string
+        period_start:
+          format: date
+          type: string
+      required:
+      - period_start
+      - period_end
+      type: object
+    InvoicesRecordPaymentRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        paid_at:
+          format: date-time
+          type: string
+        reference:
+          maxLength: 64
+          type: string
+      required:
+      - amount
+      - paid_at
+      type: object
+    InvoicesVoidRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    PricePlan:
+      description: A published price plan (platform fee, per active account, per transaction tiers)
+      properties:
+        billing_period:
+          description: Billing period
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          type: string
+        code:
+          description: Plan code
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        included_active_accounts:
+          description: Active accounts included
+          format: int32
+          type: integer
+        metric_prices:
+          additionalProperties: true
+          description: Tiered prices per usage metric
+          type: object
+        name:
+          description: Plan name
+          maxLength: 120
+          type: string
+        platform_fee:
+          description: Fixed fee per period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        price_per_active_account:
+          description: Price per extra active account
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Available from
+          format: date
+          type: string
+        valid_to:
+          description: Available to
+          format: date
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - currency
+      - billing_period
+      - platform_fee
+      - included_active_accounts
+      - price_per_active_account
+      - metric_prices
+      - status
+      - valid_from
+      type: object
+    PricePlanCreate:
+      properties:
+        billing_period:
+          description: Billing period
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          type: string
+        code:
+          description: Plan code
+          maxLength: 32
+          type: string
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        included_active_accounts:
+          description: Active accounts included
+          format: int32
+          type: integer
+        metric_prices:
+          additionalProperties: true
+          description: Tiered prices per usage metric
+          type: object
+        name:
+          description: Plan name
+          maxLength: 120
+          type: string
+        platform_fee:
+          description: Fixed fee per period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        price_per_active_account:
+          description: Price per extra active account
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+        valid_from:
+          description: Available from
+          format: date
+          type: string
+        valid_to:
+          description: Available to
+          format: date
+          type: string
+      required:
+      - code
+      - name
+      - currency
+      - metric_prices
+      - valid_from
+      type: object
+    PricePlanPage:
+      description: One page of PricePlan results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/PricePlan'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    PricePlanUpdate:
+      properties:
+        billing_period:
+          description: Billing period
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+          type: string
+        code:
+          description: Plan code
+          maxLength: 32
+          type: string
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        included_active_accounts:
+          description: Active accounts included
+          format: int32
+          type: integer
+        metric_prices:
+          additionalProperties: true
+          description: Tiered prices per usage metric
+          type: object
+        name:
+          description: Plan name
+          maxLength: 120
+          type: string
+        platform_fee:
+          description: Fixed fee per period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        price_per_active_account:
+          description: Price per extra active account
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+          type: string
+        valid_from:
+          description: Available from
+          format: date
+          type: string
+        valid_to:
+          description: Available to
+          format: date
+          type: string
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    SubscriptionsCancelRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    SubscriptionsChangePlanRequest:
+      properties:
+        effective_date:
+          format: date
+          type: string
+        price_plan_id:
+          format: uuid
+          type: string
+      required:
+      - price_plan_id
+      - effective_date
+      type: object
+    TenantInvoice:
+      description: Invoice issued to a tenant for a billing period
+      properties:
+        amount_paid:
+          description: Paid so far
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        document_id:
+          description: PDF invoice
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        due_date:
+          description: Due date
+          format: date
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        invoice_number:
+          description: Invoice number
+          maxLength: 32
+          readOnly: true
+          type: string
+        issued_at:
+          description: Issue time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        paid_at:
+          description: Fully paid time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        period_end:
+          description: Period end
+          format: date
+          type: string
+        period_start:
+          description: Period start
+          format: date
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - ISSUED
+          - PAID
+          - PARTIALLY_PAID
+          - OVERDUE
+          - VOID
+          type: string
+        subtotal:
+          description: Before tax
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        tax_amount:
+          description: Tax
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        tenant_subscription_id:
+          description: Subscription
+          format: uuid
+          type: string
+        total:
+          description: Total due
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - tenant_subscription_id
+      - invoice_number
+      - period_start
+      - period_end
+      - currency
+      - subtotal
+      - tax_amount
+      - total
+      - amount_paid
+      - status
+      type: object
+    TenantInvoiceLine:
+      description: A line of a tenant invoice
+      properties:
+        amount:
+          description: Line amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          maxLength: 255
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        line_no:
+          description: Line number
+          format: int32
+          type: integer
+        metric:
+          description: Metric (empty for fixed fees)
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+          type:
+          - string
+          - 'null'
+        quantity:
+          description: Quantity
+          format: int64
+          type: integer
+        tenant_invoice_id:
+          description: Invoice
+          format: uuid
+          type: string
+        tier:
+          description: Pricing tier applied
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        unit_price:
+          description: Unit price
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - tenant_invoice_id
+      - line_no
+      - description
+      - quantity
+      - unit_price
+      - amount
+      type: object
+    TenantInvoiceLinePage:
+      description: One page of TenantInvoiceLine results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantInvoiceLine'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantInvoicePage:
+      description: One page of TenantInvoice results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantInvoice'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantSubscription:
+      description: A tenant's subscription to a price plan
+      properties:
+        billing_email:
+          description: Invoice recipient
+          format: email
+          maxLength: 320
+          type: string
+        committed_monthly_spend:
+          description: Minimum commitment
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_prices:
+          additionalProperties: true
+          description: Negotiated price overrides
+          type:
+          - object
+          - 'null'
+        discount_rate:
+          description: Negotiated discount (fraction)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        end_date:
+          description: End
+          format: date
+          type:
+          - string
+          - 'null'
+        external_customer_ref:
+          description: Customer id in the finance system
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        payment_terms_days:
+          description: Payment terms
+          format: int32
+          type: integer
+        price_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        start_date:
+          description: Start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - price_plan_id
+      - status
+      - start_date
+      - currency
+      - discount_rate
+      - billing_email
+      - payment_terms_days
+      type: object
+    TenantSubscriptionCreate:
+      properties:
+        billing_email:
+          description: Invoice recipient
+          format: email
+          maxLength: 320
+          type: string
+        committed_monthly_spend:
+          description: Minimum commitment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_prices:
+          additionalProperties: true
+          description: Negotiated price overrides
+          type: object
+        discount_rate:
+          description: Negotiated discount (fraction)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        end_date:
+          description: End
+          format: date
+          type: string
+        external_customer_ref:
+          description: Customer id in the finance system
+          maxLength: 64
+          type: string
+        payment_terms_days:
+          description: Payment terms
+          format: int32
+          type: integer
+        price_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        start_date:
+          description: Start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+          type: string
+      required:
+      - price_plan_id
+      - start_date
+      - currency
+      - billing_email
+      type: object
+    TenantSubscriptionPage:
+      description: One page of TenantSubscription results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantSubscription'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TenantSubscriptionUpdate:
+      properties:
+        billing_email:
+          description: Invoice recipient
+          format: email
+          maxLength: 320
+          type: string
+        committed_monthly_spend:
+          description: Minimum commitment
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_prices:
+          additionalProperties: true
+          description: Negotiated price overrides
+          type: object
+        discount_rate:
+          description: Negotiated discount (fraction)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        end_date:
+          description: End
+          format: date
+          type: string
+        external_customer_ref:
+          description: Customer id in the finance system
+          maxLength: 64
+          type: string
+        payment_terms_days:
+          description: Payment terms
+          format: int32
+          type: integer
+        price_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        start_date:
+          description: Start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+          type: string
+      type: object
+    UsageRecord:
+      description: Metered usage aggregated per day and metric. Append-only.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        dimensions:
+          additionalProperties: true
+          description: Breakdown, e.g. by legal entity or environment
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Dedupe key from the reporting service
+          maxLength: 128
+          readOnly: true
+          type: string
+        metric:
+          description: Metric
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+          type: string
+        period_date:
+          description: Usage date
+          format: date
+          type: string
+        quantity:
+          description: Quantity
+          format: int64
+          type: integer
+        service_name:
+          description: Reporting service
+          maxLength: 64
+          type: string
+      required:
+      - id
+      - created_at
+      - metric
+      - period_date
+      - quantity
+      - service_name
+      - idempotency_key
+      type: object
+    UsageRecordCreate:
+      properties:
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        dimensions:
+          additionalProperties: true
+          description: Breakdown, e.g. by legal entity or environment
+          type: object
+        metric:
+          description: Metric
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+          type: string
+        period_date:
+          description: Usage date
+          format: date
+          type: string
+        quantity:
+          description: Quantity
+          format: int64
+          type: integer
+        service_name:
+          description: Reporting service
+          maxLength: 64
+          type: string
+      required:
+      - metric
+      - period_date
+      - quantity
+      - service_name
+      type: object
+    UsageRecordPage:
+      description: One page of UsageRecord results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UsageRecord'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — billing-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/billing/price-plans:
+    get:
+      operationId: pricePlansList
+      summary: List price plans
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - RETIRED
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: billing_period
+        in: query
+        schema:
+          type: string
+          enum:
+          - MONTHLY
+          - QUARTERLY
+          - ANNUAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlanPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: pricePlansCreate
+      summary: Create price plan
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricePlanCreate'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-create: true
+  /v1/billing/price-plans/{id}:
+    get:
+      operationId: pricePlansGet
+      summary: Retrieve price plan
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: pricePlansUpdate
+      summary: Update price plan
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricePlanUpdate'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: price_plan
+      x-crud: true
+      x-crud-update: true
+  /v1/billing/subscriptions:
+    get:
+      operationId: subscriptionsList
+      summary: List subscriptions
+      tags:
+      - Subscriptions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: price_plan_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - TRIAL
+          - ACTIVE
+          - PAST_DUE
+          - SUSPENDED
+          - CANCELLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSubscriptionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: subscriptionsCreate
+      summary: Create subscription
+      tags:
+      - Subscriptions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSubscription'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantSubscriptionCreate'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-create: true
+  /v1/billing/subscriptions/{id}:
+    get:
+      operationId: subscriptionsGet
+      summary: Retrieve subscription
+      tags:
+      - Subscriptions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSubscription'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: subscriptionsUpdate
+      summary: Update subscription
+      tags:
+      - Subscriptions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSubscription'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantSubscriptionUpdate'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_subscription
+      x-crud: true
+      x-crud-update: true
+  /v1/billing/subscriptions/{id}/change-plan:
+    post:
+      operationId: subscriptionsChangePlan
+      summary: Move to another plan from a date
+      tags:
+      - Subscriptions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSubscription'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionsChangePlanRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_subscription
+  /v1/billing/subscriptions/{id}/cancel:
+    post:
+      operationId: subscriptionsCancel
+      summary: Cancel at period end
+      tags:
+      - Subscriptions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantSubscription'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionsCancelRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_subscription
+  /v1/billing/usage:
+    get:
+      operationId: usageList
+      summary: List usage
+      tags:
+      - Usage
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: metric
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE_ACCOUNT
+          - API_CALL
+          - LEDGER_POSTING
+          - CARD_AUTHORIZATION
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - NOTIFICATION_SMS
+          - NOTIFICATION_EMAIL
+          - KYC_CHECK
+          - SANCTIONS_SCREENING
+          - STORAGE_GB
+          - AI_TOKENS
+      - name: period_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: service_name
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageRecordPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: usage_record
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: usageCreate
+      summary: Create usage
+      tags:
+      - Usage
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageRecord'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsageRecordCreate'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: usage_record
+      x-crud: true
+      x-crud-create: true
+  /v1/billing/usage/{id}:
+    get:
+      operationId: usageGet
+      summary: Retrieve usage
+      tags:
+      - Usage
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageRecord'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: usage_record
+      x-crud: true
+      x-crud-get: true
+  /v1/billing/usage/summary:
+    get:
+      operationId: usageSummary
+      summary: Usage totals per metric for a period (?from=&to=)
+      tags:
+      - Usage
+      security:
+      - oauth2:
+        - platform:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: usage_record
+  /v1/billing/invoices:
+    get:
+      operationId: invoicesList
+      summary: List invoices
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: tenant_subscription_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - ISSUED
+          - PAID
+          - PARTIALLY_PAID
+          - OVERDUE
+          - VOID
+      - name: period_start
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoicePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+      x-crud: true
+      x-crud-list: true
+  /v1/billing/invoices/{id}:
+    get:
+      operationId: invoicesGet
+      summary: Retrieve invoice
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+      x-crud: true
+      x-crud-get: true
+  /v1/billing/invoices/{id}/issue:
+    post:
+      operationId: invoicesIssue
+      summary: Finalise and issue a draft invoice
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+  /v1/billing/invoices/{id}/void:
+    post:
+      operationId: invoicesVoid
+      summary: Void an invoice
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoicesVoidRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+  /v1/billing/invoices/{id}/record-payment:
+    post:
+      operationId: invoicesRecordPayment
+      summary: Record a payment against the invoice
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoice'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoicesRecordPaymentRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+  /v1/billing/invoices/{id}/lines:
+    get:
+      operationId: invoicesLines
+      summary: Invoice lines
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoiceLinePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+  /v1/billing/invoices/generate:
+    post:
+      operationId: invoicesGenerate
+      summary: Generate draft invoices for a period
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoicesGenerateRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-table: tenant_invoice
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A published price plan (platform fee, per active account, per transaction tiers)
+  name: Price Plans
+- description: A tenant's subscription to a price plan
+  name: Subscriptions
+- description: Metered usage aggregated per day and metric. Append-only.
+  name: Usage
+- description: Invoice issued to a tenant for a billing period
+  name: Invoices

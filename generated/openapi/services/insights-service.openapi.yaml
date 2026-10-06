@@ -1,0 +1,3958 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Budget:
+      description: A customer budget, overall or per category, with alert thresholds
+      properties:
+        alert_threshold_pct:
+          description: Alert when spend reaches this share
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        amount:
+          description: Budget amount per period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Budget name
+          maxLength: 120
+          type: string
+        period_type:
+          description: Budget period
+          enum:
+          - WEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+          type: string
+        rollover:
+          description: Carry unspent amount to next period
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        spend_category_id:
+          description: Category (empty = all spending)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        starts_on:
+          description: First period start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - PAUSED
+          - ARCHIVED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - name
+      - period_type
+      - amount
+      - currency
+      - rollover
+      - alert_threshold_pct
+      - status
+      - starts_on
+      type: object
+    BudgetCreate:
+      properties:
+        alert_threshold_pct:
+          description: Alert when spend reaches this share
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        amount:
+          description: Budget amount per period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        name:
+          description: Budget name
+          maxLength: 120
+          type: string
+        period_type:
+          description: Budget period
+          enum:
+          - WEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+          type: string
+        rollover:
+          description: Carry unspent amount to next period
+          type: boolean
+        spend_category_id:
+          description: Category (empty = all spending)
+          format: uuid
+          type: string
+        starts_on:
+          description: First period start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - PAUSED
+          - ARCHIVED
+          type: string
+      required:
+      - customer_id
+      - name
+      - amount
+      - currency
+      - starts_on
+      type: object
+    BudgetPage:
+      description: One page of Budget results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Budget'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BudgetPeriod:
+      description: Actuals for one period of a budget
+      properties:
+        alert_sent_at:
+          description: Threshold alert time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        budget_amount:
+          description: Budget incl. rollover
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        budget_id:
+          description: Budget
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        exceeded_at:
+          description: Time the budget was exceeded
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        period_end:
+          description: Period end
+          format: date
+          type: string
+        period_start:
+          description: Period start
+          format: date
+          type: string
+        remaining_amount:
+          description: Remaining
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        spent_amount:
+          description: Spent so far
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type: string
+        transaction_count:
+          description: Transactions counted
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - budget_id
+      - period_start
+      - period_end
+      - budget_amount
+      - spent_amount
+      - remaining_amount
+      - transaction_count
+      type: object
+    BudgetPeriodPage:
+      description: One page of BudgetPeriod results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/BudgetPeriod'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    BudgetUpdate:
+      properties:
+        alert_threshold_pct:
+          description: Alert when spend reaches this share
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        amount:
+          description: Budget amount per period
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        name:
+          description: Budget name
+          maxLength: 120
+          type: string
+        period_type:
+          description: Budget period
+          enum:
+          - WEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+          type: string
+        rollover:
+          description: Carry unspent amount to next period
+          type: boolean
+        spend_category_id:
+          description: Category (empty = all spending)
+          format: uuid
+          type: string
+        starts_on:
+          description: First period start
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - PAUSED
+          - ARCHIVED
+          type: string
+      type: object
+    BudgetsSuggestRequest:
+      properties:
+        customer_id:
+          format: uuid
+          type: string
+      required:
+      - customer_id
+      type: object
+    CashFlowForecast:
+      description: Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+      properties:
+        as_of:
+          description: Forecast generation time
+          format: date-time
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        deposit_account_id:
+          description: Account forecast
+          format: uuid
+          type:
+          - string
+          - 'null'
+        expected_bills:
+          description: Expected recurring outflows
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        expected_income:
+          description: Expected income in the horizon
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        horizon_days:
+          description: Horizon
+          format: int32
+          type: integer
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        lowest_balance:
+          description: Lowest projected balance
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        lowest_balance_date:
+          description: Date of lowest balance
+          format: date
+          type:
+          - string
+          - 'null'
+        model_version:
+          description: Model version
+          maxLength: 32
+          type: string
+        projected_points:
+          additionalProperties: true
+          description: Daily projected balances with expected inflows/outflows
+          type: object
+        starting_balance:
+          description: Balance at as_of
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - id
+      - created_at
+      - customer_id
+      - as_of
+      - horizon_days
+      - currency
+      - starting_balance
+      - lowest_balance
+      - projected_points
+      - model_version
+      type: object
+    CashFlowForecastCreate:
+      properties:
+        as_of:
+          description: Forecast generation time
+          format: date-time
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        deposit_account_id:
+          description: Account forecast
+          format: uuid
+          type: string
+        expected_bills:
+          description: Expected recurring outflows
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        expected_income:
+          description: Expected income in the horizon
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        horizon_days:
+          description: Horizon
+          format: int32
+          type: integer
+        lowest_balance:
+          description: Lowest projected balance
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        lowest_balance_date:
+          description: Date of lowest balance
+          format: date
+          type: string
+        model_version:
+          description: Model version
+          maxLength: 32
+          type: string
+        projected_points:
+          additionalProperties: true
+          description: Daily projected balances with expected inflows/outflows
+          type: object
+        starting_balance:
+          description: Balance at as_of
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      required:
+      - customer_id
+      - as_of
+      - horizon_days
+      - currency
+      - starting_balance
+      - lowest_balance
+      - projected_points
+      - model_version
+      type: object
+    CashFlowForecastPage:
+      description: One page of CashFlowForecast results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CashFlowForecast'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CategoryOverrideRule:
+      description: Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
+      properties:
+        apply_to_past:
+          description: Re-categorise historical transactions
+          type: boolean
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        match_amount_max:
+          description: Maximum amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        match_amount_min:
+          description: Minimum amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        match_description_pattern:
+          description: Regex on raw descriptor
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        match_merchant_name:
+          description: Merchant name to match
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        spend_category_id:
+          description: Category to apply
+          format: uuid
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - spend_category_id
+      - apply_to_past
+      - is_active
+      type: object
+    CategoryOverrideRuleCreate:
+      properties:
+        apply_to_past:
+          description: Re-categorise historical transactions
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        match_amount_max:
+          description: Maximum amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        match_amount_min:
+          description: Minimum amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        match_description_pattern:
+          description: Regex on raw descriptor
+          maxLength: 255
+          type: string
+        match_merchant_name:
+          description: Merchant name to match
+          maxLength: 160
+          type: string
+        spend_category_id:
+          description: Category to apply
+          format: uuid
+          type: string
+      required:
+      - customer_id
+      - spend_category_id
+      type: object
+    CategoryOverrideRulePage:
+      description: One page of CategoryOverrideRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CategoryOverrideRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CategoryOverrideRuleUpdate:
+      properties:
+        apply_to_past:
+          description: Re-categorise historical transactions
+          type: boolean
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        match_amount_max:
+          description: Maximum amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        match_amount_min:
+          description: Minimum amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        match_description_pattern:
+          description: Regex on raw descriptor
+          maxLength: 255
+          type: string
+        match_merchant_name:
+          description: Merchant name to match
+          maxLength: 160
+          type: string
+        spend_category_id:
+          description: Category to apply
+          format: uuid
+          type: string
+      type: object
+    FinancialInsight:
+      description: An insight card for a customer (spend spike, low-balance forecast, new subscription) and its delivery
+      properties:
+        acted_at:
+          description: Action time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        action_deeplink:
+          description: App deep link
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        action_label:
+          description: Call-to-action label
+          maxLength: 60
+          type:
+          - string
+          - 'null'
+        body:
+          description: Card text
+          maxLength: 1000
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        data:
+          additionalProperties: true
+          description: Supporting figures (amounts, categories, dates)
+          type:
+          - object
+          - 'null'
+        delivery_status:
+          description: Delivery status
+          enum:
+          - PENDING
+          - DELIVERED
+          - SEEN
+          - DISMISSED
+          - ACTED
+          - EXPIRED
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        feedback_useful:
+          description: Customer feedback
+          type:
+          - boolean
+          - 'null'
+        generated_at:
+          description: Generation time
+          format: date-time
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        insight_type:
+          description: Insight type
+          enum:
+          - SPEND_SPIKE
+          - LOW_BALANCE_FORECAST
+          - BUDGET_EXCEEDED
+          - BUDGET_NEAR_LIMIT
+          - SUBSCRIPTION_PRICE_CHANGE
+          - NEW_SUBSCRIPTION
+          - SALARY_RECEIVED
+          - SAVINGS_OPPORTUNITY
+          - UNUSUAL_MERCHANT
+          - FEE_CHARGED
+          - BILL_DUE
+          type: string
+        model_version:
+          description: Generating model / rule version
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        notification_id:
+          description: Push or in-app notification sent
+          format: uuid
+          type:
+          - string
+          - 'null'
+        related_id:
+          description: Related object
+          format: uuid
+          type:
+          - string
+          - 'null'
+        related_type:
+          description: BUDGET, RECURRING_PAYMENT, ACCOUNT, CARD
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        seen_at:
+          description: Seen time
+          format: date-time
+          type:
+          - string
+          - 'null'
+        severity:
+          description: Severity
+          enum:
+          - INFO
+          - POSITIVE
+          - WARNING
+          - CRITICAL
+          type: string
+        title:
+          description: Card title
+          maxLength: 160
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - insight_type
+      - severity
+      - title
+      - body
+      - delivery_status
+      - generated_at
+      type: object
+    FinancialInsightPage:
+      description: One page of FinancialInsight results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/FinancialInsight'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    FinancialInsightsFeedbackRequest:
+      properties:
+        feedback_useful:
+          type: boolean
+      required:
+      - feedback_useful
+      type: object
+    FinancialInsightsGenerateRequest:
+      properties:
+        customer_id:
+          format: uuid
+          type: string
+      required:
+      - customer_id
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    RecurringPayment:
+      description: Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+      properties:
+        card_id:
+          description: Card the subscription charges
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        detection_confidence:
+          description: Confidence 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        first_seen_at:
+          description: First charge
+          format: date-time
+          type: string
+        frequency:
+          description: Detected frequency
+          enum:
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+          - IRREGULAR
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        last_amount:
+          description: Most recent amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        last_seen_at:
+          description: Latest charge
+          format: date-time
+          type: string
+        merchant_clean_name:
+          description: Merchant
+          maxLength: 160
+          type: string
+        merchant_id:
+          description: Internal merchant when known
+          format: uuid
+          type:
+          - string
+          - 'null'
+        next_expected_at:
+          description: Predicted next charge
+          format: date-time
+          type:
+          - string
+          - 'null'
+        occurrences:
+          description: Charges matched
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        spend_category_id:
+          description: Category
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - DETECTED
+          - CONFIRMED
+          - DISMISSED
+          - CANCELLED_BY_CUSTOMER
+          - INACTIVE
+          type: string
+        typical_amount:
+          description: Typical amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - customer_id
+      - merchant_clean_name
+      - frequency
+      - typical_amount
+      - currency
+      - first_seen_at
+      - last_seen_at
+      - occurrences
+      - status
+      type: object
+    RecurringPaymentPage:
+      description: One page of RecurringPayment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RecurringPayment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RecurringPaymentUpdate:
+      properties:
+        card_id:
+          description: Card the subscription charges
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        detection_confidence:
+          description: Confidence 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        first_seen_at:
+          description: First charge
+          format: date-time
+          type: string
+        frequency:
+          description: Detected frequency
+          enum:
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+          - IRREGULAR
+          type: string
+        last_amount:
+          description: Most recent amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        last_seen_at:
+          description: Latest charge
+          format: date-time
+          type: string
+        merchant_clean_name:
+          description: Merchant
+          maxLength: 160
+          type: string
+        merchant_id:
+          description: Internal merchant when known
+          format: uuid
+          type: string
+        next_expected_at:
+          description: Predicted next charge
+          format: date-time
+          type: string
+        occurrences:
+          description: Charges matched
+          format: int32
+          type: integer
+        spend_category_id:
+          description: Category
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - DETECTED
+          - CONFIRMED
+          - DISMISSED
+          - CANCELLED_BY_CUSTOMER
+          - INACTIVE
+          type: string
+        typical_amount:
+          description: Typical amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+      type: object
+    SpendCategory:
+      description: Spending category taxonomy (group, category, subcategory) used for enrichment and budgets
+      properties:
+        code:
+          description: Category code, e.g. FOOD.GROCERIES
+          maxLength: 64
+          type: string
+        color:
+          description: Display colour
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        icon:
+          description: Icon key
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_income:
+          description: Income category (salary, refunds)
+          type: boolean
+        level:
+          description: Taxonomy level
+          enum:
+          - GROUP
+          - CATEGORY
+          - SUBCATEGORY
+          type: string
+        mcc_codes:
+          additionalProperties: true
+          description: MCC codes mapped by default
+          type:
+          - object
+          - 'null'
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        parent_id:
+          description: Parent category
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        translations:
+          additionalProperties: true
+          description: Names per language
+          type:
+          - object
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - level
+      - is_income
+      - is_active
+      type: object
+    SpendCategoryCreate:
+      properties:
+        code:
+          description: Category code, e.g. FOOD.GROCERIES
+          maxLength: 64
+          type: string
+        color:
+          description: Display colour
+          maxLength: 16
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        icon:
+          description: Icon key
+          maxLength: 64
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_income:
+          description: Income category (salary, refunds)
+          type: boolean
+        level:
+          description: Taxonomy level
+          enum:
+          - GROUP
+          - CATEGORY
+          - SUBCATEGORY
+          type: string
+        mcc_codes:
+          additionalProperties: true
+          description: MCC codes mapped by default
+          type: object
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        parent_id:
+          description: Parent category
+          format: uuid
+          type: string
+        translations:
+          additionalProperties: true
+          description: Names per language
+          type: object
+      required:
+      - code
+      - name
+      - level
+      type: object
+    SpendCategoryPage:
+      description: One page of SpendCategory results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SpendCategory'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SpendCategoryUpdate:
+      properties:
+        code:
+          description: Category code, e.g. FOOD.GROCERIES
+          maxLength: 64
+          type: string
+        color:
+          description: Display colour
+          maxLength: 16
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        icon:
+          description: Icon key
+          maxLength: 64
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        is_income:
+          description: Income category (salary, refunds)
+          type: boolean
+        level:
+          description: Taxonomy level
+          enum:
+          - GROUP
+          - CATEGORY
+          - SUBCATEGORY
+          type: string
+        mcc_codes:
+          additionalProperties: true
+          description: MCC codes mapped by default
+          type: object
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        parent_id:
+          description: Parent category
+          format: uuid
+          type: string
+        translations:
+          additionalProperties: true
+          description: Names per language
+          type: object
+      type: object
+    TransactionEnrichment:
+      description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+      properties:
+        account_ref:
+          description: Account / card / wallet the transaction belongs to
+          format: uuid
+          type:
+          - string
+          - 'null'
+        amount:
+          description: Signed amount (negative = spend)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        category_confidence:
+          description: Model confidence 0..1
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        customer_id:
+          description: Customer
+          format: uuid
+          type: string
+        enrichment_provider:
+          description: INTERNAL or external provider
+          maxLength: 40
+          type:
+          - string
+          - 'null'
+        geo_city:
+          description: City
+          maxLength: 100
+          type:
+          - string
+          - 'null'
+        geo_country:
+          description: Country (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        geo_lat:
+          description: Latitude
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        geo_lon:
+          description: Longitude
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_recurring:
+          description: Part of a recurring series
+          type: boolean
+        mcc:
+          description: Merchant category code
+          maxLength: 4
+          type:
+          - string
+          - 'null'
+        merchant_clean_name:
+          description: Cleaned merchant name
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        merchant_id:
+          description: Internal merchant when known
+          format: uuid
+          type:
+          - string
+          - 'null'
+        merchant_logo_url:
+          description: Logo URL
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        merchant_website:
+          description: Merchant website
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        model_version:
+          description: Categorisation model version
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        raw_description:
+          description: Original descriptor
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        recurring_payment_id:
+          description: Detected recurring series
+          format: uuid
+          type:
+          - string
+          - 'null'
+        source_id:
+          description: Source transaction id
+          format: uuid
+          type: string
+        source_type:
+          description: Transaction source
+          enum:
+          - CARD_AUTHORIZATION
+          - CARD_CLEARING
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - DEPOSIT_TRANSACTION
+          type: string
+        spend_category_id:
+          description: Assigned category
+          format: uuid
+          type:
+          - string
+          - 'null'
+        supersedes_id:
+          description: Earlier enrichment this one replaces
+          format: uuid
+          type:
+          - string
+          - 'null'
+        transaction_at:
+          description: Transaction time
+          format: date-time
+          type: string
+      required:
+      - id
+      - created_at
+      - customer_id
+      - source_type
+      - source_id
+      - transaction_at
+      - amount
+      - currency
+      - is_recurring
+      type: object
+    TransactionEnrichmentPage:
+      description: One page of TransactionEnrichment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TransactionEnrichment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    TransactionEnrichmentsEnrichRequest:
+      properties:
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        currency:
+          description: ISO 4217
+          pattern: ^[A-Z]{3}$
+          type: string
+        mcc:
+          maxLength: 4
+          type: string
+        raw_description:
+          maxLength: 500
+          type: string
+        source_id:
+          format: uuid
+          type: string
+        source_type:
+          enum:
+          - CARD_AUTHORIZATION
+          - CARD_CLEARING
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - DEPOSIT_TRANSACTION
+          type: string
+      required:
+      - source_type
+      - source_id
+      - amount
+      - currency
+      type: object
+    TransactionEnrichmentsRecategoriseRequest:
+      properties:
+        create_rule:
+          type: boolean
+        spend_category_id:
+          format: uuid
+          type: string
+      required:
+      - spend_category_id
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
+            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            engagement:read: 'Read Engagement: Rewards, Insights and Campaigns'
+            engagement:write: 'Change Engagement: Rewards, Insights and Campaigns'
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Customer engagement: loyalty rewards, points and cashback, referral programs, transaction enrichment and personal
+    finance insights (PFM), targeted campaigns and personalised offers, and secure customer messaging.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — insights-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/insights/categories:
+    get:
+      operationId: spendCategoriesList
+      summary: List spend categories
+      tags:
+      - Spend Categories
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: level
+        in: query
+        schema:
+          type: string
+          enum:
+          - GROUP
+          - CATEGORY
+          - SUBCATEGORY
+      - name: parent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_income
+        in: query
+        schema:
+          type: boolean
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendCategoryPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: spend_category
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: spendCategoriesCreate
+      summary: Create spend categorie
+      tags:
+      - Spend Categories
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpendCategoryCreate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: spend_category
+      x-crud: true
+      x-crud-create: true
+  /v1/insights/categories/{id}:
+    get:
+      operationId: spendCategoriesGet
+      summary: Retrieve spend categorie
+      tags:
+      - Spend Categories
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: spend_category
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: spendCategoriesUpdate
+      summary: Update spend categorie
+      tags:
+      - Spend Categories
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpendCategoryUpdate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: spend_category
+      x-crud: true
+      x-crud-update: true
+  /v1/insights/enrichments:
+    get:
+      operationId: transactionEnrichmentsList
+      summary: List transaction enrichments
+      tags:
+      - Transaction Enrichments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: source_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CARD_AUTHORIZATION
+          - CARD_CLEARING
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - DEPOSIT_TRANSACTION
+      - name: source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: spend_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_recurring
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionEnrichmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: transaction_enrichment
+      x-crud: true
+      x-crud-list: true
+  /v1/insights/enrichments/{id}:
+    get:
+      operationId: transactionEnrichmentsGet
+      summary: Retrieve transaction enrichment
+      tags:
+      - Transaction Enrichments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionEnrichment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: transaction_enrichment
+      x-crud: true
+      x-crud-get: true
+  /v1/insights/enrichments/enrich:
+    post:
+      operationId: transactionEnrichmentsEnrich
+      summary: Enrich a transaction synchronously
+      tags:
+      - Transaction Enrichments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionEnrichment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionEnrichmentsEnrichRequest'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: transaction_enrichment
+  /v1/insights/enrichments/{id}/recategorise:
+    post:
+      operationId: transactionEnrichmentsRecategorise
+      summary: Customer or agent changes the category
+      tags:
+      - Transaction Enrichments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionEnrichment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionEnrichmentsRecategoriseRequest'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: transaction_enrichment
+  /v1/insights/category-rules:
+    get:
+      operationId: categoryOverrideRulesList
+      summary: List category override rules
+      tags:
+      - Category Override Rules
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: spend_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryOverrideRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: category_override_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: categoryOverrideRulesCreate
+      summary: Create category override rule
+      tags:
+      - Category Override Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryOverrideRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryOverrideRuleCreate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: category_override_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/insights/category-rules/{id}:
+    get:
+      operationId: categoryOverrideRulesGet
+      summary: Retrieve category override rule
+      tags:
+      - Category Override Rules
+      security:
+      - oauth2:
+        - engagement:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryOverrideRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: category_override_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: categoryOverrideRulesUpdate
+      summary: Update category override rule
+      tags:
+      - Category Override Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryOverrideRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryOverrideRuleUpdate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: category_override_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: categoryOverrideRulesDelete
+      summary: Delete category override rule
+      tags:
+      - Category Override Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: category_override_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/insights/budgets:
+    get:
+      operationId: budgetsList
+      summary: List budgets
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: spend_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - PAUSED
+          - ARCHIVED
+      - name: period_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - WEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: budgetsCreate
+      summary: Create budget
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetCreate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+      x-crud: true
+      x-crud-create: true
+  /v1/insights/budgets/{id}:
+    get:
+      operationId: budgetsGet
+      summary: Retrieve budget
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:read
+      parameters: &id009
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: budgetsUpdate
+      summary: Update budget
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetUpdate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: budgetsDelete
+      summary: Delete budget
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+      x-crud: true
+      x-crud-delete: true
+  /v1/insights/budgets/{id}/periods:
+    get:
+      operationId: budgetsPeriods
+      summary: Budget actuals per period
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPeriodPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+  /v1/insights/budgets/suggest:
+    post:
+      operationId: budgetsSuggest
+      summary: Suggest budgets from past spending
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetsSuggestRequest'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget
+  /v1/insights/budget-periods:
+    get:
+      operationId: budgetPeriodsList
+      summary: List budget periods
+      tags:
+      - Budget Periods
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: budget_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPeriodPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget_period
+      x-crud: true
+      x-crud-list: true
+  /v1/insights/budget-periods/{id}:
+    get:
+      operationId: budgetPeriodsGet
+      summary: Retrieve budget period
+      tags:
+      - Budget Periods
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPeriod'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget_period
+      x-crud: true
+      x-crud-get: true
+  /v1/insights/recurring-payments:
+    get:
+      operationId: recurringPaymentsList
+      summary: List recurring payments
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DETECTED
+          - CONFIRMED
+          - DISMISSED
+          - CANCELLED_BY_CUSTOMER
+          - INACTIVE
+      - name: frequency
+        in: query
+        schema:
+          type: string
+          enum:
+          - WEEKLY
+          - BIWEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - YEARLY
+          - IRREGULAR
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringPaymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: recurring_payment
+      x-crud: true
+      x-crud-list: true
+  /v1/insights/recurring-payments/{id}:
+    get:
+      operationId: recurringPaymentsGet
+      summary: Retrieve recurring payment
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: recurring_payment
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: recurringPaymentsUpdate
+      summary: Update recurring payment
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringPaymentUpdate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: recurring_payment
+      x-crud: true
+      x-crud-update: true
+  /v1/insights/recurring-payments/{id}/confirm:
+    post:
+      operationId: recurringPaymentsConfirm
+      summary: Customer confirms a detected subscription
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: recurring_payment
+  /v1/insights/recurring-payments/{id}/dismiss:
+    post:
+      operationId: recurringPaymentsDismiss
+      summary: Not a subscription
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: recurring_payment
+  /v1/insights/recurring-payments/{id}/block-card-charges:
+    post:
+      operationId: recurringPaymentsBlockCardCharges
+      summary: Block future charges from this merchant on the card
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: recurring_payment
+  /v1/insights/cards:
+    get:
+      operationId: financialInsightsList
+      summary: List financial insights
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: insight_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SPEND_SPIKE
+          - LOW_BALANCE_FORECAST
+          - BUDGET_EXCEEDED
+          - BUDGET_NEAR_LIMIT
+          - SUBSCRIPTION_PRICE_CHANGE
+          - NEW_SUBSCRIPTION
+          - SALARY_RECEIVED
+          - SAVINGS_OPPORTUNITY
+          - UNUSUAL_MERCHANT
+          - FEE_CHARGED
+          - BILL_DUE
+      - name: severity
+        in: query
+        schema:
+          type: string
+          enum:
+          - INFO
+          - POSITIVE
+          - WARNING
+          - CRITICAL
+      - name: delivery_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - DELIVERED
+          - SEEN
+          - DISMISSED
+          - ACTED
+          - EXPIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsightPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-table: financial_insight
+      x-crud: true
+      x-crud-list: true
+  /v1/insights/cards/{id}:
+    get:
+      operationId: financialInsightsGet
+      summary: Retrieve financial insight
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsight'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-table: financial_insight
+      x-crud: true
+      x-crud-get: true
+  /v1/insights/cards/{id}/seen:
+    post:
+      operationId: financialInsightsSeen
+      summary: Mark seen
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsight'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-table: financial_insight
+  /v1/insights/cards/{id}/dismiss:
+    post:
+      operationId: financialInsightsDismiss
+      summary: Dismiss
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsight'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-table: financial_insight
+  /v1/insights/cards/{id}/feedback:
+    post:
+      operationId: financialInsightsFeedback
+      summary: Was this useful?
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsight'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialInsightsFeedbackRequest'
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-table: financial_insight
+  /v1/insights/cards/generate:
+    post:
+      operationId: financialInsightsGenerate
+      summary: Generate insights for a customer now
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsightPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinancialInsightsGenerateRequest'
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-table: financial_insight
+  /v1/insights/forecasts:
+    get:
+      operationId: cashFlowForecastsList
+      summary: List cash flow forecasts
+      tags:
+      - Cash Flow Forecasts
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: deposit_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashFlowForecastPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: cash_flow_forecast
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cashFlowForecastsCreate
+      summary: Create cash flow forecast
+      tags:
+      - Cash Flow Forecasts
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashFlowForecast'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashFlowForecastCreate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: cash_flow_forecast
+      x-crud: true
+      x-crud-create: true
+  /v1/insights/forecasts/{id}:
+    get:
+      operationId: cashFlowForecastsGet
+      summary: Retrieve cash flow forecast
+      tags:
+      - Cash Flow Forecasts
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashFlowForecast'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: cash_flow_forecast
+      x-crud: true
+      x-crud-get: true
+  /v1/insights/spending/by-category:
+    get:
+      operationId: spendingSummariesByCategory
+      summary: Spend per category for a customer and date range (?customer_id=&from=&to=)
+      tags:
+      - Spending Summaries
+      security:
+      - oauth2:
+        - engagement:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget_period
+  /v1/insights/spending/by-merchant:
+    get:
+      operationId: spendingSummariesByMerchant
+      summary: Top merchants for a customer and date range
+      tags:
+      - Spending Summaries
+      security:
+      - oauth2:
+        - engagement:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget_period
+  /v1/insights/spending/trend:
+    get:
+      operationId: spendingSummariesTrend
+      summary: Monthly income vs spend trend
+      tags:
+      - Spending Summaries
+      security:
+      - oauth2:
+        - engagement:read
+      parameters: []
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-table: budget_period
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Spending category taxonomy (group, category, subcategory) used for enrichment and budgets
+  name: Spend Categories
+- description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+  name: Transaction Enrichments
+- description: Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
+  name: Category Override Rules
+- description: A customer budget, overall or per category, with alert thresholds
+  name: Budgets
+- description: Actuals for one period of a budget
+  name: Budget Periods
+- description: Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+  name: Recurring Payments
+- description: An insight card for a customer (spend spike, low-balance forecast, new subscription) and its delivery
+  name: Financial Insights
+- description: Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+  name: Cash Flow Forecasts
+- description: Spending analytics computed from enrichments
+  name: Spending Summaries

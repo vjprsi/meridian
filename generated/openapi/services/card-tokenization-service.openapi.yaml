@@ -1,0 +1,877 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    CardToken:
+      description: A network token (DPAN) linked to a card
+      properties:
+        activated_at:
+          description: Activation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deactivated_at:
+          description: Deactivation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        device_id_hash:
+          description: Hash of the device id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        device_name:
+          description: Device name
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        device_score:
+          description: Device risk score
+          format: int32
+          type:
+          - integer
+          - 'null'
+        device_type:
+          description: PHONE, WATCH, TABLET, BROWSER
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        dpan_expiry_month:
+          description: Token expiry month
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        dpan_expiry_year:
+          description: Token expiry year
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        dpan_last4:
+          description: Last four of the device PAN
+          maxLength: 4
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        merchant_name:
+          description: Merchant for card-on-file tokens
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        network_token_ref:
+          description: Scheme token reference (TUR / token id)
+          maxLength: 64
+          type: string
+        provisioning_decision:
+          description: GREEN, YELLOW, RED
+          maxLength: 16
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - REQUESTED
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - DEACTIVATED
+          - DECLINED
+          type: string
+        step_up_method:
+          description: OTP_SMS, OTP_EMAIL, APP, CALL_CENTER
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        token_requestor:
+          description: Wallet or token requestor
+          enum:
+          - APPLE_PAY
+          - GOOGLE_PAY
+          - SAMSUNG_PAY
+          - MERCHANT_COF
+          - CLICK_TO_PAY
+          - OTHER
+          type: string
+        token_requestor_id:
+          description: Scheme token requestor id
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_account_score:
+          description: Wallet provider risk score
+          format: int32
+          type:
+          - integer
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - card_id
+      - token_requestor
+      - network_token_ref
+      - status
+      type: object
+    CardTokenEvent:
+      description: Immutable lifecycle events received from or sent to the token service
+      properties:
+        card_token_id:
+          description: Token
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        event_type:
+          description: Event
+          enum:
+          - PROVISIONING_REQUESTED
+          - PROVISIONING_APPROVED
+          - PROVISIONING_DECLINED
+          - STEP_UP_SENT
+          - ACTIVATED
+          - SUSPENDED
+          - RESUMED
+          - DEACTIVATED
+          - PAN_UPDATED
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        payload:
+          additionalProperties: true
+          description: Message received or sent
+          type:
+          - object
+          - 'null'
+        reason:
+          description: Reason
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        source:
+          description: SCHEME or ISSUER
+          maxLength: 16
+          type: string
+      required:
+      - id
+      - created_at
+      - card_token_id
+      - event_type
+      - source
+      type: object
+    CardTokenEventPage:
+      description: One page of CardTokenEvent results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardTokenEvent'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardTokenPage:
+      description: One page of CardToken results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardToken'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardTokensDeactivateRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    CardTokensPushProvisionRequest:
+      properties:
+        card_id:
+          format: uuid
+          type: string
+        device_info:
+          additionalProperties: true
+          type: object
+        token_requestor:
+          enum:
+          - APPLE_PAY
+          - GOOGLE_PAY
+          - SAMSUNG_PAY
+          - MERCHANT_COF
+          - CLICK_TO_PAY
+          - OTHER
+          type: string
+      required:
+      - card_id
+      - token_requestor
+      - device_info
+      type: object
+    CardTokensSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      type: object
+    CardTokensVerifyStepUpRequest:
+      properties:
+        otp:
+          maxLength: 10
+          type: string
+      required:
+      - otp
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
+    vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
+    clearing and settlement, interchange and fees, and scheme disputes.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — card-tokenization-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/card-tokens:
+    get:
+      operationId: cardTokensList
+      summary: List card tokens
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: token_requestor
+        in: query
+        schema:
+          type: string
+          enum:
+          - APPLE_PAY
+          - GOOGLE_PAY
+          - SAMSUNG_PAY
+          - MERCHANT_COF
+          - CLICK_TO_PAY
+          - OTHER
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - SUSPENDED
+          - DEACTIVATED
+          - DECLINED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardTokenPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+      x-crud: true
+      x-crud-list: true
+  /v1/card-tokens/{id}:
+    get:
+      operationId: cardTokensGet
+      summary: Retrieve card token
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+      x-crud: true
+      x-crud-get: true
+  /v1/card-tokens/push-provision:
+    post:
+      operationId: cardTokensPushProvision
+      summary: Push-provision a card to a wallet from the issuer app
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensPushProvisionRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+  /v1/card-tokens/{id}/suspend:
+    post:
+      operationId: cardTokensSuspend
+      summary: Suspend a token
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensSuspendRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+  /v1/card-tokens/{id}/resume:
+    post:
+      operationId: cardTokensResume
+      summary: Resume a suspended token
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+  /v1/card-tokens/{id}/deactivate:
+    post:
+      operationId: cardTokensDeactivate
+      summary: Permanently deactivate a token
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensDeactivateRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+  /v1/card-tokens/{id}/verify-step-up:
+    post:
+      operationId: cardTokensVerifyStepUp
+      summary: Verify OTP / step-up for a yellow-path provisioning
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardToken'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardTokensVerifyStepUpRequest'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+  /v1/card-tokens/{id}/events:
+    get:
+      operationId: cardTokensEvents
+      summary: Token lifecycle events
+      tags:
+      - Card Tokens
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardTokenEventPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-05
+      x-service: card-tokenization-service
+      x-table: card_token
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A network token (DPAN) linked to a card
+  name: Card Tokens

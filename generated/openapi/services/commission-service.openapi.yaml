@@ -1,0 +1,2745 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    CommissionEarning:
+      description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+      properties:
+        base_amount:
+          description: Base the commission was computed on
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        beneficiary:
+          description: Beneficiary type
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          type: string
+        beneficiary_agent_id:
+          description: Agent beneficiary
+          format: uuid
+          type:
+          - string
+          - 'null'
+        beneficiary_merchant_id:
+          description: Merchant beneficiary
+          format: uuid
+          type:
+          - string
+          - 'null'
+        beneficiary_wallet_id:
+          description: Wallet to pay
+          format: uuid
+          type: string
+        commission_amount:
+          description: Gross commission (negative for clawback)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        commission_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        commission_rule_id:
+          description: Rule applied
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        earned_at:
+          description: Transaction completion time
+          format: date-time
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_clawback:
+          description: Clawback of an earlier earning (reversal)
+          type: boolean
+        net_amount:
+          description: Net commission
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        payout_due_on:
+          description: Payout date per plan frequency
+          format: date
+          type: string
+        tax_amount:
+          description: Withholding tax
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        wallet_transaction_id:
+          description: Source transaction
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - commission_plan_id
+      - commission_rule_id
+      - wallet_transaction_id
+      - beneficiary
+      - beneficiary_wallet_id
+      - base_amount
+      - commission_amount
+      - tax_amount
+      - net_amount
+      - currency
+      - is_clawback
+      - earned_at
+      - payout_due_on
+      type: object
+    CommissionEarningPage:
+      description: One page of CommissionEarning results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CommissionEarning'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CommissionPayoutLine:
+      description: Amount paid to one beneficiary in a payout run. Append-only.
+      properties:
+        beneficiary_agent_id:
+          description: Agent paid
+          format: uuid
+          type:
+          - string
+          - 'null'
+        beneficiary_wallet_id:
+          description: Wallet paid
+          format: uuid
+          type: string
+        commission_payout_run_id:
+          description: Run
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        earning_count:
+          description: Earnings included
+          format: int32
+          type: integer
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        gross_amount:
+          description: Gross commission
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        net_amount:
+          description: Net paid
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        payout_status:
+          description: PAID, FAILED, HELD
+          maxLength: 16
+          type: string
+        tax_amount:
+          description: Tax withheld
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        wallet_transaction_id:
+          description: Payout transaction
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - commission_payout_run_id
+      - beneficiary_wallet_id
+      - earning_count
+      - gross_amount
+      - tax_amount
+      - net_amount
+      - currency
+      - payout_status
+      type: object
+    CommissionPayoutLinePage:
+      description: One page of CommissionPayoutLine results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CommissionPayoutLine'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CommissionPayoutRun:
+      description: A payout run paying accrued commissions to beneficiary wallets
+      properties:
+        approved_at:
+          description: Approval time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Checker
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        beneficiary_count:
+          description: Beneficiaries paid
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        finished_at:
+          description: End
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Summary posting
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        payout_frequency:
+          description: Frequency covered
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          type: string
+        period_end:
+          description: Earnings to
+          format: date
+          type: string
+        period_start:
+          description: Earnings from
+          format: date
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Start
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          readOnly: true
+          type: string
+        total_amount:
+          description: Total net paid
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - payout_frequency
+      - period_start
+      - period_end
+      - currency
+      - status
+      type: object
+    CommissionPayoutRunCreate:
+      properties:
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        payout_frequency:
+          description: Frequency covered
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          type: string
+        period_end:
+          description: Earnings to
+          format: date
+          type: string
+        period_start:
+          description: Earnings from
+          format: date
+          type: string
+      required:
+      - payout_frequency
+      - period_start
+      - period_end
+      - currency
+      type: object
+    CommissionPayoutRunPage:
+      description: One page of CommissionPayoutRun results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CommissionPayoutRun'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CommissionPayoutRunsApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    CommissionPlan:
+      description: A versioned set of commission rules assigned to agents, merchants or billers
+      properties:
+        applies_to:
+          description: AGENT, MERCHANT, BILLER, ALL
+          maxLength: 32
+          type: string
+        approved_at:
+          description: Approval time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        approved_by:
+          description: Checker
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        code:
+          description: Plan code
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Description
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        payout_frequency:
+          description: Payout frequency
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type:
+          - string
+          - 'null'
+        version:
+          description: Version
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - version
+      - applies_to
+      - currency
+      - payout_frequency
+      - status
+      - valid_from
+      type: object
+    CommissionPlanCreate:
+      properties:
+        applies_to:
+          description: AGENT, MERCHANT, BILLER, ALL
+          maxLength: 32
+          type: string
+        code:
+          description: Plan code
+          maxLength: 32
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        payout_frequency:
+          description: Payout frequency
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+        version:
+          description: Version
+          format: int32
+          type: integer
+      required:
+      - code
+      - name
+      - applies_to
+      - currency
+      - valid_from
+      type: object
+    CommissionPlanPage:
+      description: One page of CommissionPlan results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CommissionPlan'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CommissionPlanUpdate:
+      properties:
+        applies_to:
+          description: AGENT, MERCHANT, BILLER, ALL
+          maxLength: 32
+          type: string
+        code:
+          description: Plan code
+          maxLength: 32
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Description
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        payout_frequency:
+          description: Payout frequency
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          type: string
+        valid_from:
+          description: Effective from
+          format: date
+          type: string
+        valid_to:
+          description: Effective to
+          format: date
+          type: string
+        version:
+          description: Version
+          format: int32
+          type: integer
+      type: object
+    CommissionPlansApproveRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    CommissionPlansRetireRequest:
+      properties:
+        effective_date:
+          format: date
+          type: string
+      type: object
+    CommissionPlansSimulateRequest:
+      properties:
+        agent_id:
+          format: uuid
+          type: string
+        amount:
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        channel:
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          type: string
+        kyc_tier:
+          format: int32
+          type: integer
+        txn_type:
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          type: string
+      required:
+      - txn_type
+      - amount
+      type: object
+    CommissionRule:
+      description: One commission rule; the most specific matching rule per beneficiary wins
+      properties:
+        agent_level:
+          description: Agent level (empty = any)
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          type:
+          - string
+          - 'null'
+        agent_territory_id:
+          description: Territory (empty = any)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        base:
+          description: 'Base of the percentage: AMOUNT or FEE'
+          maxLength: 16
+          type: string
+        basis:
+          description: Calculation basis
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          type: string
+        beneficiary:
+          description: Who earns it
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          type: string
+        beneficiary_share:
+          description: Share of the computed commission for this beneficiary
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        biller_id:
+          description: Biller (empty = any)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        cap_amount:
+          description: Maximum commission per transaction
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        channel:
+          description: Channel (empty = any)
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          type:
+          - string
+          - 'null'
+        commission_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        flat_amount:
+          description: Flat commission
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        funded_by:
+          description: FEE, PLATFORM, BILLER, MERCHANT
+          maxLength: 32
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        kyc_tier:
+          description: Customer KYC tier (empty = any)
+          format: int32
+          type:
+          - integer
+          - 'null'
+        max_amount:
+          description: Applies up to this transaction amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        min_amount:
+          description: Applies from this transaction amount
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        name:
+          description: Rule name
+          maxLength: 120
+          type: string
+        percentage:
+          description: Percentage of the base (0.005 = 0.5%)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        priority:
+          description: Lower wins among equally specific rules
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        tax_withholding_rate:
+          description: Withholding tax on commission
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        tiers:
+          additionalProperties: true
+          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
+          type:
+          - object
+          - 'null'
+        txn_type:
+          description: Transaction type
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - commission_plan_id
+      - name
+      - priority
+      - txn_type
+      - basis
+      - base
+      - beneficiary
+      - beneficiary_share
+      - funded_by
+      - is_active
+      type: object
+    CommissionRuleCreate:
+      properties:
+        agent_level:
+          description: Agent level (empty = any)
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          type: string
+        agent_territory_id:
+          description: Territory (empty = any)
+          format: uuid
+          type: string
+        base:
+          description: 'Base of the percentage: AMOUNT or FEE'
+          maxLength: 16
+          type: string
+        basis:
+          description: Calculation basis
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          type: string
+        beneficiary:
+          description: Who earns it
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          type: string
+        beneficiary_share:
+          description: Share of the computed commission for this beneficiary
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        biller_id:
+          description: Biller (empty = any)
+          format: uuid
+          type: string
+        cap_amount:
+          description: Maximum commission per transaction
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        channel:
+          description: Channel (empty = any)
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          type: string
+        commission_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        flat_amount:
+          description: Flat commission
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        funded_by:
+          description: FEE, PLATFORM, BILLER, MERCHANT
+          maxLength: 32
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        kyc_tier:
+          description: Customer KYC tier (empty = any)
+          format: int32
+          type: integer
+        max_amount:
+          description: Applies up to this transaction amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Applies from this transaction amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Rule name
+          maxLength: 120
+          type: string
+        percentage:
+          description: Percentage of the base (0.005 = 0.5%)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        priority:
+          description: Lower wins among equally specific rules
+          format: int32
+          type: integer
+        tax_withholding_rate:
+          description: Withholding tax on commission
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        tiers:
+          additionalProperties: true
+          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
+          type: object
+        txn_type:
+          description: Transaction type
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          type: string
+      required:
+      - commission_plan_id
+      - name
+      - txn_type
+      - basis
+      - beneficiary
+      type: object
+    CommissionRulePage:
+      description: One page of CommissionRule results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CommissionRule'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CommissionRuleUpdate:
+      properties:
+        agent_level:
+          description: Agent level (empty = any)
+          enum:
+          - SUPER_AGENT
+          - AGENT
+          - SUB_AGENT
+          type: string
+        agent_territory_id:
+          description: Territory (empty = any)
+          format: uuid
+          type: string
+        base:
+          description: 'Base of the percentage: AMOUNT or FEE'
+          maxLength: 16
+          type: string
+        basis:
+          description: Calculation basis
+          enum:
+          - FLAT
+          - PERCENTAGE
+          - TIERED
+          - FLAT_PLUS_PERCENTAGE
+          type: string
+        beneficiary:
+          description: Who earns it
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          type: string
+        beneficiary_share:
+          description: Share of the computed commission for this beneficiary
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        biller_id:
+          description: Biller (empty = any)
+          format: uuid
+          type: string
+        cap_amount:
+          description: Maximum commission per transaction
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        channel:
+          description: Channel (empty = any)
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          type: string
+        commission_plan_id:
+          description: Plan
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        flat_amount:
+          description: Flat commission
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        funded_by:
+          description: FEE, PLATFORM, BILLER, MERCHANT
+          maxLength: 32
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        kyc_tier:
+          description: Customer KYC tier (empty = any)
+          format: int32
+          type: integer
+        max_amount:
+          description: Applies up to this transaction amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        min_amount:
+          description: Applies from this transaction amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        name:
+          description: Rule name
+          maxLength: 120
+          type: string
+        percentage:
+          description: Percentage of the base (0.005 = 0.5%)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        priority:
+          description: Lower wins among equally specific rules
+          format: int32
+          type: integer
+        tax_withholding_rate:
+          description: Withholding tax on commission
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        tiers:
+          additionalProperties: true
+          description: 'Tier table for TIERED basis: [{from, to, flat, percentage}]'
+          type: object
+        txn_type:
+          description: Transaction type
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          type: string
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
+    with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
+    bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
+    and bulk disbursements; interoperability with national switches and other wallets. Every money movement posts through
+    the ledger.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — commission-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/commission-plans:
+    get:
+      operationId: commissionPlansList
+      summary: List commission plans
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+      - name: applies_to
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlanPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: commissionPlansCreate
+      summary: Create commission plan
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlanCreate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-create: true
+  /v1/commission-plans/{id}:
+    get:
+      operationId: commissionPlansGet
+      summary: Retrieve commission plan
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: commissionPlansUpdate
+      summary: Update commission plan
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlanUpdate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+      x-crud: true
+      x-crud-update: true
+  /v1/commission-plans/{id}/rules:
+    get:
+      operationId: commissionPlansRules
+      summary: Rules of the plan
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+  /v1/commission-plans/{id}/submit:
+    post:
+      operationId: commissionPlansSubmit
+      summary: Submit a draft plan for approval
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+  /v1/commission-plans/{id}/approve:
+    post:
+      operationId: commissionPlansApprove
+      summary: Approve and activate the plan (checker)
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlansApproveRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+  /v1/commission-plans/{id}/retire:
+    post:
+      operationId: commissionPlansRetire
+      summary: Retire the plan
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlansRetireRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+  /v1/commission-plans/{id}/clone:
+    post:
+      operationId: commissionPlansClone
+      summary: Create a new draft version from this plan
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+  /v1/commission-plans/{id}/simulate:
+    post:
+      operationId: commissionPlansSimulate
+      summary: Simulate commissions for a hypothetical transaction
+      tags:
+      - Commission Plans
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionEarningPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPlansSimulateRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_plan
+  /v1/commission-rules:
+    get:
+      operationId: commissionRulesList
+      summary: List commission rules
+      tags:
+      - Commission Rules
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: commission_plan_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: txn_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: beneficiary
+        in: query
+        schema:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: commissionRulesCreate
+      summary: Create commission rule
+      tags:
+      - Commission Rules
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionRuleCreate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/commission-rules/{id}:
+    get:
+      operationId: commissionRulesGet
+      summary: Retrieve commission rule
+      tags:
+      - Commission Rules
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: commissionRulesUpdate
+      summary: Update commission rule
+      tags:
+      - Commission Rules
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionRuleUpdate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: commissionRulesDelete
+      summary: Delete commission rule
+      tags:
+      - Commission Rules
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/commission-earnings:
+    get:
+      operationId: commissionEarningsList
+      summary: List commission earnings
+      tags:
+      - Commission Earnings
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: commission_plan_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: wallet_transaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: beneficiary_agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: beneficiary_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: beneficiary
+        in: query
+        schema:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+      - name: payout_due_on
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionEarningPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_earning
+      x-crud: true
+      x-crud-list: true
+  /v1/commission-earnings/{id}:
+    get:
+      operationId: commissionEarningsGet
+      summary: Retrieve commission earning
+      tags:
+      - Commission Earnings
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionEarning'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_earning
+      x-crud: true
+      x-crud-get: true
+  /v1/commission-payout-runs:
+    get:
+      operationId: commissionPayoutRunsList
+      summary: List commission payout runs
+      tags:
+      - Commission Payout Runs
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: payout_frequency
+        in: query
+        schema:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPayoutRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_payout_run
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: commissionPayoutRunsCreate
+      summary: Create commission payout run
+      tags:
+      - Commission Payout Runs
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPayoutRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPayoutRunCreate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_payout_run
+      x-crud: true
+      x-crud-create: true
+  /v1/commission-payout-runs/{id}:
+    get:
+      operationId: commissionPayoutRunsGet
+      summary: Retrieve commission payout run
+      tags:
+      - Commission Payout Runs
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPayoutRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_payout_run
+      x-crud: true
+      x-crud-get: true
+  /v1/commission-payout-runs/{id}/approve:
+    post:
+      operationId: commissionPayoutRunsApprove
+      summary: Approve the payout run (checker)
+      tags:
+      - Commission Payout Runs
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPayoutRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommissionPayoutRunsApproveRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_payout_run
+  /v1/commission-payout-runs/{id}/retry-failed:
+    post:
+      operationId: commissionPayoutRunsRetryFailed
+      summary: Retry failed payout lines
+      tags:
+      - Commission Payout Runs
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPayoutRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_payout_run
+  /v1/commission-payout-runs/{id}/lines:
+    get:
+      operationId: commissionPayoutRunsLines
+      summary: Lines of the run
+      tags:
+      - Commission Payout Runs
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommissionPayoutLinePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-table: commission_payout_run
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A versioned set of commission rules assigned to agents, merchants or billers
+  name: Commission Plans
+- description: One commission rule; the most specific matching rule per beneficiary wins
+  name: Commission Rules
+- description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+  name: Commission Earnings
+- description: A payout run paying accrued commissions to beneficiary wallets
+  name: Commission Payout Runs

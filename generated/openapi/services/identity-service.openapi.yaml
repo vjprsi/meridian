@@ -1,0 +1,6944 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    AccessPoliciesSimulateRequest:
+      properties:
+        action:
+          maxLength: 128
+          type: string
+        resource:
+          additionalProperties: true
+          type: object
+        user_id:
+          format: uuid
+          type: string
+      required:
+      - user_id
+      - action
+      - resource
+      type: object
+    AccessPolicy:
+      description: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
+      properties:
+        actions:
+          additionalProperties: true
+          description: Actions covered
+          type: object
+        condition_expression:
+          description: CEL expression over subject, resource and context
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Purpose
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        effect:
+          description: Allow or deny
+          enum:
+          - ALLOW
+          - DENY
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Policy name
+          maxLength: 120
+          type: string
+        priority:
+          description: Lower evaluates first; deny wins on tie
+          format: int32
+          type: integer
+        resource_pattern:
+          description: Resource pattern, e.g. payments.payment.*
+          maxLength: 255
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - effect
+      - priority
+      - resource_pattern
+      - actions
+      - condition_expression
+      - is_active
+      type: object
+    AccessPolicyCreate:
+      properties:
+        actions:
+          additionalProperties: true
+          description: Actions covered
+          type: object
+        condition_expression:
+          description: CEL expression over subject, resource and context
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose
+          maxLength: 500
+          type: string
+        effect:
+          description: Allow or deny
+          enum:
+          - ALLOW
+          - DENY
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Policy name
+          maxLength: 120
+          type: string
+        priority:
+          description: Lower evaluates first; deny wins on tie
+          format: int32
+          type: integer
+        resource_pattern:
+          description: Resource pattern, e.g. payments.payment.*
+          maxLength: 255
+          type: string
+      required:
+      - name
+      - effect
+      - resource_pattern
+      - actions
+      - condition_expression
+      type: object
+    AccessPolicyPage:
+      description: One page of AccessPolicy results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AccessPolicy'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AccessPolicyUpdate:
+      properties:
+        actions:
+          additionalProperties: true
+          description: Actions covered
+          type: object
+        condition_expression:
+          description: CEL expression over subject, resource and context
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose
+          maxLength: 500
+          type: string
+        effect:
+          description: Allow or deny
+          enum:
+          - ALLOW
+          - DENY
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        name:
+          description: Policy name
+          maxLength: 120
+          type: string
+        priority:
+          description: Lower evaluates first; deny wins on tie
+          format: int32
+          type: integer
+        resource_pattern:
+          description: Resource pattern, e.g. payments.payment.*
+          maxLength: 255
+          type: string
+      type: object
+    ApiClient:
+      description: An OAuth 2.1 client (server integration, app, partner or open banking TPP)
+      properties:
+        allowed_ip_ranges:
+          additionalProperties: true
+          description: CIDR allow-list
+          type:
+          - object
+          - 'null'
+        allowed_scopes:
+          additionalProperties: true
+          description: Scopes this client may request
+          type: object
+        auth_method:
+          description: Token endpoint authentication
+          enum:
+          - CLIENT_SECRET_BASIC
+          - CLIENT_SECRET_POST
+          - PRIVATE_KEY_JWT
+          - TLS_CLIENT_AUTH
+          - NONE
+          type: string
+        client_id:
+          description: Public client identifier
+          maxLength: 64
+          readOnly: true
+          type: string
+        client_type:
+          description: Kind of client
+          enum:
+          - SERVER
+          - PUBLIC_APP
+          - PARTNER
+          - TPP
+          - INTERNAL
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Purpose
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        environment:
+          description: Sandbox or production
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        fapi_profile:
+          description: Enforce FAPI 2.0 security profile
+          type: boolean
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        jwks_uri:
+          description: JWKS URL for private_key_jwt
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        last_used_at:
+          description: Last token issued
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        mtls_cert_thumbprint:
+          description: Bound certificate (RFC 8705)
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        name:
+          description: Client name
+          maxLength: 120
+          type: string
+        owner_email:
+          description: Technical owner
+          format: email
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        rate_limit_policy_id:
+          description: Rate limits
+          format: uuid
+          type:
+          - string
+          - 'null'
+        redirect_uris:
+          additionalProperties: true
+          description: Allowed redirect URIs
+          type:
+          - object
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          type: string
+        tpp_registration_id:
+          description: Open banking TPP registration / eIDAS id
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - client_type
+      - client_id
+      - auth_method
+      - allowed_scopes
+      - environment
+      - status
+      - fapi_profile
+      type: object
+    ApiClientCreate:
+      properties:
+        allowed_ip_ranges:
+          additionalProperties: true
+          description: CIDR allow-list
+          type: object
+        allowed_scopes:
+          additionalProperties: true
+          description: Scopes this client may request
+          type: object
+        auth_method:
+          description: Token endpoint authentication
+          enum:
+          - CLIENT_SECRET_BASIC
+          - CLIENT_SECRET_POST
+          - PRIVATE_KEY_JWT
+          - TLS_CLIENT_AUTH
+          - NONE
+          type: string
+        client_type:
+          description: Kind of client
+          enum:
+          - SERVER
+          - PUBLIC_APP
+          - PARTNER
+          - TPP
+          - INTERNAL
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose
+          maxLength: 500
+          type: string
+        environment:
+          description: Sandbox or production
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          type: string
+        fapi_profile:
+          description: Enforce FAPI 2.0 security profile
+          type: boolean
+        jwks_uri:
+          description: JWKS URL for private_key_jwt
+          maxLength: 500
+          type: string
+        mtls_cert_thumbprint:
+          description: Bound certificate (RFC 8705)
+          maxLength: 128
+          type: string
+        name:
+          description: Client name
+          maxLength: 120
+          type: string
+        owner_email:
+          description: Technical owner
+          format: email
+          maxLength: 320
+          type: string
+        rate_limit_policy_id:
+          description: Rate limits
+          format: uuid
+          type: string
+        redirect_uris:
+          additionalProperties: true
+          description: Allowed redirect URIs
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          type: string
+        tpp_registration_id:
+          description: Open banking TPP registration / eIDAS id
+          maxLength: 128
+          type: string
+      required:
+      - name
+      - client_type
+      - allowed_scopes
+      type: object
+    ApiClientPage:
+      description: One page of ApiClient results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ApiClient'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ApiClientUpdate:
+      properties:
+        allowed_ip_ranges:
+          additionalProperties: true
+          description: CIDR allow-list
+          type: object
+        allowed_scopes:
+          additionalProperties: true
+          description: Scopes this client may request
+          type: object
+        auth_method:
+          description: Token endpoint authentication
+          enum:
+          - CLIENT_SECRET_BASIC
+          - CLIENT_SECRET_POST
+          - PRIVATE_KEY_JWT
+          - TLS_CLIENT_AUTH
+          - NONE
+          type: string
+        client_type:
+          description: Kind of client
+          enum:
+          - SERVER
+          - PUBLIC_APP
+          - PARTNER
+          - TPP
+          - INTERNAL
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose
+          maxLength: 500
+          type: string
+        environment:
+          description: Sandbox or production
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          type: string
+        fapi_profile:
+          description: Enforce FAPI 2.0 security profile
+          type: boolean
+        jwks_uri:
+          description: JWKS URL for private_key_jwt
+          maxLength: 500
+          type: string
+        mtls_cert_thumbprint:
+          description: Bound certificate (RFC 8705)
+          maxLength: 128
+          type: string
+        name:
+          description: Client name
+          maxLength: 120
+          type: string
+        owner_email:
+          description: Technical owner
+          format: email
+          maxLength: 320
+          type: string
+        rate_limit_policy_id:
+          description: Rate limits
+          format: uuid
+          type: string
+        redirect_uris:
+          additionalProperties: true
+          description: Allowed redirect URIs
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+          type: string
+        tpp_registration_id:
+          description: Open banking TPP registration / eIDAS id
+          maxLength: 128
+          type: string
+      type: object
+    ApiClientsSuspendRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    ApiKey:
+      description: Secret API key for an API client (shown once at creation; stored hashed)
+      properties:
+        api_client_id:
+          description: Client
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        key_prefix:
+          description: Visible prefix, e.g. mk_live_4f9a
+          maxLength: 16
+          readOnly: true
+          type: string
+        last_used_at:
+          description: Last use
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        last_used_ip:
+          description: Last caller IP (IPv4 or IPv6 address)
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        name:
+          description: Key label
+          maxLength: 120
+          type: string
+        revoked_at:
+          description: Revocation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        rotated_from_id:
+          description: Key this one replaced
+          format: uuid
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scopes:
+          additionalProperties: true
+          description: Scopes (subset of the client's)
+          type:
+          - object
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - ROTATING
+          - REVOKED
+          - EXPIRED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - api_client_id
+      - name
+      - key_prefix
+      - status
+      type: object
+    ApiKeyCreate:
+      properties:
+        api_client_id:
+          description: Client
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        expires_at:
+          description: Expiry
+          format: date-time
+          type: string
+        name:
+          description: Key label
+          maxLength: 120
+          type: string
+        rotated_from_id:
+          description: Key this one replaced
+          format: uuid
+          type: string
+        scopes:
+          additionalProperties: true
+          description: Scopes (subset of the client's)
+          type: object
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - ROTATING
+          - REVOKED
+          - EXPIRED
+          type: string
+      required:
+      - api_client_id
+      - name
+      type: object
+    ApiKeyPage:
+      description: One page of ApiKey results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ApiKey'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ApiKeysRevokeRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    ApiKeysRotateRequest:
+      properties:
+        grace_period_hours:
+          format: int32
+          type: integer
+      type: object
+    ApiRequestLog:
+      description: One API request handled by the gateway; powers developer logs and usage metering. Append-only.
+      properties:
+        api_client_id:
+          description: Calling client
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        environment:
+          description: Sandbox or production
+          enum:
+          - SANDBOX
+          - PRODUCTION
+          type: string
+        error_code:
+          description: Problem code for errors
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        idempotency_key:
+          description: Idempotency key sent
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        ip_address:
+          description: Caller IP (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        latency_ms:
+          description: Gateway latency
+          format: int32
+          type: integer
+        method:
+          description: HTTP method
+          maxLength: 8
+          type: string
+        occurred_at:
+          description: Request time
+          format: date-time
+          type: string
+        operation_id:
+          description: OpenAPI operation id
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        path:
+          description: Request path
+          maxLength: 500
+          type: string
+        request_bytes:
+          description: Request size
+          format: int32
+          type:
+          - integer
+          - 'null'
+        request_id:
+          description: Request id returned in X-Request-Id
+          maxLength: 64
+          type: string
+        response_bytes:
+          description: Response size
+          format: int32
+          type:
+          - integer
+          - 'null'
+        status_code:
+          description: HTTP status
+          format: int32
+          type: integer
+        user_agent:
+          description: Caller user agent
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - request_id
+      - method
+      - path
+      - status_code
+      - latency_ms
+      - environment
+      - occurred_at
+      type: object
+    ApiRequestLogPage:
+      description: One page of ApiRequestLog results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ApiRequestLog'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AppUser:
+      description: Staff, operator, auditor or service-account user of the console and back-office APIs
+      properties:
+        branch_id:
+          description: Home branch
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        deactivated_at:
+          description: Deactivation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        department:
+          description: Department
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        display_name:
+          description: Display name
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        email:
+          description: Work email
+          format: email
+          maxLength: 320
+          type: string
+        external_subject:
+          description: Subject id at the identity provider
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        failed_login_count:
+          description: Consecutive failed logins
+          format: int32
+          readOnly: true
+          type: integer
+        first_name:
+          description: First name
+          maxLength: 120
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        invited_at:
+          description: Invitation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        job_title:
+          description: Job title
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        last_login_at:
+          description: Last successful login
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        last_name:
+          description: Last name
+          maxLength: 120
+          type: string
+        legal_entity_id:
+          description: Home legal entity
+          format: uuid
+          type:
+          - string
+          - 'null'
+        locale:
+          description: Preferred locale
+          maxLength: 10
+          type: string
+        locked_until:
+          description: Lockout end
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        manager_id:
+          description: Line manager
+          format: uuid
+          type:
+          - string
+          - 'null'
+        mfa_enrolled:
+          description: Has an active MFA factor
+          readOnly: true
+          type: boolean
+        password_changed_at:
+          description: Last password change
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        phone:
+          description: Work phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        sso_provider_id:
+          description: SSO provider, if federated
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - INVITED
+          - ACTIVE
+          - LOCKED
+          - SUSPENDED
+          - DEACTIVATED
+          type: string
+        timezone:
+          description: Timezone
+          maxLength: 64
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        user_type:
+          description: Kind of user
+          enum:
+          - STAFF
+          - PLATFORM_OPERATOR
+          - AGENT_STAFF
+          - AUDITOR
+          - SERVICE_ACCOUNT
+          type: string
+        username:
+          description: Login name
+          maxLength: 120
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - username
+      - email
+      - first_name
+      - last_name
+      - user_type
+      - status
+      - locale
+      - timezone
+      - mfa_enrolled
+      - failed_login_count
+      type: object
+    AppUserCreate:
+      properties:
+        branch_id:
+          description: Home branch
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        department:
+          description: Department
+          maxLength: 120
+          type: string
+        display_name:
+          description: Display name
+          maxLength: 160
+          type: string
+        email:
+          description: Work email
+          format: email
+          maxLength: 320
+          type: string
+        external_subject:
+          description: Subject id at the identity provider
+          maxLength: 255
+          type: string
+        first_name:
+          description: First name
+          maxLength: 120
+          type: string
+        job_title:
+          description: Job title
+          maxLength: 120
+          type: string
+        last_name:
+          description: Last name
+          maxLength: 120
+          type: string
+        legal_entity_id:
+          description: Home legal entity
+          format: uuid
+          type: string
+        locale:
+          description: Preferred locale
+          maxLength: 10
+          type: string
+        manager_id:
+          description: Line manager
+          format: uuid
+          type: string
+        phone:
+          description: Work phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        sso_provider_id:
+          description: SSO provider, if federated
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - INVITED
+          - ACTIVE
+          - LOCKED
+          - SUSPENDED
+          - DEACTIVATED
+          type: string
+        timezone:
+          description: Timezone
+          maxLength: 64
+          type: string
+        user_type:
+          description: Kind of user
+          enum:
+          - STAFF
+          - PLATFORM_OPERATOR
+          - AGENT_STAFF
+          - AUDITOR
+          - SERVICE_ACCOUNT
+          type: string
+        username:
+          description: Login name
+          maxLength: 120
+          type: string
+      required:
+      - username
+      - email
+      - first_name
+      - last_name
+      type: object
+    AppUserPage:
+      description: One page of AppUser results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/AppUser'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    AppUserUpdate:
+      properties:
+        branch_id:
+          description: Home branch
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        department:
+          description: Department
+          maxLength: 120
+          type: string
+        display_name:
+          description: Display name
+          maxLength: 160
+          type: string
+        email:
+          description: Work email
+          format: email
+          maxLength: 320
+          type: string
+        external_subject:
+          description: Subject id at the identity provider
+          maxLength: 255
+          type: string
+        first_name:
+          description: First name
+          maxLength: 120
+          type: string
+        job_title:
+          description: Job title
+          maxLength: 120
+          type: string
+        last_name:
+          description: Last name
+          maxLength: 120
+          type: string
+        legal_entity_id:
+          description: Home legal entity
+          format: uuid
+          type: string
+        locale:
+          description: Preferred locale
+          maxLength: 10
+          type: string
+        manager_id:
+          description: Line manager
+          format: uuid
+          type: string
+        phone:
+          description: Work phone (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        sso_provider_id:
+          description: SSO provider, if federated
+          format: uuid
+          type: string
+        status:
+          description: Status
+          enum:
+          - INVITED
+          - ACTIVE
+          - LOCKED
+          - SUSPENDED
+          - DEACTIVATED
+          type: string
+        timezone:
+          description: Timezone
+          maxLength: 64
+          type: string
+        user_type:
+          description: Kind of user
+          enum:
+          - STAFF
+          - PLATFORM_OPERATOR
+          - AGENT_STAFF
+          - AUDITOR
+          - SERVICE_ACCOUNT
+          type: string
+        username:
+          description: Login name
+          maxLength: 120
+          type: string
+      type: object
+    ApprovalRequest:
+      description: A pending sensitive operation awaiting checker approval (four-eyes)
+      properties:
+        action:
+          description: Action
+          maxLength: 40
+          type: string
+        amount:
+          description: Amount, for threshold routing
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        approval_policy_id:
+          description: Policy applied
+          format: uuid
+          type:
+          - string
+          - 'null'
+        approvals_received:
+          description: Approvals received
+          format: int32
+          readOnly: true
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency of the amount (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        current_level:
+          description: Current approval level
+          format: int32
+          readOnly: true
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        decided_at:
+          description: Final decision time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        diff:
+          additionalProperties: true
+          description: Before/after diff for updates
+          type:
+          - object
+          - 'null'
+        executed_at:
+          description: Execution time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        execution_result:
+          additionalProperties: true
+          description: Result or error from executing the operation
+          readOnly: true
+          type:
+          - object
+          - 'null'
+        expires_at:
+          description: Expiry
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        maker:
+          description: Requesting user
+          maxLength: 64
+          readOnly: true
+          type: string
+        payload:
+          additionalProperties: true
+          description: Operation to execute once approved
+          type: object
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        required_approvals:
+          description: Approvals required
+          format: int32
+          readOnly: true
+          type: integer
+        resource_id:
+          description: Resource id (empty for creates)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        resource_type:
+          description: Resource type
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - EXPIRED
+          - EXECUTED
+          - EXECUTION_FAILED
+          readOnly: true
+          type: string
+        summary:
+          description: Human-readable description of the change
+          type:
+          - string
+          - 'null'
+        title:
+          description: Short title shown in the approvals queue
+          maxLength: 255
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - resource_type
+      - action
+      - title
+      - payload
+      - priority
+      - status
+      - maker
+      - required_approvals
+      - approvals_received
+      - current_level
+      type: object
+    MfaFactor:
+      description: A multi-factor authentication factor enrolled by a staff user
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        credential_id:
+          description: WebAuthn credential id
+          maxLength: 512
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        destination:
+          description: Phone or email for OTP factors
+          maxLength: 320
+          type:
+          - string
+          - 'null'
+        factor_type:
+          description: Factor type
+          enum:
+          - TOTP
+          - WEBAUTHN
+          - SMS_OTP
+          - EMAIL_OTP
+          - PUSH
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_primary:
+          description: Default factor
+          type: boolean
+        label:
+          description: User-visible label, e.g. YubiKey 5C
+          maxLength: 120
+          type:
+          - string
+          - 'null'
+        last_used_at:
+          description: Last successful use
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        status:
+          description: Status
+          enum:
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - DISABLED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        user_id:
+          description: User
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - user_id
+      - factor_type
+      - is_primary
+      - status
+      type: object
+    MfaFactorCreate:
+      properties:
+        credential_id:
+          description: WebAuthn credential id
+          maxLength: 512
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        destination:
+          description: Phone or email for OTP factors
+          maxLength: 320
+          type: string
+        factor_type:
+          description: Factor type
+          enum:
+          - TOTP
+          - WEBAUTHN
+          - SMS_OTP
+          - EMAIL_OTP
+          - PUSH
+          type: string
+        is_primary:
+          description: Default factor
+          type: boolean
+        label:
+          description: User-visible label, e.g. YubiKey 5C
+          maxLength: 120
+          type: string
+        status:
+          description: Status
+          enum:
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - DISABLED
+          type: string
+        user_id:
+          description: User
+          format: uuid
+          type: string
+      required:
+      - user_id
+      - factor_type
+      type: object
+    MfaFactorPage:
+      description: One page of MfaFactor results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/MfaFactor'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    MfaFactorsVerifyRequest:
+      properties:
+        assertion:
+          additionalProperties: true
+          type: object
+        code:
+          maxLength: 16
+          type: string
+      type: object
+    OauthScope:
+      description: Catalogue of OAuth scopes (e.g. payments:write), shared by all tenants
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: What the scope grants
+          maxLength: 500
+          type: string
+        domain:
+          description: Owning domain
+          maxLength: 40
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_sensitive:
+          description: Needs extra approval to grant
+          type: boolean
+        requires_customer_consent:
+          description: Needs customer consent (open banking)
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scope:
+          description: Scope string
+          maxLength: 128
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - scope
+      - domain
+      - description
+      - is_sensitive
+      - requires_customer_consent
+      type: object
+    OauthScopePage:
+      description: One page of OauthScope results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/OauthScope'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Permission:
+      description: Catalogue of fine-grained permissions (resource + action), shared by all tenants
+      properties:
+        action:
+          description: 'Action: read, create, update, approve, export ...'
+          maxLength: 40
+          type: string
+        code:
+          description: Permission code, e.g. payments.payment.approve
+          maxLength: 128
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: What it allows
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        domain:
+          description: Owning domain
+          maxLength: 40
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_sensitive:
+          description: Sensitive (PII, money movement, configuration)
+          type: boolean
+        requires_approval:
+          description: Operations need maker-checker
+          type: boolean
+        resource:
+          description: Resource
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - domain
+      - resource
+      - action
+      - is_sensitive
+      - requires_approval
+      type: object
+    PermissionPage:
+      description: One page of Permission results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Permission'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    RateLimitPolicy:
+      description: Rate and concurrency limits applied by the API gateway
+      properties:
+        applies_to:
+          description: What the limit is keyed on
+          enum:
+          - TENANT
+          - CLIENT
+          - IP
+          - USER
+          type: string
+        burst:
+          description: Burst size
+          format: int32
+          type: integer
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        max_concurrent_requests:
+          description: Concurrency cap
+          format: int32
+          type:
+          - integer
+          - 'null'
+        name:
+          description: Policy name
+          maxLength: 120
+          type: string
+        operation_overrides:
+          additionalProperties: true
+          description: Per-operation overrides
+          type:
+          - object
+          - 'null'
+        requests_per_day:
+          description: Daily quota
+          format: int64
+          type:
+          - integer
+          - 'null'
+        requests_per_second:
+          description: Sustained rate
+          format: int32
+          type: integer
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - applies_to
+      - requests_per_second
+      - burst
+      type: object
+    RateLimitPolicyCreate:
+      properties:
+        applies_to:
+          description: What the limit is keyed on
+          enum:
+          - TENANT
+          - CLIENT
+          - IP
+          - USER
+          type: string
+        burst:
+          description: Burst size
+          format: int32
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        max_concurrent_requests:
+          description: Concurrency cap
+          format: int32
+          type: integer
+        name:
+          description: Policy name
+          maxLength: 120
+          type: string
+        operation_overrides:
+          additionalProperties: true
+          description: Per-operation overrides
+          type: object
+        requests_per_day:
+          description: Daily quota
+          format: int64
+          type: integer
+        requests_per_second:
+          description: Sustained rate
+          format: int32
+          type: integer
+      required:
+      - name
+      - requests_per_second
+      - burst
+      type: object
+    RateLimitPolicyPage:
+      description: One page of RateLimitPolicy results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RateLimitPolicy'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RateLimitPolicyUpdate:
+      properties:
+        applies_to:
+          description: What the limit is keyed on
+          enum:
+          - TENANT
+          - CLIENT
+          - IP
+          - USER
+          type: string
+        burst:
+          description: Burst size
+          format: int32
+          type: integer
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        max_concurrent_requests:
+          description: Concurrency cap
+          format: int32
+          type: integer
+        name:
+          description: Policy name
+          maxLength: 120
+          type: string
+        operation_overrides:
+          additionalProperties: true
+          description: Per-operation overrides
+          type: object
+        requests_per_day:
+          description: Daily quota
+          format: int64
+          type: integer
+        requests_per_second:
+          description: Sustained rate
+          format: int32
+          type: integer
+      type: object
+    Role:
+      description: A named set of permissions assignable to staff users
+      properties:
+        code:
+          description: Role code, e.g. OPS_PAYMENTS_MAKER
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Purpose of the role
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        incompatible_role_ids:
+          additionalProperties: true
+          description: Segregation-of-duties conflicts
+          type:
+          - object
+          - 'null'
+        is_privileged:
+          description: Privileged roles need just-in-time elevation and approval
+          type: boolean
+        max_session_minutes:
+          description: Session lifetime
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        requires_mfa:
+          description: MFA required for sessions using this role
+          type: boolean
+        role_type:
+          description: System roles cannot be edited
+          enum:
+          - SYSTEM
+          - CUSTOM
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - role_type
+      - is_privileged
+      - requires_mfa
+      - max_session_minutes
+      type: object
+    RoleCreate:
+      properties:
+        code:
+          description: Role code, e.g. OPS_PAYMENTS_MAKER
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose of the role
+          maxLength: 500
+          type: string
+        incompatible_role_ids:
+          additionalProperties: true
+          description: Segregation-of-duties conflicts
+          type: object
+        is_privileged:
+          description: Privileged roles need just-in-time elevation and approval
+          type: boolean
+        max_session_minutes:
+          description: Session lifetime
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        requires_mfa:
+          description: MFA required for sessions using this role
+          type: boolean
+        role_type:
+          description: System roles cannot be edited
+          enum:
+          - SYSTEM
+          - CUSTOM
+          type: string
+      required:
+      - code
+      - name
+      type: object
+    RolePage:
+      description: One page of Role results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/Role'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RolePermission:
+      description: Grants a permission to a role, optionally constrained by ABAC conditions
+      properties:
+        conditions:
+          additionalProperties: true
+          description: ABAC constraints, e.g. amount <= 10000, own branch only
+          type:
+          - object
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        permission_id:
+          description: Permission
+          format: uuid
+          type: string
+        role_id:
+          description: Role
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - role_id
+      - permission_id
+      type: object
+    RolePermissionPage:
+      description: One page of RolePermission results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/RolePermission'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    RoleUpdate:
+      properties:
+        code:
+          description: Role code, e.g. OPS_PAYMENTS_MAKER
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Purpose of the role
+          maxLength: 500
+          type: string
+        incompatible_role_ids:
+          additionalProperties: true
+          description: Segregation-of-duties conflicts
+          type: object
+        is_privileged:
+          description: Privileged roles need just-in-time elevation and approval
+          type: boolean
+        max_session_minutes:
+          description: Session lifetime
+          format: int32
+          type: integer
+        name:
+          description: Display name
+          maxLength: 120
+          type: string
+        requires_mfa:
+          description: MFA required for sessions using this role
+          type: boolean
+        role_type:
+          description: System roles cannot be edited
+          enum:
+          - SYSTEM
+          - CUSTOM
+          type: string
+      type: object
+    RolesCloneRequest:
+      properties:
+        code:
+          maxLength: 64
+          type: string
+        name:
+          maxLength: 120
+          type: string
+      required:
+      - code
+      - name
+      type: object
+    RolesPermissionsRequest:
+      properties:
+        conditions:
+          additionalProperties: true
+          type: object
+        permission_ids:
+          additionalProperties: true
+          type: object
+      required:
+      - permission_ids
+      type: object
+    SessionsRevokeAllRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+        user_id:
+          format: uuid
+          type: string
+      required:
+      - user_id
+      - reason
+      type: object
+    SessionsRevokeRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    SsoProvider:
+      description: Enterprise identity provider used for staff single sign-on
+      properties:
+        attribute_mapping:
+          additionalProperties: true
+          description: Maps IdP claims to user fields and roles
+          type:
+          - object
+          - 'null'
+        client_id:
+          description: OIDC client id
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        default_role_id:
+          description: Role assigned to just-in-time users
+          format: uuid
+          type:
+          - string
+          - 'null'
+        email_domains:
+          additionalProperties: true
+          description: Email domains that must use this provider
+          type:
+          - object
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        issuer_url:
+          description: Issuer / entity id
+          maxLength: 500
+          type: string
+        jit_provisioning:
+          description: Create users on first login
+          type: boolean
+        metadata_url:
+          description: Discovery or SAML metadata URL
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        name:
+          description: Display name, e.g. Corporate Entra ID
+          maxLength: 120
+          type: string
+        protocol:
+          description: OIDC or SAML 2.0
+          enum:
+          - OIDC
+          - SAML2
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        signing_certificate:
+          description: SAML IdP signing certificate (PEM)
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - protocol
+      - issuer_url
+      - jit_provisioning
+      - status
+      type: object
+    SsoProviderCreate:
+      properties:
+        attribute_mapping:
+          additionalProperties: true
+          description: Maps IdP claims to user fields and roles
+          type: object
+        client_id:
+          description: OIDC client id
+          maxLength: 255
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        default_role_id:
+          description: Role assigned to just-in-time users
+          format: uuid
+          type: string
+        email_domains:
+          additionalProperties: true
+          description: Email domains that must use this provider
+          type: object
+        issuer_url:
+          description: Issuer / entity id
+          maxLength: 500
+          type: string
+        jit_provisioning:
+          description: Create users on first login
+          type: boolean
+        metadata_url:
+          description: Discovery or SAML metadata URL
+          maxLength: 500
+          type: string
+        name:
+          description: Display name, e.g. Corporate Entra ID
+          maxLength: 120
+          type: string
+        protocol:
+          description: OIDC or SAML 2.0
+          enum:
+          - OIDC
+          - SAML2
+          type: string
+        signing_certificate:
+          description: SAML IdP signing certificate (PEM)
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          type: string
+      required:
+      - name
+      - protocol
+      - issuer_url
+      type: object
+    SsoProviderPage:
+      description: One page of SsoProvider results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SsoProvider'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SsoProviderUpdate:
+      properties:
+        attribute_mapping:
+          additionalProperties: true
+          description: Maps IdP claims to user fields and roles
+          type: object
+        client_id:
+          description: OIDC client id
+          maxLength: 255
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        default_role_id:
+          description: Role assigned to just-in-time users
+          format: uuid
+          type: string
+        email_domains:
+          additionalProperties: true
+          description: Email domains that must use this provider
+          type: object
+        issuer_url:
+          description: Issuer / entity id
+          maxLength: 500
+          type: string
+        jit_provisioning:
+          description: Create users on first login
+          type: boolean
+        metadata_url:
+          description: Discovery or SAML metadata URL
+          maxLength: 500
+          type: string
+        name:
+          description: Display name, e.g. Corporate Entra ID
+          maxLength: 120
+          type: string
+        protocol:
+          description: OIDC or SAML 2.0
+          enum:
+          - OIDC
+          - SAML2
+          type: string
+        signing_certificate:
+          description: SAML IdP signing certificate (PEM)
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+          type: string
+      type: object
+    UserRole:
+      description: Assignment of a role to a user, scoped to the tenant, a legal entity or a branch, optionally time-bound
+      properties:
+        approval_request_id:
+          description: Approval for privileged roles
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        granted_by:
+          description: Who granted it
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        justification:
+          description: Business justification
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        role_id:
+          description: Role
+          format: uuid
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scope_id:
+          description: Legal entity or branch id when scoped
+          format: uuid
+          type:
+          - string
+          - 'null'
+        scope_type:
+          description: Scope of the assignment
+          enum:
+          - TENANT
+          - LEGAL_ENTITY
+          - BRANCH
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        user_id:
+          description: User
+          format: uuid
+          type: string
+        valid_from:
+          description: Start
+          format: date-time
+          type: string
+        valid_to:
+          description: End (just-in-time elevation)
+          format: date-time
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - user_id
+      - role_id
+      - scope_type
+      - valid_from
+      type: object
+    UserRoleCreate:
+      properties:
+        approval_request_id:
+          description: Approval for privileged roles
+          format: uuid
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        justification:
+          description: Business justification
+          maxLength: 500
+          type: string
+        role_id:
+          description: Role
+          format: uuid
+          type: string
+        scope_id:
+          description: Legal entity or branch id when scoped
+          format: uuid
+          type: string
+        scope_type:
+          description: Scope of the assignment
+          enum:
+          - TENANT
+          - LEGAL_ENTITY
+          - BRANCH
+          type: string
+        user_id:
+          description: User
+          format: uuid
+          type: string
+        valid_from:
+          description: Start
+          format: date-time
+          type: string
+        valid_to:
+          description: End (just-in-time elevation)
+          format: date-time
+          type: string
+      required:
+      - user_id
+      - role_id
+      type: object
+    UserRolePage:
+      description: One page of UserRole results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UserRole'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    UserRolesElevateRequest:
+      properties:
+        duration_minutes:
+          format: int32
+          type: integer
+        justification:
+          maxLength: 500
+          type: string
+        role_id:
+          format: uuid
+          type: string
+      required:
+      - role_id
+      - duration_minutes
+      - justification
+      type: object
+    UserSession:
+      description: An authenticated staff session; revocable
+      properties:
+        auth_method:
+          description: PASSWORD, SSO_OIDC, SSO_SAML, PASSKEY
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        device_fingerprint:
+          description: Device fingerprint
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: Absolute expiry
+          format: date-time
+          type: string
+        geo_country:
+          description: Country resolved from IP (ISO 3166-1 alpha-2)
+          pattern: ^[A-Z]{2}$
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        ip_address:
+          description: Client IP (IPv4 or IPv6 address)
+          type:
+          - string
+          - 'null'
+        last_seen_at:
+          description: Last activity
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        mfa_verified:
+          description: MFA completed
+          type: boolean
+        revoke_reason:
+          description: Revocation reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        revoked_at:
+          description: Revocation time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        started_at:
+          description: Session start
+          format: date-time
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        user_agent:
+          description: Browser user agent
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        user_id:
+          description: User
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - user_id
+      - auth_method
+      - mfa_verified
+      - started_at
+      - expires_at
+      type: object
+    UserSessionPage:
+      description: One page of UserSession results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UserSession'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    UsersDeactivateRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    UsersLockRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    UsersResetMfaRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    UsersUnlockRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            platform:read: Read Platform and Administration
+            platform:write: Change Platform and Administration
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Cross-cutting platform capabilities: multi-tenancy and cells, legal entities and branches, staff identity
+    and access (RBAC + ABAC, SSO, MFA), API clients and keys, versioned configuration and country packs, reference data, documents
+    and e-signature, maker-checker approvals and workflows, notifications, webhooks, the tamper-evident audit log, and SaaS
+    usage metering and billing.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — identity-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/users:
+    get:
+      operationId: usersList
+      summary: List users
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - INVITED
+          - ACTIVE
+          - LOCKED
+          - SUSPENDED
+          - DEACTIVATED
+      - name: user_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - STAFF
+          - PLATFORM_OPERATOR
+          - AGENT_STAFF
+          - AUDITOR
+          - SERVICE_ACCOUNT
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: branch_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: email
+        in: query
+        schema:
+          type: string
+          format: email
+          maxLength: 320
+      - name: username
+        in: query
+        schema:
+          type: string
+          maxLength: 120
+      - name: sso_provider_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUserPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: usersCreate
+      summary: Create user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppUserCreate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-create: true
+  /v1/users/{id}:
+    get:
+      operationId: usersGet
+      summary: Retrieve user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: usersUpdate
+      summary: Update user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppUserUpdate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+      x-crud: true
+      x-crud-update: true
+  /v1/users/{id}/invite:
+    post:
+      operationId: usersInvite
+      summary: Send or resend the invitation email
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/{id}/lock:
+    post:
+      operationId: usersLock
+      summary: Lock a user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsersLockRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/{id}/unlock:
+    post:
+      operationId: usersUnlock
+      summary: Unlock a user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsersUnlockRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/{id}/deactivate:
+    post:
+      operationId: usersDeactivate
+      summary: Deactivate a user and revoke sessions
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsersDeactivateRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/{id}/reset-mfa:
+    post:
+      operationId: usersResetMfa
+      summary: Remove all MFA factors (maker-checker)
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsersResetMfaRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/{id}/roles:
+    get:
+      operationId: usersRoles
+      summary: Role assignments of a user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRolePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/{id}/effective-permissions:
+    get:
+      operationId: usersEffectivePermissions
+      summary: Permissions after RBAC and ABAC evaluation
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/users/me:
+    get:
+      operationId: usersMe
+      summary: The calling user
+      tags:
+      - Users
+      security:
+      - oauth2:
+        - platform:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppUser'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: app_user
+  /v1/user-roles:
+    get:
+      operationId: userRolesList
+      summary: List user roles
+      tags:
+      - User Roles
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: role_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: scope_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - TENANT
+          - LEGAL_ENTITY
+          - BRANCH
+      - name: scope_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRolePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      - LIM-02
+      x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: userRolesCreate
+      summary: Create user role
+      tags:
+      - User Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRole'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRoleCreate'
+      x-requirements:
+      - ADM-02
+      - LIM-02
+      x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-create: true
+  /v1/user-roles/{id}:
+    get:
+      operationId: userRolesGet
+      summary: Retrieve user role
+      tags:
+      - User Roles
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id006
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRole'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      - LIM-02
+      x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-get: true
+    delete:
+      operationId: userRolesDelete
+      summary: Delete user role
+      tags:
+      - User Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id006
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      - LIM-02
+      x-service: identity-service
+      x-table: user_role
+      x-crud: true
+      x-crud-delete: true
+  /v1/user-roles/elevate:
+    post:
+      operationId: userRolesElevate
+      summary: Request just-in-time elevation to a privileged role
+      tags:
+      - User Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRolesElevateRequest'
+      x-requirements:
+      - ADM-02
+      - LIM-02
+      x-service: identity-service
+      x-table: user_role
+  /v1/roles:
+    get:
+      operationId: rolesList
+      summary: List roles
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: role_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SYSTEM
+          - CUSTOM
+      - name: is_privileged
+        in: query
+        schema:
+          type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: rolesCreate
+      summary: Create role
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-create: true
+  /v1/roles/{id}:
+    get:
+      operationId: rolesGet
+      summary: Retrieve role
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id008
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: rolesUpdate
+      summary: Update role
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: rolesDelete
+      summary: Delete role
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id008
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+      x-crud: true
+      x-crud-delete: true
+  /v1/roles/{id}/permissions:
+    get:
+      operationId: rolesPermissions
+      summary: Permissions granted to a role
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+    post:
+      operationId: rolesAddPermissions
+      summary: Grant permissions to a role (maker-checker)
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalRequest'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolesPermissionsRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+  /v1/roles/{id}/clone:
+    post:
+      operationId: rolesClone
+      summary: Copy a role as a new custom role
+      tags:
+      - Roles
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolesCloneRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role
+  /v1/role-permissions:
+    get:
+      operationId: rolePermissionsList
+      summary: List role permissions
+      tags:
+      - Role Permissions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: role_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: permission_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermissionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role_permission
+      x-crud: true
+      x-crud-list: true
+  /v1/role-permissions/{id}:
+    get:
+      operationId: rolePermissionsGet
+      summary: Retrieve role permission
+      tags:
+      - Role Permissions
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id009
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePermission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role_permission
+      x-crud: true
+      x-crud-get: true
+    delete:
+      operationId: rolePermissionsDelete
+      summary: Delete role permission
+      tags:
+      - Role Permissions
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: role_permission
+      x-crud: true
+      x-crud-delete: true
+  /v1/permissions:
+    get:
+      operationId: permissionsList
+      summary: List permissions
+      tags:
+      - Permissions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: domain
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: resource
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: is_sensitive
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: permission
+      x-crud: true
+      x-crud-list: true
+  /v1/permissions/{id}:
+    get:
+      operationId: permissionsGet
+      summary: Retrieve permission
+      tags:
+      - Permissions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: permission
+      x-crud: true
+      x-crud-get: true
+  /v1/access-policies:
+    get:
+      operationId: accessPoliciesList
+      summary: List access policies
+      tags:
+      - Access Policies
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: effect
+        in: query
+        schema:
+          type: string
+          enum:
+          - ALLOW
+          - DENY
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPolicyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: accessPoliciesCreate
+      summary: Create access policie
+      tags:
+      - Access Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessPolicyCreate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-create: true
+  /v1/access-policies/{id}:
+    get:
+      operationId: accessPoliciesGet
+      summary: Retrieve access policie
+      tags:
+      - Access Policies
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id011
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: accessPoliciesUpdate
+      summary: Update access policie
+      tags:
+      - Access Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessPolicyUpdate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: accessPoliciesDelete
+      summary: Delete access policie
+      tags:
+      - Access Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id011
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: access_policy
+      x-crud: true
+      x-crud-delete: true
+  /v1/access-policies/simulate:
+    post:
+      operationId: accessPoliciesSimulate
+      summary: Evaluate an access decision for a subject, action and resource
+      tags:
+      - Access Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessPoliciesSimulateRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: access_policy
+  /v1/sso-providers:
+    get:
+      operationId: ssoProvidersList
+      summary: List sso providers
+      tags:
+      - Sso Providers
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: protocol
+        in: query
+        schema:
+          type: string
+          enum:
+          - OIDC
+          - SAML2
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - ERROR
+          - TESTING
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoProviderPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: ssoProvidersCreate
+      summary: Create sso provider
+      tags:
+      - Sso Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SsoProviderCreate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-create: true
+  /v1/sso-providers/{id}:
+    get:
+      operationId: ssoProvidersGet
+      summary: Retrieve sso provider
+      tags:
+      - Sso Providers
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id013
+      - &id012
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: ssoProvidersUpdate
+      summary: Update sso provider
+      tags:
+      - Sso Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id012
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoProvider'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SsoProviderUpdate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: ssoProvidersDelete
+      summary: Delete sso provider
+      tags:
+      - Sso Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id013
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: sso_provider
+      x-crud: true
+      x-crud-delete: true
+  /v1/sso-providers/{id}/test:
+    post:
+      operationId: ssoProvidersTest
+      summary: Run a test login against the provider
+      tags:
+      - Sso Providers
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: sso_provider
+  /v1/users/{user_id}/mfa-factors:
+    get:
+      operationId: mfaFactorsList
+      summary: List mfa factors
+      tags:
+      - Mfa Factors
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id014
+        name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: factor_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - TOTP
+          - WEBAUTHN
+          - SMS_OTP
+          - EMAIL_OTP
+          - PUSH
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_VERIFICATION
+          - ACTIVE
+          - DISABLED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaFactorPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: mfaFactorsCreate
+      summary: Create mfa factor
+      tags:
+      - Mfa Factors
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id014
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaFactor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaFactorCreate'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-create: true
+  /v1/users/{user_id}/mfa-factors/{id}:
+    get:
+      operationId: mfaFactorsGet
+      summary: Retrieve mfa factor
+      tags:
+      - Mfa Factors
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id015
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaFactor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-get: true
+    delete:
+      operationId: mfaFactorsDelete
+      summary: Delete mfa factor
+      tags:
+      - Mfa Factors
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id015
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: mfa_factor
+      x-crud: true
+      x-crud-delete: true
+  /v1/users/{user_id}/mfa-factors/{id}/verify:
+    post:
+      operationId: mfaFactorsVerify
+      summary: Verify enrolment with a code or WebAuthn assertion
+      tags:
+      - Mfa Factors
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaFactor'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaFactorsVerifyRequest'
+      x-requirements:
+      - ADM-02
+      x-service: identity-service
+      x-table: mfa_factor
+  /v1/sessions:
+    get:
+      operationId: sessionsList
+      summary: List sessions
+      tags:
+      - Sessions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: user_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: mfa_verified
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSessionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-table: user_session
+      x-crud: true
+      x-crud-list: true
+  /v1/sessions/{id}:
+    get:
+      operationId: sessionsGet
+      summary: Retrieve session
+      tags:
+      - Sessions
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSession'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-table: user_session
+      x-crud: true
+      x-crud-get: true
+  /v1/sessions/{id}/revoke:
+    post:
+      operationId: sessionsRevoke
+      summary: Revoke a session
+      tags:
+      - Sessions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSession'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionsRevokeRequest'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-table: user_session
+  /v1/sessions/revoke-all:
+    post:
+      operationId: sessionsRevokeAll
+      summary: Revoke all sessions of a user
+      tags:
+      - Sessions
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionsRevokeAllRequest'
+      x-requirements:
+      - ADM-02
+      - ADM-03
+      x-service: identity-service
+      x-table: user_session
+  /v1/api-clients:
+    get:
+      operationId: apiClientsList
+      summary: List api clients
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: client_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - SERVER
+          - PUBLIC_APP
+          - PARTNER
+          - TPP
+          - INTERNAL
+      - name: environment
+        in: query
+        schema:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REVOKED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: apiClientsCreate
+      summary: Create api client
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientCreate'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-create: true
+  /v1/api-clients/{id}:
+    get:
+      operationId: apiClientsGet
+      summary: Retrieve api client
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id016
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: apiClientsUpdate
+      summary: Update api client
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id016
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientUpdate'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+      x-crud: true
+      x-crud-update: true
+  /v1/api-clients/{id}/rotate-secret:
+    post:
+      operationId: apiClientsRotateSecret
+      summary: Rotate the client secret (returned once)
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+  /v1/api-clients/{id}/suspend:
+    post:
+      operationId: apiClientsSuspend
+      summary: Suspend a client
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientsSuspendRequest'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+  /v1/api-clients/{id}/reactivate:
+    post:
+      operationId: apiClientsReactivate
+      summary: Reactivate a suspended client
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+  /v1/api-clients/{id}/usage:
+    get:
+      operationId: apiClientsUsage
+      summary: Request counts, error rates and latency for a period (?from=&to=)
+      tags:
+      - Api Clients
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - API-02
+      - OBK-01
+      x-service: identity-service
+      x-table: api_client
+  /v1/api-clients/{api_client_id}/keys:
+    get:
+      operationId: apiKeysList
+      summary: List api keys
+      tags:
+      - Api Keys
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - &id017
+        name: api_client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - ROTATING
+          - REVOKED
+          - EXPIRED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: api_key
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: apiKeysCreate
+      summary: Create api key
+      tags:
+      - Api Keys
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id017
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyCreate'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: api_key
+      x-crud: true
+      x-crud-create: true
+  /v1/api-clients/{api_client_id}/keys/{id}:
+    get:
+      operationId: apiKeysGet
+      summary: Retrieve api key
+      tags:
+      - Api Keys
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: api_client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: api_key
+      x-crud: true
+      x-crud-get: true
+  /v1/api-clients/{api_client_id}/keys/{id}/rotate:
+    post:
+      operationId: apiKeysRotate
+      summary: Create a replacement key; the old key stays valid for a grace period
+      tags:
+      - Api Keys
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: api_client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeysRotateRequest'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: api_key
+  /v1/api-clients/{api_client_id}/keys/{id}/revoke:
+    post:
+      operationId: apiKeysRevoke
+      summary: Revoke a key immediately
+      tags:
+      - Api Keys
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: api_client_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKey'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeysRevokeRequest'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: api_key
+  /v1/oauth-scopes:
+    get:
+      operationId: oauthScopesList
+      summary: List oauth scopes
+      tags:
+      - Oauth Scopes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: domain
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: is_sensitive
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthScopePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: oauth_scope
+      x-crud: true
+      x-crud-list: true
+  /v1/oauth-scopes/{id}:
+    get:
+      operationId: oauthScopesGet
+      summary: Retrieve oauth scope
+      tags:
+      - Oauth Scopes
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthScope'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: oauth_scope
+      x-crud: true
+      x-crud-get: true
+  /v1/rate-limit-policies:
+    get:
+      operationId: rateLimitPoliciesList
+      summary: List rate limit policies
+      tags:
+      - Rate Limit Policies
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: applies_to
+        in: query
+        schema:
+          type: string
+          enum:
+          - TENANT
+          - CLIENT
+          - IP
+          - USER
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitPolicyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: rateLimitPoliciesCreate
+      summary: Create rate limit policie
+      tags:
+      - Rate Limit Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateLimitPolicyCreate'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-create: true
+  /v1/rate-limit-policies/{id}:
+    get:
+      operationId: rateLimitPoliciesGet
+      summary: Retrieve rate limit policie
+      tags:
+      - Rate Limit Policies
+      security:
+      - oauth2:
+        - platform:read
+      parameters: &id019
+      - &id018
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: rateLimitPoliciesUpdate
+      summary: Update rate limit policie
+      tags:
+      - Rate Limit Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - *id018
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateLimitPolicyUpdate'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: rateLimitPoliciesDelete
+      summary: Delete rate limit policie
+      tags:
+      - Rate Limit Policies
+      security:
+      - oauth2:
+        - platform:write
+      parameters: *id019
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - API-02
+      x-service: identity-service
+      x-table: rate_limit_policy
+      x-crud: true
+      x-crud-delete: true
+  /v1/request-logs:
+    get:
+      operationId: requestLogsList
+      summary: List request logs
+      tags:
+      - Request Logs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: api_client_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: request_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: method
+        in: query
+        schema:
+          type: string
+          maxLength: 8
+      - name: status_code
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: operation_id
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: environment
+        in: query
+        schema:
+          type: string
+          enum:
+          - SANDBOX
+          - PRODUCTION
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiRequestLogPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ADM-05
+      - API-02
+      x-service: identity-service
+      x-table: api_request_log
+      x-crud: true
+      x-crud-list: true
+  /v1/request-logs/{id}:
+    get:
+      operationId: requestLogsGet
+      summary: Retrieve request log
+      tags:
+      - Request Logs
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiRequestLog'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      - API-02
+      x-service: identity-service
+      x-table: api_request_log
+      x-crud: true
+      x-crud-get: true
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: Staff, operator, auditor or service-account user of the console and back-office APIs
+  name: Users
+- description: Assignment of a role to a user, scoped to the tenant, a legal entity or a branch, optionally time-bound
+  name: User Roles
+- description: A named set of permissions assignable to staff users
+  name: Roles
+- description: Grants a permission to a role, optionally constrained by ABAC conditions
+  name: Role Permissions
+- description: Catalogue of fine-grained permissions (resource + action), shared by all tenants
+  name: Permissions
+- description: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
+  name: Access Policies
+- description: Enterprise identity provider used for staff single sign-on
+  name: Sso Providers
+- description: A multi-factor authentication factor enrolled by a staff user
+  name: Mfa Factors
+- description: An authenticated staff session; revocable
+  name: Sessions
+- description: An OAuth 2.1 client (server integration, app, partner or open banking TPP)
+  name: Api Clients
+- description: Secret API key for an API client (shown once at creation; stored hashed)
+  name: Api Keys
+- description: Catalogue of OAuth scopes (e.g. payments:write), shared by all tenants
+  name: Oauth Scopes
+- description: Rate and concurrency limits applied by the API gateway
+  name: Rate Limit Policies
+- description: One API request handled by the gateway; powers developer logs and usage metering. Append-only.
+  name: Request Logs

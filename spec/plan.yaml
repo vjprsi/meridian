@@ -11,16 +11,19 @@ steps:
   - {id: S03, phase: 0, name: "Apps and screens catalogue", status: Done,
      deliverables: "All web/mobile apps and screens with the API operations each screen calls",
      exit: "Every screen references existing operation ids"}
-  - {id: S04, phase: 0, name: "Monorepo and build scaffold", status: Not started,
+  - {id: S04, phase: 0, name: "Monorepo and build scaffold", status: Done,
      deliverables: "Gradle multi-module monorepo, version catalog, shared libs (meridian-common, meridian-events, meridian-test), OpenAPI codegen per service, ArchUnit rules, CI pipeline",
      exit: "All service modules compile from generated interfaces; CI green"}
   - {id: S05, phase: 0, name: "Local developer platform", status: In progress,
      deliverables: "docker-compose: PostgreSQL 18, Kafka + Schema Registry, Temporal, Keycloak, Redis, OpenSearch, Grafana LGTM stack; seed tenant",
      exit: "make up brings the full stack up in under 5 minutes"}
+  - {id: S05B, phase: 0, name: "Enterprise gap closure", status: Done,
+     deliverables: "New domains: operations (business day/EOD batch, file gateway, search, archive), engagement (rewards, referrals, PFM insights, campaigns/offers, secure inbox), treasury (MM/FX/securities deals, liquidity LCR/NSFR, ALM, FTP)",
+     exit: "Strict validation passes; OPS/ENG/TRY requirements traced"}
   - {id: S06, phase: 1, name: "Platform services",
      deliverables: "Tenant, identity and access, configuration, audit, reference data, documents, workflow/approvals, webhooks, notifications",
      exit: "A tenant can be provisioned, users log in with SSO+MFA, every change is audited"}
-  - {id: S07, phase: 1, name: "Ledger and GL services",
+  - {id: S07, phase: 1, name: "Ledger and GL services", status: In progress,
      deliverables: "ledger-service, gl-service with property-based tests, hash chain and continuous verification",
      exit: "1,000 TPS sustained in staging; zero unbalanced journals"}
   - {id: S08, phase: 1, name: "Party, onboarding and KYC",
@@ -73,12 +76,12 @@ tasks:
   - {id: PLT-SPEC-CONVENTIONS, phase: 0, type: Spec, title: "Engineering conventions (docs/CONVENTIONS.md)", priority: P0, est: 1, status: Done}
   - {id: PLT-SPEC-GENERATOR, phase: 0, type: Tooling, title: "Spec generator: DDL, OpenAPI 3.1, AsyncAPI 3, data dictionary", priority: P0, est: 3, status: Done}
   - {id: PLT-SPEC-TRACKER, phase: 0, type: Tooling, title: "Excel tracker generation with preserved manual edits", priority: P0, est: 1, status: Done}
-  - {id: PLT-MONOREPO, phase: 0, type: Platform, title: "Gradle monorepo, version catalog, convention plugins", priority: P0, est: 3}
-  - {id: PLT-LIB-COMMON, phase: 0, type: Platform, title: "meridian-common: Money/BigDecimal, ids (UUIDv7), errors (RFC 9457), tenancy context, idempotency", priority: P0, est: 5, depends: PLT-MONOREPO}
-  - {id: PLT-LIB-EVENTS, phase: 0, type: Platform, title: "meridian-events: CloudEvents envelope, outbox writer, Kafka publisher/consumer base", priority: P0, est: 4, depends: PLT-MONOREPO}
-  - {id: PLT-LIB-TEST, phase: 0, type: Platform, title: "meridian-test: Testcontainers fixtures, tenant fixtures, contract test helpers", priority: P0, est: 3, depends: PLT-MONOREPO}
-  - {id: PLT-CODEGEN, phase: 0, type: Platform, title: "OpenAPI → Spring interfaces/DTO generation per service in Gradle", priority: P0, est: 2, depends: PLT-MONOREPO}
-  - {id: PLT-CI, phase: 0, type: DevOps, title: "CI: build, test, Spotless, Error Prone, Semgrep, Trivy, SBOM, image signing", priority: P0, est: 4, depends: PLT-MONOREPO}
+  - {id: PLT-MONOREPO, phase: 0, type: Platform, title: "Gradle monorepo, version catalog, convention plugins", priority: P0, est: 3, status: Done}
+  - {id: PLT-LIB-COMMON, phase: 0, type: Platform, title: "meridian-common: Money/BigDecimal, ids (UUIDv7), errors (RFC 9457), tenancy context, idempotency", priority: P0, est: 5, depends: PLT-MONOREPO, status: Done}
+  - {id: PLT-LIB-EVENTS, phase: 0, type: Platform, title: "meridian-events: CloudEvents envelope, outbox writer, Kafka publisher/consumer base", priority: P0, est: 4, depends: PLT-MONOREPO, status: Done}
+  - {id: PLT-LIB-TEST, phase: 0, type: Platform, title: "meridian-test: Testcontainers fixtures, tenant fixtures, contract test helpers", priority: P0, est: 3, depends: PLT-MONOREPO, status: Done}
+  - {id: PLT-CODEGEN, phase: 0, type: Platform, title: "OpenAPI → Spring interfaces/DTO generation per service in Gradle", priority: P0, est: 2, depends: PLT-MONOREPO, status: Done}
+  - {id: PLT-CI, phase: 0, type: DevOps, title: "CI: build, test, Spotless, Error Prone, Semgrep, Trivy, SBOM, image signing", priority: P0, est: 4, depends: PLT-MONOREPO, status: Done}
   - {id: PLT-DEV-TOOLS, phase: 0, type: DevOps, title: "Portable toolchain in D:/DevTools:JDK 25, Gradle 9.8, kubectl, Helm, OpenTofu, Temporal CLI, k9s, DBeaver (tools/setup/install-dev-tools.ps1)", priority: P0, est: 1, status: Done}
   - {id: PLT-LOCAL-STACK, phase: 0, type: DevOps, title: "Docker Compose local stack (infra/local): Postgres 18, Kafka, Schema Registry, Kafka console, Valkey, Temporal, Keycloak, OpenSearch, Grafana LGTM, Mailpit, SeaweedFS S3", priority: P0, est: 3, status: Done}
   - {id: PLT-DB-VERIFY, phase: 0, type: Test, title: "Apply all generated DDL to Postgres 18 (tools/db/apply-ddl.sh) + behaviour smoke test: RLS, append-only, optimistic locking, enums, custom fields", priority: P0, est: 1, status: Done}
@@ -93,6 +96,27 @@ tasks:
   - {id: PLT-SDKS, phase: 2, type: API, title: "Generated SDKs: TypeScript, Python, Java, Go, C#, Swift, Kotlin + CLI", priority: P1, est: 8}
   - {id: PLT-SANDBOX, phase: 1, type: API, title: "Sandbox with test clocks and scheme/rail simulators", priority: P1, est: 10}
   - {id: PLT-MCP, phase: 3, type: API, title: "MCP server over sandbox and read APIs for AI agents", priority: P2, est: 4}
+
+  - {id: PLT-CRUD-ENGINE, phase: 0, type: Platform, title: "Generic tenant-scoped CRUD engine (json_populate_record/row_to_json) wired into generated API default methods via custom methodBody template; ETag/If-Match, idempotency, keyset paging", priority: P0, est: 4, status: Done}
+  - {id: PLT-TEST-RLS, phase: 0, type: Test, title: "Integration tests connect as meridian_app (RLS enforced) with Testcontainers Postgres 18 + Kafka", priority: P0, est: 1, status: Done}
+  - {id: LED-HOLD-EXPIRY, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "Hold expiry job: release holds past expires_at (system job needs cross-tenant ops role)", priority: P1, est: 2}
+  - {id: LED-VERIFY, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "Ledger verification: recompute balances from entries, seal hash chain per ledger, report", priority: P1, est: 3}
+  - {id: LED-EOD-SNAPSHOT, phase: 1, domain: ledger, service: ledger-service, type: Service, title: "End-of-day balance snapshots (driven by business-day-service EOD run)", priority: P1, est: 2}
+  - {id: LED-PERF, phase: 1, domain: ledger, service: ledger-service, type: Test, title: "Load test: 1,000 TPS sustained posting (gate G1), k6/Gatling scenario", priority: P0, est: 3}
+  - {id: PLT-EDGE-GATEWAY, phase: 0, type: Platform, title: "Edge gateway (platform/edge-gateway): 2,480 spec-generated routes, streaming proxy, 404/405/503/504 problem+json, /openapi.yaml", priority: P0, est: 2, status: Done}
+  - {id: PLT-DEV-LAUNCHER, phase: 1, type: DevOps, title: "Dev launcher: start/stop any set of services + gateway locally with health checks", priority: P1, est: 2}
+
+status:
+  "SVC-*-SCAFFOLD": Done          # all 63 services scaffolded, compile, boot in tests
+  "SVC-*-DB": Done                # Flyway migrations from generated DDL, verified per service in tests
+  "SVC-ledger-service-*": Done    # posting engine, holds, reversals, freezes + 10 integration tests
+  "SVC-ledger-service-EVENTS": Done          # outbox -> Kafka relay verified live (CloudEvents headers, drained)
+  "API-ledgers": Done
+  "API-ledger-accounts": Done
+  "API-journal-entries": Done
+  "API-ledger-entries": Done
+  "API-holds": Done
+  "API-balance-snapshots": Done
 
 requirements:
   LED-01: {module: Ledger, priority: M, text: "Immutable, append-only double-entry journal; every posting balances per currency and legal entity"}
@@ -204,6 +228,20 @@ requirements:
   API-02: {module: Developer platform, priority: M, text: "API clients, keys, scopes, rate limits, request logs"}
   AI-01: {module: AI, priority: S, text: "Ops, disputes, AML and servicing copilots with audit trail"}
   AI-02: {module: AI, priority: S, text: "Model registry, versioning and monitoring for fraud and credit models"}
+  OPS-01: {module: Operations, priority: M, text: "Business-day management and EOD/EOM/EOQ/EOY batch orchestration with dependencies, retries, restart and date roll"}
+  OPS-02: {module: Operations, priority: M, text: "Secure partner file exchange (SFTP/FTPS/S3/AS2/API) with PGP, virus scanning, routing, acknowledgements and audit"}
+  OPS-03: {module: Operations, priority: S, text: "Enterprise search across entities with versioned indices, zero-downtime reindex and role-based PII masking"}
+  OPS-04: {module: Operations, priority: M, text: "Data retention, WORM archival, legal hold and approved purge/anonymisation with certificate of destruction"}
+  ENG-01: {module: Engagement, priority: S, text: "Rewards programs, points, cashback, tiers and redemption"}
+  ENG-02: {module: Engagement, priority: S, text: "Referral programs with qualification and payouts"}
+  ENG-03: {module: Engagement, priority: S, text: "Transaction enrichment, categorisation, budgets, subscription detection and insights (PFM)"}
+  ENG-04: {module: Engagement, priority: S, text: "Targeted campaigns and personalised offers with marketing-consent checks"}
+  ENG-05: {module: Engagement, priority: S, text: "Secure customer messaging and in-app announcements"}
+  TRY-01: {module: Treasury, priority: S, text: "Money market, FX and securities deals with confirmations (MT300/MT320/MT54x) and settlement"}
+  TRY-02: {module: Treasury, priority: S, text: "Counterparty limits (settlement, pre-settlement, tenor, issuer) and utilisation"}
+  TRY-03: {module: Treasury, priority: S, text: "Liquidity positions, maturity ladders, LCR/NSFR, stress tests and intraday monitoring"}
+  TRY-04: {module: Treasury, priority: S, text: "ALM repricing gap and NII/EVE/EaR sensitivity under IRRBB shocks"}
+  TRY-05: {module: Treasury, priority: S, text: "Funds transfer pricing: curves, rules and per-exposure assignments"}
 
 decisions:
   - {id: D01, title: "Product name and brand", options: "Meridian Core (placeholder) / other", recommendation: "Decide before public developer portal launch (S11)"}

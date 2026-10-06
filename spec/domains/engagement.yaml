@@ -1,0 +1,916 @@
+domain: engagement
+title: "Engagement: Rewards, Insights and Campaigns"
+phase: 3
+description: >
+  Customer engagement: loyalty rewards, points and cashback, referral programs, transaction enrichment and
+  personal finance insights (PFM), targeted campaigns and personalised offers, and secure customer messaging.
+
+enums:
+  RewardProgramType: [POINTS, CASHBACK, MILES, HYBRID]
+  RewardProgramStatus: [DRAFT, ACTIVE, PAUSED, ENDED]
+  RewardRuleTrigger: [CARD_SPEND, WALLET_PAYMENT, BILL_PAYMENT, ACCOUNT_OPENING, DIRECT_DEPOSIT, BALANCE_HELD,
+                      LOAN_REPAYMENT, REFERRAL, MANUAL]
+  RewardRuleStatus: [DRAFT, ACTIVE, INACTIVE]
+  RewardCapPeriod: [TRANSACTION, DAY, WEEK, MONTH, QUARTER, YEAR, LIFETIME]
+  PointsAccountStatus: [ACTIVE, SUSPENDED, CLOSED]
+  PointsEntryType: [EARN, REDEEM, EXPIRE, ADJUST, REVERSE, TRANSFER_IN, TRANSFER_OUT, BONUS]
+  CashbackStatus: [PENDING, CONFIRMED, PAID, REVERSED, CANCELLED]
+  RewardCatalogItemType: [STATEMENT_CREDIT, VOUCHER, GIFT_CARD, PARTNER_MILES, MERCHANDISE, DONATION, CASH_TRANSFER]
+  RedemptionStatus: [REQUESTED, PROCESSING, FULFILLED, FAILED, CANCELLED, REVERSED]
+  ReferralProgramStatus: [DRAFT, ACTIVE, PAUSED, ENDED]
+  ReferralStatus: [INVITED, SIGNED_UP, QUALIFYING, QUALIFIED, REWARDED, EXPIRED, REJECTED]
+  InsightCategoryLevel: [GROUP, CATEGORY, SUBCATEGORY]
+  InsightSourceType: [CARD_AUTHORIZATION, CARD_CLEARING, PAYMENT, WALLET_TRANSACTION, DEPOSIT_TRANSACTION]
+  BudgetPeriodType: [WEEKLY, MONTHLY, QUARTERLY, YEARLY]
+  BudgetStatus: [ACTIVE, PAUSED, ARCHIVED]
+  RecurringFrequency: [WEEKLY, BIWEEKLY, MONTHLY, QUARTERLY, YEARLY, IRREGULAR]
+  RecurringPaymentStatus: [DETECTED, CONFIRMED, DISMISSED, CANCELLED_BY_CUSTOMER, INACTIVE]
+  InsightType: [SPEND_SPIKE, LOW_BALANCE_FORECAST, BUDGET_EXCEEDED, BUDGET_NEAR_LIMIT, SUBSCRIPTION_PRICE_CHANGE,
+                NEW_SUBSCRIPTION, SALARY_RECEIVED, SAVINGS_OPPORTUNITY, UNUSUAL_MERCHANT, FEE_CHARGED, BILL_DUE]
+  InsightSeverity: [INFO, POSITIVE, WARNING, CRITICAL]
+  InsightDeliveryStatus: [PENDING, DELIVERED, SEEN, DISMISSED, ACTED, EXPIRED]
+  CampaignStatus: [DRAFT, PENDING_APPROVAL, SCHEDULED, RUNNING, PAUSED, COMPLETED, CANCELLED]
+  CampaignChannel: [PUSH, SMS, EMAIL, IN_APP, WHATSAPP, USSD, BRANCH, CALL_CENTER]
+  OfferType: [PRE_APPROVED_LOAN, CREDIT_LIMIT_INCREASE, CARD_UPGRADE, RATE_PROMOTION, FEE_WAIVER, CASHBACK_BOOST,
+              PRODUCT_CROSS_SELL, OVERDRAFT]
+  OfferStatus: [DRAFT, ACTIVE, PAUSED, EXPIRED, WITHDRAWN]
+  OfferAssignmentStatus: [ASSIGNED, SHOWN, CLICKED, ACCEPTED, DECLINED, EXPIRED, WITHDRAWN]
+  SecureThreadStatus: [OPEN, AWAITING_CUSTOMER, AWAITING_BANK, CLOSED]
+  SecureMessageSender: [CUSTOMER, STAFF, SYSTEM, BOT]
+  AnnouncementStatus: [DRAFT, SCHEDULED, LIVE, EXPIRED, WITHDRAWN]
+
+services:
+  # ------------------------------------------------------------------ rewards-service
+  - name: rewards-service
+    database: rewards_db
+    description: >
+      Loyalty programs: earn rules on spend and behaviour, points accounts with an append-only points ledger,
+      cashback, tiers, a redemption catalogue, and referral programs with qualification and payouts.
+    tables:
+      - name: rewards_program
+        prefix: rwp
+        description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+        fr: [ENG-01]
+        columns:
+          - "code string(32) nn uq | Program code"
+          - "name string(120) nn | Display name"
+          - "program_type enum:RewardProgramType nn | Points, cashback, miles or hybrid"
+          - "status enum:RewardProgramStatus nn default=DRAFT | Lifecycle status"
+          - "points_name string(40) | Branded name of the points currency, e.g. Stars"
+          - "point_value amount | Monetary value of one point for redemption"
+          - "value_currency currency | Currency of point_value and cashback"
+          - "points_expiry_months int | Months until earned points expire (empty = never)"
+          - "funding_ledger_account_id uuid ref=ledger_account | Ledger account funding rewards liability"
+          - "liability_ledger_account_id uuid ref=ledger_account | Ledger account holding outstanding rewards liability"
+          - "eligible_product_ids json | Products whose customers can enrol (empty = all)"
+          - "auto_enrol bool nn default=true | Enrol eligible customers automatically"
+          - "terms_document_id uuid ref=document | Program terms and conditions"
+          - "starts_on date nn | Start date"
+          - "ends_on date | End date"
+          - "approved_by string(64) ro | Checker who approved activation"
+
+      - name: reward_tier
+        prefix: rwt
+        description: Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
+        fr: [ENG-01]
+        columns:
+          - "rewards_program_id uuid nn fk=rewards_program idx | Program"
+          - "code string(32) nn | Tier code"
+          - "name string(80) nn | Display name"
+          - "rank int nn | Order, 1 = lowest"
+          - "qualify_spend amount | Annual spend needed to reach the tier"
+          - "qualify_points bigint | Points earned in the period needed to reach the tier"
+          - "earn_multiplier rate nn default=1 | Multiplier applied to base earn"
+          - "benefits json | Tier benefits (fee waivers, lounge access, FX discounts)"
+        unique: [[rewards_program_id, code]]
+
+      - name: reward_rule
+        prefix: rwr
+        description: Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
+        fr: [ENG-01]
+        columns:
+          - "rewards_program_id uuid nn fk=rewards_program idx | Program"
+          - "name string(120) nn | Rule name"
+          - "trigger enum:RewardRuleTrigger nn | Event that earns"
+          - "status enum:RewardRuleStatus nn default=DRAFT | Status"
+          - "priority int nn default=100 | Lower evaluates first"
+          - "stackable bool nn default=true | Can combine with other matching rules"
+          - "mcc_include json | MCC codes that qualify (empty = any)"
+          - "mcc_exclude json | MCC codes excluded (e.g. gambling, quasi-cash)"
+          - "merchant_ids json | Specific merchants (partner offers)"
+          - "product_ids json | Products that qualify"
+          - "channels json | Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)"
+          - "countries json | Merchant countries that qualify"
+          - "min_amount amount | Minimum transaction amount"
+          - "points_per_unit rate | Points earned per unit of currency spent"
+          - "cashback_rate rate | Cashback as a fraction of the amount"
+          - "fixed_award amount | Fixed points or cashback per qualifying event"
+          - "multiplier rate nn default=1 | Promotional multiplier"
+          - "cap_amount amount | Maximum award per cap period"
+          - "cap_period enum:RewardCapPeriod | Period the cap applies to"
+          - "valid_days_of_week json | Days of week the rule applies (e.g. weekend boosts)"
+          - "valid_from ts nn | Effective from"
+          - "valid_to ts | Effective to"
+          - "settle_after_days int nn default=0 | Days before pending awards confirm (dispute window)"
+
+      - name: points_account
+        prefix: pta
+        description: A customer's points account within a program with running balances and tier
+        fr: [ENG-01]
+        columns:
+          - "rewards_program_id uuid nn fk=rewards_program idx | Program"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "status enum:PointsAccountStatus nn default=ACTIVE | Status"
+          - "reward_tier_id uuid fk=reward_tier | Current tier"
+          - "tier_qualified_until date | Tier valid until"
+          - "available_points bigint nn default=0 ro | Redeemable points"
+          - "pending_points bigint nn default=0 ro | Points awaiting confirmation"
+          - "lifetime_earned bigint nn default=0 ro | All points ever earned"
+          - "lifetime_redeemed bigint nn default=0 ro | All points ever redeemed"
+          - "expiring_points bigint nn default=0 ro | Points expiring in the next 30 days"
+          - "next_expiry_date date ro | Next expiry date"
+          - "enrolled_at ts nn default=now | Enrolment time"
+        unique: [[rewards_program_id, customer_id]]
+
+      - name: points_ledger_entry
+        prefix: ple
+        description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
+        immutable: true
+        fr: [ENG-01]
+        columns:
+          - "points_account_id uuid nn fk=points_account idx | Points account"
+          - "entry_type enum:PointsEntryType nn | Movement type"
+          - "points bigint nn | Signed points (positive earn, negative redeem/expire)"
+          - "balance_after bigint nn ro | Available balance after the entry"
+          - "is_pending bool nn default=false | Earned but not yet confirmed"
+          - "reward_rule_id uuid fk=reward_rule | Rule that produced an earn"
+          - "source_type string(40) | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL"
+          - "source_id uuid idx | Source object id"
+          - "expires_on date | Expiry date of earned points"
+          - "reversal_of_id uuid fk=points_ledger_entry | Entry this one reverses"
+          - "reason string(255) | Adjustment reason"
+          - "idempotency_key string(128) nn ro | Prevents double awards"
+        unique: [[tenant_id, idempotency_key]]
+
+      - name: cashback_transaction
+        prefix: cbt
+        description: A cashback award for a qualifying transaction, paid to the customer's account after settlement
+        fr: [ENG-01]
+        columns:
+          - "rewards_program_id uuid nn fk=rewards_program idx | Program"
+          - "reward_rule_id uuid fk=reward_rule | Rule applied"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "source_type string(40) nn | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION"
+          - "source_id uuid nn idx | Qualifying transaction"
+          - "transaction_amount amount nn | Qualifying amount"
+          - "cashback_amount amount nn | Cashback awarded"
+          - "currency currency nn | Currency"
+          - "status enum:CashbackStatus nn default=PENDING | Status"
+          - "confirm_after ts | When the award confirms (after dispute window)"
+          - "credit_account_id uuid ref=deposit_account | Account credited"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting of the payout"
+          - "paid_at ts ro | Payout time"
+          - "reversal_reason string(255) | Why reversed (refund, chargeback)"
+        unique: [[tenant_id, reward_rule_id, source_id]]
+
+      - name: reward_catalog_item
+        prefix: rci
+        description: Something points can be redeemed for (statement credit, voucher, partner miles, merchandise)
+        fr: [ENG-01]
+        columns:
+          - "rewards_program_id uuid nn fk=rewards_program idx | Program"
+          - "sku string(64) nn | Catalogue SKU"
+          - "name string(160) nn | Display name"
+          - "item_type enum:RewardCatalogItemType nn | Redemption type"
+          - "points_cost bigint nn | Points required"
+          - "cash_value amount | Monetary value delivered"
+          - "currency currency | Currency of cash_value"
+          - "partner_name string(120) | Fulfilment partner (airline, voucher provider)"
+          - "partner_sku string(64) | Partner's product code"
+          - "image_document_id uuid ref=document | Image"
+          - "stock int | Remaining stock (empty = unlimited)"
+          - "min_tier_rank int | Minimum tier rank required"
+          - "is_active bool nn default=true | Available for redemption"
+        unique: [[rewards_program_id, sku]]
+
+      - name: redemption
+        prefix: rdm
+        description: A customer's redemption of points for a catalogue item or statement credit
+        fr: [ENG-01]
+        columns:
+          - "points_account_id uuid nn fk=points_account idx | Points account"
+          - "reward_catalog_item_id uuid nn fk=reward_catalog_item | Item redeemed"
+          - "quantity int nn default=1 | Quantity"
+          - "points_spent bigint nn | Points debited"
+          - "cash_value amount | Value delivered"
+          - "currency currency | Currency"
+          - "status enum:RedemptionStatus nn default=REQUESTED | Status"
+          - "credit_account_id uuid ref=deposit_account | Account for statement credit"
+          - "partner_member_id string(64) pii | Loyalty number at the partner (airline miles)"
+          - "voucher_code string(128) secret | Issued voucher code"
+          - "partner_reference string(128) | Fulfilment reference"
+          - "points_ledger_entry_id uuid fk=points_ledger_entry | Debit entry"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting for statement credit"
+          - "fulfilled_at ts ro | Fulfilment time"
+          - "failure_reason string(255) ro | Failure reason"
+          - "idempotency_key string(128) nn ro | Client key"
+        unique: [[tenant_id, idempotency_key]]
+
+      - name: referral_program
+        prefix: rfp
+        description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
+        fr: [ENG-02]
+        columns:
+          - "code string(32) nn uq | Program code"
+          - "name string(120) nn | Display name"
+          - "status enum:ReferralProgramStatus nn default=DRAFT | Status"
+          - "qualification_rules json nn | E.g. account opened + first deposit >= X within N days"
+          - "qualify_within_days int nn default=60 | Days the referee has to qualify"
+          - "referrer_reward amount | Cash reward to the referrer"
+          - "referee_reward amount | Cash reward to the referee"
+          - "referrer_points bigint | Points reward to the referrer"
+          - "referee_points bigint | Points reward to the referee"
+          - "currency currency | Reward currency"
+          - "max_referrals_per_customer int | Cap per referrer"
+          - "budget_amount amount | Total program budget"
+          - "funding_ledger_account_id uuid ref=ledger_account | Account funding payouts"
+          - "starts_on date nn | Start"
+          - "ends_on date | End"
+
+      - name: referral
+        prefix: rfl
+        description: One referral from a referrer to a referee, tracked through qualification to payout
+        fr: [ENG-02]
+        columns:
+          - "referral_program_id uuid nn fk=referral_program idx | Program"
+          - "referrer_customer_id uuid nn ref=customer idx | Referrer"
+          - "referral_code string(32) nn idx | Code shared by the referrer"
+          - "referee_customer_id uuid ref=customer idx | Referee once signed up"
+          - "referee_contact string(320) pii | Invited phone or email"
+          - "status enum:ReferralStatus nn default=INVITED | Status"
+          - "signed_up_at ts | Referee sign-up time"
+          - "qualify_by ts | Deadline to qualify"
+          - "qualified_at ts ro | Qualification time"
+          - "referrer_payout_journal_entry_id uuid ref=journal_entry | Referrer reward posting"
+          - "referee_payout_journal_entry_id uuid ref=journal_entry | Referee reward posting"
+          - "rejection_reason string(255) | Why rejected (self-referral, fraud)"
+          - "fraud_score rate | Fraud score at qualification"
+
+    apis:
+      - resource: rewards-programs
+        path: /v1/rewards/programs
+        table: rewards_program
+        ops: [list, get, create, update]
+        filters: [status, program_type]
+        actions:
+          - "POST /{id}/activate | Activate a program (checker) | comment string(500)"
+          - "POST /{id}/pause | Pause earning | reason string(255) nn"
+          - "POST /{id}/end | End a program | ends_on date nn"
+          - "GET /{id}/tiers | Tiers of the program | | reward_tier[]"
+          - "GET /{id}/rules | Earn rules of the program | | reward_rule[]"
+      - resource: reward-tiers
+        path: /v1/rewards/tiers
+        table: reward_tier
+        ops: [list, get, create, update, delete]
+        filters: [rewards_program_id]
+      - resource: reward-rules
+        path: /v1/rewards/rules
+        table: reward_rule
+        ops: [list, get, create, update]
+        filters: [rewards_program_id, trigger, status]
+        actions:
+          - "POST /{id}/activate | Activate a rule | "
+          - "POST /{id}/deactivate | Deactivate a rule | reason string(255)"
+          - "POST /simulate | Simulate earnings for a sample transaction | rewards_program_id uuid nn, transaction json nn | none"
+      - resource: points-accounts
+        path: /v1/rewards/points-accounts
+        table: points_account
+        ops: [list, get, create]
+        filters: [rewards_program_id, customer_id, status, reward_tier_id]
+        actions:
+          - "GET /{id}/entries | Points history | | points_ledger_entry[]"
+          - "POST /{id}/adjust | Manual points adjustment (maker-checker) | points bigint nn, reason string(255) nn"
+          - "POST /{id}/transfer | Transfer points to another member | to_points_account_id uuid nn, points bigint nn"
+          - "POST /{id}/suspend | Suspend earning and redemption | reason string(255) nn"
+          - "POST /{id}/recalculate-tier | Re-evaluate tier qualification | "
+      - resource: points-ledger-entries
+        path: /v1/rewards/points-entries
+        table: points_ledger_entry
+        ops: [list, get]
+        filters: [points_account_id, entry_type, source_type, source_id, is_pending]
+      - resource: cashback-transactions
+        path: /v1/rewards/cashback
+        table: cashback_transaction
+        ops: [list, get]
+        filters: [rewards_program_id, customer_id, status, source_id]
+        actions:
+          - "POST /{id}/reverse | Reverse cashback (refund or chargeback) | reversal_reason string(255) nn"
+          - "POST /{id}/confirm | Confirm a pending award early | "
+      - resource: reward-catalog-items
+        path: /v1/rewards/catalog
+        table: reward_catalog_item
+        ops: [list, get, create, update, delete]
+        filters: [rewards_program_id, item_type, is_active]
+      - resource: redemptions
+        path: /v1/rewards/redemptions
+        table: redemption
+        ops: [list, get, create]
+        filters: [points_account_id, reward_catalog_item_id, status]
+        actions:
+          - "POST /{id}/cancel | Cancel a redemption and restore points | reason string(255) nn"
+          - "POST /{id}/retry | Retry partner fulfilment | "
+      - resource: referral-programs
+        path: /v1/referrals/programs
+        table: referral_program
+        ops: [list, get, create, update]
+        filters: [status]
+        actions:
+          - "POST /{id}/activate | Activate the program | "
+          - "POST /{id}/pause | Pause the program | reason string(255) nn"
+      - resource: referrals
+        path: /v1/referrals
+        table: referral
+        ops: [list, get, create]
+        filters: [referral_program_id, referrer_customer_id, referee_customer_id, status, referral_code]
+        actions:
+          - "POST /code | Get or create a customer's referral code | referral_program_id uuid nn, customer_id uuid nn | referral"
+          - "POST /{id}/qualify | Mark the referral qualified and pay rewards | "
+          - "POST /{id}/reject | Reject the referral | rejection_reason string(255) nn"
+
+    events:
+      - "engagement.rewards_program.activated | rewards_program | A rewards program went live"
+      - "engagement.points.earned | points_ledger_entry | Points were earned"
+      - "engagement.points.redeemed | points_ledger_entry | Points were redeemed"
+      - "engagement.points.expired | points_ledger_entry | Points expired"
+      - "engagement.points_account.tier_changed | points_account | A member moved to a new tier"
+      - "engagement.cashback.confirmed | cashback_transaction | Cashback was confirmed"
+      - "engagement.cashback.paid | cashback_transaction | Cashback was paid to the customer"
+      - "engagement.cashback.reversed | cashback_transaction | Cashback was reversed"
+      - "engagement.redemption.fulfilled | redemption | A redemption was fulfilled"
+      - "engagement.redemption.failed | redemption | A redemption failed"
+      - "engagement.referral.signed_up | referral | A referee signed up"
+      - "engagement.referral.qualified | referral | A referral qualified and was rewarded"
+
+  # ------------------------------------------------------------------ insights-service
+  - name: insights-service
+    database: insights_db
+    description: >
+      Personal finance management: transaction enrichment (clean merchant names, logos, categories, geo,
+      recurring flags), category taxonomy and customer overrides, budgets, subscription detection,
+      insight cards and cash-flow forecasts.
+    tables:
+      - name: spend_category
+        prefix: spc
+        description: Spending category taxonomy (group, category, subcategory) used for enrichment and budgets
+        tenant: false
+        fr: [ENG-03]
+        columns:
+          - "code string(64) nn uq | Category code, e.g. FOOD.GROCERIES"
+          - "name string(120) nn | Display name"
+          - "level enum:InsightCategoryLevel nn | Taxonomy level"
+          - "parent_id uuid fk=spend_category idx | Parent category"
+          - "icon string(64) | Icon key"
+          - "color string(16) | Display colour"
+          - "mcc_codes json | MCC codes mapped by default"
+          - "translations json | Names per language"
+          - "is_income bool nn default=false | Income category (salary, refunds)"
+          - "is_active bool nn default=true | Active"
+
+      - name: transaction_enrichment
+        prefix: txe
+        description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+        immutable: true
+        fr: [ENG-03]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "source_type enum:InsightSourceType nn | Transaction source"
+          - "source_id uuid nn idx | Source transaction id"
+          - "account_ref uuid idx | Account / card / wallet the transaction belongs to"
+          - "transaction_at ts nn | Transaction time"
+          - "amount amount nn | Signed amount (negative = spend)"
+          - "currency currency nn | Currency"
+          - "raw_description string(500) | Original descriptor"
+          - "merchant_id uuid ref=merchant | Internal merchant when known"
+          - "merchant_clean_name string(160) | Cleaned merchant name"
+          - "merchant_logo_url string(500) | Logo URL"
+          - "merchant_website string(255) | Merchant website"
+          - "mcc string(4) | Merchant category code"
+          - "spend_category_id uuid fk=spend_category idx | Assigned category"
+          - "category_confidence rate | Model confidence 0..1"
+          - "is_recurring bool nn default=false | Part of a recurring series"
+          - "recurring_payment_id uuid fk=recurring_payment | Detected recurring series"
+          - "geo_city string(100) | City"
+          - "geo_country country | Country"
+          - "geo_lat rate | Latitude"
+          - "geo_lon rate | Longitude"
+          - "enrichment_provider string(40) | INTERNAL or external provider"
+          - "model_version string(32) | Categorisation model version"
+          - "supersedes_id uuid fk=transaction_enrichment | Earlier enrichment this one replaces"
+        indexes: [[customer_id, transaction_at]]
+
+      - name: category_override_rule
+        prefix: cor
+        description: Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
+        fr: [ENG-03]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "match_merchant_name string(160) | Merchant name to match"
+          - "match_description_pattern string(255) | Regex on raw descriptor"
+          - "match_amount_min amount | Minimum amount"
+          - "match_amount_max amount | Maximum amount"
+          - "spend_category_id uuid nn fk=spend_category | Category to apply"
+          - "apply_to_past bool nn default=true | Re-categorise historical transactions"
+          - "is_active bool nn default=true | Active"
+
+      - name: budget
+        prefix: bdg
+        description: A customer budget, overall or per category, with alert thresholds
+        fr: [ENG-03]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "name string(120) nn | Budget name"
+          - "spend_category_id uuid fk=spend_category | Category (empty = all spending)"
+          - "period_type enum:BudgetPeriodType nn default=MONTHLY | Budget period"
+          - "amount amount nn | Budget amount per period"
+          - "currency currency nn | Currency"
+          - "rollover bool nn default=false | Carry unspent amount to next period"
+          - "alert_threshold_pct rate nn default=0.8 | Alert when spend reaches this share"
+          - "status enum:BudgetStatus nn default=ACTIVE | Status"
+          - "starts_on date nn | First period start"
+
+      - name: budget_period
+        prefix: bdp
+        description: Actuals for one period of a budget
+        fr: [ENG-03]
+        columns:
+          - "budget_id uuid nn fk=budget idx | Budget"
+          - "period_start date nn | Period start"
+          - "period_end date nn | Period end"
+          - "budget_amount amount nn | Budget incl. rollover"
+          - "spent_amount amount nn default=0 ro | Spent so far"
+          - "remaining_amount amount nn default=0 ro | Remaining"
+          - "transaction_count int nn default=0 ro | Transactions counted"
+          - "alert_sent_at ts ro | Threshold alert time"
+          - "exceeded_at ts ro | Time the budget was exceeded"
+        unique: [[budget_id, period_start]]
+
+      - name: recurring_payment
+        prefix: rcp
+        description: Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+        fr: [ENG-03]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "merchant_clean_name string(160) nn | Merchant"
+          - "merchant_id uuid ref=merchant | Internal merchant when known"
+          - "spend_category_id uuid fk=spend_category | Category"
+          - "frequency enum:RecurringFrequency nn | Detected frequency"
+          - "typical_amount amount nn | Typical amount"
+          - "last_amount amount | Most recent amount"
+          - "currency currency nn | Currency"
+          - "first_seen_at ts nn | First charge"
+          - "last_seen_at ts nn | Latest charge"
+          - "next_expected_at ts | Predicted next charge"
+          - "occurrences int nn default=0 | Charges matched"
+          - "status enum:RecurringPaymentStatus nn default=DETECTED | Status"
+          - "card_id uuid ref=card | Card the subscription charges"
+          - "detection_confidence rate | Confidence 0..1"
+
+      - name: financial_insight
+        prefix: fin
+        description: An insight card for a customer (spend spike, low-balance forecast, new subscription) and its delivery
+        fr: [ENG-03, NOT-01]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "insight_type enum:InsightType nn | Insight type"
+          - "severity enum:InsightSeverity nn default=INFO | Severity"
+          - "title string(160) nn | Card title"
+          - "body string(1000) nn | Card text"
+          - "data json | Supporting figures (amounts, categories, dates)"
+          - "action_label string(60) | Call-to-action label"
+          - "action_deeplink string(500) | App deep link"
+          - "related_type string(40) | BUDGET, RECURRING_PAYMENT, ACCOUNT, CARD"
+          - "related_id uuid | Related object"
+          - "delivery_status enum:InsightDeliveryStatus nn default=PENDING | Delivery status"
+          - "notification_id uuid ref=notification | Push or in-app notification sent"
+          - "generated_at ts nn default=now | Generation time"
+          - "seen_at ts | Seen time"
+          - "acted_at ts | Action time"
+          - "expires_at ts | Expiry"
+          - "model_version string(32) | Generating model / rule version"
+          - "feedback_useful bool | Customer feedback"
+
+      - name: cash_flow_forecast
+        prefix: cff
+        description: Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+        immutable: true
+        fr: [ENG-03]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "deposit_account_id uuid ref=deposit_account idx | Account forecast"
+          - "as_of ts nn | Forecast generation time"
+          - "horizon_days int nn | Horizon"
+          - "currency currency nn | Currency"
+          - "starting_balance amount nn | Balance at as_of"
+          - "lowest_balance amount nn | Lowest projected balance"
+          - "lowest_balance_date date | Date of lowest balance"
+          - "projected_points json nn | Daily projected balances with expected inflows/outflows"
+          - "expected_income amount | Expected income in the horizon"
+          - "expected_bills amount | Expected recurring outflows"
+          - "model_version string(32) nn | Model version"
+
+    apis:
+      - resource: spend-categories
+        path: /v1/insights/categories
+        table: spend_category
+        ops: [list, get, create, update]
+        filters: [level, parent_id, is_income, is_active]
+      - resource: transaction-enrichments
+        path: /v1/insights/enrichments
+        table: transaction_enrichment
+        ops: [list, get]
+        filters: [customer_id, source_type, source_id, spend_category_id, is_recurring]
+        actions:
+          - "POST /enrich | Enrich a transaction synchronously | source_type enum:InsightSourceType nn, source_id uuid nn, raw_description string(500), amount amount nn, currency currency nn, mcc string(4) | transaction_enrichment"
+          - "POST /{id}/recategorise | Customer or agent changes the category | spend_category_id uuid nn, create_rule bool | transaction_enrichment"
+      - resource: category-override-rules
+        path: /v1/insights/category-rules
+        table: category_override_rule
+        ops: [list, get, create, update, delete]
+        filters: [customer_id, spend_category_id, is_active]
+      - resource: budgets
+        path: /v1/insights/budgets
+        table: budget
+        ops: [list, get, create, update, delete]
+        filters: [customer_id, spend_category_id, status, period_type]
+        actions:
+          - "GET /{id}/periods | Budget actuals per period | | budget_period[]"
+          - "POST /suggest | Suggest budgets from past spending | customer_id uuid nn | budget[]"
+      - resource: budget-periods
+        path: /v1/insights/budget-periods
+        table: budget_period
+        ops: [list, get]
+        filters: [budget_id]
+      - resource: recurring-payments
+        path: /v1/insights/recurring-payments
+        table: recurring_payment
+        ops: [list, get, update]
+        filters: [customer_id, status, frequency, card_id]
+        actions:
+          - "POST /{id}/confirm | Customer confirms a detected subscription | "
+          - "POST /{id}/dismiss | Not a subscription | "
+          - "POST /{id}/block-card-charges | Block future charges from this merchant on the card | "
+      - resource: financial-insights
+        path: /v1/insights/cards
+        table: financial_insight
+        ops: [list, get]
+        filters: [customer_id, insight_type, severity, delivery_status]
+        actions:
+          - "POST /{id}/seen | Mark seen | "
+          - "POST /{id}/dismiss | Dismiss | "
+          - "POST /{id}/feedback | Was this useful? | feedback_useful bool nn"
+          - "POST /generate | Generate insights for a customer now | customer_id uuid nn | financial_insight[]"
+      - resource: cash-flow-forecasts
+        path: /v1/insights/forecasts
+        table: cash_flow_forecast
+        ops: [list, get, create]
+        filters: [customer_id, deposit_account_id]
+      - resource: spending-summaries
+        path: /v1/insights/spending
+        table: budget_period
+        description: Spending analytics computed from enrichments
+        ops: []
+        actions:
+          - "GET /by-category | Spend per category for a customer and date range (?customer_id=&from=&to=) | | none"
+          - "GET /by-merchant | Top merchants for a customer and date range | | none"
+          - "GET /trend | Monthly income vs spend trend | | none"
+
+    events:
+      - "engagement.transaction.enriched | transaction_enrichment | A transaction was enriched and categorised"
+      - "engagement.transaction.recategorised | transaction_enrichment | A transaction category was changed"
+      - "engagement.budget.threshold_reached | budget_period | A budget reached its alert threshold"
+      - "engagement.budget.exceeded | budget_period | A budget was exceeded"
+      - "engagement.recurring_payment.detected | recurring_payment | A new subscription was detected"
+      - "engagement.recurring_payment.price_changed | recurring_payment | A subscription amount changed"
+      - "engagement.insight.generated | financial_insight | An insight card was generated"
+      - "engagement.cash_flow.low_balance_forecast | cash_flow_forecast | A low balance is forecast"
+
+  # ------------------------------------------------------------------ campaign-service
+  - name: campaign-service
+    database: campaign_db
+    description: >
+      Targeted marketing campaigns across channels with A/B variants, schedules and budgets; personalised offers
+      (pre-approved loans, card upgrades, rate promotions) with eligibility, consent checks and response tracking.
+    tables:
+      - name: campaign
+        prefix: cmp
+        description: A marketing campaign targeting one or more customer segments across channels
+        fr: [ENG-04]
+        columns:
+          - "code string(32) nn uq | Campaign code"
+          - "name string(160) nn | Name"
+          - "objective string(255) | Business objective"
+          - "status enum:CampaignStatus nn default=DRAFT | Status"
+          - "segment_ids json nn | Target customer_segment ids"
+          - "exclusion_segment_ids json | Segments excluded"
+          - "channels json nn | Channels used (CampaignChannel values)"
+          - "start_at ts nn | Start"
+          - "end_at ts | End"
+          - "send_window json | Allowed send hours per channel and timezone"
+          - "frequency_cap int | Max messages per customer per week"
+          - "budget_amount amount | Budget"
+          - "currency currency | Budget currency"
+          - "control_group_pct rate nn default=0 | Hold-out share for uplift measurement"
+          - "requires_marketing_consent bool nn default=true | Only customers with marketing consent"
+          - "owner_user_id uuid ref=app_user | Campaign owner"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+
+      - name: campaign_variant
+        prefix: cmv
+        description: A/B variant of a campaign with its message content per channel
+        fr: [ENG-04]
+        columns:
+          - "campaign_id uuid nn fk=campaign idx | Campaign"
+          - "code string(16) nn | Variant code (A, B, ...)"
+          - "traffic_share rate nn | Share of the audience"
+          - "channel enum:CampaignChannel nn | Channel"
+          - "notification_template_code string(64) | Notification template used"
+          - "subject string(200) | Subject / title"
+          - "body text | Message body with placeholders"
+          - "image_document_id uuid ref=document | Creative"
+          - "deeplink string(500) | Call-to-action deep link"
+          - "offer_id uuid fk=campaign_offer | Offer promoted (campaign_offer)"
+        unique: [[campaign_id, code, channel]]
+
+      - name: campaign_offer
+        prefix: ofr
+        description: A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
+        fr: [ENG-04]
+        columns:
+          - "code string(32) nn uq | Offer code"
+          - "name string(160) nn | Name"
+          - "offer_type enum:OfferType nn | Offer type"
+          - "status enum:OfferStatus nn default=DRAFT | Status"
+          - "product_id uuid ref=product | Product offered"
+          - "product_version_id uuid ref=product_version | Product version"
+          - "eligibility_rules json | Eligibility (segments, scores, balances)"
+          - "terms json nn | Offer terms (amount, rate, fee waiver, duration)"
+          - "max_amount amount | Maximum amount for credit offers"
+          - "currency currency | Currency"
+          - "valid_from ts nn | Valid from"
+          - "valid_to ts nn | Valid to"
+          - "acceptance_flow string(40) | IN_APP_ONE_TAP, APPLICATION, BRANCH"
+          - "disclosure_document_id uuid ref=document | Regulatory disclosure"
+
+      - name: offer_assignment
+        prefix: ofa
+        description: An offer assigned to a specific customer, tracked from shown to accepted or expired
+        fr: [ENG-04]
+        columns:
+          - "campaign_offer_id uuid nn fk=campaign_offer idx | Offer"
+          - "campaign_id uuid fk=campaign idx | Campaign that assigned it"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "status enum:OfferAssignmentStatus nn default=ASSIGNED | Response status"
+          - "personalised_terms json | Customer-specific terms (approved amount, rate)"
+          - "score rate | Propensity / risk score at assignment"
+          - "model_version string(32) | Model used"
+          - "consent_snapshot_id uuid fk=marketing_consent_snapshot | Marketing consent snapshot proving permission"
+          - "assigned_at ts nn default=now | Assignment time"
+          - "shown_at ts | First shown"
+          - "clicked_at ts | First clicked"
+          - "responded_at ts | Accept or decline time"
+          - "expires_at ts nn | Expiry"
+          - "resulting_object_type string(40) | LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT"
+          - "resulting_object_id uuid | Object created on acceptance"
+        unique: [[campaign_offer_id, customer_id]]
+
+      - name: marketing_consent_snapshot
+        prefix: mcs
+        description: Immutable record of the customer's marketing consent at the time a campaign targeted them
+        immutable: true
+        fr: [ENG-04, CIF-04]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "consent_id uuid ref=consent | Consent record evaluated"
+          - "campaign_id uuid fk=campaign idx | Campaign"
+          - "channel enum:CampaignChannel nn | Channel checked"
+          - "is_permitted bool nn | Whether contact was allowed"
+          - "reason string(255) | Why not permitted (opt-out, quiet hours, frequency cap)"
+          - "checked_at ts nn default=now | Check time"
+
+      - name: campaign_audience_member
+        prefix: cam
+        description: Customer selected into a campaign run with variant or control-group allocation
+        fr: [ENG-04]
+        columns:
+          - "campaign_id uuid nn fk=campaign idx | Campaign"
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "campaign_variant_id uuid fk=campaign_variant | Variant (empty = control group)"
+          - "is_control bool nn default=false | Hold-out member"
+          - "marketing_consent_snapshot_id uuid fk=marketing_consent_snapshot | Consent evidence"
+          - "notification_id uuid ref=notification | Message sent"
+          - "sent_at ts | Send time"
+          - "opened_at ts | Open time"
+          - "clicked_at ts | Click time"
+          - "converted_at ts | Conversion time"
+          - "unsubscribed_at ts | Opt-out from this campaign"
+        unique: [[campaign_id, customer_id]]
+
+      - name: campaign_metric
+        prefix: cmm
+        description: Daily performance metrics per campaign and variant. Append-only.
+        immutable: true
+        fr: [ENG-04]
+        columns:
+          - "campaign_id uuid nn fk=campaign idx | Campaign"
+          - "campaign_variant_id uuid fk=campaign_variant | Variant (empty = total)"
+          - "metric_date date nn | Day"
+          - "audience int nn default=0 | Members targeted"
+          - "sent int nn default=0 | Messages sent"
+          - "delivered int nn default=0 | Delivered"
+          - "opened int nn default=0 | Opened"
+          - "clicked int nn default=0 | Clicked"
+          - "converted int nn default=0 | Converted"
+          - "unsubscribed int nn default=0 | Opt-outs"
+          - "revenue amount nn default=0 | Attributed revenue"
+          - "cost amount nn default=0 | Spend"
+          - "uplift_pct rate | Conversion uplift vs control group"
+        unique: [[campaign_id, campaign_variant_id, metric_date]]
+
+    apis:
+      - resource: campaigns
+        path: /v1/campaigns
+        table: campaign
+        ops: [list, get, create, update]
+        filters: [status, owner_user_id]
+        actions:
+          - "POST /{id}/submit | Submit for approval | "
+          - "POST /{id}/approve | Approve (checker) | comment string(500)"
+          - "POST /{id}/schedule | Schedule the campaign | start_at ts nn"
+          - "POST /{id}/pause | Pause sending | reason string(255) nn"
+          - "POST /{id}/resume | Resume sending | "
+          - "POST /{id}/cancel | Cancel | reason string(255) nn"
+          - "POST /{id}/preview-audience | Count and sample the audience after consent and exclusions | | none"
+          - "GET /{id}/variants | Variants | | campaign_variant[]"
+          - "GET /{id}/metrics | Daily metrics | | campaign_metric[]"
+          - "GET /{id}/audience | Audience members | | campaign_audience_member[]"
+      - resource: campaign-variants
+        path: /v1/campaigns/variants
+        table: campaign_variant
+        ops: [list, get, create, update, delete]
+        filters: [campaign_id, channel]
+        actions:
+          - "POST /{id}/test-send | Send the variant to a test recipient | recipient string(320) nn | none"
+      - resource: campaign-offers
+        path: /v1/offers
+        table: campaign_offer
+        ops: [list, get, create, update]
+        filters: [offer_type, status, product_id]
+        actions:
+          - "POST /{id}/activate | Activate the offer | "
+          - "POST /{id}/withdraw | Withdraw the offer and all open assignments | reason string(255) nn"
+          - "POST /{id}/assign | Assign to customers (explicit list or segment) | customer_ids json, segment_id uuid, expires_at ts nn | none"
+      - resource: offer-assignments
+        path: /v1/offers/assignments
+        table: offer_assignment
+        ops: [list, get]
+        filters: [campaign_offer_id, campaign_id, customer_id, status]
+        actions:
+          - "POST /{id}/shown | Record that the offer was shown | "
+          - "POST /{id}/clicked | Record a click | "
+          - "POST /{id}/accept | Customer accepts; starts the product flow | "
+          - "POST /{id}/decline | Customer declines | reason string(255)"
+          - "GET /for-customer | Active offers for a customer (?customer_id=) | | offer_assignment[]"
+      - resource: marketing-consent-snapshots
+        path: /v1/campaigns/consent-snapshots
+        table: marketing_consent_snapshot
+        ops: [list, get]
+        filters: [customer_id, campaign_id, channel, is_permitted]
+      - resource: campaign-audience
+        path: /v1/campaigns/audience
+        table: campaign_audience_member
+        ops: [list, get]
+        filters: [campaign_id, customer_id, campaign_variant_id, is_control]
+        actions:
+          - "POST /{id}/unsubscribe | Opt the customer out of this campaign | "
+      - resource: campaign-metrics
+        path: /v1/campaigns/metrics
+        table: campaign_metric
+        ops: [list, get]
+        filters: [campaign_id, campaign_variant_id, metric_date]
+
+    events:
+      - "engagement.campaign.approved | campaign | A campaign was approved"
+      - "engagement.campaign.started | campaign | A campaign started sending"
+      - "engagement.campaign.completed | campaign | A campaign completed"
+      - "engagement.offer.assigned | offer_assignment | An offer was assigned to a customer"
+      - "engagement.offer.accepted | offer_assignment | A customer accepted an offer"
+      - "engagement.offer.declined | offer_assignment | A customer declined an offer"
+      - "engagement.offer.expired | offer_assignment | An offer expired"
+      - "engagement.campaign_audience.converted | campaign_audience_member | A campaign member converted"
+
+  # ------------------------------------------------------------------ inbox-service
+  - name: inbox-service
+    database: inbox_db
+    description: >
+      Secure, authenticated two-way messaging between customers and the bank with attachments and read receipts,
+      plus in-app announcements and banners.
+    tables:
+      - name: secure_message_thread
+        prefix: smt
+        description: A secure conversation between a customer and the bank
+        fr: [ENG-05]
+        columns:
+          - "customer_id uuid nn ref=customer idx | Customer"
+          - "subject string(200) nn | Subject"
+          - "topic string(64) | Topic code (CARDS, PAYMENTS, LOANS, GENERAL)"
+          - "status enum:SecureThreadStatus nn default=OPEN | Status"
+          - "assigned_user_id uuid ref=app_user idx | Staff member handling it"
+          - "related_type string(40) | Related object (SERVICE_CASE, ACCOUNT, CARD, LOAN)"
+          - "related_id uuid | Related object id"
+          - "last_message_at ts ro | Last message time"
+          - "unread_customer int nn default=0 ro | Messages unread by the customer"
+          - "unread_staff int nn default=0 ro | Messages unread by staff"
+          - "closed_at ts ro | Close time"
+
+      - name: secure_message
+        prefix: smg
+        description: One message in a secure thread with attachments and read receipt. Append-only.
+        immutable: true
+        fr: [ENG-05]
+        columns:
+          - "secure_message_thread_id uuid nn fk=secure_message_thread idx | Thread"
+          - "sender_type enum:SecureMessageSender nn | Who sent it"
+          - "sender_user_id uuid ref=app_user | Staff sender"
+          - "body text nn pii | Message text"
+          - "attachment_document_ids json | Attached documents"
+          - "is_internal_note bool nn default=false | Staff-only note, hidden from the customer"
+          - "notification_id uuid ref=notification | Push/email alert sent about it"
+          - "client_message_id string(64) | Client-side id for de-duplication"
+
+      - name: secure_message_receipt
+        prefix: smr
+        description: Read receipt for a secure message by a party
+        immutable: true
+        fr: [ENG-05]
+        columns:
+          - "secure_message_id uuid nn fk=secure_message idx | Message"
+          - "reader_type enum:SecureMessageSender nn | Customer or staff"
+          - "reader_user_id uuid ref=app_user | Staff reader"
+          - "read_at ts nn default=now | Read time"
+        unique: [[secure_message_id, reader_type, reader_user_id]]
+
+      - name: announcement
+        prefix: anc
+        description: In-app banner or announcement targeted to all customers or segments
+        fr: [ENG-05, NOT-01]
+        columns:
+          - "title string(160) nn | Title"
+          - "body string(2000) nn | Body"
+          - "placement string(40) nn | HOME_BANNER, LOGIN, INBOX, MODAL"
+          - "status enum:AnnouncementStatus nn default=DRAFT | Status"
+          - "segment_ids json | Target segments (empty = everyone)"
+          - "apps json | Target apps (customer-mobile, customer-web, business-portal)"
+          - "languages json | Translations per language"
+          - "image_document_id uuid ref=document | Image"
+          - "deeplink string(500) | Call to action"
+          - "priority int nn default=100 | Display priority"
+          - "dismissible bool nn default=true | Customer can dismiss"
+          - "starts_at ts nn | Start"
+          - "ends_at ts | End"
+
+    apis:
+      - resource: secure-message-threads
+        path: /v1/inbox/threads
+        table: secure_message_thread
+        ops: [list, get, create, update]
+        filters: [customer_id, status, topic, assigned_user_id]
+        actions:
+          - "GET /{id}/messages | Messages in the thread | | secure_message[]"
+          - "POST /{id}/messages | Send a message in the thread | body text nn, attachment_document_ids json, is_internal_note bool | secure_message"
+          - "POST /{id}/read | Mark all messages read for the caller | "
+          - "POST /{id}/assign | Assign to a staff member | assigned_user_id uuid nn"
+          - "POST /{id}/close | Close the thread | "
+          - "POST /{id}/reopen | Reopen the thread | "
+      - resource: secure-messages
+        path: /v1/inbox/messages
+        table: secure_message
+        ops: [list, get]
+        filters: [secure_message_thread_id, sender_type]
+        actions:
+          - "GET /{id}/receipts | Read receipts | | secure_message_receipt[]"
+      - resource: announcements
+        path: /v1/inbox/announcements
+        table: announcement
+        ops: [list, get, create, update, delete]
+        filters: [status, placement]
+        actions:
+          - "POST /{id}/publish | Publish | "
+          - "POST /{id}/withdraw | Withdraw | "
+          - "GET /active | Announcements active for the calling customer and app | | announcement[]"
+
+    events:
+      - "engagement.secure_message_thread.opened | secure_message_thread | A secure thread was opened"
+      - "engagement.secure_message.sent | secure_message | A secure message was sent"
+      - "engagement.secure_message_thread.closed | secure_message_thread | A secure thread was closed"
+      - "engagement.announcement.published | announcement | An announcement was published"

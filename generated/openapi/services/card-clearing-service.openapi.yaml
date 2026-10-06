@@ -1,0 +1,1842 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    CardFee:
+      description: Fee charged to a cardholder or interchange earned, linked to the posting
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        card_authorization_id:
+          description: Related authorisation
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        clearing_record_id:
+          description: Related clearing record
+          format: uuid
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        description:
+          description: Narrative
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        fee_type:
+          description: Fee type
+          enum:
+          - ISSUANCE
+          - REPLACEMENT
+          - MONTHLY
+          - ANNUAL
+          - ATM_WITHDRAWAL
+          - FX_MARKUP
+          - CROSS_BORDER
+          - EXPRESS_SHIPPING
+          - INACTIVITY
+          - LATE_PAYMENT
+          - CASH_ADVANCE
+          - INTERCHANGE_INCOME
+          - SCHEME_FEE
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        journal_entry_id:
+          description: Ledger posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        tax_amount:
+          description: Tax on the fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        waived:
+          description: Waived
+          type: boolean
+      required:
+      - id
+      - created_at
+      - card_id
+      - fee_type
+      - amount
+      - currency
+      - tax_amount
+      - waived
+      type: object
+    CardFeeCreate:
+      properties:
+        amount:
+          description: Amount
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        card_authorization_id:
+          description: Related authorisation
+          format: uuid
+          type: string
+        card_id:
+          description: Card
+          format: uuid
+          type: string
+        clearing_record_id:
+          description: Related clearing record
+          format: uuid
+          type: string
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Narrative
+          maxLength: 255
+          type: string
+        fee_type:
+          description: Fee type
+          enum:
+          - ISSUANCE
+          - REPLACEMENT
+          - MONTHLY
+          - ANNUAL
+          - ATM_WITHDRAWAL
+          - FX_MARKUP
+          - CROSS_BORDER
+          - EXPRESS_SHIPPING
+          - INACTIVITY
+          - LATE_PAYMENT
+          - CASH_ADVANCE
+          - INTERCHANGE_INCOME
+          - SCHEME_FEE
+          type: string
+        journal_entry_id:
+          description: Ledger posting
+          format: uuid
+          type: string
+        tax_amount:
+          description: Tax on the fee
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        waived:
+          description: Waived
+          type: boolean
+      required:
+      - card_id
+      - fee_type
+      - amount
+      - currency
+      type: object
+    CardFeePage:
+      description: One page of CardFee results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardFee'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardFeesWaiveRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
+      type: object
+    CardSettlementRecord:
+      description: Scheme settlement position per settlement date and currency (net amount due to / from scheme)
+      properties:
+        card_program_id:
+          description: Program (empty = all)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        chargebacks:
+          description: Chargebacks
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Settlement currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        gross_purchases:
+          description: Purchases
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        gross_refunds:
+          description: Refunds
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interchange:
+          description: Net interchange
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        journal_entry_id:
+          description: Settlement posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        net_amount:
+          description: Net position (positive = issuer pays scheme)
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        recon_reference:
+          description: Bank statement reference
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scheme:
+          description: Scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        scheme_fees:
+          description: Scheme fees
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        settlement_date:
+          description: Settlement date
+          format: date
+          type: string
+        status:
+          description: Status
+          enum:
+          - PENDING
+          - CONFIRMED
+          - PAID
+          - DISPUTED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - scheme
+      - settlement_date
+      - currency
+      - gross_purchases
+      - gross_refunds
+      - chargebacks
+      - interchange
+      - scheme_fees
+      - net_amount
+      - status
+      type: object
+    CardSettlementRecordPage:
+      description: One page of CardSettlementRecord results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/CardSettlementRecord'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    CardSettlementsConfirmRequest:
+      properties:
+        recon_reference:
+          maxLength: 64
+          type: string
+      required:
+      - recon_reference
+      type: object
+    ClearingFile:
+      description: An incoming or outgoing scheme clearing file
+      properties:
+        checksum:
+          description: SHA-256, rejects duplicates
+          maxLength: 64
+          readOnly: true
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        direction:
+          description: INCOMING or OUTGOING
+          maxLength: 8
+          type: string
+        error:
+          description: Error details
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        file_name:
+          description: File name
+          maxLength: 255
+          type: string
+        file_uri:
+          description: Storage location
+          maxLength: 500
+          readOnly: true
+          type: string
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        processing_date:
+          description: Scheme processing date
+          format: date
+          type: string
+        record_count:
+          description: Records parsed
+          format: int32
+          readOnly: true
+          type:
+          - integer
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        scheme:
+          description: Scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+        status:
+          description: Status
+          enum:
+          - RECEIVED
+          - PARSING
+          - PARSED
+          - POSTED
+          - FAILED
+          readOnly: true
+          type: string
+        total_amount:
+          description: Total amount
+          examples:
+          - '125.50'
+          format: decimal
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - scheme
+      - direction
+      - file_name
+      - file_uri
+      - checksum
+      - processing_date
+      - status
+      type: object
+    ClearingFileCreate:
+      properties:
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        direction:
+          description: INCOMING or OUTGOING
+          maxLength: 8
+          type: string
+        file_name:
+          description: File name
+          maxLength: 255
+          type: string
+        processing_date:
+          description: Scheme processing date
+          format: date
+          type: string
+        scheme:
+          description: Scheme
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+          type: string
+      required:
+      - scheme
+      - direction
+      - file_name
+      - processing_date
+      type: object
+    ClearingFilePage:
+      description: One page of ClearingFile results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ClearingFile'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ClearingRecord:
+      description: One clearing record (presentment, refund, chargeback, fee). Append-only.
+      properties:
+        arn:
+          description: Acquirer reference number
+          maxLength: 23
+          type:
+          - string
+          - 'null'
+        auth_code:
+          description: Approval code
+          maxLength: 6
+          type:
+          - string
+          - 'null'
+        billing_amount:
+          description: Amount in billing currency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        billing_currency:
+          description: Billing currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        card_authorization_id:
+          description: Matched authorisation
+          format: uuid
+          type:
+          - string
+          - 'null'
+        card_id:
+          description: Card
+          format: uuid
+          type:
+          - string
+          - 'null'
+        clearing_file_id:
+          description: File
+          format: uuid
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        interchange_amount:
+          description: Interchange (issuer income or cost)
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        interchange_rate_code:
+          description: Interchange program / rate designator
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        journal_entry_id:
+          description: Ledger posting
+          format: uuid
+          type:
+          - string
+          - 'null'
+        match_status:
+          description: Match result
+          enum:
+          - MATCHED
+          - FORCE_POST
+          - UNMATCHED
+          - EXCEPTION
+          type: string
+        mcc:
+          description: MCC
+          maxLength: 4
+          type:
+          - string
+          - 'null'
+        merchant_id:
+          description: Merchant id
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        merchant_name:
+          description: Merchant name
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        network_transaction_id:
+          description: Scheme transaction id
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        raw:
+          additionalProperties: true
+          description: Parsed record (sensitive fields removed)
+          type:
+          - object
+          - 'null'
+        record_type:
+          description: Record type
+          enum:
+          - PRESENTMENT
+          - REFUND
+          - REVERSAL
+          - CHARGEBACK
+          - REPRESENTMENT
+          - FEE_COLLECTION
+          - FUNDS_DISBURSEMENT
+          type: string
+        scheme_fee_amount:
+          description: Scheme fees
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        settlement_amount:
+          description: Amount in settlement currency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        settlement_currency:
+          description: Settlement currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        transaction_amount:
+          description: Amount in transaction currency
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        transaction_currency:
+          description: Transaction currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        transaction_date:
+          description: Transaction date
+          format: date
+          type: string
+      required:
+      - id
+      - created_at
+      - clearing_file_id
+      - record_type
+      - match_status
+      - transaction_date
+      - transaction_amount
+      - transaction_currency
+      - billing_amount
+      - billing_currency
+      - settlement_amount
+      - settlement_currency
+      type: object
+    ClearingRecordPage:
+      description: One page of ClearingRecord results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/ClearingRecord'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    ClearingRecordsForceMatchRequest:
+      properties:
+        card_authorization_id:
+          format: uuid
+          type: string
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - card_authorization_id
+      - reason
+      type: object
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            cards:read: Read Card Issuing and Processing
+            cards:write: Change Card Issuing and Processing
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Card issuing processor: card programs and products, virtual and physical cards, card controls, PCI card data
+    vault, real-time ISO 8583 authorisation inside the ledger with JIT funding and stand-in, network tokenisation, 3-D Secure,
+    clearing and settlement, interchange and fees, and scheme disputes.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — card-clearing-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/card-clearing/files:
+    get:
+      operationId: clearingFilesList
+      summary: List clearing files
+      tags:
+      - Clearing Files
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: scheme
+        in: query
+        schema:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+      - name: direction
+        in: query
+        schema:
+          type: string
+          maxLength: 8
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RECEIVED
+          - PARSING
+          - PARSED
+          - POSTED
+          - FAILED
+      - name: processing_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingFilePage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_file
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: clearingFilesCreate
+      summary: Create clearing file
+      tags:
+      - Clearing Files
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearingFileCreate'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_file
+      x-crud: true
+      x-crud-create: true
+  /v1/card-clearing/files/{id}:
+    get:
+      operationId: clearingFilesGet
+      summary: Retrieve clearing file
+      tags:
+      - Clearing Files
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_file
+      x-crud: true
+      x-crud-get: true
+  /v1/card-clearing/files/{id}/reprocess:
+    post:
+      operationId: clearingFilesReprocess
+      summary: Re-parse and re-post a failed file
+      tags:
+      - Clearing Files
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingFile'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_file
+  /v1/card-clearing/files/{id}/records:
+    get:
+      operationId: clearingFilesRecords
+      summary: Records in the file
+      tags:
+      - Clearing Files
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingRecordPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_file
+  /v1/card-clearing/records:
+    get:
+      operationId: clearingRecordsList
+      summary: List clearing records
+      tags:
+      - Clearing Records
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: clearing_file_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: card_authorization_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: record_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - PRESENTMENT
+          - REFUND
+          - REVERSAL
+          - CHARGEBACK
+          - REPRESENTMENT
+          - FEE_COLLECTION
+          - FUNDS_DISBURSEMENT
+      - name: match_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - MATCHED
+          - FORCE_POST
+          - UNMATCHED
+          - EXCEPTION
+      - name: arn
+        in: query
+        schema:
+          type: string
+          maxLength: 23
+      - name: network_transaction_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingRecordPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_record
+      x-crud: true
+      x-crud-list: true
+  /v1/card-clearing/records/{id}:
+    get:
+      operationId: clearingRecordsGet
+      summary: Retrieve clearing record
+      tags:
+      - Clearing Records
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingRecord'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_record
+      x-crud: true
+      x-crud-get: true
+  /v1/card-clearing/records/{id}/force-match:
+    post:
+      operationId: clearingRecordsForceMatch
+      summary: Manually match an unmatched record to an authorisation
+      tags:
+      - Clearing Records
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearingRecord'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearingRecordsForceMatchRequest'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: clearing_record
+  /v1/card-clearing/settlements:
+    get:
+      operationId: cardSettlementsList
+      summary: List card settlements
+      tags:
+      - Card Settlements
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: scheme
+        in: query
+        schema:
+          type: string
+          enum:
+          - VISA
+          - MASTERCARD
+          - AMEX
+          - UNIONPAY
+          - JCB
+          - DISCOVER
+          - RUPAY
+          - ELO
+          - LOCAL
+      - name: card_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: settlement_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - CONFIRMED
+          - PAID
+          - DISPUTED
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSettlementRecordPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: card_settlement_record
+      x-crud: true
+      x-crud-list: true
+  /v1/card-clearing/settlements/{id}:
+    get:
+      operationId: cardSettlementsGet
+      summary: Retrieve card settlement
+      tags:
+      - Card Settlements
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSettlementRecord'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: card_settlement_record
+      x-crud: true
+      x-crud-get: true
+  /v1/card-clearing/settlements/{id}/confirm:
+    post:
+      operationId: cardSettlementsConfirm
+      summary: Confirm settlement after bank statement match
+      tags:
+      - Card Settlements
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardSettlementRecord'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardSettlementsConfirmRequest'
+      x-requirements:
+      - CRD-06
+      x-service: card-clearing-service
+      x-table: card_settlement_record
+  /v1/card-fees:
+    get:
+      operationId: cardFeesList
+      summary: List card fees
+      tags:
+      - Card Fees
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: card_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: fee_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - ISSUANCE
+          - REPLACEMENT
+          - MONTHLY
+          - ANNUAL
+          - ATM_WITHDRAWAL
+          - FX_MARKUP
+          - CROSS_BORDER
+          - EXPRESS_SHIPPING
+          - INACTIVITY
+          - LATE_PAYMENT
+          - CASH_ADVANCE
+          - INTERCHANGE_INCOME
+          - SCHEME_FEE
+      - name: waived
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardFeePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - CRD-06
+      - PRC-02
+      x-service: card-clearing-service
+      x-table: card_fee
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: cardFeesCreate
+      summary: Create card fee
+      tags:
+      - Card Fees
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardFee'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardFeeCreate'
+      x-requirements:
+      - CRD-06
+      - PRC-02
+      x-service: card-clearing-service
+      x-table: card_fee
+      x-crud: true
+      x-crud-create: true
+  /v1/card-fees/{id}:
+    get:
+      operationId: cardFeesGet
+      summary: Retrieve card fee
+      tags:
+      - Card Fees
+      security:
+      - oauth2:
+        - cards:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardFee'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - CRD-06
+      - PRC-02
+      x-service: card-clearing-service
+      x-table: card_fee
+      x-crud: true
+      x-crud-get: true
+  /v1/card-fees/{id}/waive:
+    post:
+      operationId: cardFeesWaive
+      summary: Waive a fee with a compensating posting
+      tags:
+      - Card Fees
+      security:
+      - oauth2:
+        - cards:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardFee'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardFeesWaiveRequest'
+      x-requirements:
+      - CRD-06
+      - PRC-02
+      x-service: card-clearing-service
+      x-table: card_fee
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: An incoming or outgoing scheme clearing file
+  name: Clearing Files
+- description: One clearing record (presentment, refund, chargeback, fee). Append-only.
+  name: Clearing Records
+- description: Scheme settlement position per settlement date and currency (net amount due to / from scheme)
+  name: Card Settlements
+- description: Fee charged to a cardholder or interchange earned, linked to the posting
+  name: Card Fees

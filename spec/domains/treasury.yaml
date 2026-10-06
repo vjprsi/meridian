@@ -1,0 +1,790 @@
+domain: treasury
+title: Treasury and ALM
+phase: 4
+description: >
+  Front-to-back treasury: money market, FX and securities deals with confirmations and settlement,
+  counterparty limits, liquidity positions and Basel III ratios (LCR/NSFR) with stress testing, and
+  asset-liability management (repricing gap, NII/EVE sensitivity) with funds transfer pricing.
+
+enums:
+  TreasuryCounterpartyType: [BANK, CENTRAL_BANK, BROKER, CORPORATE, FUND, SOVEREIGN, SUPRANATIONAL, INTERNAL]
+  TreasuryCounterpartyStatus: [PENDING_APPROVAL, ACTIVE, SUSPENDED, CLOSED]
+  TreasuryDealStatus: [CAPTURED, VERIFIED, CONFIRMED, SETTLED, MATURED, CANCELLED, AMENDED]
+  TreasuryMmDealType: [PLACEMENT, BORROWING, CALL_PLACEMENT, CALL_BORROWING, REPO, REVERSE_REPO, CD_ISSUED, CD_PURCHASED]
+  TreasuryRateType: [FIXED, FLOATING]
+  TreasuryRolloverType: [NONE, PRINCIPAL_ONLY, PRINCIPAL_AND_INTEREST]
+  TreasuryFxDealType: [SPOT, FORWARD, SWAP, NDF]
+  TreasuryFxLegType: [NEAR, FAR]
+  TreasuryBuySell: [BUY, SELL]
+  TreasurySecurityType: [GOVERNMENT_BOND, TREASURY_BILL, CORPORATE_BOND, COVERED_BOND, SUPRANATIONAL_BOND, COMMERCIAL_PAPER, CERTIFICATE_OF_DEPOSIT]
+  TreasuryAccountingClass: [HTM, AFS, FVTPL, AMORTISED_COST, FVOCI]
+  TreasuryTradeStatus: [PENDING, SETTLED, MATURED, SOLD, CANCELLED]
+  TreasuryConfirmationStatus: [PENDING, SENT, RECEIVED, MATCHED, UNMATCHED, DISPUTED, CANCELLED]
+  TreasuryConfirmationChannel: [SWIFT, EMAIL, PLATFORM, MANUAL]
+  TreasurySettlementStatus: [PENDING, INSTRUCTED, SETTLED, FAILED, CANCELLED]
+  TreasuryLimitType: [SETTLEMENT, PRE_SETTLEMENT, MONEY_MARKET, FX, ISSUER, COUNTRY, TENOR]
+  TreasuryLimitStatus: [ACTIVE, SUSPENDED, EXPIRED]
+  LiquidityPositionType: [ACTUAL, PROJECTED, FORECAST]
+  LiquidityFlowCategory: [DEPOSITS, LOANS, PAYMENTS, CARDS, WALLETS, TREASURY_DEALS, SECURITIES, FEES, OTHER]
+  LiquidityRatioStatus: [DRAFT, CALCULATED, REVIEWED, APPROVED, SUBMITTED]
+  LiquidityStressSeverity: [MILD, MODERATE, SEVERE, IDIOSYNCRATIC, MARKET_WIDE, COMBINED]
+  AlmShockType: [PARALLEL_UP, PARALLEL_DOWN, STEEPENER, FLATTENER, SHORT_UP, SHORT_DOWN, CUSTOM]
+  AlmMeasure: [NII, EVE, EAR]
+  AlmAssumptionType: [PREPAYMENT, DEPOSIT_DECAY, NON_MATURITY_REPRICING, EARLY_WITHDRAWAL, DRAWDOWN]
+  FtpCurveType: [BASE, LIQUIDITY_PREMIUM, CONTINGENT_LIQUIDITY, MATCHED_MATURITY]
+  FtpMethod: [MATCHED_MATURITY, POOLED, BEHAVIOURAL, FIXED_SPREAD]
+
+services:
+  # ------------------------------------------------------------------ treasury-deal-service
+  - name: treasury-deal-service
+    database: treasury_deal_db
+    description: >
+      Front and middle office for treasury: counterparties and limits, money market, FX and securities
+      deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement.
+    tables:
+      - name: treasury_counterparty
+        prefix: tcp
+        description: Treasury counterparty (bank, central bank, broker, corporate) with identifiers and rating
+        fr: [TRY-01, TRY-02]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Our legal entity dealing with the counterparty"
+          - "code string(32) nn uq | Short code"
+          - "name string(200) nn | Legal name"
+          - "counterparty_type enum:TreasuryCounterpartyType nn | Type"
+          - "bic string(11) idx | SWIFT BIC"
+          - "lei string(20) idx | Legal Entity Identifier"
+          - "country_code country nn | Country of incorporation"
+          - "parent_counterparty_id uuid fk=treasury_counterparty | Group parent for aggregated limits"
+          - "external_rating string(10) | External credit rating, e.g. AA-"
+          - "rating_agency string(32) | Agency for the rating"
+          - "internal_rating string(10) | Internal rating grade"
+          - "isda_signed bool nn default=false | ISDA master agreement in place"
+          - "csa_signed bool nn default=false | Credit support annex in place"
+          - "gmra_signed bool nn default=false | GMRA in place (repos)"
+          - "status enum:TreasuryCounterpartyStatus nn default=PENDING_APPROVAL | Status"
+          - "approval_request_id uuid ref=approval_request | Onboarding approval"
+          - "notes text | Notes"
+
+      - name: treasury_ssi
+        prefix: ssi
+        description: Standing settlement instructions per counterparty and currency
+        fr: [TRY-01]
+        columns:
+          - "treasury_counterparty_id uuid nn fk=treasury_counterparty idx | Counterparty"
+          - "currency currency nn | Currency"
+          - "beneficiary_bic string(11) nn | Beneficiary bank BIC"
+          - "beneficiary_account string(64) nn | Beneficiary account / IBAN"
+          - "intermediary_bic string(11) | Intermediary bank BIC"
+          - "our_nostro_account_id uuid ref=nostro_account | Our nostro used to settle"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+          - "is_default bool nn default=true | Default SSI for the currency"
+          - "verified_by string(64) | Four-eyes verification"
+        unique: [[tenant_id, treasury_counterparty_id, currency, valid_from]]
+
+      - name: treasury_counterparty_limit
+        prefix: tcl
+        description: Credit / settlement / tenor limit on a counterparty (or its group)
+        fr: [TRY-02]
+        columns:
+          - "treasury_counterparty_id uuid nn fk=treasury_counterparty idx | Counterparty"
+          - "limit_type enum:TreasuryLimitType nn | Limit type"
+          - "currency currency nn | Limit currency"
+          - "limit_amount amount nn | Approved limit"
+          - "max_tenor_days int | Maximum tenor allowed"
+          - "utilised_amount amount nn default=0 ro | Current utilisation"
+          - "available_amount amount nn default=0 ro | Limit minus utilisation"
+          - "warning_threshold_pct rate nn default=0.8 | Warn at this share of the limit"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Expiry"
+          - "status enum:TreasuryLimitStatus nn default=ACTIVE | Status"
+          - "approved_by string(64) | Credit approver"
+        unique: [[tenant_id, treasury_counterparty_id, limit_type, currency, valid_from]]
+
+      - name: treasury_limit_utilisation
+        prefix: tlu
+        description: Immutable record of a deal consuming or releasing a counterparty limit
+        immutable: true
+        fr: [TRY-02]
+        columns:
+          - "treasury_counterparty_limit_id uuid nn fk=treasury_counterparty_limit idx | Limit"
+          - "deal_type string(32) nn | MONEY_MARKET, FX, SECURITY"
+          - "deal_id uuid nn idx | Deal consuming the limit"
+          - "amount amount nn | Utilisation change (negative releases)"
+          - "currency currency nn | Currency"
+          - "utilised_after amount nn | Utilisation after this change"
+          - "breach bool nn default=false | Change breached the limit"
+          - "override_approval_id uuid ref=approval_request | Approval for a breach"
+
+      - name: money_market_deal
+        prefix: mmd
+        description: Money market placement, borrowing, call, repo or CD with full lifecycle
+        fr: [TRY-01, GL-02]
+        columns:
+          - "deal_ref string(32) nn uq | Deal reference"
+          - "legal_entity_id uuid nn ref=legal_entity | Booking entity"
+          - "treasury_counterparty_id uuid nn fk=treasury_counterparty idx | Counterparty"
+          - "deal_type enum:TreasuryMmDealType nn | Placement, borrowing, repo, ..."
+          - "currency currency nn | Currency"
+          - "principal amount nn | Principal amount"
+          - "trade_date date nn | Trade date"
+          - "value_date date nn | Value (start) date"
+          - "maturity_date date | Maturity date (empty for call deals)"
+          - "is_call bool nn default=false | Call (open-ended) deal"
+          - "notice_days int | Notice period for call deals"
+          - "rate_type enum:TreasuryRateType nn default=FIXED | Fixed or floating"
+          - "interest_rate rate nn | All-in rate"
+          - "rate_index string(32) | Index for floating deals, e.g. SOFR"
+          - "spread rate | Spread over index"
+          - "day_count enum:DayCountBasis nn default=ACT_360 | Day-count basis"
+          - "interest_amount amount ro | Interest to maturity"
+          - "accrued_interest amount nn default=0 ro | Accrued interest to date"
+          - "rollover_type enum:TreasuryRolloverType nn default=NONE | Rollover instruction"
+          - "rolled_from_deal_id uuid fk=money_market_deal | Previous deal when rolled"
+          - "collateral_description text | Repo collateral details"
+          - "dealer_id uuid nn ref=app_user | Dealer"
+          - "verified_by string(64) ro | Back-office verifier"
+          - "status enum:TreasuryDealStatus nn default=CAPTURED ro | Lifecycle status"
+          - "ledger_account_id uuid ref=ledger_account | Ledger account carrying the deal"
+          - "settlement_journal_entry_id uuid ref=journal_entry | Posting on settlement"
+          - "maturity_journal_entry_id uuid ref=journal_entry | Posting on maturity"
+          - "cancel_reason string(255) | Cancellation reason"
+        indexes: [[maturity_date, status], [value_date]]
+
+      - name: treasury_fx_deal
+        prefix: tfx
+        description: Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+        fr: [TRY-01, GL-02]
+        columns:
+          - "deal_ref string(32) nn uq | Deal reference"
+          - "legal_entity_id uuid nn ref=legal_entity | Booking entity"
+          - "treasury_counterparty_id uuid nn fk=treasury_counterparty idx | Counterparty"
+          - "deal_type enum:TreasuryFxDealType nn | Spot, forward, swap or NDF"
+          - "trade_date date nn | Trade date"
+          - "dealer_id uuid nn ref=app_user | Dealer"
+          - "fixing_date date | NDF fixing date"
+          - "fixing_source string(64) | NDF fixing source"
+          - "status enum:TreasuryDealStatus nn default=CAPTURED ro | Lifecycle status"
+          - "verified_by string(64) ro | Back-office verifier"
+          - "mtm_value amount ro | Latest mark-to-market in base currency"
+          - "mtm_date date ro | Valuation date"
+          - "cancel_reason string(255) | Cancellation reason"
+
+      - name: treasury_fx_deal_leg
+        prefix: tfl
+        description: A leg of a treasury FX deal (one for spot/forward, two for swaps)
+        fr: [TRY-01]
+        columns:
+          - "treasury_fx_deal_id uuid nn fk=treasury_fx_deal idx | Deal"
+          - "leg_type enum:TreasuryFxLegType nn default=NEAR | Near or far leg"
+          - "buy_sell enum:TreasuryBuySell nn | Our direction on the base currency"
+          - "base_currency currency nn | Base currency"
+          - "base_amount amount nn | Base amount"
+          - "quote_currency currency nn | Quote currency"
+          - "quote_amount amount nn | Quote amount"
+          - "deal_rate rate nn | All-in rate"
+          - "spot_rate rate | Spot component"
+          - "forward_points rate | Forward points"
+          - "value_date date nn | Settlement date"
+          - "settlement_status enum:TreasurySettlementStatus nn default=PENDING ro | Settlement status"
+          - "journal_entry_id uuid ref=journal_entry | Settlement posting"
+        unique: [[treasury_fx_deal_id, leg_type]]
+
+      - name: treasury_security
+        prefix: sec
+        description: Security master record (bonds, bills, CP, CDs)
+        fr: [TRY-01]
+        columns:
+          - "isin string(12) nn uq | ISIN"
+          - "name string(200) nn | Security name"
+          - "security_type enum:TreasurySecurityType nn | Type"
+          - "issuer_name string(200) nn | Issuer"
+          - "issuer_counterparty_id uuid fk=treasury_counterparty | Issuer as counterparty (issuer limits)"
+          - "currency currency nn | Currency"
+          - "coupon_rate rate | Coupon rate (empty for discount instruments)"
+          - "coupon_frequency int | Coupons per year"
+          - "issue_date date | Issue date"
+          - "maturity_date date nn | Maturity"
+          - "day_count enum:DayCountBasis nn default=ACT_ACT_ISDA | Day count"
+          - "hqla_level string(10) | Basel HQLA level: L1, L2A, L2B or NONE"
+          - "last_price rate ro | Last clean price (% of nominal)"
+          - "last_price_date date ro | Price date"
+
+      - name: securities_holding
+        prefix: shl
+        description: Position in a security by portfolio and accounting classification
+        fr: [TRY-01, GL-02]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Entity"
+          - "treasury_security_id uuid nn fk=treasury_security idx | Security"
+          - "portfolio string(64) nn | Portfolio / book"
+          - "accounting_class enum:TreasuryAccountingClass nn | HTM, AFS, FVTPL, ..."
+          - "nominal amount nn default=0 ro | Face value held"
+          - "book_value amount nn default=0 ro | Amortised book value"
+          - "market_value amount ro | Market value"
+          - "accrued_interest amount nn default=0 ro | Accrued coupon"
+          - "unrealised_pnl amount ro | Unrealised gain / loss"
+          - "is_encumbered bool nn default=false | Pledged as collateral"
+          - "ledger_account_id uuid ref=ledger_account | Ledger account"
+          - "valuation_date date ro | Valuation date"
+        unique: [[tenant_id, treasury_security_id, portfolio, accounting_class]]
+
+      - name: securities_trade
+        prefix: str
+        description: Purchase or sale of a security that changes a holding
+        fr: [TRY-01, GL-02]
+        columns:
+          - "deal_ref string(32) nn uq | Trade reference"
+          - "securities_holding_id uuid nn fk=securities_holding idx | Holding affected"
+          - "treasury_counterparty_id uuid nn fk=treasury_counterparty | Counterparty / broker"
+          - "buy_sell enum:TreasuryBuySell nn | Buy or sell"
+          - "nominal amount nn | Nominal traded"
+          - "clean_price rate nn | Clean price (% of nominal)"
+          - "accrued_interest amount nn | Accrued interest paid / received"
+          - "settlement_amount amount nn | Dirty settlement amount"
+          - "currency currency nn | Currency"
+          - "trade_date date nn | Trade date"
+          - "settlement_date date nn | Settlement date"
+          - "dealer_id uuid nn ref=app_user | Dealer"
+          - "status enum:TreasuryTradeStatus nn default=PENDING ro | Status"
+          - "realised_pnl amount ro | Realised P&L on sale"
+          - "journal_entry_id uuid ref=journal_entry | Settlement posting"
+
+      - name: treasury_deal_confirmation
+        prefix: tdc
+        description: Confirmation of a treasury deal (SWIFT MT300 FX, MT320 MM, MT541/543 securities) and matching
+        fr: [TRY-01]
+        columns:
+          - "deal_type string(32) nn | MONEY_MARKET, FX, SECURITY"
+          - "deal_id uuid nn idx | Deal confirmed"
+          - "channel enum:TreasuryConfirmationChannel nn default=SWIFT | Channel"
+          - "message_type string(16) | MT300, MT320, MT541, MT543, ..."
+          - "our_reference string(35) nn | Our SWIFT reference (field 20)"
+          - "their_reference string(35) | Counterparty reference"
+          - "direction string(10) nn | OUTBOUND or INBOUND"
+          - "status enum:TreasuryConfirmationStatus nn default=PENDING | Matching status"
+          - "mismatch_fields json ro | Fields that did not match"
+          - "sent_at ts ro | Sent time"
+          - "matched_at ts ro | Match time"
+          - "raw_message_document_id uuid ref=document | Stored raw message"
+
+      - name: treasury_settlement
+        prefix: tst
+        description: Settlement instruction generated for a treasury deal cash flow
+        fr: [TRY-01, GL-02]
+        columns:
+          - "deal_type string(32) nn | MONEY_MARKET, FX, SECURITY"
+          - "deal_id uuid nn idx | Deal"
+          - "flow_type string(32) nn | PRINCIPAL_OUT, PRINCIPAL_IN, INTEREST, FX_PAY, FX_RECEIVE, SECURITY_CASH"
+          - "direction enum:EntryDirection nn | Pay (CREDIT nostro) or receive (DEBIT nostro)"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "value_date date nn | Settlement date"
+          - "treasury_ssi_id uuid fk=treasury_ssi | Counterparty SSI used"
+          - "nostro_account_id uuid ref=nostro_account | Our nostro"
+          - "payment_id uuid ref=payment | Outgoing payment created"
+          - "status enum:TreasurySettlementStatus nn default=PENDING | Status"
+          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "failure_reason string(255) | Failure reason"
+        indexes: [[value_date, status]]
+
+    apis:
+      - resource: treasury-counterparties
+        path: /v1/treasury/counterparties
+        table: treasury_counterparty
+        ops: [list, get, create, update]
+        filters: [counterparty_type, status, country_code, bic, lei, legal_entity_id]
+        actions:
+          - "POST /{id}/approve | Approve counterparty onboarding (checker) | comment string(500)"
+          - "POST /{id}/suspend | Suspend dealing with a counterparty | reason string(255) nn"
+          - "GET /{id}/exposure | Aggregated exposure across deals and limits | | treasury_counterparty_limit[]"
+      - resource: treasury-ssis
+        path: /v1/treasury/ssis
+        table: treasury_ssi
+        ops: [list, get, create, update]
+        filters: [treasury_counterparty_id, currency, is_default]
+        actions:
+          - "POST /{id}/verify | Four-eyes verification of an SSI | comment string(500)"
+      - resource: treasury-counterparty-limits
+        path: /v1/treasury/limits
+        table: treasury_counterparty_limit
+        ops: [list, get, create, update]
+        filters: [treasury_counterparty_id, limit_type, currency, status]
+        actions:
+          - "POST /check | Pre-deal limit check | treasury_counterparty_id uuid nn, limit_type enum:TreasuryLimitType nn, amount amount nn, currency currency nn, tenor_days int | none"
+          - "GET /{id}/utilisations | Utilisation history | | treasury_limit_utilisation[]"
+      - resource: treasury-limit-utilisations
+        path: /v1/treasury/limit-utilisations
+        table: treasury_limit_utilisation
+        ops: [list, get]
+        filters: [treasury_counterparty_limit_id, deal_id, breach]
+      - resource: money-market-deals
+        path: /v1/treasury/money-market-deals
+        table: money_market_deal
+        ops: [list, get, create, update]
+        filters: [treasury_counterparty_id, deal_type, currency, status, value_date, maturity_date, legal_entity_id]
+        actions:
+          - "POST /{id}/verify | Back-office verification (checker)"
+          - "POST /{id}/confirm | Mark confirmed after confirmation matching"
+          - "POST /{id}/settle | Settle the start leg and post to the ledger"
+          - "POST /{id}/rollover | Roll over at maturity into a new deal | new_rate rate nn, new_maturity_date date, rollover_type enum:TreasuryRolloverType nn | money_market_deal"
+          - "POST /{id}/mature | Process maturity: repay principal and interest"
+          - "POST /{id}/call | Call an open-ended deal with notice | call_date date nn"
+          - "POST /{id}/cancel | Cancel a deal before settlement | reason string(255) nn"
+          - "POST /{id}/accrue | Recalculate accrued interest to a date | as_of date nn"
+      - resource: treasury-fx-deals
+        path: /v1/treasury/fx-deals
+        table: treasury_fx_deal
+        ops: [list, get, create, update]
+        filters: [treasury_counterparty_id, deal_type, status, trade_date, legal_entity_id]
+        actions:
+          - "GET /{id}/legs | Legs of the deal | | treasury_fx_deal_leg[]"
+          - "POST /{id}/verify | Back-office verification"
+          - "POST /{id}/confirm | Mark confirmed"
+          - "POST /{id}/settle | Settle the due leg | leg_type enum:TreasuryFxLegType nn"
+          - "POST /{id}/revalue | Mark to market | valuation_date date nn"
+          - "POST /{id}/cancel | Cancel the deal | reason string(255) nn"
+      - resource: treasury-fx-deal-legs
+        path: /v1/treasury/fx-deal-legs
+        table: treasury_fx_deal_leg
+        ops: [list, get]
+        filters: [treasury_fx_deal_id, value_date, settlement_status, base_currency, quote_currency]
+      - resource: treasury-securities
+        path: /v1/treasury/securities
+        table: treasury_security
+        ops: [list, get, create, update]
+        filters: [isin, security_type, currency, hqla_level, maturity_date]
+        actions:
+          - "POST /{id}/prices | Record a market price | price rate nn, price_date date nn"
+      - resource: securities-holdings
+        path: /v1/treasury/holdings
+        table: securities_holding
+        ops: [list, get]
+        filters: [treasury_security_id, portfolio, accounting_class, legal_entity_id, is_encumbered]
+        actions:
+          - "POST /revalue | Revalue holdings at a valuation date | valuation_date date nn, legal_entity_id uuid nn | none"
+          - "POST /{id}/encumber | Pledge or release as collateral | is_encumbered bool nn, reason string(255)"
+      - resource: securities-trades
+        path: /v1/treasury/securities-trades
+        table: securities_trade
+        ops: [list, get, create]
+        filters: [securities_holding_id, treasury_counterparty_id, buy_sell, status, trade_date]
+        actions:
+          - "POST /{id}/settle | Settle the trade and update the holding"
+          - "POST /{id}/cancel | Cancel before settlement | reason string(255) nn"
+      - resource: treasury-confirmations
+        path: /v1/treasury/confirmations
+        table: treasury_deal_confirmation
+        ops: [list, get, create]
+        filters: [deal_type, deal_id, status, channel]
+        actions:
+          - "POST /{id}/match | Match an inbound confirmation to a deal | deal_id uuid nn"
+          - "POST /{id}/dispute | Flag a confirmation mismatch | reason string(500) nn"
+      - resource: treasury-settlements
+        path: /v1/treasury/settlements
+        table: treasury_settlement
+        ops: [list, get]
+        filters: [deal_type, deal_id, status, value_date, currency]
+        actions:
+          - "POST /{id}/instruct | Release the settlement as a payment"
+          - "POST /{id}/mark-settled | Confirm settlement from nostro statement | reference string(64)"
+          - "POST /{id}/fail | Mark settlement failed | reason string(255) nn"
+
+    events:
+      - "treasury.counterparty.approved | treasury_counterparty | A treasury counterparty was approved"
+      - "treasury.limit.breached | treasury_limit_utilisation | A counterparty limit was breached"
+      - "treasury.money_market_deal.captured | money_market_deal | A money market deal was captured"
+      - "treasury.money_market_deal.settled | money_market_deal | A money market deal settled"
+      - "treasury.money_market_deal.matured | money_market_deal | A money market deal matured"
+      - "treasury.fx_deal.captured | treasury_fx_deal | A treasury FX deal was captured"
+      - "treasury.fx_deal.settled | treasury_fx_deal | A treasury FX deal leg settled"
+      - "treasury.securities_trade.settled | securities_trade | A securities trade settled"
+      - "treasury.confirmation.unmatched | treasury_deal_confirmation | A deal confirmation did not match"
+      - "treasury.settlement.failed | treasury_settlement | A treasury settlement failed"
+
+  # ------------------------------------------------------------------ liquidity-service
+  - name: liquidity-service
+    database: liquidity_db
+    description: >
+      Real-time and projected cash positions by currency and nostro, maturity ladders, Basel III LCR and
+      NSFR calculations, intraday liquidity monitoring and liquidity stress testing.
+    tables:
+      - name: liquidity_cash_position
+        prefix: lcp
+        description: Actual or projected cash position by currency, nostro and day
+        fr: [TRY-03]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Entity"
+          - "position_date date nn | Business date"
+          - "currency currency nn | Currency"
+          - "nostro_account_id uuid ref=nostro_account | Nostro (empty = all accounts in the currency)"
+          - "position_type enum:LiquidityPositionType nn | Actual, projected or forecast"
+          - "opening_balance amount nn | Opening balance"
+          - "expected_inflows amount nn default=0 | Expected inflows"
+          - "expected_outflows amount nn default=0 | Expected outflows"
+          - "closing_balance amount nn | Closing (projected) balance"
+          - "minimum_buffer amount | Minimum buffer required"
+          - "shortfall amount ro | Buffer shortfall, if any"
+          - "flows_by_category json ro | Inflows/outflows by LiquidityFlowCategory"
+        unique: [[tenant_id, legal_entity_id, position_date, currency, nostro_account_id, position_type]]
+
+      - name: liquidity_ladder_run
+        prefix: llr
+        description: A maturity ladder (liquidity gap) computation at an as-of date
+        fr: [TRY-03]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Entity"
+          - "as_of_date date nn | As-of date"
+          - "currency currency | Currency (empty = all, in base currency)"
+          - "behavioural bool nn default=true | Apply behavioural assumptions"
+          - "status enum:RunStatus nn default=QUEUED ro | Run status"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+
+      - name: liquidity_bucket
+        prefix: lbk
+        description: One time bucket of a maturity ladder with inflows, outflows and cumulative gap
+        immutable: true
+        fr: [TRY-03]
+        columns:
+          - "liquidity_ladder_run_id uuid nn fk=liquidity_ladder_run idx | Ladder run"
+          - "bucket_code string(16) nn | O/N, 2-7D, 8-30D, 1-3M, 3-6M, 6-12M, 1-5Y, >5Y"
+          - "bucket_order int nn | Display order"
+          - "start_day int nn | First day of the bucket"
+          - "end_day int | Last day (empty = open)"
+          - "inflows amount nn | Contractual / behavioural inflows"
+          - "outflows amount nn | Outflows"
+          - "net_gap amount nn | Inflows minus outflows"
+          - "cumulative_gap amount nn | Cumulative gap"
+          - "breakdown json | Amounts by flow category"
+
+      - name: lcr_calculation
+        prefix: lcr
+        description: Basel III Liquidity Coverage Ratio snapshot
+        fr: [TRY-03, REG-01]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Entity"
+          - "as_of_date date nn | As-of date"
+          - "currency currency nn | Reporting currency"
+          - "hqla_level1 amount nn | Level 1 HQLA after haircuts"
+          - "hqla_level2a amount nn | Level 2A HQLA after haircuts"
+          - "hqla_level2b amount nn | Level 2B HQLA after haircuts"
+          - "total_hqla amount nn | Total HQLA after caps"
+          - "outflows_30d amount nn | Weighted 30-day outflows"
+          - "inflows_30d amount nn | Weighted inflows (capped at 75% of outflows)"
+          - "net_outflows amount nn | Net cash outflows"
+          - "lcr_ratio rate nn | LCR = HQLA / net outflows"
+          - "regulatory_minimum rate nn default=1.0 | Minimum ratio"
+          - "components json nn | Line-level components with run-off / inflow factors"
+          - "status enum:LiquidityRatioStatus nn default=CALCULATED | Status"
+          - "approved_by string(64) | Approver"
+        unique: [[tenant_id, legal_entity_id, as_of_date, currency]]
+
+      - name: nsfr_calculation
+        prefix: nsf
+        description: Basel III Net Stable Funding Ratio snapshot
+        fr: [TRY-03, REG-01]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity idx | Entity"
+          - "as_of_date date nn | As-of date"
+          - "currency currency nn | Reporting currency"
+          - "available_stable_funding amount nn | ASF"
+          - "required_stable_funding amount nn | RSF"
+          - "nsfr_ratio rate nn | ASF / RSF"
+          - "regulatory_minimum rate nn default=1.0 | Minimum ratio"
+          - "components json nn | ASF/RSF factors per balance-sheet line"
+          - "status enum:LiquidityRatioStatus nn default=CALCULATED | Status"
+          - "approved_by string(64) | Approver"
+        unique: [[tenant_id, legal_entity_id, as_of_date, currency]]
+
+      - name: liquidity_stress_scenario
+        prefix: lss
+        description: Definition of a liquidity stress scenario (run-off rates, haircuts, horizon)
+        fr: [TRY-03]
+        columns:
+          - "code string(32) nn uq | Scenario code"
+          - "name string(160) nn | Name"
+          - "severity enum:LiquidityStressSeverity nn | Severity / type"
+          - "horizon_days int nn default=30 | Survival horizon"
+          - "assumptions json nn | Deposit run-off, drawdown, haircut and market assumptions"
+          - "is_active bool nn default=true | Active"
+          - "approved_by string(64) | Approver"
+
+      - name: liquidity_stress_result
+        prefix: lsr
+        description: Outcome of running a stress scenario at an as-of date
+        immutable: true
+        fr: [TRY-03]
+        columns:
+          - "liquidity_stress_scenario_id uuid nn fk=liquidity_stress_scenario idx | Scenario"
+          - "legal_entity_id uuid nn ref=legal_entity | Entity"
+          - "as_of_date date nn | As-of date"
+          - "currency currency nn | Currency"
+          - "stressed_outflows amount nn | Stressed outflows over the horizon"
+          - "counterbalancing_capacity amount nn | Liquidity available to cover them"
+          - "net_position amount nn | Surplus / shortfall"
+          - "survival_days int nn | Days until the buffer is exhausted"
+          - "daily_profile json nn | Day-by-day stressed position"
+          - "breach bool nn default=false | Breaches the risk appetite"
+
+      - name: intraday_liquidity_snapshot
+        prefix: ils
+        description: Intraday liquidity monitoring per currency and settlement account (BCBS 248)
+        immutable: true
+        fr: [TRY-03, REG-01]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Entity"
+          - "snapshot_at ts nn | Snapshot time"
+          - "currency currency nn | Currency"
+          - "nostro_account_id uuid ref=nostro_account | Settlement account"
+          - "available_liquidity amount nn | Available intraday liquidity"
+          - "used_liquidity amount nn | Liquidity used so far today"
+          - "largest_negative_position amount nn | Largest net negative position so far"
+          - "payments_sent amount nn | Gross payments sent"
+          - "payments_received amount nn | Gross payments received"
+          - "throughput_pct rate | Share of payments settled by this time"
+        indexes: [[currency, snapshot_at]]
+
+    apis:
+      - resource: liquidity-positions
+        path: /v1/treasury/liquidity/positions
+        table: liquidity_cash_position
+        ops: [list, get]
+        filters: [legal_entity_id, position_date, currency, nostro_account_id, position_type]
+        actions:
+          - "POST /project | Recompute projected positions for a horizon | legal_entity_id uuid nn, from_date date nn, days int nn | none"
+      - resource: liquidity-ladder-runs
+        path: /v1/treasury/liquidity/ladders
+        table: liquidity_ladder_run
+        ops: [list, get, create]
+        filters: [legal_entity_id, as_of_date, currency, status]
+        actions:
+          - "GET /{id}/buckets | Buckets of a maturity ladder | | liquidity_bucket[]"
+      - resource: lcr-calculations
+        path: /v1/treasury/liquidity/lcr
+        table: lcr_calculation
+        ops: [list, get]
+        filters: [legal_entity_id, as_of_date, currency, status]
+        actions:
+          - "POST /calculate | Calculate LCR for a date | legal_entity_id uuid nn, as_of_date date nn, currency currency nn | lcr_calculation"
+          - "POST /{id}/approve | Approve for regulatory reporting | comment string(500)"
+      - resource: nsfr-calculations
+        path: /v1/treasury/liquidity/nsfr
+        table: nsfr_calculation
+        ops: [list, get]
+        filters: [legal_entity_id, as_of_date, currency, status]
+        actions:
+          - "POST /calculate | Calculate NSFR for a date | legal_entity_id uuid nn, as_of_date date nn, currency currency nn | nsfr_calculation"
+          - "POST /{id}/approve | Approve for regulatory reporting | comment string(500)"
+      - resource: liquidity-stress-scenarios
+        path: /v1/treasury/liquidity/stress-scenarios
+        table: liquidity_stress_scenario
+        ops: [list, get, create, update]
+        filters: [severity, is_active]
+        actions:
+          - "POST /{id}/run | Run the scenario at a date | legal_entity_id uuid nn, as_of_date date nn, currency currency nn | liquidity_stress_result"
+      - resource: liquidity-stress-results
+        path: /v1/treasury/liquidity/stress-results
+        table: liquidity_stress_result
+        ops: [list, get]
+        filters: [liquidity_stress_scenario_id, legal_entity_id, as_of_date, breach]
+      - resource: intraday-liquidity
+        path: /v1/treasury/liquidity/intraday
+        table: intraday_liquidity_snapshot
+        ops: [list, get]
+        filters: [legal_entity_id, currency, nostro_account_id]
+
+    events:
+      - "treasury.liquidity_position.shortfall | liquidity_cash_position | A projected position fell below its buffer"
+      - "treasury.lcr.calculated | lcr_calculation | LCR was calculated"
+      - "treasury.nsfr.calculated | nsfr_calculation | NSFR was calculated"
+      - "treasury.liquidity_stress.breached | liquidity_stress_result | A stress test breached the risk appetite"
+
+  # ------------------------------------------------------------------ alm-service
+  - name: alm-service
+    database: alm_db
+    description: >
+      Interest rate risk in the banking book: repricing gap, NII and EVE sensitivity under rate shocks,
+      behavioural assumptions, and funds transfer pricing curves and assignments.
+    tables:
+      - name: alm_behavioural_assumption
+        prefix: aba
+        description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+        fr: [TRY-04, TRY-05]
+        columns:
+          - "assumption_type enum:AlmAssumptionType nn | Assumption type"
+          - "product_id uuid ref=product idx | Product (empty = all products of the segment)"
+          - "segment string(64) | Customer / product segment"
+          - "currency currency | Currency"
+          - "parameters json nn | Model parameters, e.g. CPR curve, decay rates, core/volatile split"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+          - "model_version string(32) nn | Model version"
+          - "approved_by string(64) | Model approver"
+
+      - name: alm_gap_run
+        prefix: agr
+        description: Repricing gap report run at an as-of date
+        fr: [TRY-04]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Entity"
+          - "as_of_date date nn | As-of date"
+          - "currency currency | Currency (empty = all, in base currency)"
+          - "behavioural bool nn default=true | Apply behavioural assumptions"
+          - "status enum:RunStatus nn default=QUEUED ro | Run status"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+
+      - name: alm_gap_bucket
+        prefix: agb
+        description: Repricing gap per time bucket (rate-sensitive assets minus liabilities)
+        immutable: true
+        fr: [TRY-04]
+        columns:
+          - "alm_gap_run_id uuid nn fk=alm_gap_run idx | Gap run"
+          - "bucket_code string(16) nn | Bucket, e.g. 0-1M, 1-3M, 3-6M, 6-12M, 1-2Y, 2-5Y, >5Y"
+          - "bucket_order int nn | Display order"
+          - "rate_sensitive_assets amount nn | Assets repricing in the bucket"
+          - "rate_sensitive_liabilities amount nn | Liabilities repricing in the bucket"
+          - "off_balance_net amount nn default=0 | Off-balance-sheet net position"
+          - "gap amount nn | Net repricing gap"
+          - "cumulative_gap amount nn | Cumulative gap"
+          - "breakdown json | Amounts by product"
+
+      - name: alm_sensitivity_run
+        prefix: asr
+        description: NII / EVE / EaR sensitivity simulation under a rate shock
+        fr: [TRY-04, REG-01]
+        columns:
+          - "legal_entity_id uuid nn ref=legal_entity | Entity"
+          - "as_of_date date nn | As-of date"
+          - "measure enum:AlmMeasure nn | NII, EVE or EaR"
+          - "shock_type enum:AlmShockType nn | Shock scenario"
+          - "shock_bps int | Parallel shock size in basis points"
+          - "custom_shock json | Tenor-by-tenor shocks for CUSTOM"
+          - "horizon_months int nn default=12 | NII horizon"
+          - "currency currency nn | Reporting currency"
+          - "base_value amount ro | Base-case NII or EVE"
+          - "shocked_value amount ro | Shocked NII or EVE"
+          - "delta amount ro | Change versus base"
+          - "delta_pct_tier1 rate ro | Change as share of Tier 1 capital (EVE outlier test)"
+          - "status enum:RunStatus nn default=QUEUED ro | Run status"
+          - "results json ro | Detail by product and bucket"
+
+      - name: ftp_curve
+        prefix: ftc
+        description: Funds transfer pricing curve per currency, type and effective date
+        fr: [TRY-05]
+        columns:
+          - "code string(32) nn | Curve code"
+          - "currency currency nn | Currency"
+          - "curve_type enum:FtpCurveType nn | Base, liquidity premium, ..."
+          - "effective_date date nn | Effective date"
+          - "source string(64) | Market source / construction method"
+          - "is_published bool nn default=false | Published for use"
+          - "approved_by string(64) | ALCO approver"
+        unique: [[tenant_id, code, effective_date]]
+
+      - name: ftp_curve_point
+        prefix: ftp
+        description: Tenor point on an FTP curve
+        fr: [TRY-05]
+        columns:
+          - "ftp_curve_id uuid nn fk=ftp_curve idx | Curve"
+          - "tenor_days int nn | Tenor in days"
+          - "tenor_label string(8) nn | Tenor label, e.g. 3M"
+          - "rate rate nn | Rate at the tenor"
+        unique: [[ftp_curve_id, tenor_days]]
+
+      - name: ftp_rule
+        prefix: ftr
+        description: Rule assigning an FTP method and curves to products / segments
+        fr: [TRY-05]
+        columns:
+          - "product_id uuid ref=product idx | Product (empty = default)"
+          - "segment string(64) | Segment"
+          - "currency currency | Currency"
+          - "method enum:FtpMethod nn | Pricing method"
+          - "base_curve_code string(32) nn | Base curve code"
+          - "liquidity_curve_code string(32) | Liquidity premium curve code"
+          - "fixed_spread rate | Spread for FIXED_SPREAD method"
+          - "priority int nn default=100 | Lower wins"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+
+      - name: ftp_assignment
+        prefix: fta
+        description: FTP rate and margin assigned to an account or loan for a period
+        immutable: true
+        fr: [TRY-05]
+        columns:
+          - "period_start date nn | Period start"
+          - "period_end date nn | Period end"
+          - "exposure_type string(32) nn | DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE"
+          - "exposure_id uuid nn idx | Account or loan id"
+          - "deposit_account_id uuid ref=deposit_account | Deposit account, when applicable"
+          - "loan_id uuid ref=loan | Loan, when applicable"
+          - "product_id uuid ref=product | Product"
+          - "ftp_rule_id uuid fk=ftp_rule | Rule applied"
+          - "average_balance amount nn | Average balance for the period"
+          - "currency currency nn | Currency"
+          - "customer_rate rate nn | Rate paid / earned with the customer"
+          - "ftp_rate rate nn | Transfer price"
+          - "net_margin rate nn | Customer rate minus FTP (sign by side)"
+          - "ftp_charge_credit amount nn | FTP charge (loans) or credit (deposits)"
+        unique: [[tenant_id, exposure_id, period_start]]
+
+    apis:
+      - resource: alm-behavioural-assumptions
+        path: /v1/treasury/alm/assumptions
+        table: alm_behavioural_assumption
+        ops: [list, get, create, update]
+        filters: [assumption_type, product_id, segment, currency]
+        actions:
+          - "POST /{id}/approve | Approve the model assumption (model risk) | comment string(500)"
+      - resource: alm-gap-runs
+        path: /v1/treasury/alm/gap-runs
+        table: alm_gap_run
+        ops: [list, get, create]
+        filters: [legal_entity_id, as_of_date, currency, status]
+        actions:
+          - "GET /{id}/buckets | Buckets of a repricing gap run | | alm_gap_bucket[]"
+      - resource: alm-sensitivity-runs
+        path: /v1/treasury/alm/sensitivity-runs
+        table: alm_sensitivity_run
+        ops: [list, get, create]
+        filters: [legal_entity_id, as_of_date, measure, shock_type, status]
+        actions:
+          - "POST /standard-shocks | Run all six Basel IRRBB standard shocks for NII and EVE | legal_entity_id uuid nn, as_of_date date nn, currency currency nn | none"
+      - resource: ftp-curves
+        path: /v1/treasury/ftp/curves
+        table: ftp_curve
+        ops: [list, get, create, update]
+        filters: [currency, curve_type, effective_date, is_published]
+        actions:
+          - "GET /{id}/points | Points of the curve | | ftp_curve_point[]"
+          - "POST /{id}/publish | Publish the curve after ALCO approval | comment string(500)"
+          - "GET /{id}/rate | Interpolated rate for a tenor (?tenor_days=) | | none"
+      - resource: ftp-curve-points
+        path: /v1/treasury/ftp/curve-points
+        table: ftp_curve_point
+        ops: [list, get, create, update, delete]
+        filters: [ftp_curve_id]
+      - resource: ftp-rules
+        path: /v1/treasury/ftp/rules
+        table: ftp_rule
+        ops: [list, get, create, update, delete]
+        filters: [product_id, segment, currency, method]
+      - resource: ftp-assignments
+        path: /v1/treasury/ftp/assignments
+        table: ftp_assignment
+        ops: [list, get]
+        filters: [exposure_type, exposure_id, product_id, period_start, currency]
+        actions:
+          - "POST /run | Compute FTP for all exposures for a period | period_start date nn, period_end date nn | none"
+
+    events:
+      - "treasury.alm_gap_run.completed | alm_gap_run | A repricing gap run completed"
+      - "treasury.alm_sensitivity.completed | alm_sensitivity_run | An NII/EVE sensitivity run completed"
+      - "treasury.ftp_curve.published | ftp_curve | An FTP curve was published"
+      - "treasury.ftp_assignment.computed | ftp_assignment | FTP was assigned for a period"

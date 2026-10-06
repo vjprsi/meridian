@@ -84,6 +84,7 @@ class Table:
     columns: list = field(default_factory=list)
     unique: list = field(default_factory=list)
     indexes: list = field(default_factory=list)
+    nested: list = field(default_factory=list)   # [(field, target_table, required, description)]
 
     def col(self, name):
         for c in self.columns:
@@ -99,6 +100,7 @@ class Action:
     summary: str
     body: list            # list[Column]
     response: str | None  # table name, "none", or None (= resource table)
+    query: list = field(default_factory=list)  # list[Column] from '?name:type&name:type!' (! = required)
 
 
 @dataclass
@@ -218,7 +220,13 @@ def parse_action(text: str, ctx: str) -> Action:
             if f:
                 body.append(parse_column(f, ctx))
     response = parts[3] if len(parts) > 3 and parts[3] else None
-    return Action(head[0], head[1], summary, body, response)
+    path, _, qs = head[1].partition("?")
+    query = []
+    for q in filter(None, qs.split("&")):
+        name, _, typ = q.partition(":")
+        required = typ.endswith("!")
+        query.append(parse_column(f"{name} {typ.rstrip('!') or 'string'}{' nn' if required else ''}", ctx))
+    return Action(head[0], path, summary, body, response, query)
 
 
 _DESC_RE = re.compile(r'^(\s*(?:- )?(?:description|title): )(?![>|"\'])(.+)$', re.M)
@@ -227,6 +235,15 @@ _DESC_RE = re.compile(r'^(\s*(?:- )?(?:description|title): )(?![>|"\'])(.+)$', r
 def _quote_descriptions(text: str) -> str:
     """Plain one-line description/title values may contain ': '; quote them so YAML parses."""
     return _DESC_RE.sub(lambda m: m.group(1) + '"' + m.group(2).replace("\\", "\\\\").replace('"', '\\"') + '"', text)
+
+
+def parse_nested(text: str, ctx: str):
+    """'<field> list:<table> [nn] | description' -> nested child rows sent with the parent on create."""
+    left, _, desc = text.partition("|")
+    toks = left.split()
+    if len(toks) < 2 or not toks[1].startswith("list:"):
+        raise SpecError(f"{ctx}: nested must be '<field> list:<table> [nn] | desc': {text!r}")
+    return toks[0], toks[1][5:], "nn" in toks[2:], desc.strip()
 
 
 def load_domains() -> list:
@@ -253,7 +270,8 @@ def load_domains() -> list:
                     name=t["name"], domain=did, service=sname, database=db,
                     description=t.get("description", ""), prefix=t.get("prefix", ""),
                     immutable=imm, tenant=ten, std=std, fr=t.get("fr", []) or [],
-                    columns=cols, unique=t.get("unique", []) or [], indexes=t.get("indexes", []) or []))
+                    columns=cols, unique=t.get("unique", []) or [], indexes=t.get("indexes", []) or [],
+                    nested=[parse_nested(x, ctx) for x in (t.get("nested", []) or [])]))
             for a in s.get("apis", []) or []:
                 ctx = f"{path.name}:{a['resource']}"
                 apis.append(Api(
@@ -318,6 +336,9 @@ def validate(domains, focus: str | None = None, strict: bool = True) -> tuple[di
                     if c.ref and c.ref not in tables_global:
                         (errors if strict else warnings).append(
                             f"[{d.id}] {t.name}.{c.name}: ref={c.ref} is not a known table")
+                for _f, target, _r, _d in t.nested:
+                    if target not in tables_by_db[t.database]:
+                        errors.append(f"{t.name}: nested list:{target} must be a table in {t.database}")
                 for group in t.unique + t.indexes:
                     for cn in group:
                         if not t.col(cn):
@@ -560,7 +581,8 @@ def oa_type(c: Column, enums) -> dict:
     elif t == "bigint":
         s = {"type": "integer", "format": "int64"}
     elif t in ("amount", "rate"):
-        s = {"type": "string", "format": "decimal", "pattern": r"^-?\d+(\.\d+)?$"}
+        # No regex: models map this to BigDecimal, which enforces numeric syntax on parse.
+        s = {"type": "string", "format": "decimal", "examples": ["125.50"]}
     elif t == "bool":
         s = {"type": "boolean"}
     elif t == "date":
@@ -616,6 +638,14 @@ def table_schemas(t: Table, enums) -> dict:
         create["required"] = creq
     update = {"type": "object", "properties": dict(
         (c.name, oa_type(c, enums)) for c in t.columns if c.writable and not t.immutable)}
+    for fname, target, required, desc in t.nested:
+        tp = pascal(target)
+        full["properties"][fname] = {"type": "array", "items": {"$ref": f"#/components/schemas/{tp}"},
+                                     "readOnly": True, "description": desc}
+        create["properties"][fname] = {"type": "array", "items": {"$ref": f"#/components/schemas/{tp}Create"},
+                                       "minItems": 1, "description": desc}
+        if required:
+            create.setdefault("required", []).append(fname)
     return {name: full, f"{name}Create": create, f"{name}Update": update}
 
 
@@ -722,6 +752,18 @@ def prune_components(doc: dict) -> None:
                 del doc["components"][s][n]
 
 
+def page_schema(doc: dict, bundle: dict, name: str) -> None:
+    """Named cursor-page wrapper <Name>Page = {data: [<Name>], next_cursor, has_more}."""
+    sch = {"type": "object", "description": f"One page of {name} results (newest first)",
+           "properties": {"data": {"type": "array", "items": {"$ref": f"#/components/schemas/{name}"}},
+                          "next_cursor": {"type": ["string", "null"],
+                                          "description": "Pass as ?cursor= to fetch the next page"},
+                          "has_more": {"type": "boolean"}},
+           "required": ["data", "has_more"]}
+    doc["components"]["schemas"][f"{name}Page"] = sch
+    bundle["components"]["schemas"][f"{name}Page"] = sch
+
+
 def gen_openapi(domains, enums, tables_global) -> list:
     endpoints: list = []
     bundle = {"openapi": "3.1.0",
@@ -748,6 +790,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
             for a in s.apis:
                 t = tables_global[a.table]
                 needed_tables.add(a.table)
+                needed_tables.update(n[1] for n in t.nested)
                 tag = " ".join(w.capitalize() for w in a.resource.split("-"))
                 doc["tags"].append({"name": tag, "description": a.description or t.description})
                 bundle["tags"].append({"name": tag, "description": a.description or t.description,
@@ -780,6 +823,10 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     if a.fr or t.fr:
                         o["x-requirements"] = sorted(set(a.fr + t.fr))
                     o["x-service"] = s.name
+                    o["x-table"] = t.name
+                    if kind in ("list", "get", "create", "update", "delete"):
+                        o["x-crud"] = True
+                        o[f"x-crud-{kind}"] = True
                     for target in (doc, bundle):
                         target["paths"].setdefault(path, {})[method] = o
                     endpoints.append(Endpoint(oid, method.upper(), path, summary, d.id, s.name, a.resource,
@@ -795,10 +842,8 @@ def gen_openapi(domains, enums, tables_global) -> list:
                         sch = oa_type(c, enums)
                         sch.pop("description", None)
                         fparams.append({"name": fcol, "in": "query", "schema": sch})
-                    lst = {"type": "object", "properties": {
-                        "data": {"type": "array", "items": ref(S)},
-                        "next_cursor": {"type": ["string", "null"]}, "has_more": {"type": "boolean"}},
-                        "required": ["data", "has_more"]}
+                    page_schema(doc, bundle, S)
+                    lst = ref(f"{S}Page")
                     add("get", a.path, f"{rn}List", "list", f"List {noun}", response=lst,
                         params=base_params + [{"$ref": "#/components/parameters/Limit"},
                                               {"$ref": "#/components/parameters/Cursor"},
@@ -854,15 +899,17 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     if resp_tbl == "none":
                         resp = None
                     elif is_list:
-                        resp = {"type": "object", "properties": {
-                            "data": {"type": "array", "items": ref(pascal(resp_tbl))},
-                            "next_cursor": {"type": ["string", "null"]}, "has_more": {"type": "boolean"}},
-                            "required": ["data", "has_more"]}
+                        page_schema(doc, bundle, pascal(resp_tbl))
+                        resp = ref(f"{pascal(resp_tbl)}Page")
                     else:
                         resp = ref(pascal(resp_tbl))
                     if resp_tbl != "none":
                         needed_tables.add(resp_tbl)
                     params = path_params(full)
+                    for qc in act.query:
+                        qs = oa_type(qc, enums)
+                        qs.pop("description", None)
+                        params.append({"name": qc.name, "in": "query", "required": qc.nn, "schema": qs})
                     if is_list:
                         params += [{"$ref": "#/components/parameters/Limit"},
                                    {"$ref": "#/components/parameters/Cursor"}]
@@ -883,6 +930,19 @@ def gen_openapi(domains, enums, tables_global) -> list:
         p = OUT / "openapi" / f"{d.id}.openapi.yaml"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+        # one OpenAPI file per service: only that service's paths (input to Spring interface codegen)
+        for s in d.services:
+            sdoc = yaml.safe_load(yaml.safe_dump(doc))
+            sdoc["info"]["title"] = f"Meridian Core — {s.name}"
+            sdoc["paths"] = {pth: {m: o for m, o in ops.items() if o.get("x-service") == s.name}
+                             for pth, ops in doc["paths"].items()}
+            sdoc["paths"] = {pth: ops for pth, ops in sdoc["paths"].items() if ops}
+            used_tags = {t for ops in sdoc["paths"].values() for o in ops.values() for t in o["tags"]}
+            sdoc["tags"] = [t for t in sdoc["tags"] if t["name"] in used_tags]
+            prune_components(sdoc)
+            sp = OUT / "openapi" / "services" / f"{s.name}.openapi.yaml"
+            sp.parent.mkdir(parents=True, exist_ok=True)
+            sp.write_text(yaml.safe_dump(sdoc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
     prune_components(bundle)
     (OUT / "openapi" / "meridian.openapi.yaml").write_text(
         yaml.safe_dump(bundle, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
@@ -965,6 +1025,50 @@ def gen_dictionary(domains, api_by_table):
 # main
 # ---------------------------------------------------------------------------
 
+SERVICE_PORT_BASE = 9101
+
+
+def gen_manifest(domains):
+    """generated/services.json: one entry per service, consumed by tools/scaffold.py and ops tooling.
+    Ports are stable: services keep the port recorded in the previous manifest; new ones get the next free."""
+    import json
+    mp = OUT / "services.json"
+    old = {}
+    if mp.exists():
+        old = {x["name"]: x["port"] for x in json.loads(mp.read_text(encoding="utf-8"))}
+    taken = set(old.values())
+    nxt = SERVICE_PORT_BASE
+    out = []
+    for d in domains:
+        for s in d.services:
+            port = old.get(s.name)
+            if port is None:
+                while nxt in taken:
+                    nxt += 1
+                port = nxt
+                taken.add(port)
+            short = s.name[:-len("-service")] if s.name.endswith("-service") else s.name
+            out.append({
+                "name": s.name, "domain": d.id, "domain_title": d.title, "phase": d.phase,
+                "database": s.database, "schema": s.database[:-3] if s.database.endswith("_db") else s.database,
+                "package": "io.meridian." + re.sub(r"[^a-z0-9]", "", short.replace("-", "")),
+                "port": port, "description": " ".join(s.description.split()),
+                "tags": sorted({" ".join(w.capitalize() for w in a.resource.split("-")) for a in s.apis}),
+                "tables": len(s.tables), "events": [e.name for e in s.events],
+            })
+    mp.write_text(json.dumps(out, indent=2), encoding="utf-8")
+
+
+def gen_routes(endpoints):
+    """generated/routes.json: every operation's method + path template -> owning service and port (edge gateway)."""
+    import json
+    ports = {x["name"]: x["port"] for x in json.loads((OUT / "services.json").read_text(encoding="utf-8"))}
+    routes = sorted({(e.method, e.path, e.service) for e in endpoints}, key=lambda r: (r[1], r[0]))
+    (OUT / "routes.json").write_text(json.dumps(
+        [{"method": m, "path": pth, "service": svc, "port": ports[svc]} for m, pth, svc in routes], indent=1),
+        encoding="utf-8")
+
+
 def main():
     domains = load_domains()
     if "--domain" in sys.argv:
@@ -989,6 +1093,8 @@ def main():
             for a in s.apis:
                 api_by_table[a.table].add(a.path)
     gen_dictionary(domains, api_by_table)
+    gen_manifest(domains)
+    gen_routes(endpoints)
     apps = yaml.safe_load(_quote_descriptions((SPEC / "apps.yaml").read_text(encoding="utf-8"))) \
         if (SPEC / "apps.yaml").exists() else {}
     op_ids = {e.op_id for e in endpoints}

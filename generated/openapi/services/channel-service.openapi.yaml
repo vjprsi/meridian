@@ -1,0 +1,2722 @@
+components:
+  parameters:
+    CreatedAfter:
+      in: query
+      name: created_after
+      schema:
+        format: date-time
+        type: string
+    CreatedBefore:
+      in: query
+      name: created_before
+      schema:
+        format: date-time
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    IdempotencyKey:
+      description: Unique key per logical request; replays return the original response for 24h
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 128
+        type: string
+    IfMatch:
+      description: Current row_version of the resource (optimistic locking)
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+    Limit:
+      in: query
+      name: limit
+      schema:
+        default: 50
+        maximum: 200
+        minimum: 1
+        type: integer
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Malformed request
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Version or idempotency conflict
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Not allowed
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Resource not found
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Rate limit exceeded
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Missing or invalid credentials
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: Business rule violation
+  schemas:
+    Problem:
+      description: RFC 9457 problem details
+      properties:
+        code:
+          description: Stable machine-readable error code
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            properties:
+              code:
+                type: string
+              field:
+                type: string
+              message:
+                type: string
+            type: object
+          type: array
+        instance:
+          type: string
+        request_id:
+          type: string
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          format: uri
+          type: string
+      required:
+      - type
+      - title
+      - status
+      - code
+      type: object
+    SmsCommand:
+      description: A keyword command customers can send by SMS (e.g. BAL, SEND)
+      properties:
+        action_code:
+          description: Action executed
+          maxLength: 64
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        help_text:
+          description: Help reply
+          maxLength: 160
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        keyword:
+          description: Keyword
+          maxLength: 32
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type: string
+        requires_pin:
+          description: PIN required in the message
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        short_code:
+          description: Short code
+          maxLength: 16
+          type: string
+        syntax:
+          description: Syntax, e.g. SEND amount msisdn pin
+          maxLength: 255
+          type:
+          - string
+          - 'null'
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - keyword
+      - short_code
+      - language
+      - action_code
+      - requires_pin
+      - is_active
+      type: object
+    SmsCommandCreate:
+      properties:
+        action_code:
+          description: Action executed
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        help_text:
+          description: Help reply
+          maxLength: 160
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        keyword:
+          description: Keyword
+          maxLength: 32
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type: string
+        requires_pin:
+          description: PIN required in the message
+          type: boolean
+        short_code:
+          description: Short code
+          maxLength: 16
+          type: string
+        syntax:
+          description: Syntax, e.g. SEND amount msisdn pin
+          maxLength: 255
+          type: string
+      required:
+      - keyword
+      - short_code
+      - language
+      - action_code
+      type: object
+    SmsCommandPage:
+      description: One page of SmsCommand results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SmsCommand'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SmsCommandUpdate:
+      properties:
+        action_code:
+          description: Action executed
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        help_text:
+          description: Help reply
+          maxLength: 160
+          type: string
+        is_active:
+          description: Active
+          type: boolean
+        keyword:
+          description: Keyword
+          maxLength: 32
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type: string
+        requires_pin:
+          description: PIN required in the message
+          type: boolean
+        short_code:
+          description: Short code
+          maxLength: 16
+          type: string
+        syntax:
+          description: Syntax, e.g. SEND amount msisdn pin
+          maxLength: 255
+          type: string
+      type: object
+    SmsMessage:
+      description: Inbound and outbound SMS log
+      properties:
+        body:
+          description: Message text (PINs masked)
+          type:
+          - string
+          - 'null'
+        cost:
+          description: Cost
+          examples:
+          - '125.50'
+          format: decimal
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Cost currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        delivered_at:
+          description: Delivery time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        direction:
+          description: Direction
+          enum:
+          - INBOUND
+          - OUTBOUND
+          type: string
+        failure_reason:
+          description: Failure reason
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        mno:
+          description: Network operator
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        msisdn:
+          description: Subscriber (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        notification_id:
+          description: Related notification (outbound)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        provider:
+          description: SMS gateway
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        provider_message_id:
+          description: Gateway message id
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        segments:
+          description: SMS segments
+          format: int32
+          type:
+          - integer
+          - 'null'
+        sent_at:
+          description: Sent time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        short_code:
+          description: Short code / sender id
+          maxLength: 16
+          type:
+          - string
+          - 'null'
+        sms_command_id:
+          description: Command matched (inbound)
+          format: uuid
+          type:
+          - string
+          - 'null'
+        status:
+          description: Status
+          enum:
+          - QUEUED
+          - SENT
+          - DELIVERED
+          - FAILED
+          - RECEIVED
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        wallet_transaction_id:
+          description: Related transaction
+          format: uuid
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - direction
+      - msisdn
+      - status
+      type: object
+    SmsMessagePage:
+      description: One page of SmsMessage results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/SmsMessage'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    SmsMessagesDeliveryReportsRequest:
+      properties:
+        failure_reason:
+          maxLength: 255
+          type: string
+        provider_message_id:
+          maxLength: 64
+          type: string
+        status:
+          enum:
+          - QUEUED
+          - SENT
+          - DELIVERED
+          - FAILED
+          - RECEIVED
+          type: string
+      required:
+      - provider_message_id
+      - status
+      type: object
+    SmsMessagesInboundRequest:
+      properties:
+        body:
+          type: string
+        mno:
+          maxLength: 32
+          type: string
+        msisdn:
+          description: E.164
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        provider_message_id:
+          maxLength: 64
+          type: string
+        short_code:
+          maxLength: 16
+          type: string
+      required:
+      - msisdn
+      - short_code
+      - body
+      type: object
+    UssdMenu:
+      description: A versioned USSD menu tree for one short code and language
+      properties:
+        code:
+          description: Menu code
+          maxLength: 32
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        published_at:
+          description: Publication time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        published_by:
+          description: Publisher
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        root_node_key:
+          description: Key of the first node
+          maxLength: 64
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        session_timeout_seconds:
+          description: Session timeout
+          format: int32
+          type: integer
+        short_code:
+          description: Dialled code, e.g. *123#
+          maxLength: 16
+          type: string
+        status:
+          description: Status
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - RETIRED
+          readOnly: true
+          type: string
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        version:
+          description: Version
+          format: int32
+          type: integer
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - short_code
+      - language
+      - version
+      - root_node_key
+      - session_timeout_seconds
+      - status
+      type: object
+    UssdMenuCreate:
+      properties:
+        code:
+          description: Menu code
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        root_node_key:
+          description: Key of the first node
+          maxLength: 64
+          type: string
+        session_timeout_seconds:
+          description: Session timeout
+          format: int32
+          type: integer
+        short_code:
+          description: Dialled code, e.g. *123#
+          maxLength: 16
+          type: string
+        version:
+          description: Version
+          format: int32
+          type: integer
+      required:
+      - code
+      - name
+      - short_code
+      - language
+      - root_node_key
+      type: object
+    UssdMenuNode:
+      description: A screen in a USSD menu tree
+      properties:
+        action_code:
+          description: Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        display_order:
+          description: Order among siblings
+          format: int32
+          type:
+          - integer
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        input_validation:
+          description: Regex the input must match
+          maxLength: 128
+          type:
+          - string
+          - 'null'
+        label:
+          description: Text shown (182-character USSD limit)
+          maxLength: 182
+          type: string
+        min_kyc_tier:
+          description: Hide the node below this tier
+          format: int32
+          type:
+          - integer
+          - 'null'
+        next_node_key:
+          description: Next node after input
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        node_key:
+          description: Node key
+          maxLength: 64
+          type: string
+        node_type:
+          description: Node type
+          enum:
+          - MENU
+          - INPUT
+          - CONFIRM
+          - ACTION
+          - END
+          type: string
+        option_number:
+          description: Option number in the parent menu
+          format: int32
+          type:
+          - integer
+          - 'null'
+        parent_node_key:
+          description: Parent node
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        prompt:
+          description: Input prompt
+          maxLength: 182
+          type:
+          - string
+          - 'null'
+        requires_pin:
+          description: Ask for the PIN before the action
+          type: boolean
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        ussd_menu_id:
+          description: Menu
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - ussd_menu_id
+      - node_key
+      - node_type
+      - label
+      - requires_pin
+      type: object
+    UssdMenuNodeCreate:
+      properties:
+        action_code:
+          description: Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        display_order:
+          description: Order among siblings
+          format: int32
+          type: integer
+        input_validation:
+          description: Regex the input must match
+          maxLength: 128
+          type: string
+        label:
+          description: Text shown (182-character USSD limit)
+          maxLength: 182
+          type: string
+        min_kyc_tier:
+          description: Hide the node below this tier
+          format: int32
+          type: integer
+        next_node_key:
+          description: Next node after input
+          maxLength: 64
+          type: string
+        node_key:
+          description: Node key
+          maxLength: 64
+          type: string
+        node_type:
+          description: Node type
+          enum:
+          - MENU
+          - INPUT
+          - CONFIRM
+          - ACTION
+          - END
+          type: string
+        option_number:
+          description: Option number in the parent menu
+          format: int32
+          type: integer
+        parent_node_key:
+          description: Parent node
+          maxLength: 64
+          type: string
+        prompt:
+          description: Input prompt
+          maxLength: 182
+          type: string
+        requires_pin:
+          description: Ask for the PIN before the action
+          type: boolean
+        ussd_menu_id:
+          description: Menu
+          format: uuid
+          type: string
+      required:
+      - ussd_menu_id
+      - node_key
+      - node_type
+      - label
+      type: object
+    UssdMenuNodePage:
+      description: One page of UssdMenuNode results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UssdMenuNode'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    UssdMenuNodeUpdate:
+      properties:
+        action_code:
+          description: Action executed, e.g. P2P_SEND, CASH_OUT, BALANCE
+          maxLength: 64
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        display_order:
+          description: Order among siblings
+          format: int32
+          type: integer
+        input_validation:
+          description: Regex the input must match
+          maxLength: 128
+          type: string
+        label:
+          description: Text shown (182-character USSD limit)
+          maxLength: 182
+          type: string
+        min_kyc_tier:
+          description: Hide the node below this tier
+          format: int32
+          type: integer
+        next_node_key:
+          description: Next node after input
+          maxLength: 64
+          type: string
+        node_key:
+          description: Node key
+          maxLength: 64
+          type: string
+        node_type:
+          description: Node type
+          enum:
+          - MENU
+          - INPUT
+          - CONFIRM
+          - ACTION
+          - END
+          type: string
+        option_number:
+          description: Option number in the parent menu
+          format: int32
+          type: integer
+        parent_node_key:
+          description: Parent node
+          maxLength: 64
+          type: string
+        prompt:
+          description: Input prompt
+          maxLength: 182
+          type: string
+        requires_pin:
+          description: Ask for the PIN before the action
+          type: boolean
+        ussd_menu_id:
+          description: Menu
+          format: uuid
+          type: string
+      type: object
+    UssdMenuPage:
+      description: One page of UssdMenu results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UssdMenu'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    UssdMenuUpdate:
+      properties:
+        code:
+          description: Menu code
+          maxLength: 32
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type: string
+        name:
+          description: Name
+          maxLength: 120
+          type: string
+        root_node_key:
+          description: Key of the first node
+          maxLength: 64
+          type: string
+        session_timeout_seconds:
+          description: Session timeout
+          format: int32
+          type: integer
+        short_code:
+          description: Dialled code, e.g. *123#
+          maxLength: 16
+          type: string
+        version:
+          description: Version
+          format: int32
+          type: integer
+      type: object
+    UssdMenusPublishRequest:
+      properties:
+        comment:
+          maxLength: 500
+          type: string
+      type: object
+    UssdMenusSimulateRequest:
+      properties:
+        inputs:
+          additionalProperties: true
+          type: object
+        msisdn:
+          description: E.164
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+      required:
+      - msisdn
+      - inputs
+      type: object
+    UssdSession:
+      description: One USSD dialogue between a subscriber and the platform
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        current_node_key:
+          description: Current node
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        ended_at:
+          description: End
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        language:
+          description: Language
+          maxLength: 8
+          type:
+          - string
+          - 'null'
+        mno:
+          description: Mobile network operator
+          maxLength: 32
+          type:
+          - string
+          - 'null'
+        msisdn:
+          description: Subscriber (E.164)
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        row_version:
+          description: Optimistic lock version; send as If-Match
+          format: int32
+          readOnly: true
+          type: integer
+        session_id:
+          description: MNO session id
+          maxLength: 64
+          type: string
+        short_code:
+          description: Dialled code
+          maxLength: 16
+          type: string
+        started_at:
+          description: Start
+          format: date-time
+          type: string
+        status:
+          description: Status
+          enum:
+          - ACTIVE
+          - COMPLETED
+          - TIMED_OUT
+          - ABORTED
+          - FAILED
+          readOnly: true
+          type: string
+        step_count:
+          description: Steps taken
+          format: int32
+          readOnly: true
+          type: integer
+        updated_at:
+          description: Last update time
+          format: date-time
+          readOnly: true
+          type: string
+        updated_by:
+          description: Principal that last updated the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        ussd_menu_id:
+          description: Menu version served
+          format: uuid
+          type:
+          - string
+          - 'null'
+        wallet_id:
+          description: Resolved wallet
+          format: uuid
+          type:
+          - string
+          - 'null'
+        wallet_transaction_id:
+          description: Transaction created
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - session_id
+      - msisdn
+      - short_code
+      - status
+      - step_count
+      - started_at
+      type: object
+    UssdSessionPage:
+      description: One page of UssdSession results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UssdSession'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    UssdSessionStep:
+      description: One request/response step of a USSD session. Append-only.
+      properties:
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        latency_ms:
+          description: Processing time
+          format: int32
+          type:
+          - integer
+          - 'null'
+        node_key:
+          description: Node served
+          maxLength: 64
+          type: string
+        response_text:
+          description: Text returned
+          maxLength: 182
+          type:
+          - string
+          - 'null'
+        step_no:
+          description: Step number
+          format: int32
+          type: integer
+        user_input:
+          description: Input received (masked on PIN nodes)
+          maxLength: 182
+          type:
+          - string
+          - 'null'
+        ussd_session_id:
+          description: Session
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - ussd_session_id
+      - step_no
+      - node_key
+      type: object
+    UssdSessionStepPage:
+      description: One page of UssdSessionStep results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/UssdSessionStep'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    UssdSessionsCallbackRequest:
+      properties:
+        input:
+          maxLength: 182
+          type: string
+        mno:
+          maxLength: 32
+          type: string
+        msisdn:
+          description: E.164
+          pattern: ^\+[1-9]\d{6,14}$
+          type: string
+        session_id:
+          maxLength: 64
+          type: string
+        short_code:
+          maxLength: 16
+          type: string
+      required:
+      - session_id
+      - msisdn
+      - short_code
+      type: object
+  securitySchemes:
+    oauth2:
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.meridian.example/oauth2/authorize
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+        clientCredentials:
+          scopes:
+            wallets:read: Read Wallets, Agents and Merchants
+            wallets:write: Change Wallets, Agents and Merchants
+          tokenUrl: https://auth.meridian.example/oauth2/token
+      type: oauth2
+info:
+  description: 'Mobile money and e-wallets (the Mobiquity / Inswitch use case): customer, merchant, agent and system wallets
+    with KYC-tier limits; agent networks with float, tills and devices; a multi-level commission engine; biller catalogue,
+    bill payments and airtime; merchant acceptance (QR, terminals, payment links) and settlement; USSD and SMS channels; G2P
+    and bulk disbursements; interoperability with national switches and other wallets. Every money movement posts through
+    the ledger.
+
+    '
+  license:
+    identifier: LicenseRef-Proprietary
+    name: Proprietary
+  title: Meridian Core — channel-service
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/ussd-menus:
+    get:
+      operationId: ussdMenusList
+      summary: List ussd menus
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: short_code
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: language
+        in: query
+        schema:
+          type: string
+          maxLength: 8
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+          - RETIRED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenuPage'
+        '400': &id001
+          $ref: '#/components/responses/BadRequest'
+        '401': &id002
+          $ref: '#/components/responses/Unauthorized'
+        '403': &id003
+          $ref: '#/components/responses/Forbidden'
+        '429': &id004
+          $ref: '#/components/responses/TooManyRequests'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: ussdMenusCreate
+      summary: Create ussd menu
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenuCreate'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-create: true
+  /v1/ussd-menus/{id}:
+    get:
+      operationId: ussdMenusGet
+      summary: Retrieve ussd menu
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id005
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: ussdMenusUpdate
+      summary: Update ussd menu
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id005
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenuUpdate'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+      x-crud: true
+      x-crud-update: true
+  /v1/ussd-menus/{id}/nodes:
+    get:
+      operationId: ussdMenusNodes
+      summary: Nodes of the menu
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenuNodePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+  /v1/ussd-menus/{id}/publish:
+    post:
+      operationId: ussdMenusPublish
+      summary: Publish the menu version (maker-checker)
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenusPublishRequest'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+  /v1/ussd-menus/{id}/clone:
+    post:
+      operationId: ussdMenusClone
+      summary: Create a new draft version
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenu'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+  /v1/ussd-menus/{id}/simulate:
+    post:
+      operationId: ussdMenusSimulate
+      summary: Run the menu in a simulator with scripted inputs
+      tags:
+      - Ussd Menus
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenusSimulateRequest'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu
+  /v1/ussd-menu-nodes:
+    get:
+      operationId: ussdMenuNodesList
+      summary: List ussd menu nodes
+      tags:
+      - Ussd Menu Nodes
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: ussd_menu_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: node_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - MENU
+          - INPUT
+          - CONFIRM
+          - ACTION
+          - END
+      - name: parent_node_key
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenuNodePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: ussdMenuNodesCreate
+      summary: Create ussd menu node
+      tags:
+      - Ussd Menu Nodes
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenuNode'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenuNodeCreate'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-create: true
+  /v1/ussd-menu-nodes/{id}:
+    get:
+      operationId: ussdMenuNodesGet
+      summary: Retrieve ussd menu node
+      tags:
+      - Ussd Menu Nodes
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenuNode'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: ussdMenuNodesUpdate
+      summary: Update ussd menu node
+      tags:
+      - Ussd Menu Nodes
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdMenuNode'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdMenuNodeUpdate'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: ussdMenuNodesDelete
+      summary: Delete ussd menu node
+      tags:
+      - Ussd Menu Nodes
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_menu_node
+      x-crud: true
+      x-crud-delete: true
+  /v1/ussd-sessions:
+    get:
+      operationId: ussdSessionsList
+      summary: List ussd sessions
+      tags:
+      - Ussd Sessions
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: msisdn
+        in: query
+        schema:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - COMPLETED
+          - TIMED_OUT
+          - ABORTED
+          - FAILED
+      - name: short_code
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: mno
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdSessionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_session
+      x-crud: true
+      x-crud-list: true
+  /v1/ussd-sessions/{id}:
+    get:
+      operationId: ussdSessionsGet
+      summary: Retrieve ussd session
+      tags:
+      - Ussd Sessions
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdSession'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_session
+      x-crud: true
+      x-crud-get: true
+  /v1/ussd-sessions/{id}/steps:
+    get:
+      operationId: ussdSessionsSteps
+      summary: Steps of the session
+      tags:
+      - Ussd Sessions
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UssdSessionStepPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_session
+  /v1/ussd-sessions/callback:
+    post:
+      operationId: ussdSessionsCallback
+      summary: MNO gateway callback that processes one USSD request and returns the next screen
+      tags:
+      - Ussd Sessions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UssdSessionsCallbackRequest'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: ussd_session
+  /v1/sms-commands:
+    get:
+      operationId: smsCommandsList
+      summary: List sms commands
+      tags:
+      - Sms Commands
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: keyword
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: short_code
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsCommandPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: smsCommandsCreate
+      summary: Create sms command
+      tags:
+      - Sms Commands
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsCommand'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsCommandCreate'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-create: true
+  /v1/sms-commands/{id}:
+    get:
+      operationId: smsCommandsGet
+      summary: Retrieve sms command
+      tags:
+      - Sms Commands
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id009
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsCommand'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: smsCommandsUpdate
+      summary: Update sms command
+      tags:
+      - Sms Commands
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsCommand'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsCommandUpdate'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: smsCommandsDelete
+      summary: Delete sms command
+      tags:
+      - Sms Commands
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id009
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_command
+      x-crud: true
+      x-crud-delete: true
+  /v1/sms-messages:
+    get:
+      operationId: smsMessagesList
+      summary: List sms messages
+      tags:
+      - Sms Messages
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - INBOUND
+          - OUTBOUND
+      - name: msisdn
+        in: query
+        schema:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - SENT
+          - DELIVERED
+          - FAILED
+          - RECEIVED
+      - name: sms_command_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: provider_message_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsMessagePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - NOT-01
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_message
+      x-crud: true
+      x-crud-list: true
+  /v1/sms-messages/{id}:
+    get:
+      operationId: smsMessagesGet
+      summary: Retrieve sms message
+      tags:
+      - Sms Messages
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsMessage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - NOT-01
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_message
+      x-crud: true
+      x-crud-get: true
+  /v1/sms-messages/inbound:
+    post:
+      operationId: smsMessagesInbound
+      summary: SMS gateway webhook for inbound messages
+      tags:
+      - Sms Messages
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsMessagesInboundRequest'
+      x-requirements:
+      - NOT-01
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_message
+  /v1/sms-messages/delivery-reports:
+    post:
+      operationId: smsMessagesDeliveryReports
+      summary: SMS gateway delivery receipts
+      tags:
+      - Sms Messages
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsMessagesDeliveryReportsRequest'
+      x-requirements:
+      - NOT-01
+      - WAL-03
+      x-service: channel-service
+      x-table: sms_message
+security:
+- oauth2: []
+servers:
+- description: Production
+  url: https://api.meridian.example
+- description: Sandbox
+  url: https://sandbox.api.meridian.example
+tags:
+- description: A versioned USSD menu tree for one short code and language
+  name: Ussd Menus
+- description: A screen in a USSD menu tree
+  name: Ussd Menu Nodes
+- description: One USSD dialogue between a subscriber and the platform
+  name: Ussd Sessions
+- description: A keyword command customers can send by SMS (e.g. BAL, SEND)
+  name: Sms Commands
+- description: Inbound and outbound SMS log
+  name: Sms Messages
