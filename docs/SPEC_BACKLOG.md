@@ -37,4 +37,9 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
   drop the hack); `gl_journal` needs `nested: lines list:gl_journal_line`; ECL calculate needs `exposures` body and
   GL accounts; simulate needs inputs; recon file create needs `content`/`records`; missing events for matches and
   ERP export; P&L close to retained earnings not modelled; ledger entries lack value_date/reference for recon.
-- Product/accounts/operations: pending reports.
+- product: event `product.product_version.migration_requested` missing; calculators declared 204 (fee calculate,
+  effective-rate, eligibility-check, quote, diff, simulation export, script test, DMN test/export) → response schemas;
+  eligibility-check/quote/fee-calculate need applicant/context bodies; diff `?against=`; rate-index values `?from&to`;
+  decision table inputs/outputs/rules are lists (G1); `product_script` wasm_module_uri/sha required+ro without default;
+  no rejection-reason/submitted_by columns; decision-table version lacks APPROVED/REJECTED; `version_no` should be ro.
+- accounts/operations: pending reports.
