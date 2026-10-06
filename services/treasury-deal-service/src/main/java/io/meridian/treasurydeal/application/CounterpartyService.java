@@ -1,11 +1,15 @@
 package io.meridian.treasurydeal.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.treasurydeal.domain.Identifiers;
 import io.meridian.treasurydeal.domain.Lifecycle;
 import io.meridian.treasurydeal.infrastructure.Rows;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,12 +23,18 @@ public class CounterpartyService {
     static final String TABLE = "treasury_counterparty";
     static final String SSI = "treasury_ssi";
 
+    /** Approval resource types in workflow-service (G11): counterparty onboarding and SSI verification. */
+    public static final String APPROVAL_RESOURCE = "treasury_counterparty";
+    public static final String SSI_APPROVAL_RESOURCE = "treasury_ssi";
+
     private final Rows rows;
     private final Events events;
+    private final Approvals approvals;
 
-    public CounterpartyService(Rows rows, Events events) {
+    public CounterpartyService(Rows rows, Events events, Approvals approvals) {
         this.rows = rows;
         this.events = events;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -42,7 +52,39 @@ public class CounterpartyService {
         v.put("status", "PENDING_APPROVAL");
         ObjectNode out = rows.insert(TABLE, v);
         events.publish("treasury.counterparty.created", TABLE, out);
+        requestApproval(out);
         return out;
+    }
+
+    /**
+     * After a PATCH of a counterparty still PENDING_APPROVAL, opens a workflow request for the changed content (the
+     * request for the previous content goes stale: its row_version no longer matches).
+     */
+    @Transactional
+    public void resubmitIfPending(UUID id) {
+        rows.find(TABLE, id).filter(cp -> "PENDING_APPROVAL".equals(Rows.str(cp, "status"))).ifPresent(this::requestApproval);
+    }
+
+    /** Central maker-checker: the checker decides in the workflow inbox; CounterpartyApprovalHandler applies it. */
+    private void requestApproval(ObjectNode cp) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        for (String f : new String[] {"code", "name", "counterparty_type", "bic", "lei", "country_code",
+                "parent_counterparty_id", "external_rating"}) {
+            payload.put(f, Rows.str(cp, f));
+        }
+        payload.put("row_version", Rows.integer(cp, "row_version"));
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, Rows.uuid(cp, "id"), "approve",
+                "Treasury counterparty " + Rows.str(cp, "code") + " onboarding", payload),
+                "submit:" + Rows.str(cp, "id") + ":" + Rows.integer(cp, "row_version"));
+    }
+
+    /** True while the counterparty is PENDING_APPROVAL with the submitted content (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, Integer rowVersion) {
+        return rows.find(TABLE, id)
+                .filter(cp -> "PENDING_APPROVAL".equals(Rows.str(cp, "status")))
+                .filter(cp -> rowVersion == null || rowVersion.equals(Rows.integer(cp, "row_version")))
+                .isPresent();
     }
 
     /** Validates identifiers of a create or a PATCH body (fields present only). */
@@ -72,6 +114,7 @@ public class CounterpartyService {
         v.put("approved_at", rows.now());
         ObjectNode out = rows.update(TABLE, id, v);
         events.publish("treasury.counterparty.approved", TABLE, out);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return out;
     }
 
@@ -172,7 +215,9 @@ public class CounterpartyService {
                 Integer.class, cp, Rows.str(req, "currency"), Rows.date(req, "valid_from")).orElse(0) > 0) {
             throw ApiException.conflict("duplicate_ssi", "An SSI for this currency already starts on that date");
         }
-        return rows.insert(SSI, rows.columns(SSI, req));
+        ObjectNode out = rows.insert(SSI, rows.columns(SSI, req));
+        requestVerification(out);
+        return out;
     }
 
     /** PATCH of an SSI: changing payment details clears the verification (must be re-verified by a checker). */
@@ -199,7 +244,33 @@ public class CounterpartyService {
             v.putNull("verified_by");
             v.putNull("verified_at");
         }
-        return rows.update(SSI, id, v);
+        ObjectNode out = rows.update(SSI, id, v);
+        if (Rows.str(out, "verified_by") == null) {
+            requestVerification(out);
+        }
+        return out;
+    }
+
+    /** Central maker-checker for an unverified SSI; SsiApprovalHandler applies the decision. */
+    private void requestVerification(ObjectNode ssi) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        for (String f : new String[] {"treasury_counterparty_id", "currency", "beneficiary_bic", "beneficiary_account",
+                "intermediary_bic", "our_nostro_account_id", "valid_from", "valid_to"}) {
+            payload.put(f, Rows.str(ssi, f));
+        }
+        payload.put("row_version", Rows.integer(ssi, "row_version"));
+        approvals.request(ApprovalSpec.of(SSI_APPROVAL_RESOURCE, Rows.uuid(ssi, "id"), "verify",
+                "SSI " + Rows.str(ssi, "currency") + " " + Rows.str(ssi, "beneficiary_bic") + " verification", payload),
+                "verify:" + Rows.str(ssi, "id") + ":" + Rows.integer(ssi, "row_version"));
+    }
+
+    /** True while the SSI is unverified with the submitted payment details (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsVerification(UUID id, Integer rowVersion) {
+        return rows.find(SSI, id)
+                .filter(s -> Rows.str(s, "verified_by") == null)
+                .filter(s -> rowVersion == null || rowVersion.equals(Rows.integer(s, "row_version")))
+                .isPresent();
     }
 
     private static void validateSsi(JsonNode req) {
@@ -225,6 +296,7 @@ public class CounterpartyService {
         v.put("verified_at", rows.now());
         ObjectNode out = rows.update(SSI, id, v);
         events.publish("treasury.ssi.verified", SSI, out);
+        approvals.cancelOpen(SSI_APPROVAL_RESOURCE, id, null, "verified directly");
         return out;
     }
 

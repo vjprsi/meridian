@@ -1,5 +1,7 @@
 package io.meridian.liquidity.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.liquidity.domain.LcrCalculator;
@@ -8,8 +10,10 @@ import io.meridian.liquidity.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -30,12 +34,18 @@ public class RatioService {
     static final Set<String> LOCKED = Set.of("APPROVED", "SUBMITTED");
     static final Set<String> APPROVABLE = Set.of("CALCULATED", "REVIEWED");
 
+    /** Approval resource types for LCR / NSFR snapshots in workflow-service (G11). */
+    public static final String LCR_APPROVAL_RESOURCE = LCR;
+    public static final String NSFR_APPROVAL_RESOURCE = NSFR;
+
     private final Rows rows;
     private final Events events;
+    private final Approvals approvals;
 
-    public RatioService(Rows rows, Events events) {
+    public RatioService(Rows rows, Events events, Approvals approvals) {
         this.rows = rows;
         this.events = events;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -87,6 +97,7 @@ public class RatioService {
         if (r.breach()) {
             events.publish("treasury.lcr.breached", LCR, row);
         }
+        requestApproval(LCR, row, "LCR", "lcr_ratio", "total_hqla");
         return row;
     }
 
@@ -133,6 +144,7 @@ public class RatioService {
         if (r.breach()) {
             events.publish("treasury.nsfr.breached", NSFR, row);
         }
+        requestApproval(NSFR, row, "NSFR", "nsfr_ratio", "required_stable_funding");
         return row;
     }
 
@@ -152,7 +164,44 @@ public class RatioService {
                 + " where id = ?", me, me, id);
         ObjectNode approved = rows.get(table, id);
         events.publish(LCR.equals(table) ? "treasury.lcr.approved" : "treasury.nsfr.approved", table, approved);
+        approvals.cancelOpen(table, id, null, "approved directly");
         return approved;
+    }
+
+    /** True while the snapshot is approvable with the submitted calculation (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(String table, UUID id, Integer rowVersion) {
+        return rows.find(table, id)
+                .filter(c -> APPROVABLE.contains(Rows.str(c, "status")))
+                .filter(c -> rowVersion == null || rowVersion.equals(Rows.integer(c, "row_version")))
+                .isPresent();
+    }
+
+    /**
+     * Central maker-checker: each (re)calculation is a submission for approval; the checker decides in the workflow
+     * inbox and {@link RatioApprovalHandler} applies the decision. A recalculation bumps row_version, so decisions on
+     * an earlier calculation are ignored.
+     */
+    private void requestApproval(String table, ObjectNode row, String label, String ratioField, String amountField) {
+        UUID id = Rows.uuid(row, "id");
+        int version = row.get("row_version").asInt();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("legal_entity_id", Rows.str(row, "legal_entity_id"));
+        payload.put("as_of_date", Rows.str(row, "as_of_date"));
+        payload.put("currency", Rows.str(row, "currency"));
+        payload.put(ratioField, Rows.str(row, ratioField));
+        payload.put("regulatory_minimum", Rows.str(row, "regulatory_minimum"));
+        payload.put("breach", Rows.bool(row, "breach"));
+        payload.put(amountField, Rows.str(row, amountField));
+        payload.put("row_version", version);
+        String title = label + " " + Rows.str(row, "as_of_date") + " " + Rows.str(row, "currency");
+        ApprovalSpec spec = ApprovalSpec.of(table, id, "approve", title, payload)
+                .withSummary(label + " ratio " + Rows.str(row, ratioField) + (Rows.bool(row, "breach") ? " (breach)" : ""));
+        BigDecimal amount = Rows.dec(row, amountField);
+        if (amount != null) {
+            spec = spec.withAmount(amount, Rows.str(row, "currency"));
+        }
+        approvals.request(spec, "submit:" + id + ":" + version);
     }
 
     private ObjectNode save(String table, Key key, BigDecimal minimum, ObjectNode v) {

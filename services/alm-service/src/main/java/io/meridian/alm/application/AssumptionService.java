@@ -4,6 +4,8 @@ import io.meridian.alm.domain.Assumption;
 import io.meridian.alm.domain.Assumption.AssumptionType;
 import io.meridian.alm.domain.Behaviour;
 import io.meridian.alm.infrastructure.Rows;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
@@ -13,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -29,12 +32,17 @@ public class AssumptionService {
     private static final Set<String> AFTER_APPROVAL = Set.of("valid_to", "custom_field_1", "custom_field_2",
             "custom_field_3", "custom_field_4", "custom_field_5");
 
+    /** Approval resource type for behavioural assumptions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "alm_behavioural_assumption";
+
     private final Rows rows;
     private final Events events;
+    private final Approvals approvals;
 
-    public AssumptionService(Rows rows, Events events) {
+    public AssumptionService(Rows rows, Events events, Approvals approvals) {
         this.rows = rows;
         this.events = events;
+        this.approvals = approvals;
     }
 
     /** Validates a create body and returns the column values to insert (parameters normalised). */
@@ -48,7 +56,48 @@ public class AssumptionService {
 
     @Transactional
     public JsonNode create(ObjectNode values) {
-        return rows.insert(TABLE, values);
+        ObjectNode row = rows.insert(TABLE, values);
+        requestApproval(row);
+        return row;
+    }
+
+    /**
+     * After a PATCH of an assumption still awaiting approval: the reworked content is submitted again (the earlier
+     * workflow request carries the old row_version and is ignored if decided).
+     */
+    @Transactional
+    public void resubmit(UUID id) {
+        rows.find(TABLE, id).filter(r -> Rows.str(r, "approved_by") == null).ifPresent(this::requestApproval);
+    }
+
+    /** Central maker-checker: the checker decides in the workflow inbox; AssumptionApprovalHandler applies it. */
+    private void requestApproval(ObjectNode row) {
+        UUID id = Rows.uuid(row, "id");
+        int version = Rows.integer(row, "row_version");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("assumption_type", Rows.str(row, "assumption_type"));
+        payload.put("product_id", Rows.str(row, "product_id"));
+        payload.put("segment", Rows.str(row, "segment"));
+        payload.put("currency", Rows.str(row, "currency"));
+        payload.put("parameters", toMap(row.get("parameters")));
+        payload.put("valid_from", Rows.str(row, "valid_from"));
+        payload.put("valid_to", Rows.str(row, "valid_to"));
+        payload.put("model_version", Rows.str(row, "model_version"));
+        payload.put("row_version", version);
+        String scope = Rows.str(row, "segment") != null ? Rows.str(row, "segment")
+                : Rows.str(row, "product_id") != null ? "product " + Rows.str(row, "product_id") : "all";
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Behavioural assumption " + Rows.str(row, "assumption_type") + " " + Rows.str(row, "model_version")
+                        + " (" + scope + ")", payload), "submit:" + id + ":" + version);
+    }
+
+    /** True while the assumption is unapproved with the submitted content (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, Integer rowVersion) {
+        return rows.find(TABLE, id)
+                .filter(r -> Rows.str(r, "approved_by") == null)
+                .filter(r -> rowVersion == null || rowVersion.equals(Rows.integer(r, "row_version")))
+                .isPresent();
     }
 
     /** Validates a PATCH against the stored row; throws when the assumption is approved and frozen. */
@@ -89,6 +138,7 @@ public class AssumptionService {
                 update alm_behavioural_assumption t set approved_by = ?, approved_at = now(), updated_by = ?
                 where id = ? returning row_to_json(t)::text""", approver, approver, id).orElseThrow();
         events.publish("treasury.alm_assumption.approved", TABLE, approved);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approved;
     }
 

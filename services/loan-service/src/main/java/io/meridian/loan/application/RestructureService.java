@@ -4,6 +4,8 @@ import static io.meridian.loan.infrastructure.Rows.decOr0;
 import static io.meridian.loan.infrastructure.Rows.str;
 import static io.meridian.loan.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.loan.domain.Frequency;
@@ -31,13 +33,17 @@ import tools.jackson.databind.node.ObjectNode;
 public class RestructureService {
     static final String TABLE = "loan_restructure";
     static final Set<String> OPEN = Set.of("PROPOSED", "PENDING_APPROVAL", "APPROVED");
+    /** Approval resource type for restructures in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "loan_restructure";
 
     private final LoanSupport loans;
     private final Rows rows;
+    private final Approvals approvals;
 
-    public RestructureService(LoanSupport loans) {
+    public RestructureService(LoanSupport loans, Approvals approvals) {
         this.loans = loans;
         this.rows = loans.rows();
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ rate change
@@ -217,7 +223,49 @@ public class RestructureService {
         ObjectNode upd = rows.object();
         upd.put("status", "PENDING_APPROVAL");
         upd.put("submitted_by", TenantContext.principal());
-        return rows.update(TABLE, id, upd);
+        ObjectNode submitted = rows.update(TABLE, id, upd);
+        // Central maker-checker: the checker decides in the workflow inbox; RestructureApprovalHandler applies it.
+        ObjectNode loan = rows.get(LoanSupport.LOAN, uuid(submitted, "loan_id"));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("loan_id", str(submitted, "loan_id"));
+        payload.put("loan_number", str(loan, "loan_number"));
+        payload.put("restructure_type", str(submitted, "restructure_type"));
+        payload.put("reason", str(submitted, "reason"));
+        payload.put("new_term_months", Rows.integer(submitted, "new_term_months"));
+        payload.put("new_interest_rate", str(submitted, "new_interest_rate"));
+        payload.put("holiday_months", Rows.integer(submitted, "holiday_months"));
+        payload.put("capitalise_arrears", Rows.bool(submitted, "capitalise_arrears"));
+        payload.put("settlement_amount", str(submitted, "settlement_amount"));
+        payload.put("effective_date", str(submitted, "effective_date"));
+        payload.put("outstanding_principal", str(loan, "outstanding_principal"));
+        payload.put("currency", str(loan, "currency"));
+        payload.put("submitted_by", str(submitted, "submitted_by"));
+        payload.put("row_version", submitted.path("row_version").asInt());
+        JsonNode request = approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                        "Loan " + str(loan, "loan_number") + " restructure (" + str(submitted, "restructure_type") + ")", payload)
+                .withSummary(str(submitted, "reason"))
+                .withAmount(decOr0(loan, "outstanding_principal"), str(loan, "currency")), "submit:" + id);
+        UUID requestId = Approvals.idOf(request);
+        if (requestId != null) {
+            ObjectNode link = rows.object();
+            link.put("approval_request_id", requestId.toString());
+            submitted = rows.update(TABLE, id, link);
+        }
+        return submitted;
+    }
+
+    /**
+     * True while the restructure is PENDING_APPROVAL for the given workflow request (the one linked at submit, if
+     * any) and was submitted by the same maker.
+     */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, UUID approvalRequestId, String submittedBy) {
+        return rows.find(TABLE, id)
+                .filter(r -> "PENDING_APPROVAL".equals(str(r, "status")))
+                .filter(r -> str(r, "approval_request_id") == null || approvalRequestId == null
+                        || approvalRequestId.toString().equals(str(r, "approval_request_id")))
+                .filter(r -> submittedBy == null || submittedBy.equals(str(r, "submitted_by")))
+                .isPresent();
     }
 
     @Transactional
@@ -233,6 +281,7 @@ public class RestructureService {
         upd.put("approved_by", me);
         ObjectNode approved = rows.update(TABLE, id, upd);
         loans.events().publish("lending.loan.restructure_approved", TABLE, approved);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approved;
     }
 
@@ -245,6 +294,7 @@ public class RestructureService {
         upd.put("rejection_reason", reason);
         ObjectNode rejected = rows.update(TABLE, id, upd);
         loans.events().publish("lending.loan.restructure_rejected", TABLE, rejected);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return rejected;
     }
 

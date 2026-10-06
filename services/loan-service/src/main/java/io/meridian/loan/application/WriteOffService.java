@@ -4,6 +4,8 @@ import static io.meridian.loan.infrastructure.Rows.decOr0;
 import static io.meridian.loan.infrastructure.Rows.str;
 import static io.meridian.loan.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.loan.domain.Currencies;
@@ -23,13 +25,17 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class WriteOffService {
     static final String TABLE = "loan_write_off";
+    /** Approval resource type for write-offs in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "loan_write_off";
 
     private final LoanSupport loans;
     private final Rows rows;
+    private final Approvals approvals;
 
-    public WriteOffService(LoanSupport loans) {
+    public WriteOffService(LoanSupport loans, Approvals approvals) {
         this.loans = loans;
         this.rows = loans.rows();
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -64,6 +70,29 @@ public class WriteOffService {
         w.put("status", "PENDING_APPROVAL");
         ObjectNode row = rows.insert(TABLE, w);
         loans.events().publish("lending.loan.write_off_requested", TABLE, row);
+        // Central maker-checker: the checker decides in the workflow inbox; WriteOffApprovalHandler applies it.
+        UUID id = uuid(row, "id");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("loan_id", loanId.toString());
+        payload.put("loan_number", str(loan, "loan_number"));
+        payload.put("write_off_type", type);
+        payload.put("reason", str(row, "reason"));
+        payload.put("principal_amount", str(row, "principal_amount"));
+        payload.put("interest_amount", str(row, "interest_amount"));
+        payload.put("fees_amount", str(row, "fees_amount"));
+        payload.put("total_amount", str(row, "total_amount"));
+        payload.put("currency", str(row, "currency"));
+        payload.put("requested_by", str(row, "created_by"));
+        JsonNode request = approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                        "Loan " + str(loan, "loan_number") + " " + type.toLowerCase(java.util.Locale.ROOT) + " write-off", payload)
+                .withSummary(str(row, "reason"))
+                .withAmount(decOr0(row, "total_amount"), str(row, "currency")), "request:" + id);
+        UUID requestId = Approvals.idOf(request);
+        if (requestId != null) {
+            ObjectNode link = rows.object();
+            link.put("approval_request_id", requestId.toString());
+            row = rows.update(TABLE, id, link);
+        }
         return row;
     }
 
@@ -145,7 +174,22 @@ public class WriteOffService {
         upd.put("posted_at", loans.now().toString());
         ObjectNode posted = rows.update(TABLE, id, upd);
         loans.events().publish("lending.loan.written_off", TABLE, posted);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return posted;
+    }
+
+    /**
+     * True while the write-off is PENDING_APPROVAL for the given workflow request (the one linked at request time,
+     * if any) with the requested total unchanged.
+     */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, UUID approvalRequestId, BigDecimal totalAmount) {
+        return rows.find(TABLE, id)
+                .filter(w -> "PENDING_APPROVAL".equals(str(w, "status")))
+                .filter(w -> str(w, "approval_request_id") == null || approvalRequestId == null
+                        || approvalRequestId.toString().equals(str(w, "approval_request_id")))
+                .filter(w -> totalAmount == null || totalAmount.compareTo(decOr0(w, "total_amount")) == 0)
+                .isPresent();
     }
 
     @Transactional
@@ -155,7 +199,9 @@ public class WriteOffService {
         ObjectNode upd = rows.object();
         upd.put("status", "REJECTED");
         upd.put("rejection_reason", reason);
-        return rows.update(TABLE, id, upd);
+        ObjectNode rejected = rows.update(TABLE, id, upd);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return rejected;
     }
 
     private static void move(JsonNode w, String to) {
