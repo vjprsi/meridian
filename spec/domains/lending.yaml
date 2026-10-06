@@ -7,7 +7,7 @@ description: >
 
 enums:
   LoanApplicationStatus: [DRAFT, SUBMITTED, IN_REVIEW, BUREAU_PENDING, SCORED, REFERRED, APPROVED, COUNTER_OFFERED,
-                          DECLINED, OFFER_ACCEPTED, SIGNED, DISBURSED, WITHDRAWN, EXPIRED, CANCELLED]
+                          DECLINED, OFFER_ACCEPTED, SIGNED, BOOKED, DISBURSED, WITHDRAWN, EXPIRED, CANCELLED]
   LoanChannel: [MOBILE, WEB, BRANCH, AGENT, API, USSD, MERCHANT_POS]
   LoanPurpose: [PERSONAL, HOME, VEHICLE, EDUCATION, MEDICAL, BUSINESS_WORKING_CAPITAL, BUSINESS_ASSET, DEBT_CONSOLIDATION,
                 PURCHASE_FINANCING, AGRICULTURE, OTHER]
@@ -23,8 +23,10 @@ enums:
   ScorecardStatus: [DRAFT, VALIDATING, ACTIVE, CHAMPION, CHALLENGER, RETIRED]
   CreditDecisionOutcome: [APPROVED, DECLINED, REFER, COUNTER_OFFER]
   CreditDecisionMethod: [AUTOMATIC, MANUAL]
+  DecisionRequestStatus: [PENDING_APPROVAL, APPROVED, REJECTED, CANCELLED]
   LoanOfferStatus: [ISSUED, ACCEPTED, DECLINED, EXPIRED, WITHDRAWN]
   ESignatureStatus: [CREATED, SENT, VIEWED, SIGNED, DECLINED, EXPIRED, VOIDED]
+  LendingCallbackKind: [E_SIGNATURE, BUREAU]
   AffordabilityResult: [PASS, FAIL, MARGINAL]
   LoanStatus: [PENDING_DISBURSEMENT, ACTIVE, IN_ARREARS, RESTRUCTURED, PAID_OFF, CLOSED, WRITTEN_OFF, CHARGED_OFF,
                CANCELLED]
@@ -32,36 +34,47 @@ enums:
   InterestRateType: [FIXED, FLOATING, STEPPED, ZERO]
   ScheduleType: [ANNUITY, EQUAL_PRINCIPAL, BULLET, BALLOON, INTEREST_ONLY, CUSTOM]
   RepaymentFrequency: [DAILY, WEEKLY, FORTNIGHTLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, AT_MATURITY]
+  BusinessDayConvention: [NONE, FOLLOWING, MODIFIED_FOLLOWING, PRECEDING]
   DelinquencyBucket: [CURRENT, DPD_1_29, DPD_30_59, DPD_60_89, DPD_90_119, DPD_120_179, DPD_180_PLUS]
   DisbursementStatus: [SCHEDULED, PENDING, COMPLETED, FAILED, REVERSED, CANCELLED]
   DisbursementMethod: [DEPOSIT_ACCOUNT, WALLET, EXTERNAL_TRANSFER, MERCHANT_SETTLEMENT, CASH, CARD]
   ScheduleStatus: [ACTIVE, SUPERSEDED, CLOSED]
-  InstallmentStatus: [DUE, PARTIALLY_PAID, PAID, OVERDUE, WAIVED, RESCHEDULED]
+  InstallmentStatus: [SCHEDULED, DUE, PARTIALLY_PAID, PAID, OVERDUE, WAIVED, RESCHEDULED]
   RepaymentSource: [AUTO_DEBIT, MANUAL, WALLET, CARD, EXTERNAL_TRANSFER, CASH, COLLATERAL_LIQUIDATION, RECOVERY, PAYROLL]
   RepaymentStatus: [POSTED, REVERSED]
   AllocationComponent: [PENALTY, FEE, INTEREST, PRINCIPAL, INSURANCE, TAX]
+  ExcessHandling: [REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND]
   LoanFeeType: [ORIGINATION, LATE_PAYMENT, PREPAYMENT, RESTRUCTURING, ANNUAL, INSURANCE, DOCUMENTATION, OTHER]
-  LoanFeeStatus: [CHARGED, PAID, WAIVED, REVERSED]
+  LoanFeeStatus: [CHARGED, PARTIALLY_PAID, PAID, WAIVED, REVERSED]
   RestructureType: [RESCHEDULE, REFINANCE, PAYMENT_HOLIDAY, TERM_EXTENSION, RATE_REDUCTION, CAPITALISATION, SETTLEMENT]
   RestructureStatus: [PROPOSED, PENDING_APPROVAL, APPROVED, REJECTED, APPLIED, CANCELLED]
   WriteOffType: [FULL, PARTIAL]
   WriteOffStatus: [PENDING_APPROVAL, APPROVED, POSTED, REJECTED]
+  PrepaymentQuoteType: [FULL, PARTIAL]
+  PartialPrepaymentOption: [REDUCE_TERM, REDUCE_INSTALMENT]
   PrepaymentQuoteStatus: [ISSUED, USED, EXPIRED]
   CreditLineStatus: [PENDING_ACTIVATION, ACTIVE, FROZEN, SUSPENDED, IN_ARREARS, CLOSED, CHARGED_OFF]
   CreditLineType: [REVOLVING, CREDIT_CARD, OVERDRAFT, WORKING_CAPITAL, BNPL_LIMIT]
+  DrawType: [PURCHASE, CASH_ADVANCE, BALANCE_TRANSFER, TRANSFER_TO_ACCOUNT, FEE, INSTALMENT_CONVERSION]
   DrawdownStatus: [PENDING, POSTED, REVERSED, DECLINED]
   CreditStatementStatus: [OPEN, ISSUED, PAID, PARTIALLY_PAID, OVERDUE]
   BnplPlanStatus: [PENDING, ACTIVE, COMPLETED, DEFAULTED, REFUNDED, CANCELLED]
+  LendingEodJob: [DAILY_ACCRUAL, INSTALLMENT_DUE, AUTO_DEBIT, DELINQUENCY_UPDATE, CREDIT_LINE_STATEMENTS,
+                  COLLECTIONS_STRATEGY_RUN, COLLATERAL_MONITORING]
+  LendingEodRunStatus: [RUNNING, COMPLETED, COMPLETED_WITH_ERRORS]
   CollateralType: [PROPERTY, VEHICLE, DEPOSIT, GUARANTEE, GOLD, EQUIPMENT, INVENTORY, RECEIVABLES, SECURITIES, CROP, OTHER]
   CollateralStatus: [PROPOSED, VERIFIED, PLEDGED, RELEASED, LIQUIDATED, REJECTED]
+  LtvStatus: [OK, WARNING, BREACH]
   CollectionCaseStatus: [OPEN, IN_PROGRESS, PROMISE_ACTIVE, PLAN_ACTIVE, LEGAL, RESOLVED, CLOSED, WRITTEN_OFF]
+  CollectionCaseResolution: [CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD, OTHER]
   CollectionExposureType: [LOAN, CREDIT_LINE, CARD, OVERDRAFT, BNPL]
   CollectionActionType: [SMS, PUSH, EMAIL, WHATSAPP, CALL, FIELD_VISIT, LETTER, LEGAL_NOTICE, AUTO_DEBIT_RETRY, SKIP_TRACE]
   CollectionActionOutcome: [SENT, DELIVERED, FAILED, NO_ANSWER, RIGHT_PARTY_CONTACT, WRONG_PARTY, PROMISE_MADE, REFUSED,
-                            PAID, DISPUTED]
+                            PAID, DISPUTED, SUPPRESSED]
+  CollectionAssignmentMode: [ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY]
   PromiseToPayStatus: [ACTIVE, KEPT, PARTIALLY_KEPT, BROKEN, CANCELLED]
   PaymentPlanStatus: [PROPOSED, ACTIVE, COMPLETED, BROKEN, CANCELLED]
-  LegalProceedingStatus: [INITIATED, FILED, HEARING, JUDGEMENT, ENFORCEMENT, SETTLED, CLOSED]
+  LegalProceedingStatus: [PENDING_APPROVAL, INITIATED, FILED, HEARING, JUDGEMENT, ENFORCEMENT, SETTLED, CLOSED, REJECTED]
   NbaStatus: [SUGGESTED, ACCEPTED, REJECTED, EXECUTED, EXPIRED]
 
 services:
@@ -77,7 +90,7 @@ services:
         description: An application for a loan, credit line, BNPL plan or nano-loan
         fr: [LND-01, LND-06, LND-07]
         columns:
-          - "application_number string(32) nn uq ro | Human-readable application number"
+          - "application_number string(32) nn uq ro | Human-readable application number (server-generated)"
           - "customer_id uuid nn ref=customer idx | Primary applicant"
           - "product_id uuid nn ref=product idx | Lending product applied for"
           - "product_version_id uuid ref=product_version | Product version in force at submission"
@@ -91,16 +104,23 @@ services:
           - "currency currency nn | Currency"
           - "requested_term_months int | Term requested in months"
           - "requested_frequency enum:RepaymentFrequency | Preferred repayment frequency"
+          - "requested_schedule_type enum:ScheduleType | Preferred schedule type (default ANNUITY)"
           - "merchant_id uuid ref=merchant idx | Merchant for BNPL / point-of-sale financing"
           - "wallet_id uuid ref=wallet | Wallet scored for nano-loans"
           - "agent_id uuid | Agent who assisted the application"
+          - "disbursement_account_id uuid ref=deposit_account | Deposit account to receive the funds"
+          - "repayment_account_id uuid ref=deposit_account | Deposit account auto-debited for instalments"
           - "status enum:LoanApplicationStatus nn default=DRAFT ro | Lifecycle status"
           - "submitted_at ts ro | Submission time"
           - "decided_at ts ro | Decision time"
           - "expires_at ts | Application expiry"
-          - "assigned_to string(64) idx | Underwriter assigned for manual review"
+          - "assigned_to string(64) ro idx | Underwriter assigned for manual review (set by /assign)"
           - "consent_bureau bool nn default=false | Applicant consented to a credit bureau check"
           - "consent_at ts | Consent time"
+          - "risk_grade string(8) ro | Risk grade of the latest score"
+          - "loan_id uuid ref=loan ro | Loan booked in loan-service"
+          - "booking_error string(500) ro | Last error when booking the loan failed (retry with /book)"
+          - "withdrawal_reason string(255) ro | Reason given on withdrawal"
           - "ip_address inet hide | IP address at submission (fraud signals)"
           - "device_id string(128) hide | Device fingerprint at submission"
           - "metadata json | Client-defined key/value metadata"
@@ -113,6 +133,7 @@ services:
           - "loan_application_id uuid nn fk=loan_application idx | Application"
           - "customer_id uuid nn ref=customer idx | Applicant customer"
           - "role enum:LoanApplicantRole nn | Role on the application"
+          - "date_of_birth date pii | Date of birth (age feature of the scorecard)"
           - "employment_status string(32) | EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT"
           - "employer_name string(160) pii | Employer"
           - "occupation string(120) | Occupation"
@@ -145,8 +166,9 @@ services:
           - "loan_applicant_id uuid fk=loan_applicant | Applicant the document belongs to"
           - "document_type enum:LoanDocumentType nn | Type"
           - "document_id uuid ref=document | Stored document"
-          - "status enum:LoanDocumentStatus nn default=REQUESTED | Status"
-          - "rejection_reason string(255) | Why it was rejected"
+          - "status enum:LoanDocumentStatus nn default=REQUESTED ro | Status (UPLOADED when document_id is set; /verify, /reject)"
+          - "is_mandatory bool nn default=true | Required before the application can be decided"
+          - "rejection_reason string(255) ro | Why it was rejected"
           - "verified_by string(64) ro | Verifier"
           - "verified_at ts ro | Verification time"
 
@@ -156,21 +178,25 @@ services:
         fr: [LND-01]
         columns:
           - "loan_application_id uuid fk=loan_application idx | Application (empty for periodic reviews)"
+          - "loan_applicant_id uuid fk=loan_applicant | Applicant the report is for"
           - "customer_id uuid nn ref=customer idx | Subject of the report"
-          - "provider string(40) nn | Bureau provider, e.g. EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA"
+          - "provider string(40) nn | Bureau provider adapter, e.g. SANDBOX, SANDBOX_ASYNC, EXPERIAN, EQUIFAX, TRANSUNION, CRB_AFRICA"
           - "pull_type string(16) nn | HARD or SOFT inquiry"
           - "status enum:BureauReportStatus nn default=REQUESTED ro | Status"
           - "bureau_reference string(128) ro | Provider reference"
           - "bureau_score int ro | Score returned by the bureau"
           - "score_band string(16) ro | Band returned by the bureau"
           - "total_debt amount ro | Total outstanding debt reported"
+          - "monthly_debt_service amount ro | Monthly instalments of reported credit"
           - "open_accounts int ro | Open credit accounts"
           - "delinquent_accounts int ro | Accounts in delinquency"
           - "worst_dpd_24m int ro | Worst days past due in 24 months"
           - "inquiries_6m int ro | Inquiries in the last 6 months"
+          - "tradelines json[] ro | Normalised tradelines (lender, type, balance, monthly payment, worst DPD)"
           - "summary json ro | Normalised summary of the report"
           - "raw_document_id uuid ref=document ro | Raw report stored as an encrypted document"
           - "consent_reference string(128) nn | Consent captured for this pull"
+          - "failure_reason string(255) ro | Why the pull failed"
           - "requested_at ts nn default=now ro | Request time"
           - "received_at ts ro | Response time"
           - "valid_until date ro | Report reuse expiry"
@@ -189,19 +215,27 @@ services:
 
       - name: scorecard_version
         prefix: scv
-        description: A versioned scorecard or ML model with cut-offs; champion/challenger supported
+        description: >
+          A versioned points-based scorecard with cut-offs; champion/challenger supported. Each feature has ordered
+          bins ({min, max} numeric ranges or {values} categories) with points and an adverse reason code.
         fr: [LND-01, AI-02]
         columns:
           - "scorecard_id uuid nn fk=scorecard idx | Scorecard"
           - "version string(32) nn | Version label"
-          - "status enum:ScorecardStatus nn default=DRAFT | Status"
+          - "status enum:ScorecardStatus nn default=DRAFT ro | Status (changed by /activate, /set-challenger, /retire)"
           - "model_uri string(500) | Model artefact location (model registry)"
-          - "features json nn | Input features and transformations"
-          - "cutoffs json nn | Score cut-offs mapping to APPROVE / REFER / DECLINE and pricing tiers"
-          - "challenger_traffic_pct rate | Share of traffic routed to this challenger"
+          - "base_points int nn default=0 | Points every applicant starts with"
+          - "features json[] nn | Features: {name, weight?, missing_points, reason_code, bins: [{min?, max?, values?, points}]}"
+          - "cutoffs json[] nn | Cut-offs by descending min_score: {min_score, outcome APPROVE|REFER|DECLINE, risk_grade, rate_adjustment}"
+          - "target_score int nn default=600 | Score at the target odds (PD calibration)"
+          - "target_odds rate nn default=50 | Good:bad odds at the target score"
+          - "points_to_double_odds rate nn default=20 | Points that double the odds"
+          - "challenger_traffic_pct rate ro | Share of traffic routed to this challenger (0..1)"
           - "validation_report_document_id uuid ref=document | Validation and bias-test report"
-          - "approved_by string(64) | Model risk approver"
-          - "activated_at ts | Activation time"
+          - "approval_request_id uuid ref=approval_request ro | Model risk approval"
+          - "approved_by string(64) ro | Model risk approver (must differ from the author)"
+          - "activated_at ts ro | Activation time"
+          - "retired_at ts ro | Retirement time"
         unique: [[tenant_id, scorecard_id, version]]
 
       - name: credit_score
@@ -213,10 +247,15 @@ services:
           - "loan_application_id uuid nn fk=loan_application idx | Application"
           - "loan_applicant_id uuid fk=loan_applicant | Applicant scored"
           - "scorecard_version_id uuid nn fk=scorecard_version | Scorecard version used"
+          - "routing string(16) nn default=CHAMPION | CHAMPION or CHALLENGER traffic"
           - "score int nn | Score"
           - "probability_of_default rate | Estimated PD"
           - "risk_grade string(8) nn | Risk grade, e.g. A1..E5"
-          - "reason_codes json nn | Top adverse-action reason codes with contribution"
+          - "cutoff_outcome string(16) | Outcome of the cut-off band: APPROVE, REFER, DECLINE"
+          - "rate_adjustment rate | Pricing adjustment of the cut-off band"
+          - "reason_codes json[] nn | Top adverse-action reason codes with points lost, most adverse first"
+          - "contributions json[] nn | Points per feature (feature, value, bin, points, max_points)"
+          - "inputs json | Feature values used"
           - "inputs_hash string(64) nn | Hash of feature inputs for reproducibility"
           - "latency_ms int | Scoring latency"
 
@@ -227,15 +266,18 @@ services:
         fr: [LND-01]
         columns:
           - "loan_application_id uuid nn fk=loan_application idx | Application"
-          - "verified_monthly_income amount nn | Verified monthly income"
+          - "verified_monthly_income amount nn | Verified (or declared, haircut) monthly income"
           - "monthly_commitments amount nn | Existing monthly commitments"
           - "living_costs amount nn | Living costs (declared or statistical floor)"
           - "proposed_instalment amount nn | Instalment of the requested loan"
           - "stressed_instalment amount | Instalment at stressed rate"
-          - "debt_to_income rate nn | Debt-to-income ratio"
-          - "disposable_income amount nn | Disposable income after the new loan"
-          - "max_affordable_amount amount | Largest affordable amount"
+          - "stress_rate rate | Rate used for the stressed instalment"
+          - "debt_to_income rate nn | Total debt / annual income (DTI)"
+          - "debt_service_ratio rate nn | Monthly debt service incl. the stressed instalment / monthly income (DSR)"
+          - "disposable_income amount nn | Residual income after commitments, living costs and the stressed instalment"
+          - "max_affordable_amount amount | Largest affordable amount at the requested term"
           - "result enum:AffordabilityResult nn | Outcome"
+          - "reason_codes json[] | Reasons for FAIL / MARGINAL"
           - "currency currency nn | Currency"
           - "policy_version string(32) nn | Affordability policy version"
 
@@ -248,16 +290,42 @@ services:
           - "loan_application_id uuid nn fk=loan_application idx | Application"
           - "outcome enum:CreditDecisionOutcome nn | Decision"
           - "method enum:CreditDecisionMethod nn | Automatic or manual"
-          - "decided_by string(64) | Underwriter for manual decisions"
+          - "decided_by string(64) | Underwriter (maker) for manual decisions"
+          - "approved_by string(64) | Checker who approved a manual decision"
           - "approved_amount amount | Approved amount"
           - "approved_term_months int | Approved term"
           - "approved_rate rate | Approved nominal annual rate"
           - "risk_grade string(8) | Risk grade at decision"
-          - "conditions json | Conditions precedent (documents, collateral, guarantor)"
-          - "decline_reasons json | Adverse action reasons communicated to the applicant"
-          - "policy_rules_fired json | Policy rules evaluated and their results"
+          - "credit_score_id uuid fk=credit_score | Score the decision used"
+          - "affordability_assessment_id uuid fk=affordability_assessment | Affordability the decision used"
+          - "conditions json[] | Conditions precedent (documents, collateral, guarantor)"
+          - "reason_codes json[] | Reason codes for the outcome (adverse action, referral or counter-offer)"
+          - "decline_reasons json[] | Adverse action reasons communicated to the applicant"
+          - "policy_rules_fired json[] | Policy rules evaluated and their results"
+          - "decision_request_id uuid | Maker-checker request of a manual decision"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval for overrides"
           - "notes text | Underwriter notes"
+
+      - name: credit_decision_request
+        prefix: cdr
+        description: A manual decision or override proposed by an underwriter (maker) awaiting a second approver (checker)
+        fr: [LND-01, LIM-02]
+        columns:
+          - "loan_application_id uuid nn fk=loan_application idx | Application"
+          - "outcome enum:CreditDecisionOutcome nn | Proposed decision"
+          - "approved_amount amount | Proposed amount"
+          - "approved_term_months int | Proposed term"
+          - "approved_rate rate | Proposed rate"
+          - "conditions json[] | Conditions precedent"
+          - "reason_codes json[] | Reason codes for the outcome"
+          - "is_override bool nn default=false ro | Overrides the latest automatic decision"
+          - "notes text | Underwriter notes"
+          - "status enum:DecisionRequestStatus nn default=PENDING_APPROVAL ro | Status"
+          - "requested_by string(64) ro | Maker"
+          - "reviewed_by string(64) ro | Checker"
+          - "reviewed_at ts ro | Review time"
+          - "review_comment string(500) ro | Checker comment or rejection reason"
+          - "credit_decision_id uuid fk=credit_decision ro | Decision recorded on approval"
 
       - name: loan_offer
         prefix: lof
@@ -272,14 +340,18 @@ services:
           - "repayment_frequency enum:RepaymentFrequency nn | Frequency"
           - "schedule_type enum:ScheduleType nn default=ANNUITY | Schedule type"
           - "interest_rate rate nn | Nominal annual rate"
-          - "apr rate nn | Annual percentage rate including fees"
+          - "apr rate nn ro | Annual percentage rate including fees (IRR of the cash flows)"
           - "upfront_fees amount nn default=0 | Fees deducted or charged at disbursement"
-          - "instalment_amount amount nn | Regular instalment"
-          - "total_repayable amount nn | Total amount repayable"
-          - "schedule_preview json nn | Indicative repayment schedule"
+          - "balloon_amount amount | Final balloon for BALLOON schedules"
+          - "first_repayment_date date | First instalment date (default: one period after acceptance)"
+          - "instalment_amount amount nn ro | Regular instalment"
+          - "total_interest amount nn ro | Total interest over the term"
+          - "total_repayable amount nn ro | Total amount repayable (principal, interest and fees)"
+          - "schedule_preview json[] nn ro | Indicative repayment schedule"
           - "status enum:LoanOfferStatus nn default=ISSUED ro | Status"
-          - "expires_at ts nn | Offer expiry"
+          - "expires_at ts | Offer expiry (default: now + offer validity days)"
           - "accepted_at ts ro | Acceptance time"
+          - "status_reason string(255) ro | Reason given on decline or withdrawal"
           - "terms_document_id uuid ref=document | Pre-contract information / key facts document"
 
       - name: e_signature_request
@@ -288,14 +360,30 @@ services:
         fr: [LND-01]
         columns:
           - "loan_offer_id uuid nn fk=loan_offer idx | Offer being signed"
-          - "provider string(40) nn | DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER"
+          - "provider string(40) nn | SANDBOX, DOCUSIGN, ADOBE_SIGN, IN_APP_OTP, OTHER"
           - "provider_envelope_id string(128) ro | Provider reference"
           - "status enum:ESignatureStatus nn default=CREATED ro | Status"
-          - "signers json nn | Signers and their order"
+          - "signers json[] nn | Signers and their order ({customer_id, name, email, order})"
           - "agreement_document_id uuid ref=document | Agreement to sign"
           - "signed_document_id uuid ref=document ro | Signed agreement"
+          - "sent_at ts ro | Last time the envelope was sent"
+          - "send_count int nn default=0 ro | Times the envelope was sent"
           - "signed_at ts ro | Completion time"
           - "expires_at ts | Expiry"
+          - "status_reason string(255) ro | Void or decline reason"
+
+      - name: lending_callback_route
+        prefix: lcr
+        description: Routes provider callbacks (which carry no tenant context) to the owning tenant's envelope or report
+        tenant: false
+        ext: false
+        columns:
+          - "kind enum:LendingCallbackKind nn | E-signature envelope or bureau report"
+          - "provider string(40) nn | Provider"
+          - "provider_reference string(128) nn | Provider envelope id or bureau reference"
+          - "entity_id uuid nn | E-signature request or bureau report in the owning tenant"
+          - "owner_tenant_id uuid nn | Tenant owning the entity"
+        unique: [[kind, provider, provider_reference]]
 
     apis:
       - resource: loan-applications
@@ -304,18 +392,21 @@ services:
         ops: [list, get, create, update]
         filters: [customer_id, product_id, status, channel, loan_type, merchant_id, assigned_to]
         actions:
-          - "POST /{id}/submit | Submit the application for decisioning"
+          - "POST /{id}/submit | Submit the application for decisioning (applicant, consent and amount checks)"
           - "POST /{id}/withdraw | Withdraw the application | reason string(255)"
-          - "POST /{id}/assign | Assign to an underwriter | assigned_to string(64) nn"
-          - "POST /{id}/bureau-pull | Pull a credit bureau report | loan_applicant_id uuid nn, provider string(40), pull_type string(16) | bureau_report"
-          - "POST /{id}/score | Run the scorecard | | credit_score"
-          - "POST /{id}/affordability | Run the affordability assessment | | affordability_assessment"
-          - "POST /{id}/decide | Record a manual decision (maker) | outcome enum:CreditDecisionOutcome nn, approved_amount amount, approved_term_months int, approved_rate rate, conditions json, notes text | credit_decision"
-          - "POST /{id}/auto-decide | Run automatic decisioning end to end | | credit_decision"
+          - "POST /{id}/assign | Assign to an underwriter for manual review | assigned_to string(64) nn"
+          - "POST /{id}/bureau-pull | Pull a credit bureau report through the provider adapter (reuses a valid report unless force) | loan_applicant_id uuid nn, provider string(40), pull_type string(16), force bool | bureau_report"
+          - "POST /{id}/score | Run the champion (or routed challenger) scorecard with explainable reason codes | | credit_score"
+          - "POST /{id}/affordability | Run the affordability assessment (DTI, DSR, residual income, stressed instalment) | | affordability_assessment"
+          - "POST /{id}/decide | Propose a manual decision or override (maker); a different user approves it | outcome enum:CreditDecisionOutcome nn, approved_amount amount, approved_term_months int, approved_rate rate, conditions json[], reason_codes json[], notes text | credit_decision_request"
+          - "POST /{id}/auto-decide | Run automatic decisioning end to end (bureau, score, affordability, policy rules, offer) | | credit_decision"
+          - "POST /{id}/book | Book the loan in loan-service for a signed application (retry after a booking failure)"
           - "GET /{id}/decisions | Decision history | | credit_decision[]"
           - "GET /{id}/scores | Scores produced | | credit_score[]"
           - "GET /{id}/offers | Offers made | | loan_offer[]"
-          - "POST /quick-quote | Indicative price without a bureau hard pull | product_id uuid nn, amount amount nn, currency currency nn, term_months int nn | none"
+          - "GET /{id}/decision-requests | Manual decision requests | | credit_decision_request[]"
+          - "POST /quick-quote | Indicative price without a bureau hard pull (rate, APR, instalment, total cost) | product_id uuid nn, product_version_id uuid, amount amount nn, currency currency nn, term_months int nn, repayment_frequency enum:RepaymentFrequency, schedule_type enum:ScheduleType, risk_grade string(8) | object"
+          - "POST /eod/expire?business_date:date! | End of day - expire lapsed offers, signature envelopes and stale applications (idempotent per business date) | | object"
       - resource: loan-applicants
         path: /v1/loan-applications/{loan_application_id}/applicants
         table: loan_applicant
@@ -332,13 +423,15 @@ services:
         ops: [list, get, create, update]
         filters: [document_type, status]
         actions:
-          - "POST /{id}/verify | Mark a document verified"
+          - "POST /{id}/verify | Mark an uploaded document verified (verifier must differ from the uploader)"
           - "POST /{id}/reject | Reject a document | rejection_reason string(255) nn"
       - resource: bureau-reports
         path: /v1/bureau-reports
         table: bureau_report
         ops: [list, get]
         filters: [customer_id, loan_application_id, provider, status]
+        actions:
+          - "POST /callbacks/{provider}/events | [public] Asynchronous bureau report delivery (HMAC-signed body; tenant resolved from the bureau reference) | bureau_reference string(128) nn, status string(16) nn, bureau_score int, score_band string(16), total_debt amount, monthly_debt_service amount, open_accounts int, delinquent_accounts int, worst_dpd_24m int, inquiries_6m int, tradelines json[], reason string(255) | object"
       - resource: scorecards
         path: /v1/scorecards
         table: scorecard
@@ -350,9 +443,10 @@ services:
         ops: [list, get, create, update]
         filters: [status]
         actions:
-          - "POST /{id}/activate | Activate as champion (requires model risk approval) | approval_request_id uuid"
+          - "POST /{id}/activate | Activate as champion (model risk approval by a user other than the author); the previous champion is retired | approval_request_id uuid"
           - "POST /{id}/set-challenger | Route a share of traffic to this version | challenger_traffic_pct rate nn"
           - "POST /{id}/retire | Retire the version"
+          - "POST /{id}/test | Score sample inputs with this version without storing anything (explainable) | inputs json nn | object"
       - resource: credit-scores
         path: /v1/credit-scores
         table: credit_score
@@ -368,34 +462,64 @@ services:
         table: credit_decision
         ops: [list, get]
         filters: [loan_application_id, outcome, method]
+      - resource: credit-decision-requests
+        path: /v1/credit-decision-requests
+        table: credit_decision_request
+        ops: [list, get]
+        filters: [loan_application_id, status, outcome]
+        actions:
+          - "POST /{id}/approve | Approve a proposed manual decision (checker; must differ from the maker) | comment string(500) | credit_decision"
+          - "POST /{id}/reject | Reject a proposed manual decision (checker) | reason string(500) nn"
       - resource: loan-offers
         path: /v1/loan-offers
         table: loan_offer
         ops: [list, get, create]
         filters: [loan_application_id, status]
         actions:
-          - "POST /{id}/accept | Accept the offer | | e_signature_request"
+          - "POST /{id}/accept | Accept the offer and create the e-signature envelope | provider string(40) | e_signature_request"
           - "POST /{id}/decline | Decline the offer | reason string(255)"
           - "POST /{id}/withdraw | Withdraw the offer (lender) | reason string(255) nn"
+          - "GET /{id}/schedule-preview | Indicative schedule with APR and totals | | object"
       - resource: e-signature-requests
         path: /v1/e-signature-requests
         table: e_signature_request
         ops: [list, get]
         filters: [loan_offer_id, status]
         actions:
+          - "POST /{id}/send | Send the envelope to the signers"
           - "POST /{id}/resend | Resend to pending signers"
           - "POST /{id}/void | Void the envelope | reason string(255) nn"
-          - "POST /{id}/callback | Provider status callback | provider_status string(40) nn, payload json | none"
+          - "POST /callbacks/{provider}/events | [public] Provider status callback (HMAC-signed body; tenant resolved from the envelope id) | provider_envelope_id string(128) nn, provider_status string(40) nn, signed_document_id uuid, reason string(255), payload json | object"
 
     events:
+      - "lending.loan_application.created | loan_application | An application was started"
       - "lending.loan_application.submitted | loan_application | An application was submitted"
       - "lending.loan_application.status_changed | loan_application | Application status changed"
+      - "lending.loan_application.assigned | loan_application | An application was assigned to an underwriter"
+      - "lending.loan_application.withdrawn | loan_application | An application was withdrawn"
+      - "lending.loan_application.booked | loan_application | The loan of an application was booked in loan-service"
+      - "lending.loan_application.expired | loan_application | An application lapsed without a decision or accepted offer"
+      - "lending.loan_application_document.verified | loan_application_document | A document was verified"
+      - "lending.loan_application_document.rejected | loan_application_document | A document was rejected"
+      - "lending.bureau_report.requested | bureau_report | A bureau report was requested"
       - "lending.bureau_report.received | bureau_report | A bureau report was received"
+      - "lending.scorecard_version.activated | scorecard_version | A scorecard version became champion"
+      - "lending.scorecard_version.retired | scorecard_version | A scorecard version was retired"
       - "lending.credit_score.calculated | credit_score | An application was scored"
+      - "lending.affordability_assessment.completed | affordability_assessment | An affordability assessment was completed"
       - "lending.credit_decision.made | credit_decision | A credit decision was made"
+      - "lending.credit_decision_request.created | credit_decision_request | A manual decision awaits approval"
+      - "lending.credit_decision_request.rejected | credit_decision_request | A manual decision was rejected by the checker"
       - "lending.loan_offer.issued | loan_offer | An offer was issued"
       - "lending.loan_offer.accepted | loan_offer | An offer was accepted"
+      - "lending.loan_offer.declined | loan_offer | An offer was declined by the applicant"
+      - "lending.loan_offer.withdrawn | loan_offer | An offer was withdrawn by the lender"
+      - "lending.loan_offer.expired | loan_offer | An offer expired"
+      - "lending.e_signature_request.sent | e_signature_request | The agreement was sent for signature"
       - "lending.e_signature_request.signed | e_signature_request | The agreement was signed"
+      - "lending.e_signature_request.declined | e_signature_request | A signer declined the agreement"
+      - "lending.e_signature_request.voided | e_signature_request | The envelope was voided"
+      - "lending.e_signature_request.expired | e_signature_request | The envelope expired unsigned"
 
   # ------------------------------------------------------------------ loan-service
   - name: loan-service
@@ -410,7 +534,7 @@ services:
         description: A booked loan (instalment, BNPL, nano, merchant financing, mortgage, SME term)
         fr: [LND-01, LND-02, LND-05, LND-06, LND-07]
         columns:
-          - "loan_number string(32) nn uq ro | Human-readable loan number"
+          - "loan_number string(32) nn uq ro | Human-readable loan number (server-generated)"
           - "customer_id uuid nn ref=customer idx | Primary borrower"
           - "loan_application_id uuid ref=loan_application idx | Originating application"
           - "loan_offer_id uuid ref=loan_offer | Accepted offer"
@@ -428,6 +552,7 @@ services:
           - "outstanding_penalties amount nn default=0 ro | Unpaid penalty interest and charges"
           - "total_outstanding amount nn default=0 ro | Total outstanding"
           - "overdue_amount amount nn default=0 ro | Amount past due"
+          - "credit_balance amount nn default=0 ro | Overpayment held as credit"
           - "interest_rate_type enum:InterestRateType nn | Fixed, floating, stepped or zero"
           - "interest_rate rate nn | Current nominal annual rate"
           - "rate_index string(32) | Reference index for floating rates, e.g. SOFR, EURIBOR_3M"
@@ -436,27 +561,38 @@ services:
           - "day_count enum:DayCountBasis nn default=ACT_365 | Day-count convention"
           - "schedule_type enum:ScheduleType nn | Schedule type"
           - "repayment_frequency enum:RepaymentFrequency nn | Repayment frequency"
+          - "business_day_convention enum:BusinessDayConvention nn default=MODIFIED_FOLLOWING | Due-date adjustment for weekends and holidays"
           - "term_months int nn | Contractual term"
+          - "balloon_amount amount | Final balloon for BALLOON schedules"
+          - "interest_only_periods int | Leading interest-only instalments for INTEREST_ONLY (empty = whole term, principal at maturity)"
+          - "custom_schedule json[] | CUSTOM schedules: [{due_date, principal}] (interest is computed on the balance)"
           - "grace_period_days int nn default=0 | Grace before an instalment counts as overdue"
           - "first_repayment_date date | First instalment date"
-          - "maturity_date date | Final maturity"
+          - "maturity_date date ro | Final maturity"
+          - "next_due_date date ro | Next unpaid instalment due date"
           - "start_date date | Contract start / first disbursement date"
+          - "cooling_off_until date ro | End of the cooling-off period (cancellation allowed until then)"
           - "disbursement_account_id uuid ref=deposit_account | Account receiving funds"
           - "disbursement_wallet_id uuid ref=wallet | Wallet receiving funds"
           - "repayment_account_id uuid ref=deposit_account | Account auto-debited"
           - "auto_debit_enabled bool nn default=true | Collect instalments automatically"
-          - "ledger_account_id uuid ref=ledger_account | Loan receivable account in the ledger"
+          - "ledger_account_id uuid ref=ledger_account ro | Loan receivable account in the ledger"
           - "merchant_id uuid ref=merchant | Merchant for BNPL / merchant financing"
           - "credit_line_id uuid fk=credit_line | Credit line the loan was drawn from"
+          - "product_terms json ro | Product terms pinned at booking (rates, fees, limits)"
           - "status enum:LoanStatus nn default=PENDING_DISBURSEMENT ro | Lifecycle status"
           - "days_past_due int nn default=0 ro | Days past due of the oldest unpaid instalment"
           - "delinquency_bucket enum:DelinquencyBucket nn default=CURRENT ro | DPD bucket"
-          - "ecl_stage enum:EclStage nn default=STAGE_1 ro | IFRS 9 stage"
+          - "ecl_stage enum:EclStage nn default=STAGE_1 ro | IFRS 9 stage hint (DPD, forbearance, write-off)"
+          - "is_forborne bool nn default=false ro | Restructured for hardship (forbearance)"
           - "risk_grade string(8) | Risk grade at origination or last review"
           - "is_nano bool nn default=false | Nano-loan scored on wallet transaction data"
+          - "last_accrual_date date ro | Last business date accrued"
           - "paid_off_at ts ro | Pay-off time"
           - "closed_at ts ro | Closing time"
           - "metadata json | Client-defined key/value metadata"
+        request_only:
+          - "origination_fee amount | Origination fee charged at the first disbursement (default from product fees)"
         indexes: [[status, delinquency_bucket], [customer_id, status]]
 
       - name: loan_status_history
@@ -469,8 +605,14 @@ services:
           - "from_status enum:LoanStatus | Previous status"
           - "to_status enum:LoanStatus nn | New status"
           - "days_past_due int nn | DPD at transition"
+          - "from_bucket enum:DelinquencyBucket | Bucket before the transition"
           - "delinquency_bucket enum:DelinquencyBucket nn | Bucket at transition"
           - "ecl_stage enum:EclStage | IFRS 9 stage at transition"
+          - "overdue_amount amount | Overdue amount at transition"
+          - "total_outstanding amount | Total outstanding at transition"
+          - "customer_id uuid ref=customer | Borrower (for consumers of the event)"
+          - "currency currency | Currency"
+          - "business_date date | Business date of the transition"
           - "reason string(255) | Reason"
 
       - name: loan_disbursement
@@ -494,6 +636,7 @@ services:
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "disbursed_at ts ro | Completion time"
           - "failure_reason string(255) ro | Failure reason"
+          - "attempts int nn default=1 ro | Posting attempts"
           - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
@@ -512,6 +655,7 @@ services:
           - "total_fees amount nn default=0 | Total scheduled fees"
           - "currency currency nn | Currency"
           - "effective_from date nn | Effective date"
+          - "interest_rate rate | Rate the schedule was generated with"
           - "reason string(255) | ORIGINATION, RESTRUCTURE, RATE_CHANGE, PREPAYMENT"
         unique: [[loan_id, version]]
 
@@ -523,7 +667,8 @@ services:
           - "repayment_schedule_id uuid nn fk=repayment_schedule idx | Schedule"
           - "loan_id uuid nn fk=loan idx | Loan"
           - "installment_no int nn | Sequence number"
-          - "due_date date nn | Due date"
+          - "period_start date | Start of the interest period"
+          - "due_date date nn | Due date (business-day adjusted)"
           - "principal_due amount nn | Principal due"
           - "interest_due amount nn | Interest due"
           - "fees_due amount nn default=0 | Fees due"
@@ -533,8 +678,9 @@ services:
           - "interest_paid amount nn default=0 ro | Interest paid"
           - "fees_paid amount nn default=0 ro | Fees paid"
           - "penalties_paid amount nn default=0 ro | Penalties paid"
+          - "waived_amount amount nn default=0 ro | Amount waived"
           - "outstanding_balance_after amount nn | Principal balance after this instalment"
-          - "status enum:InstallmentStatus nn default=DUE ro | Status"
+          - "status enum:InstallmentStatus nn default=SCHEDULED ro | Status"
           - "paid_at ts ro | Date fully paid"
           - "days_late int nn default=0 ro | Days late"
         unique: [[repayment_schedule_id, installment_no]]
@@ -548,9 +694,9 @@ services:
           - "product_id uuid ref=product idx | Product (empty = tenant default)"
           - "name string(120) nn | Rule name"
           - "applies_to_status enum:LoanStatus | Loan status the rule applies to (empty = any)"
-          - "order_of_components json nn | Ordered list of AllocationComponent values"
-          - "allocate_oldest_first bool nn default=true | Oldest instalment first vs component-first across instalments"
-          - "excess_handling string(32) nn default=REDUCE_TERM | REDUCE_TERM, REDUCE_INSTALMENT, HOLD_AS_CREDIT, REFUND"
+          - "order_of_components enum:AllocationComponent[] nn | Components in allocation order"
+          - "allocate_oldest_first bool nn default=true | Oldest instalment first (all components) vs component-first across instalments"
+          - "excess_handling enum:ExcessHandling nn default=REDUCE_TERM | What happens to money left after all due amounts"
           - "valid_from date nn | Effective from"
           - "valid_to date | Effective to"
           - "is_active bool nn default=true | Active"
@@ -561,7 +707,8 @@ services:
         immutable: true
         fr: [LND-04, COL-02]
         columns:
-          - "loan_id uuid nn fk=loan idx | Loan"
+          - "loan_id uuid fk=loan idx | Loan (empty for credit-line payments)"
+          - "credit_line_id uuid fk=credit_line idx | Credit line paid (revolving facilities)"
           - "amount amount nn | Amount received"
           - "currency currency nn | Currency"
           - "source enum:RepaymentSource nn | Source of funds"
@@ -572,12 +719,15 @@ services:
           - "allocated_fees amount nn | Allocated to fees"
           - "allocated_penalties amount nn | Allocated to penalties"
           - "excess_amount amount nn default=0 | Unallocated excess"
-          - "allocation_detail json nn | Allocation per instalment and component"
+          - "allocation_detail json[] nn | Allocation per instalment and component"
           - "allocation_rule_id uuid fk=allocation_rule | Waterfall used"
           - "status enum:RepaymentStatus nn default=POSTED | Posted or reversed (reversal is a new row)"
           - "reversal_of_id uuid fk=loan_repayment | Repayment this row reverses"
+          - "reason string(255) | Reversal reason"
           - "payment_id uuid ref=payment | Underlying payment"
+          - "source_account_id uuid ref=deposit_account | Deposit account debited"
           - "promise_to_pay_id uuid | Promise this repayment fulfils"
+          - "prepayment_quote_id uuid | Prepayment quote this repayment settled"
           - "journal_entry_id uuid ref=journal_entry | Ledger posting"
           - "external_reference string(128) | Payer reference"
           - "idempotency_key string(128) nn ro | Client key"
@@ -611,12 +761,13 @@ services:
           - "fee_type enum:LoanFeeType nn | Fee type"
           - "amount amount nn | Fee amount"
           - "tax_amount amount nn default=0 | Tax on the fee"
+          - "paid_amount amount nn default=0 ro | Paid so far"
           - "currency currency nn | Currency"
           - "charge_date date nn | Charge date"
           - "schedule_installment_id uuid fk=schedule_installment | Instalment the fee is due with"
-          - "status enum:LoanFeeStatus nn default=CHARGED | Status"
+          - "status enum:LoanFeeStatus nn default=CHARGED ro | Status"
           - "waived_by string(64) ro | Who waived it"
-          - "waiver_reason string(255) | Waiver reason"
+          - "waiver_reason string(255) ro | Waiver reason"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
 
       - name: loan_rate_change
@@ -642,34 +793,41 @@ services:
           - "restructure_type enum:RestructureType nn | Type"
           - "status enum:RestructureStatus nn default=PROPOSED ro | Status"
           - "reason string(500) nn | Reason, e.g. hardship"
-          - "new_term_months int | New term"
+          - "new_term_months int | New remaining term in months"
           - "new_interest_rate rate | New rate"
           - "holiday_months int | Payment holiday length"
           - "capitalise_arrears bool nn default=false | Capitalise overdue amounts"
           - "settlement_amount amount | Agreed settlement amount"
-          - "proposed_schedule json ro | Proposed schedule preview"
+          - "proposed_schedule json[] ro | Proposed schedule preview"
           - "new_schedule_id uuid fk=repayment_schedule ro | Schedule applied"
+          - "capitalised_amount amount ro | Arrears and interest capitalised on application"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "submitted_by string(64) ro | Maker"
+          - "approved_by string(64) ro | Checker"
+          - "rejection_reason string(500) ro | Why it was rejected"
           - "effective_date date | Effective date"
           - "applied_at ts ro | Application time"
           - "is_forborne bool nn default=true | Flag for regulatory forbearance reporting"
 
       - name: loan_prepayment_quote
         prefix: lpq
-        description: A pay-off / partial prepayment quote valid until a date
+        description: A pay-off / partial prepayment quote valid until a time
         fr: [LND-02]
         columns:
           - "loan_id uuid nn fk=loan idx | Loan"
-          - "quote_type string(16) nn | FULL or PARTIAL"
+          - "quote_type enum:PrepaymentQuoteType nn | FULL or PARTIAL"
+          - "partial_option enum:PartialPrepaymentOption | PARTIAL: reduce the term or the instalment"
           - "requested_amount amount | Requested partial amount"
+          - "quote_date date nn ro | Date the quote was calculated for"
           - "principal amount nn ro | Principal component"
           - "interest amount nn ro | Interest to the quote date"
-          - "fees amount nn ro | Fees outstanding"
+          - "fees amount nn ro | Fees and penalties outstanding"
           - "prepayment_penalty amount nn ro | Early repayment charge"
           - "total_amount amount nn ro | Amount to pay"
-          - "currency currency nn | Currency"
-          - "valid_until date nn ro | Quote validity"
+          - "currency currency nn ro | Currency"
+          - "valid_until ts nn ro | Quote validity (database clock)"
           - "status enum:PrepaymentQuoteStatus nn default=ISSUED ro | Status"
+          - "loan_repayment_id uuid ro | Repayment that used the quote"
 
       - name: loan_write_off
         prefix: lwo
@@ -682,10 +840,13 @@ services:
           - "interest_amount amount nn | Interest written off"
           - "fees_amount amount nn | Fees and penalties written off"
           - "total_amount amount nn | Total"
+          - "recovered_amount amount nn default=0 ro | Recovered after write-off"
           - "currency currency nn | Currency"
           - "reason string(500) nn | Reason"
           - "status enum:WriteOffStatus nn default=PENDING_APPROVAL ro | Status"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
+          - "approved_by string(64) ro | Checker"
+          - "rejection_reason string(500) ro | Why it was rejected"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "posted_at ts ro | Posting time"
 
@@ -702,14 +863,15 @@ services:
           - "source string(40) nn | CUSTOMER, AGENCY, COLLATERAL_SALE, INSURANCE, DEBT_SALE, LEGAL"
           - "agency_commission amount nn default=0 | Commission paid to a collection agency"
           - "received_at ts nn | Receipt time"
-          - "journal_entry_id uuid ref=journal_entry | Ledger posting"
+          - "external_reference string(128) | Payer or sale reference"
+          - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
 
       - name: credit_line
         prefix: cl
         description: A revolving credit facility (credit line, credit card account, working capital, BNPL limit)
         fr: [LND-03, LND-06, CRD-01]
         columns:
-          - "credit_line_number string(32) nn uq ro | Facility number"
+          - "credit_line_number string(32) nn uq ro | Facility number (server-generated)"
           - "customer_id uuid nn ref=customer idx | Borrower"
           - "loan_application_id uuid ref=loan_application | Originating application"
           - "product_id uuid nn ref=product idx | Product"
@@ -717,18 +879,19 @@ services:
           - "legal_entity_id uuid nn ref=legal_entity | Lending legal entity"
           - "line_type enum:CreditLineType nn | Facility type"
           - "currency currency nn | Currency"
-          - "credit_limit amount nn | Approved limit"
-          - "temporary_limit amount | Temporary limit increase"
-          - "temporary_limit_expires_at ts | Temporary limit expiry"
-          - "utilised_amount amount nn default=0 ro | Drawn principal"
-          - "available_amount amount nn default=0 ro | Limit minus utilisation and holds"
+          - "credit_limit amount nn | Approved limit (change via /change-limit)"
+          - "temporary_limit amount ro | Temporary limit"
+          - "temporary_limit_expires_at ts ro | Temporary limit expiry"
+          - "utilised_amount amount nn default=0 ro | Drawn principal (revolving balance)"
+          - "instalment_balance amount nn default=0 ro | Balance converted to instalment loans still counted against the limit"
+          - "available_amount amount nn default=0 ro | Limit minus utilisation, unpaid interest and fees"
           - "outstanding_interest amount nn default=0 ro | Unpaid interest"
           - "outstanding_fees amount nn default=0 ro | Unpaid fees"
           - "purchase_rate rate nn | Annual rate on purchases / draws"
           - "cash_advance_rate rate | Annual rate on cash advances"
           - "penalty_rate rate | Penalty rate"
           - "day_count enum:DayCountBasis nn default=ACT_365 | Day-count convention"
-          - "statement_day int nn | Day of month the statement cycle closes"
+          - "statement_day int nn | Day of month the statement cycle closes (1-28)"
           - "payment_due_days int nn default=21 | Days from statement to due date"
           - "minimum_payment_pct rate nn | Minimum payment percentage of balance"
           - "minimum_payment_floor amount nn default=0 | Minimum payment floor amount"
@@ -736,11 +899,13 @@ services:
           - "card_id uuid ref=card | Linked card for credit card accounts"
           - "repayment_account_id uuid ref=deposit_account | Auto-pay source"
           - "autopay_mode string(16) | NONE, MINIMUM, STATEMENT, FULL"
-          - "ledger_account_id uuid ref=ledger_account | Receivable account in the ledger"
+          - "ledger_account_id uuid ref=ledger_account ro | Receivable account in the ledger"
           - "status enum:CreditLineStatus nn default=PENDING_ACTIVATION ro | Status"
+          - "status_reason string(255) ro | Reason of the last freeze, unfreeze or close"
           - "days_past_due int nn default=0 ro | Days past due"
           - "delinquency_bucket enum:DelinquencyBucket nn default=CURRENT ro | DPD bucket"
           - "ecl_stage enum:EclStage nn default=STAGE_1 ro | IFRS 9 stage"
+          - "last_statement_date date ro | Last statement cycle end"
           - "review_date date | Next limit review date"
           - "opened_at ts ro | Activation time"
           - "closed_at ts ro | Closing time"
@@ -756,6 +921,7 @@ services:
           - "old_limit amount nn | Previous limit"
           - "new_limit amount nn | New limit"
           - "is_temporary bool nn default=false | Temporary change"
+          - "expires_at ts | Expiry of a temporary change"
           - "reason string(255) nn | CUSTOMER_REQUEST, PROACTIVE_INCREASE, RISK_DECREASE, REVIEW"
           - "approval_request_id uuid ref=approval_request | Approval"
 
@@ -765,15 +931,18 @@ services:
         fr: [LND-03]
         columns:
           - "credit_line_id uuid nn fk=credit_line idx | Credit line"
-          - "draw_type string(32) nn | PURCHASE, CASH_ADVANCE, BALANCE_TRANSFER, TRANSFER_TO_ACCOUNT, FEE, INSTALMENT_CONVERSION"
+          - "draw_type enum:DrawType nn | Draw type"
           - "amount amount nn | Amount"
           - "currency currency nn | Currency"
           - "rate rate nn | Rate applicable to this draw"
           - "destination_account_id uuid ref=deposit_account | Destination for transfers"
           - "card_authorization_id uuid | Card authorisation for purchases"
           - "status enum:DrawdownStatus nn default=PENDING ro | Status"
+          - "decline_reason string(255) ro | Why the draw was declined"
           - "journal_entry_id uuid ref=journal_entry ro | Ledger posting"
           - "posted_at ts ro | Posting time"
+          - "reversal_reason string(255) ro | Reversal reason"
+          - "reversed_at ts ro | Reversal time"
           - "idempotency_key string(128) nn ro | Client key"
         unique: [[tenant_id, idempotency_key]]
 
@@ -805,34 +974,56 @@ services:
         description: A buy-now-pay-later plan for a merchant purchase (pay-in-N or financed instalments)
         fr: [LND-06]
         columns:
-          - "loan_id uuid nn fk=loan uq | Underlying loan"
+          - "loan_id uuid fk=loan uq ro | Underlying loan (booked on create)"
           - "customer_id uuid nn ref=customer idx | Customer"
           - "merchant_id uuid nn ref=merchant idx | Merchant"
+          - "product_id uuid nn ref=product | BNPL product"
+          - "product_version_id uuid nn ref=product_version | Product version"
+          - "legal_entity_id uuid nn ref=legal_entity | Lending legal entity"
           - "merchant_order_ref string(128) nn | Merchant order reference"
           - "purchase_amount amount nn | Purchase amount"
           - "down_payment amount nn default=0 | Down payment at checkout"
           - "installment_count int nn | Number of instalments"
+          - "frequency enum:RepaymentFrequency nn default=FORTNIGHTLY | Instalment frequency"
+          - "interest_rate rate nn default=0 | Customer rate (0 for pay-in-N)"
           - "merchant_discount_rate rate nn default=0 | Merchant discount fee rate"
-          - "merchant_settlement_amount amount nn | Amount settled to merchant"
+          - "merchant_settlement_amount amount nn ro | Amount settled to merchant"
+          - "merchant_settlement_account_id uuid nn ref=deposit_account | Merchant settlement account"
+          - "repayment_account_id uuid ref=deposit_account | Customer account auto-debited"
           - "currency currency nn | Currency"
           - "status enum:BnplPlanStatus nn default=PENDING ro | Status"
           - "refunded_amount amount nn default=0 ro | Refunded to date"
+          - "status_reason string(255) ro | Cancellation or refund reason"
+
+      - name: loan_eod_run
+        prefix: ler
+        description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+        fr: [LND-05, PRC-01, OPS-01]
+        columns:
+          - "job enum:LendingEodJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:LendingEodRunStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
 
     apis:
       - resource: loans
         path: /v1/loans
         table: loan
         ops: [list, get, create, update]
-        filters: [customer_id, product_id, status, loan_type, delinquency_bucket, ecl_stage, credit_line_id, merchant_id]
+        filters: [customer_id, product_id, status, loan_type, delinquency_bucket, ecl_stage, credit_line_id, merchant_id, loan_application_id]
         actions:
-          - "POST /{id}/disburse | Disburse the loan or the next tranche | amount amount, method enum:DisbursementMethod nn, destination_account_id uuid, destination_wallet_id uuid | loan_disbursement"
-          - "POST /{id}/repay | Apply a repayment through the waterfall | amount amount nn, source enum:RepaymentSource nn, value_date date, external_reference string(128) | loan_repayment"
-          - "POST /{id}/prepayment-quote | Quote full or partial prepayment | quote_type string(16) nn, requested_amount amount | loan_prepayment_quote"
-          - "POST /{id}/prepay | Prepay using a quote | loan_prepayment_quote_id uuid nn | loan_repayment"
-          - "POST /{id}/change-rate | Change the interest rate | new_rate rate nn, effective_date date nn, reason string(255) nn | loan_rate_change"
-          - "POST /{id}/restructure | Propose a restructure | restructure_type enum:RestructureType nn, reason string(500) nn, new_term_months int, new_interest_rate rate, holiday_months int, capitalise_arrears bool | loan_restructure"
-          - "POST /{id}/write-off | Request a write-off | write_off_type enum:WriteOffType nn, reason string(500) nn, principal_amount amount | loan_write_off"
-          - "POST /{id}/cancel | Cancel before disbursement or within cooling-off | reason string(255) nn"
+          - "POST /{id}/disburse | Disburse the loan or the next tranche (ledger: debit loan receivable, credit the customer account) | amount amount, method enum:DisbursementMethod nn, destination_account_id uuid, destination_wallet_id uuid, scheduled_date date | loan_disbursement"
+          - "POST /{id}/repay | Apply a repayment through the waterfall | amount amount nn, source enum:RepaymentSource nn, value_date date, external_reference string(128), source_account_id uuid, promise_to_pay_id uuid | loan_repayment"
+          - "POST /{id}/prepayment-quote | Quote full or partial prepayment | quote_type enum:PrepaymentQuoteType nn, requested_amount amount, partial_option enum:PartialPrepaymentOption | loan_prepayment_quote"
+          - "POST /{id}/prepay | Prepay using a valid quote | loan_prepayment_quote_id uuid nn, source enum:RepaymentSource, source_account_id uuid | loan_repayment"
+          - "POST /{id}/change-rate | Change the interest rate and regenerate the remaining schedule | new_rate rate nn, effective_date date nn, reason string(255) nn, index_value rate | loan_rate_change"
+          - "POST /{id}/restructure | Propose a restructure (schedule preview computed) | restructure_type enum:RestructureType nn, reason string(500) nn, new_term_months int, new_interest_rate rate, holiday_months int, capitalise_arrears bool, settlement_amount amount, effective_date date | loan_restructure"
+          - "POST /{id}/write-off | Request a write-off (approved by a second user) | write_off_type enum:WriteOffType nn, reason string(500) nn, principal_amount amount | loan_write_off"
+          - "POST /{id}/cancel | Cancel before disbursement or within cooling-off (disbursed funds are returned) | reason string(255) nn"
           - "POST /{id}/close | Close a paid-off loan"
           - "POST /{id}/set-auto-debit | Enable or disable auto-debit | auto_debit_enabled bool nn, repayment_account_id uuid"
           - "GET /{id}/schedule | Current repayment schedule with instalments | | schedule_installment[]"
@@ -840,7 +1031,16 @@ services:
           - "GET /{id}/repayments | Repayments received | | loan_repayment[]"
           - "GET /{id}/accruals | Daily accruals | | loan_accrual[]"
           - "GET /{id}/status-history | Status and DPD history | | loan_status_history[]"
-          - "POST /simulate | Simulate a schedule without booking | product_id uuid nn, principal_amount amount nn, term_months int nn, interest_rate rate, schedule_type enum:ScheduleType, repayment_frequency enum:RepaymentFrequency | none"
+          - "POST /simulate | Simulate a schedule without booking (instalment, totals, APR, instalments) | product_id uuid nn, product_version_id uuid, principal_amount amount nn, currency currency, term_months int nn, interest_rate rate, schedule_type enum:ScheduleType, repayment_frequency enum:RepaymentFrequency, day_count enum:DayCountBasis, start_date date, first_repayment_date date, balloon_amount amount, interest_only_periods int, upfront_fees amount | object"
+          - "POST /eod/accrue?business_date:date! | End of day - daily interest and penalty accrual of every active loan through business_date (idempotent per business date) | | object"
+          - "POST /eod/installments-due?business_date:date! | End of day - instalments falling due on business_date become DUE, past grace become OVERDUE with late fees (idempotent per business date) | | object"
+          - "POST /eod/auto-debit?business_date:date! | End of day - collect due and overdue amounts from linked repayment accounts (idempotent per business date) | | object"
+          - "POST /eod/delinquency?business_date:date! | End of day - recompute DPD, delinquency bucket, arrears status and ECL stage hint (idempotent per business date) | | object"
+      - resource: loan-eod-runs
+        path: /v1/loan-eod-runs
+        table: loan_eod_run
+        ops: [list, get]
+        filters: [job, business_date, status]
       - resource: loan-disbursements
         path: /v1/loan-disbursements
         table: loan_disbursement
@@ -848,14 +1048,14 @@ services:
         filters: [loan_id, status, method]
         actions:
           - "POST /{id}/retry | Retry a failed disbursement"
-          - "POST /{id}/cancel | Cancel a scheduled disbursement | reason string(255) nn"
+          - "POST /{id}/cancel | Cancel a scheduled or failed disbursement | reason string(255) nn"
       - resource: schedule-installments
         path: /v1/schedule-installments
         table: schedule_installment
         ops: [list, get]
         filters: [loan_id, repayment_schedule_id, status, due_date]
         actions:
-          - "POST /{id}/waive | Waive the remaining amount of an instalment | reason string(255) nn, components json"
+          - "POST /{id}/waive | Waive the remaining amount of an instalment (all or listed components) | reason string(255) nn, components enum:AllocationComponent[]"
       - resource: allocation-rules
         path: /v1/allocation-rules
         table: allocation_rule
@@ -865,9 +1065,9 @@ services:
         path: /v1/loan-repayments
         table: loan_repayment
         ops: [list, get]
-        filters: [loan_id, source, status, payment_id]
+        filters: [loan_id, credit_line_id, source, status, payment_id, promise_to_pay_id]
         actions:
-          - "POST /{id}/reverse | Reverse a repayment (e.g. returned direct debit) | reason string(255) nn"
+          - "POST /{id}/reverse | Reverse a repayment (e.g. returned direct debit): its allocation is undone and the ledger posting mirrored | reason string(255) nn"
       - resource: loan-accruals
         path: /v1/loan-accruals
         table: loan_accrual
@@ -879,7 +1079,7 @@ services:
         ops: [list, get, create]
         filters: [loan_id, fee_type, status]
         actions:
-          - "POST /{id}/waive | Waive a fee | waiver_reason string(255) nn"
+          - "POST /{id}/waive | Waive the unpaid part of a fee | waiver_reason string(255) nn"
       - resource: loan-restructures
         path: /v1/loan-restructures
         table: loan_restructure
@@ -887,7 +1087,7 @@ services:
         filters: [loan_id, restructure_type, status, is_forborne]
         actions:
           - "POST /{id}/submit | Submit for approval (maker)"
-          - "POST /{id}/approve | Approve (checker) | comment string(500)"
+          - "POST /{id}/approve | Approve (checker; must differ from the maker) | comment string(500)"
           - "POST /{id}/reject | Reject | reason string(500) nn"
           - "POST /{id}/apply | Apply the approved restructure and create the new schedule"
       - resource: loan-prepayment-quotes
@@ -901,7 +1101,7 @@ services:
         ops: [list, get]
         filters: [loan_id, status]
         actions:
-          - "POST /{id}/approve | Approve and post the write-off (checker) | comment string(500)"
+          - "POST /{id}/approve | Approve and post the write-off (checker; must differ from the requester) | comment string(500)"
           - "POST /{id}/reject | Reject the write-off | reason string(500) nn"
       - resource: loan-recoveries
         path: /v1/loan-recoveries
@@ -914,17 +1114,19 @@ services:
         ops: [list, get, create, update]
         filters: [customer_id, product_id, line_type, status, delinquency_bucket, card_id]
         actions:
-          - "POST /{id}/activate | Activate the facility"
-          - "POST /{id}/draw | Draw funds | draw_type string(32) nn, amount amount nn, destination_account_id uuid | credit_line_drawdown"
-          - "POST /{id}/repay | Make a payment | amount amount nn, source enum:RepaymentSource nn | loan_repayment"
-          - "POST /{id}/change-limit | Change the limit (approval may be required) | new_limit amount nn, is_temporary bool, reason string(255) nn | credit_line_limit_change"
-          - "POST /{id}/convert-to-instalments | Convert a balance into an instalment loan | amount amount nn, term_months int nn | loan"
+          - "POST /{id}/activate | Activate the facility (opens the receivable account)"
+          - "POST /{id}/draw | Draw funds | draw_type enum:DrawType nn, amount amount nn, destination_account_id uuid, card_authorization_id uuid | credit_line_drawdown"
+          - "POST /{id}/repay | Make a payment (interest and fees first, then the oldest statement) | amount amount nn, source enum:RepaymentSource nn, source_account_id uuid, external_reference string(128) | loan_repayment"
+          - "POST /{id}/change-limit | Change the limit (increases above the approval threshold need an approval request) | new_limit amount nn, is_temporary bool, expires_at ts, reason string(255) nn, approval_request_id uuid | credit_line_limit_change"
+          - "POST /{id}/convert-to-instalments | Convert part of the revolving balance into an instalment loan | amount amount nn, term_months int nn, interest_rate rate | loan"
           - "POST /{id}/freeze | Freeze new draws | reason string(255) nn"
           - "POST /{id}/unfreeze | Allow draws again | reason string(255) nn"
-          - "POST /{id}/close | Close the facility | reason string(255)"
+          - "POST /{id}/close | Close the facility (balance must be zero) | reason string(255)"
+          - "GET /{id}/available | Available credit breakdown (limit, temporary limit, utilisation, interest, fees) | | object"
           - "GET /{id}/drawdowns | Draws on the facility | | credit_line_drawdown[]"
           - "GET /{id}/statements | Statements | | credit_line_statement[]"
           - "GET /{id}/limit-changes | Limit history | | credit_line_limit_change[]"
+          - "POST /eod/statements?business_date:date! | End of day - close statement cycles ending on business_date (interest, minimum payment, due date) and mark missed minimum payments (idempotent per business date) | | object"
       - resource: credit-line-drawdowns
         path: /v1/credit-line-drawdowns
         table: credit_line_drawdown
@@ -943,28 +1145,46 @@ services:
         ops: [list, get, create]
         filters: [customer_id, merchant_id, status, merchant_order_ref]
         actions:
-          - "POST /check-eligibility | Real-time BNPL eligibility at checkout | customer_id uuid nn, merchant_id uuid nn, amount amount nn, currency currency nn | none"
+          - "POST /check-eligibility | Real-time BNPL eligibility at checkout (decision, limit, split schedule, reasons) | customer_id uuid nn, merchant_id uuid nn, amount amount nn, currency currency nn, installment_count int, product_id uuid | object"
           - "POST /{id}/refund | Apply a merchant refund to the plan | amount amount nn, reason string(255)"
-          - "POST /{id}/cancel | Cancel before first instalment | reason string(255) nn"
+          - "POST /{id}/cancel | Cancel before the first instalment is paid | reason string(255) nn"
 
     events:
       - "lending.loan.created | loan | A loan was booked"
       - "lending.loan.disbursed | loan_disbursement | Loan funds were disbursed"
+      - "lending.loan.disbursement_failed | loan_disbursement | A disbursement failed"
       - "lending.loan.repayment_received | loan_repayment | A repayment was applied"
       - "lending.loan.repayment_reversed | loan_repayment | A repayment was reversed"
       - "lending.loan.installment_due | schedule_installment | An instalment is due"
       - "lending.loan.installment_overdue | schedule_installment | An instalment became overdue"
+      - "lending.loan.installment_waived | schedule_installment | An instalment was waived"
+      - "lending.loan.fee_charged | loan_fee_charge | A fee was charged"
+      - "lending.loan.fee_waived | loan_fee_charge | A fee was waived"
       - "lending.loan.delinquency_changed | loan_status_history | DPD bucket or status changed"
+      - "lending.loan.restructure_proposed | loan_restructure | A restructure was proposed"
+      - "lending.loan.restructure_approved | loan_restructure | A restructure was approved"
+      - "lending.loan.restructure_rejected | loan_restructure | A restructure was rejected"
       - "lending.loan.restructured | loan_restructure | A restructure was applied"
       - "lending.loan.rate_changed | loan_rate_change | The interest rate changed"
+      - "lending.loan.prepayment_quoted | loan_prepayment_quote | A prepayment quote was issued"
       - "lending.loan.paid_off | loan | A loan was fully repaid"
+      - "lending.loan.closed | loan | A loan was closed"
+      - "lending.loan.cancelled | loan | A loan was cancelled"
+      - "lending.loan.write_off_requested | loan_write_off | A write-off awaits approval"
       - "lending.loan.written_off | loan_write_off | A loan was written off"
       - "lending.loan.recovery_received | loan_recovery | A post-write-off recovery was received"
+      - "lending.credit_line.created | credit_line | A credit line was created"
       - "lending.credit_line.activated | credit_line | A credit line was activated"
       - "lending.credit_line.drawn | credit_line_drawdown | Funds were drawn"
+      - "lending.credit_line.draw_reversed | credit_line_drawdown | A draw was reversed"
+      - "lending.credit_line.payment_received | loan_repayment | A credit-line payment was applied"
       - "lending.credit_line.limit_changed | credit_line_limit_change | Limit changed"
+      - "lending.credit_line.status_changed | credit_line | A credit line was frozen, unfrozen, put in arrears or closed"
       - "lending.credit_line.statement_issued | credit_line_statement | A statement was issued"
       - "lending.bnpl_plan.created | bnpl_plan | A BNPL plan was created"
+      - "lending.bnpl_plan.refunded | bnpl_plan | A merchant refund was applied"
+      - "lending.bnpl_plan.cancelled | bnpl_plan | A BNPL plan was cancelled"
+      - "lending.bnpl_plan.completed | bnpl_plan | A BNPL plan was fully repaid"
 
   # ------------------------------------------------------------------ collateral-service
   - name: collateral-service
@@ -978,23 +1198,29 @@ services:
         description: A pledged asset or guarantee securing one or more exposures
         fr: [LND-06]
         columns:
-          - "collateral_number string(32) nn uq ro | Registry number"
+          - "collateral_number string(32) nn uq ro | Registry number (server-generated)"
           - "owner_customer_id uuid nn ref=customer idx | Owner / guarantor"
           - "collateral_type enum:CollateralType nn | Type"
           - "description string(500) nn | Description of the asset"
           - "currency currency nn | Valuation currency"
-          - "market_value amount nn | Latest market value"
+          - "market_value amount nn | Latest market value (changed by valuations)"
           - "forced_sale_value amount | Latest forced-sale value"
-          - "haircut_pct rate nn default=0 | Haircut applied for lending value"
+          - "haircut_pct rate | Haircut applied for lending value (empty = type default)"
           - "lending_value amount nn ro | Value after haircut"
-          - "registration_reference string(128) | Land registry / vehicle registration / lien reference"
+          - "allocated_value amount nn default=0 ro | Lending value allocated to active links"
+          - "registration_reference string(128) ro | Land registry / vehicle registration / lien reference (set by /pledge)"
           - "registration_authority string(120) | Registry authority"
-          - "lien_registered_at date | Lien registration date"
+          - "lien_registered_at date ro | Lien registration date"
           - "location json | Address or geo-location for property and field visits"
           - "deposit_account_id uuid ref=deposit_account | Pledged deposit (cash-collateral)"
-          - "asset_details json | Type-specific attributes (VIN, title number, carat weight, ...)"
-          - "status enum:CollateralStatus nn default=PROPOSED | Status"
+          - "asset_details json | Type-specific attributes (PROPERTY title_number; VEHICLE vin, registration_number; GOLD carat, weight_grams; SECURITIES isin, quantity; GUARANTEE guarantor_name)"
+          - "status enum:CollateralStatus nn default=PROPOSED ro | Status"
+          - "status_reason string(255) ro | Reason of the last rejection, release or liquidation"
           - "next_valuation_date date | Next revaluation due"
+          - "verified_by string(64) ro | Verifier"
+          - "verified_at ts ro | Verification time"
+          - "liquidation_proceeds amount ro | Net proceeds of the liquidation"
+          - "liquidated_at ts ro | Liquidation time"
           - "released_at ts ro | Release time"
 
       - name: collateral_valuation
@@ -1007,6 +1233,8 @@ services:
           - "valuation_date date nn | Valuation date"
           - "market_value amount nn | Market value"
           - "forced_sale_value amount | Forced-sale value"
+          - "haircut_pct rate ro | Haircut applied at this valuation"
+          - "lending_value amount ro | Lending value after haircut"
           - "currency currency nn | Currency"
           - "valuer string(160) | Valuer name / firm"
           - "method string(40) nn | FULL_SURVEY, DESKTOP, INDEX, AUTOMATED_AVM, MARKET_PRICE"
@@ -1022,8 +1250,13 @@ services:
           - "exposure_id uuid nn idx | Loan or credit line id"
           - "allocated_value amount nn | Lending value allocated to this exposure"
           - "charge_rank int nn default=1 | First, second charge"
-          - "ltv rate ro | Loan-to-value at last calculation"
-          - "is_active bool nn default=true | Active link"
+          - "max_ltv rate | LTV limit; above it the link is in BREACH (warning at 90% of the limit)"
+          - "exposure_amount amount ro | Exposure outstanding at the last calculation"
+          - "ltv rate ro | Loan-to-value at last calculation (exposure / lending value allocated to it)"
+          - "ltv_status enum:LtvStatus ro | OK, WARNING or BREACH"
+          - "ltv_calculated_at ts ro | Last LTV calculation"
+          - "is_active bool nn default=true ro | Active link"
+          - "release_reason string(255) ro | Why the link was released"
           - "released_at ts ro | Release time"
 
       - name: collateral_insurance
@@ -1041,6 +1274,21 @@ services:
           - "end_date date nn | Expiry"
           - "lender_noted bool nn default=true | Lender noted as loss payee"
           - "document_id uuid ref=document | Policy document"
+          - "expiry_notified_at ts ro | When the expiry warning was raised"
+
+      - name: collateral_eod_run
+        prefix: cer
+        description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+        fr: [LND-06, OPS-01]
+        columns:
+          - "job enum:LendingEodJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:LendingEodRunStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
 
     apis:
       - resource: collaterals
@@ -1049,10 +1297,18 @@ services:
         ops: [list, get, create, update]
         filters: [owner_customer_id, collateral_type, status]
         actions:
-          - "POST /{id}/verify | Mark collateral verified"
+          - "POST /{id}/verify | Mark collateral verified (type-specific attributes and a valuation required)"
+          - "POST /{id}/reject | Reject proposed collateral | reason string(255) nn"
           - "POST /{id}/pledge | Pledge (register lien) | registration_reference string(128) nn, lien_registered_at date nn"
-          - "POST /{id}/release | Release the collateral | reason string(255) nn"
-          - "POST /{id}/liquidate | Record liquidation proceeds | proceeds amount nn, sale_date date nn | loan_recovery"
+          - "POST /{id}/release | Release the collateral (no active links may remain unless force) | reason string(255) nn, force bool"
+          - "POST /{id}/liquidate | Record liquidation proceeds and apply them to the linked exposures by charge rank (loan repayment or post-write-off recovery) | proceeds amount nn, sale_date date nn, costs amount, reference string(128) | object"
+          - "GET /{id}/ltv | Current LTV of every exposure the collateral secures | | object"
+          - "POST /eod/monitor?business_date:date! | End of day - recompute LTV (alerts), insurance expiry and revaluation due (idempotent per business date) | | object"
+      - resource: collateral-eod-runs
+        path: /v1/collateral-eod-runs
+        table: collateral_eod_run
+        ops: [list, get]
+        filters: [job, business_date, status]
       - resource: collateral-valuations
         path: /v1/collaterals/{collateral_id}/valuations
         table: collateral_valuation
@@ -1062,9 +1318,10 @@ services:
         path: /v1/collateral-links
         table: collateral_link
         ops: [list, get, create, update]
-        filters: [collateral_id, exposure_type, exposure_id, is_active]
+        filters: [collateral_id, exposure_type, exposure_id, is_active, ltv_status]
         actions:
           - "POST /{id}/release | Release the link | reason string(255) nn"
+          - "POST /{id}/recalculate-ltv | Recalculate the LTV from the exposure outstanding in loan-service"
       - resource: collateral-insurances
         path: /v1/collateral-insurances
         table: collateral_insurance
@@ -1073,8 +1330,16 @@ services:
 
     events:
       - "lending.collateral.registered | collateral | Collateral was registered"
+      - "lending.collateral.verified | collateral | Collateral was verified"
+      - "lending.collateral.rejected | collateral | Collateral was rejected"
+      - "lending.collateral.pledged | collateral | A lien was registered"
       - "lending.collateral.revalued | collateral_valuation | A collateral valuation was recorded"
+      - "lending.collateral.revaluation_due | collateral | A collateral item is due for revaluation"
       - "lending.collateral.released | collateral | Collateral was released"
+      - "lending.collateral.liquidated | collateral | Collateral was liquidated"
+      - "lending.collateral_link.created | collateral_link | Collateral was linked to an exposure"
+      - "lending.collateral_link.released | collateral_link | A collateral link was released"
+      - "lending.collateral_link.ltv_breached | collateral_link | LTV rose above the warning or breach level"
       - "lending.collateral_insurance.expiring | collateral_insurance | Collateral insurance is about to expire"
 
   # ------------------------------------------------------------------ collections-service
@@ -1093,12 +1358,12 @@ services:
           - "code string(40) nn uq | Strategy code"
           - "name string(120) nn | Name"
           - "exposure_type enum:CollectionExposureType | Exposure type (empty = any)"
-          - "segment_rules json nn | Segment criteria (product, risk grade, balance, customer type)"
+          - "segment_rules json nn | Segment criteria: {risk_grades: [..], min_balance, max_balance, product_ids: [..], vulnerable}"
           - "min_dpd int nn default=1 | Lower DPD bound"
           - "max_dpd int | Upper DPD bound"
           - "priority int nn default=100 | Lower wins when several match"
           - "max_contacts_per_week int nn default=3 | Contact-frequency cap (conduct rules)"
-          - "quiet_hours json | Hours when no contact is allowed"
+          - "quiet_hours json | Hours when no contact is allowed: {start: '21:00', end: '08:00'}"
           - "is_active bool nn default=true | Active"
 
       - name: collection_strategy_step
@@ -1112,8 +1377,9 @@ services:
           - "action_type enum:CollectionActionType nn | Action"
           - "template_code string(64) | Notification / letter template"
           - "queue_id uuid | Queue for manual actions"
-          - "condition json | Extra condition, e.g. no active promise"
+          - "condition json | Extra condition: {no_active_promise: true, min_overdue: '100.00'}"
           - "fee_code string(40) | Fee to charge, if any"
+        unique: [[collection_strategy_id, step_no]]
 
       - name: collection_queue
         prefix: cqu
@@ -1123,8 +1389,9 @@ services:
           - "code string(40) nn uq | Queue code"
           - "name string(120) nn | Name"
           - "team string(64) | Team"
-          - "assignment_mode string(16) nn default=ROUND_ROBIN | ROUND_ROBIN, SKILL_BASED, MANUAL, AI_PRIORITY"
-          - "agent_user_ids json | Collectors assigned (app_user ids)"
+          - "assignment_mode enum:CollectionAssignmentMode nn default=ROUND_ROBIN | How cases are distributed"
+          - "agent_user_ids string(64)[] | Collectors assigned (app_user ids)"
+          - "max_cases_per_agent int | Capacity per collector (empty = unlimited)"
           - "is_active bool nn default=true | Active"
 
       - name: collection_case
@@ -1132,28 +1399,35 @@ services:
         description: A collections case for one delinquent exposure
         fr: [COL-01, COL-02, LND-05]
         columns:
-          - "case_number string(32) nn uq ro | Case number"
+          - "case_number string(32) nn uq ro | Case number (server-generated)"
           - "customer_id uuid nn ref=customer idx | Customer"
           - "exposure_type enum:CollectionExposureType nn | Exposure type"
           - "exposure_id uuid nn idx | Loan, credit line, card account or overdraft id"
-          - "collection_strategy_id uuid fk=collection_strategy | Strategy in force"
-          - "collection_queue_id uuid fk=collection_queue idx | Queue"
-          - "assigned_to string(64) idx | Collector"
-          - "status enum:CollectionCaseStatus nn default=OPEN | Status"
+          - "product_id uuid ref=product | Product of the exposure"
+          - "risk_grade string(8) | Risk grade of the exposure"
+          - "collection_strategy_id uuid fk=collection_strategy ro | Strategy in force"
+          - "collection_queue_id uuid fk=collection_queue ro idx | Queue (set by /assign or the strategy)"
+          - "assigned_to string(64) ro idx | Collector (set by /assign or queue distribution)"
+          - "status enum:CollectionCaseStatus nn default=OPEN ro | Status"
           - "days_past_due int nn ro | Current DPD"
           - "delinquency_bucket enum:DelinquencyBucket nn ro | Bucket"
+          - "max_days_past_due int nn default=0 ro | Highest DPD reached"
           - "overdue_amount amount nn ro | Overdue amount"
           - "total_outstanding amount nn ro | Total outstanding"
           - "currency currency nn | Currency"
-          - "priority_score int ro | AI / rules priority for working the queue"
+          - "priority_score int ro | Rules priority for working the queue (0-1000)"
+          - "last_step_no int nn default=0 ro | Last strategy step executed"
+          - "broken_promises int nn default=0 ro | Promises broken on this case"
           - "last_contact_at ts ro | Last contact attempt"
+          - "last_payment_at ts ro | Last payment seen"
           - "next_action_at ts | Next scheduled action"
-          - "is_disputed bool nn default=false | Customer disputes the debt"
+          - "is_disputed bool nn default=false ro | Customer disputes the debt (set by /mark-dispute; automated contact suppressed)"
           - "is_vulnerable bool nn default=false | Vulnerable-customer flag (adjusted treatment)"
-          - "agency_name string(120) | External agency if outsourced"
+          - "agency_name string(120) ro | External agency if outsourced"
+          - "agency_assigned_at ts ro | When the case was sent to the agency"
           - "opened_at ts nn default=now ro | Opening time"
           - "resolved_at ts ro | Resolution time"
-          - "resolution string(40) ro | CURED, PAID_OFF, RESTRUCTURED, SETTLED, WRITTEN_OFF, SOLD"
+          - "resolution enum:CollectionCaseResolution ro | How the case ended"
         indexes: [[exposure_type, exposure_id], [status, collection_queue_id]]
 
       - name: collection_action
@@ -1171,6 +1445,7 @@ services:
           - "notes text | Notes"
           - "recording_document_id uuid ref=document | Call recording / letter copy"
           - "notification_id uuid | Notification sent"
+          - "business_date date | Business date of an automated action"
           - "performed_at ts nn default=now | Time"
 
       - name: promise_to_pay
@@ -1185,7 +1460,9 @@ services:
           - "paid_amount amount nn default=0 ro | Paid against the promise"
           - "status enum:PromiseToPayStatus nn default=ACTIVE ro | Status"
           - "channel string(32) | How the promise was made"
-          - "taken_by string(64) | Collector"
+          - "taken_by string(64) ro | Collector"
+          - "resolved_at ts ro | When it was kept, broken or cancelled"
+          - "cancel_reason string(255) ro | Cancellation reason"
 
       - name: payment_plan
         prefix: ppl
@@ -1198,16 +1475,20 @@ services:
           - "installment_count int nn | Number of instalments"
           - "frequency enum:RepaymentFrequency nn | Frequency"
           - "start_date date nn | First instalment"
-          - "installments json nn | Planned instalments (date, amount, paid)"
+          - "installments json[] nn ro | Planned instalments ({no, due_date, amount, paid})"
           - "paid_amount amount nn default=0 ro | Paid to date"
           - "status enum:PaymentPlanStatus nn default=PROPOSED ro | Status"
           - "interest_frozen bool nn default=false | Interest frozen during the plan"
+          - "requires_approval bool nn default=false ro | Outside policy: activation needs a second user"
           - "approval_request_id uuid ref=approval_request | Approval if outside policy"
+          - "activated_by string(64) ro | Who activated it"
+          - "activated_at ts ro | Activation time"
+          - "cancel_reason string(255) ro | Cancellation reason"
           - "broken_at ts ro | When the plan broke"
 
       - name: next_best_action
         prefix: nba
-        description: AI-suggested next action for a case (channel, time, offer) with explanation
+        description: Suggested next action for a case (channel, time, offer) from a deterministic scoring model with reason codes
         fr: [COL-03, AI-01]
         columns:
           - "collection_case_id uuid nn fk=collection_case idx | Case"
@@ -1215,10 +1496,13 @@ services:
           - "suggested_at_time ts | Best time to contact"
           - "suggested_offer json | Offer, e.g. settlement discount or plan terms"
           - "propensity_to_pay rate | Model propensity to pay"
+          - "reason_codes json[] | Reason codes with their contribution"
+          - "alternatives json[] | Other actions with their scores"
           - "explanation text | Why the model suggests this"
           - "model_version string(32) nn | Model version"
-          - "status enum:NbaStatus nn default=SUGGESTED | Status"
-          - "decided_by string(64) | Collector who accepted or rejected"
+          - "status enum:NbaStatus nn default=SUGGESTED ro | Status"
+          - "decided_by string(64) ro | Collector who accepted or rejected"
+          - "rejection_reason string(255) ro | Why it was rejected"
           - "expires_at ts | Suggestion expiry"
 
       - name: legal_proceeding
@@ -1233,12 +1517,28 @@ services:
           - "claim_amount amount nn | Amount claimed"
           - "legal_costs amount nn default=0 | Costs incurred"
           - "currency currency nn | Currency"
-          - "status enum:LegalProceedingStatus nn default=INITIATED | Status"
+          - "status enum:LegalProceedingStatus nn default=PENDING_APPROVAL ro | Status (changed by /approve, /reject, /advance)"
+          - "requested_by string(64) ro | Who asked to litigate"
+          - "approved_by string(64) ro | Who approved (must differ from the requester)"
           - "filed_at date | Filing date"
           - "next_hearing_date date | Next hearing"
           - "judgement_amount amount | Judgement amount"
           - "notes text | Notes"
           - "approval_request_id uuid ref=approval_request | Approval to litigate"
+
+      - name: collections_eod_run
+        prefix: coe
+        description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+        fr: [COL-01, OPS-01]
+        columns:
+          - "job enum:LendingEodJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:LendingEodRunStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
 
     apis:
       - resource: collection-strategies
@@ -1246,7 +1546,6 @@ services:
         table: collection_strategy
         ops: [list, get, create, update]
         filters: [exposure_type, is_active]
-        actions:
       - resource: collection-strategy-steps
         path: /v1/collections/strategies/{collection_strategy_id}/steps
         table: collection_strategy_step
@@ -1258,24 +1557,31 @@ services:
         ops: [list, get, create, update]
         filters: [is_active]
         actions:
-          - "GET /{id}/cases | Cases in the queue ordered by priority | | collection_case[]"
-          - "POST /{id}/rebalance | Redistribute cases across collectors"
+          - "GET /{id}/cases | Open cases in the queue ordered by priority | | collection_case[]"
+          - "POST /{id}/rebalance | Redistribute the queue's open cases evenly across its collectors | | object"
       - resource: collection-cases
         path: /v1/collections/cases
         table: collection_case
         ops: [list, get, update]
         filters: [customer_id, exposure_type, exposure_id, status, delinquency_bucket, collection_queue_id, assigned_to, is_disputed]
         actions:
+          - "POST /open | Open a case for a delinquent exposure, or refresh the open one (delinquency event, EOD run or manual) | customer_id uuid nn, exposure_type enum:CollectionExposureType nn, exposure_id uuid nn, days_past_due int nn, overdue_amount amount nn, total_outstanding amount nn, currency currency nn, product_id uuid, risk_grade string(8) | collection_case"
           - "POST /{id}/assign | Assign to a collector or queue | assigned_to string(64), collection_queue_id uuid"
-          - "POST /{id}/log-action | Record a contact or action | action_type enum:CollectionActionType nn, outcome enum:CollectionActionOutcome nn, notes text | collection_action"
+          - "POST /{id}/log-action | Record a contact or action | action_type enum:CollectionActionType nn, outcome enum:CollectionActionOutcome nn, notes text, contact_channel_address string(320) | collection_action"
           - "POST /{id}/promise | Record a promise to pay | promised_amount amount nn, promised_date date nn, channel string(32) | promise_to_pay"
-          - "POST /{id}/payment-plan | Propose a payment plan | installment_count int nn, frequency enum:RepaymentFrequency nn, start_date date nn, interest_frozen bool | payment_plan"
-          - "POST /{id}/next-best-action | Ask the model for the next best action | | next_best_action"
+          - "POST /{id}/payment-plan | Propose a payment plan for the arrears | installment_count int nn, frequency enum:RepaymentFrequency nn, start_date date nn, interest_frozen bool, total_amount amount | payment_plan"
+          - "POST /{id}/next-best-action | Score the next best action (deterministic model with reason codes) | | next_best_action"
           - "POST /{id}/send-to-agency | Outsource to an external agency | agency_name string(120) nn"
-          - "POST /{id}/start-legal | Start legal proceedings (requires approval) | claim_amount amount nn | legal_proceeding"
+          - "POST /{id}/start-legal | Propose legal proceedings (approved by a second user) | claim_amount amount nn, law_firm string(160), notes text | legal_proceeding"
           - "POST /{id}/mark-dispute | Flag or clear a dispute | is_disputed bool nn, notes text"
-          - "POST /{id}/close | Close the case | resolution string(40) nn"
+          - "POST /{id}/close | Close the case | resolution enum:CollectionCaseResolution nn, notes text"
           - "GET /{id}/actions | Contact history | | collection_action[]"
+          - "POST /eod/strategy-run?business_date:date! | End of day - sync delinquent exposures from loan-service, open/refresh/cure cases, check promises and plans, run due strategy steps, distribute queues (idempotent per business date) | | object"
+      - resource: collections-eod-runs
+        path: /v1/collections/eod-runs
+        table: collections_eod_run
+        ops: [list, get]
+        filters: [job, business_date, status]
       - resource: collection-actions
         path: /v1/collections/actions
         table: collection_action
@@ -1294,7 +1600,7 @@ services:
         ops: [list, get, update]
         filters: [collection_case_id, status]
         actions:
-          - "POST /{id}/activate | Activate an agreed plan"
+          - "POST /{id}/activate | Activate an agreed plan (a second user when outside policy)"
           - "POST /{id}/cancel | Cancel a plan | reason string(255) nn"
       - resource: next-best-actions
         path: /v1/collections/next-best-actions
@@ -1309,14 +1615,29 @@ services:
         table: legal_proceeding
         ops: [list, get, update]
         filters: [collection_case_id, status]
+        actions:
+          - "POST /{id}/approve | Approve litigation (must differ from the requester) | comment string(500)"
+          - "POST /{id}/reject | Reject litigation | reason string(500) nn"
+          - "POST /{id}/advance | Move to the next stage | status enum:LegalProceedingStatus nn, court string(160), case_reference string(128), filed_at date, next_hearing_date date, judgement_amount amount, legal_costs amount, notes text"
 
     events:
       - "lending.collection_case.opened | collection_case | A collections case was opened"
+      - "lending.collection_case.updated | collection_case | DPD or amounts of a case changed"
       - "lending.collection_case.assigned | collection_case | A case was assigned"
+      - "lending.collection_case.disputed | collection_case | A dispute was flagged or cleared"
+      - "lending.collection_case.sent_to_agency | collection_case | A case was outsourced"
       - "lending.collection_case.closed | collection_case | A case was closed"
       - "lending.collection_action.performed | collection_action | A collection action was performed"
       - "lending.promise_to_pay.made | promise_to_pay | A promise to pay was recorded"
+      - "lending.promise_to_pay.kept | promise_to_pay | A promise to pay was kept"
       - "lending.promise_to_pay.broken | promise_to_pay | A promise to pay was broken"
+      - "lending.promise_to_pay.cancelled | promise_to_pay | A promise to pay was cancelled"
+      - "lending.payment_plan.proposed | payment_plan | A payment plan was proposed"
       - "lending.payment_plan.activated | payment_plan | A payment plan was activated"
+      - "lending.payment_plan.completed | payment_plan | A payment plan was completed"
       - "lending.payment_plan.broken | payment_plan | A payment plan was broken"
-      - "lending.legal_proceeding.started | legal_proceeding | Legal proceedings started"
+      - "lending.payment_plan.cancelled | payment_plan | A payment plan was cancelled"
+      - "lending.next_best_action.suggested | next_best_action | A next best action was suggested"
+      - "lending.legal_proceeding.requested | legal_proceeding | Legal proceedings were proposed"
+      - "lending.legal_proceeding.started | legal_proceeding | Legal proceedings started (approved)"
+      - "lending.legal_proceeding.status_changed | legal_proceeding | Legal proceedings moved to another stage"
