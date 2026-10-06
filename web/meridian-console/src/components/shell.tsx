@@ -14,21 +14,49 @@ const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Overview", items: [{ href: "/", label: "Dashboard", live: true }] },
   { group: "Customers", items: [
     { href: "/customers", label: "Customers", live: true },
-    { href: "/onboarding", label: "Onboarding queue" },
-    { href: "/kyc", label: "KYC reviews" },
+    { href: "/onboarding", label: "Onboarding queue", live: true },
+    { href: "/kyc", label: "KYC checks", live: true },
   ] },
-  { group: "Money", items: [
+  { group: "Ledger", items: [
     { href: "/ledger", label: "Ledger explorer", live: true },
     { href: "/ledger/post", label: "Post journal entry", live: true },
-    { href: "/payments", label: "Payments" },
-    { href: "/cards", label: "Cards" },
-    { href: "/loans", label: "Loans" },
+  ] },
+  { group: "Payments", items: [
+    { href: "/payments", label: "Payments", live: true },
+    { href: "/payments/new", label: "New payment", live: true },
+  ] },
+  { group: "Cards", items: [
+    { href: "/cards", label: "Cards", live: true },
+    { href: "/cards/programs", label: "Card programs", live: true },
+    { href: "/cards/authorisations", label: "Authorisations", live: true },
+    { href: "/cards/disputes", label: "Disputes", live: true },
+  ] },
+  { group: "Lending", items: [
+    { href: "/lending/applications", label: "Loan applications", live: true },
+    { href: "/lending/loans", label: "Loans", live: true },
+    { href: "/lending/collections", label: "Collections", live: true },
+  ] },
+  { group: "Wallets & agency", items: [
+    { href: "/wallets", label: "Wallets", live: true },
+    { href: "/wallets/agents", label: "Agents", live: true },
+    { href: "/wallets/merchants", label: "Merchants", live: true },
+    { href: "/wallets/disbursements", label: "Disbursements", live: true },
+  ] },
+  { group: "Risk & compliance", items: [
+    { href: "/risk/fraud", label: "Fraud alerts", live: true },
+    { href: "/risk/aml", label: "AML monitoring", live: true },
+    { href: "/risk/sanctions", label: "Sanctions hits", live: true },
+    { href: "/risk/cases", label: "Cases", live: true },
+  ] },
+  { group: "Treasury & reporting", items: [
+    { href: "/treasury/deals", label: "Treasury deals", live: true },
+    { href: "/treasury/liquidity", label: "Liquidity (LCR/NSFR)", live: true },
+    { href: "/reporting/regulatory", label: "Regulatory reports", live: true },
   ] },
   { group: "Products", items: [{ href: "/products", label: "Product Studio", live: true }] },
   { group: "Control", items: [
     { href: "/approvals", label: "Approvals inbox", live: true },
     { href: "/audit", label: "Audit log", live: true },
-    { href: "/risk", label: "Fraud & AML" },
   ] },
 ];
 
@@ -51,7 +79,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-60 shrink-0 border-r border-border bg-surface px-3 py-5 md:block">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 overflow-y-auto border-r border-border bg-surface px-3 py-5 md:block">
         <Link href="/" className="mb-6 flex items-center gap-2 px-2">
           <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-bold text-accent-fg">M</span>
           <span className="text-sm font-semibold">Meridian Console</span>
