@@ -324,13 +324,19 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: readon
 
 /** Money cell for a row: amount + currency keys (defaults "amount" / "currency"). */
 export function amountCell(amountKey = "amount", currencyKey = "currency") {
-  return (r: Row) => <Money amount={r[amountKey] as string | null | undefined} currency={r[currencyKey] as string | null | undefined} />;
+  return function AmountCell(r: Row) {
+    return <Money amount={r[amountKey] as string | null | undefined} currency={r[currencyKey] as string | null | undefined} />;
+  };
 }
 
 export function dateCell(key: string) {
-  return (r: Row) => <DateTime value={r[key] as string | null | undefined} />;
+  return function DateCell(r: Row) {
+    return <DateTime value={r[key] as string | null | undefined} />;
+  };
 }
 
 export function statusCell(key = "status") {
-  return (r: Row) => <Badge value={r[key] as string | null | undefined} />;
+  return function StatusCell(r: Row) {
+    return <Badge value={r[key] as string | null | undefined} />;
+  };
 }
