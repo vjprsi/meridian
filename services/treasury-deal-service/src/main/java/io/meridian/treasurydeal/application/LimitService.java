@@ -1,5 +1,7 @@
 package io.meridian.treasurydeal.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.treasurydeal.domain.Exposures.Exposure;
 import io.meridian.treasurydeal.domain.Lifecycle;
@@ -9,6 +11,7 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,11 +35,16 @@ public class LimitService {
     private final Rows rows;
     private final Events events;
     private final Ports.MarketData market;
+    private final Approvals approvals;
 
-    public LimitService(Rows rows, Events events, Ports.MarketData market) {
+    /** Approval resource type for counterparty limits in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "treasury_counterparty_limit";
+
+    public LimitService(Rows rows, Events events, Ports.MarketData market, Approvals approvals) {
         this.rows = rows;
         this.events = events;
         this.market = market;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ set-up
@@ -58,7 +66,9 @@ public class LimitService {
             throw ApiException.conflict("duplicate_limit",
                     "A limit of this type and currency already starts on that date for the counterparty");
         }
-        return rows.insert(TABLE, v);
+        ObjectNode out = rows.insert(TABLE, v);
+        requestApproval(out);
+        return out;
     }
 
     /** PATCH: an increase of limit_amount needs a new approval; a decrease applies immediately. */
@@ -88,7 +98,35 @@ public class LimitService {
             v.putNull("approved_by");
             v.putNull("approved_at");
         }
-        return rows.update(TABLE, id, v);
+        ObjectNode out = rows.update(TABLE, id, v);
+        if ("PENDING_APPROVAL".equals(Rows.str(out, "status"))) {
+            requestApproval(out);
+        }
+        return out;
+    }
+
+    /** Central maker-checker: the checker decides in the workflow inbox; LimitApprovalHandler applies it. */
+    private void requestApproval(ObjectNode limit) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        for (String f : new String[] {"treasury_counterparty_id", "limit_type", "currency", "limit_amount",
+                "warning_threshold_pct", "max_tenor_days", "valid_from", "valid_to"}) {
+            payload.put(f, Rows.str(limit, f));
+        }
+        payload.put("row_version", Rows.integer(limit, "row_version"));
+        String ccy = Rows.str(limit, "currency");
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, Rows.uuid(limit, "id"), "approve",
+                Rows.str(limit, "limit_type") + " limit " + Rows.dec(limit, "limit_amount").toPlainString() + " " + ccy, payload)
+                .withAmount(Rows.dec(limit, "limit_amount"), ccy),
+                "submit:" + Rows.str(limit, "id") + ":" + Rows.integer(limit, "row_version"));
+    }
+
+    /** True while the limit is PENDING_APPROVAL with the submitted content (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, Integer rowVersion) {
+        return rows.find(TABLE, id)
+                .filter(l -> "PENDING_APPROVAL".equals(Rows.str(l, "status")))
+                .filter(l -> rowVersion == null || rowVersion.equals(Rows.integer(l, "row_version")))
+                .isPresent();
     }
 
     private static void validate(JsonNode req) {
@@ -120,6 +158,7 @@ public class LimitService {
         v.put("approved_at", rows.now());
         ObjectNode out = rows.update(TABLE, id, v);
         events.publish("treasury.limit.approved", TABLE, out);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return out;
     }
 

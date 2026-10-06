@@ -38,7 +38,10 @@ public class TreasuryCounterpartiesController implements TreasuryCounterpartiesA
     public ResponseEntity<TreasuryCounterparty> treasuryCounterpartiesUpdate(UUID id, String ifMatch, TreasuryCounterpartyUpdate body) {
         TenantContext.require();
         CounterpartyService.validate(actions.tree(body));
-        return crud.update("treasury_counterparty", TreasuryCounterparty.class, body, ifMatch, Crud.params().with("id", id));
+        ResponseEntity<TreasuryCounterparty> out = crud.update("treasury_counterparty", TreasuryCounterparty.class, body,
+                ifMatch, Crud.params().with("id", id));
+        service.resubmitIfPending(id); // changed content of a pending counterparty needs a fresh approval request
+        return out;
     }
 
     @Override
