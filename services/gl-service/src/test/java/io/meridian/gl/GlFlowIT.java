@@ -39,7 +39,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * End-to-end over HTTP against PostgreSQL 18 with row-level security. One legal entity with a small chart of
  * accounts, monthly periods for January and February 2026, ledger postings aggregated into the GL, a manual journal
- * under maker-checker, IFRS 9 provisions, the four-eyes period close, ERP export and reopen.
+ * under maker-checker (append-only approvals), IFRS 9 provisions, the four-eyes period close, ERP export, reopen and
+ * the year-end transfer of the result to retained earnings.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev"})
@@ -163,15 +164,17 @@ class GlFlowIT {
         HttpResponse<String> sim = send("POST", "/v1/gl/mapping-rules/simulate",
                 "{\"legal_entity_id\":\"%s\",\"ledger_account_type\":\"LIABILITY\"}".formatted(le), key(), null, TENANT, MAKER);
         assertThat(sim.statusCode()).as(sim.body()).isEqualTo(200);
-        assertThat(json.readTree(sim.body()).get("code").asString()).isEqualTo("2100");
-        assertThat(sim.headers().firstValue("X-Mapping-Rule-Id")).isPresent();
+        JsonNode simulated = json.readTree(sim.body());
+        assertThat(simulated.get("gl_account").get("code").asString()).isEqualTo("2100");
+        assertThat(simulated.get("mapping_rule").get("gl_account_id").asString()).isEqualTo(deposits);
+        assertThat(simulated.hasNonNull("as_of")).isTrue();
         JsonNode future = post("/v1/gl/mapping-rules/simulate",
                 "{\"legal_entity_id\":\"%s\",\"ledger_account_type\":\"LIABILITY\",\"as_of\":\"2030-06-01\"}".formatted(le),
                 MAKER, 200);
-        assertThat(future.get("code").asString()).isEqualTo("2200");
+        assertThat(future.get("gl_account").get("code").asString()).isEqualTo("2200");
         JsonNode fee = post("/v1/gl/mapping-rules/simulate",
                 "{\"legal_entity_id\":\"%s\",\"ledger_account_type\":\"INCOME\",\"entry_type\":\"FEE\"}".formatted(le), MAKER, 200);
-        assertThat(fee.get("code").asString()).isEqualTo("4100");
+        assertThat(fee.get("gl_account").get("code").asString()).isEqualTo("4100");
         assertThat(code(post("/v1/gl/mapping-rules/simulate",
                 "{\"legal_entity_id\":\"%s\",\"ledger_account_type\":\"EXPENSE\"}".formatted(le), MAKER, 422)))
                 .isEqualTo("no_mapping_rule");
@@ -224,9 +227,11 @@ class GlFlowIT {
         assertBalance(cash, jan, "1000", "0", "1000");
         assertBalance(deposits, jan, "10", "1000", "-990");
         assertBalance(fees, jan, "0", "10", "-10");
-        HttpResponse<String> tb = send("GET", "/v1/gl/periods/" + jan + "/trial-balance", null, null, null, TENANT, MAKER);
-        assertThat(tb.headers().firstValue("X-Trial-Balance-Balanced")).contains("true");
-        assertThat(json.readTree(tb.body()).get("data")).hasSize(3);
+        JsonNode tb = get("/v1/gl/periods/" + jan + "/trial-balance", TENANT);
+        assertThat(tb.get("balanced").asBoolean()).isTrue();
+        assertThat(tb.get("lines")).hasSize(3);
+        assertThat(tb.get("currencies").get(0).get("currency").asString()).isEqualTo("USD");
+        assertThat(new BigDecimal(tb.get("currencies").get(0).get("debits").asString())).isEqualByComparingTo("1010");
         JsonNode journals = get("/v1/gl/journals?source_journal_entry_id=" + je1, TENANT).get("data");
         assertThat(journals).hasSize(1);
         assertThat(journals.get(0).get("journal_type").asString()).isEqualTo("AUTO_AGGREGATE");
@@ -246,8 +251,11 @@ class GlFlowIT {
         JsonNode j = post("/v1/gl/journals", journal("2026-01-25", jl(impairment, "DEBIT", "50.00"),
                 jl(cash, "CREDIT", "50.00")), MAKER, 201);
         String id = j.get("id").asString();
-        assertThat(j.hasNonNull("approved_by")).isFalse();
+        assertThat(j.get("lines")).hasSize(2);
+        assertThat(new BigDecimal(j.get("lines").get(0).get("base_amount").asString())).isEqualByComparingTo("50.00");
+        assertThat(get("/v1/gl/journals/" + id, TENANT).get("lines")).hasSize(2);
         assertThat(get("/v1/gl/journals/" + id + "/lines", TENANT).get("data")).hasSize(2);
+        assertThat(get("/v1/gl/journal-approvals?gl_journal_id=" + id, TENANT).get("data")).isEmpty();
         assertBalance(cash, jan, "1000", "0", "1000");
 
         // The close checklist blocks while a manual journal awaits approval.
@@ -261,6 +269,8 @@ class GlFlowIT {
                 null, TENANT, CHECKER);
         assertThat(ok.statusCode()).as(ok.body()).isEqualTo(200);
         assertThat(json.readTree(ok.body()).get("approved_by").asString()).isEqualTo(CHECKER);
+        assertThat(json.readTree(ok.body()).get("gl_journal_id").asString()).isEqualTo(id);
+        assertThat(json.readTree(ok.body()).get("comment").asString()).isEqualTo("ok");
         HttpResponse<String> replay = send("POST", "/v1/gl/journals/" + id + "/approve", "{\"comment\":\"ok\"}", "appr-1",
                 null, TENANT, CHECKER);
         assertThat(replay.statusCode()).isEqualTo(200);
@@ -268,6 +278,11 @@ class GlFlowIT {
         assertThat(code(post("/v1/gl/journals/" + id + "/approve", "{}", CHECKER, 409))).isEqualTo("already_approved");
         assertBalance(cash, jan, "1000", "50", "950");
         assertBalance(impairment, jan, "50", "0", "50");
+        assertThat(get("/v1/gl/journal-approvals?gl_journal_id=" + id, TENANT).get("data")).hasSize(1);
+        assertThat(outboxCount("ledger.gl_journal.approved")).isEqualTo(1);
+        assertThat(code(post("/v1/gl/journals", journal("2026-01-25", jl(impairment, "DEBIT", "1.00"),
+                jl(cash, "CREDIT", "1.00")).replace("MANUAL_ADJUSTMENT", "YEAR_END_CLOSE"), MAKER, 422)))
+                .isEqualTo("journal_type_reserved");
     }
 
     @Test
@@ -282,13 +297,20 @@ class GlFlowIT {
                 {"legal_entity_id":"%s","reporting_date":"2026-01-31","exposures":%s,
                  "provision_expense_gl_account_id":"%s","allowance_gl_account_id":"%s"}"""
                 .formatted(le, exposures, impairment, allowance);
-        JsonNode run = post("/v1/gl/ecl-provisions/calculate", body, MAKER, 200);
+        JsonNode result = post("/v1/gl/ecl-provisions/calculate", body, MAKER, 200);
+        assertThat(result.get("exposures").asInt()).isEqualTo(3);
+        assertThat(new BigDecimal(result.get("total_ecl").get("USD").asString())).isEqualByComparingTo("990.00");
+        assertThat(result.get("provisions")).hasSize(3);
+        String provisionJournal = result.get("gl_journal_id").asString();
+        JsonNode run = get("/v1/gl/close-runs/" + result.get("period_close_run_id").asString(), TENANT);
         assertThat(run.get("status").asString()).isEqualTo("SUCCEEDED");
         assertThat(run.get("accounting_period_id").asString()).isEqualTo(jan);
-        assertThat(new BigDecimal(run.get("steps").get("total_ecl").get("USD").asString())).isEqualByComparingTo("990.00");
         JsonNode provisions = get("/v1/gl/ecl-provisions?legal_entity_id=" + le, TENANT).get("data");
         assertThat(provisions).hasSize(3);
-        provisions.forEach(p -> assertThat(p.hasNonNull("gl_journal_id")).isTrue());
+        provisions.forEach(p -> assertThat(p.get("gl_journal_id").asString()).isEqualTo(provisionJournal));
+        // System provision journals carry a system approval, so they never block the close checklist.
+        assertThat(get("/v1/gl/journal-approvals?gl_journal_id=" + provisionJournal, TENANT).get("data").get(0)
+                .get("approved_by").asString()).isEqualTo("system:ecl");
         assertBalance(allowance, jan, "0", "990", "-990");
         assertThat(code(post("/v1/gl/ecl-provisions/calculate", body, MAKER, 409))).isEqualTo("already_calculated");
         assertThat(code(post("/v1/gl/ecl-provisions/calculate", """
@@ -342,9 +364,15 @@ class GlFlowIT {
         assertThat(export.get("checksum").asString()).hasSize(64);
         HttpResponse<String> dl = send("GET", "/v1/gl/erp-exports/" + export.get("id").asString() + "/download", null,
                 null, null, TENANT, MAKER);
-        assertThat(dl.statusCode()).isEqualTo(204);
-        assertThat(dl.headers().firstValue("Location").orElseThrow()).contains("signature=").contains("expires=");
+        assertThat(dl.statusCode()).as(dl.body()).isEqualTo(200);
+        assertThat(dl.headers().firstValue("Content-Type").orElseThrow()).startsWith("text/csv");
         assertThat(dl.headers().firstValue("X-Checksum-SHA256")).contains(export.get("checksum").asString());
+        assertThat(dl.body()).startsWith("legal_entity_id,period_type,");
+        assertThat(dl.body().strip().split("\n")).hasSize(6);
+        assertThat(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(dl.body().getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+                .isEqualTo(export.get("checksum").asString());
+        assertThat(outboxCount("ledger.erp_export.completed")).isEqualTo(1);
     }
 
     @Test
@@ -377,7 +405,57 @@ class GlFlowIT {
         assertThat(sim.statusCode()).isEqualTo(422);
     }
 
+    @Test
+    @Order(12)
+    void yearEndCloseTransfersResultToRetainedEarnings() throws Exception {
+        String year = period("YEAR", "2027-01-01", "2027-12-31", 201).get("id").asString();
+        asTenant(() -> aggregation.aggregate(new LedgerPosting(UUID.randomUUID(), UUID.fromString(le), "FEE",
+                LocalDate.parse("2027-03-10"), "Fees", List.of(line("ASSET", "DEBIT", "300.00"),
+                line("INCOME", "CREDIT", "300.00")))));
+        assertBalance(fees, year, "0", "300", "-300");
+
+        // Without a designated retained-earnings account the year cannot close.
+        JsonNode blocked = post("/v1/gl/periods/" + year + "/close", null, MAKER, 200);
+        assertThat(blocked.get("status").asString()).isEqualTo("FAILED");
+        assertThat(step(blocked, "pnl_to_retained_earnings").get("status").asString()).isEqualTo("FAILED");
+        assertThat(get("/v1/gl/periods/" + year, TENANT).get("status").asString()).isEqualTo("OPEN");
+
+        String equity = account("3000", "Equity", "EQUITY", null, false);
+        assertThat(code(post("/v1/gl/accounts", retained("1950", "Not equity", "ASSET", assets), MAKER, 422)))
+                .isEqualTo("invalid_retained_earnings_account");
+        String retained = post("/v1/gl/accounts", retained("3100", "Retained earnings", "EQUITY", equity), MAKER, 201)
+                .get("id").asString();
+        assertThat(code(post("/v1/gl/accounts", retained("3200", "Second RE", "EQUITY", equity), MAKER, 409)))
+                .isEqualTo("retained_earnings_already_designated");
+
+        JsonNode run = post("/v1/gl/periods/" + year + "/close", null, MAKER, 200);
+        assertThat(run.get("status").asString()).as(run.toString()).isEqualTo("SUCCEEDED");
+        assertThat(step(run, "pnl_to_retained_earnings").get("detail").asString()).contains("profit 300");
+        assertBalance(fees, year, "300", "300", "0");
+        assertBalance(retained, year, "0", "300", "-300");
+        JsonNode closing = get("/v1/gl/journals?journal_type=YEAR_END_CLOSE&legal_entity_id=" + le, TENANT).get("data");
+        assertThat(closing).hasSize(1);
+        assertThat(closing.get(0).get("accounting_period_id").asString()).isEqualTo(year);
+        assertThat(get("/v1/gl/periods/" + year + "/trial-balance", TENANT).get("balanced").asBoolean()).isTrue();
+        assertThat(code(post("/v1/gl/journals/" + closing.get(0).get("id").asString() + "/approve", "{}", CHECKER, 409)))
+                .isEqualTo("not_approvable");
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static JsonNode step(JsonNode run, String name) {
+        for (JsonNode s : run.get("steps").get("checklist")) {
+            if (name.equals(s.get("step").asString())) {
+                return s;
+            }
+        }
+        throw new AssertionError("no checklist step " + name + " in " + run);
+    }
+
+    private String retained(String code, String name, String cls, String parent) {
+        String body = accountBody(code, name, cls, parent, true);
+        return body.substring(0, body.lastIndexOf('}')) + ",\"is_retained_earnings\":true}";
+    }
 
     private PostingLine line(String type, String direction, String amount) {
         BigDecimal a = new BigDecimal(amount);

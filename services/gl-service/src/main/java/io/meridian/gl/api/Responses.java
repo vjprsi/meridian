@@ -3,6 +3,8 @@ package io.meridian.gl.api;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import java.util.Map;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -33,6 +35,17 @@ public class Responses {
             n.set("body", body);
         }
         return n;
+    }
+
+    /** A computed JSON object result (operations declared with response {@code object}). */
+    public ResponseEntity<Map<String, Object>> object(JsonNode result) {
+        return ResponseEntity.ok(json.convertValue(result, new TypeReference<Map<String, Object>>() {}));
+    }
+
+    /** Same as {@link #object(JsonNode)} for a (possibly replayed) idempotent response, keeping status and headers. */
+    public ResponseEntity<Map<String, Object>> object(ResponseEntity<JsonNode> r) {
+        return ResponseEntity.status(r.getStatusCode()).headers(r.getHeaders())
+                .body(r.getBody() == null ? null : json.convertValue(r.getBody(), new TypeReference<Map<String, Object>>() {}));
     }
 
     public <T> ResponseEntity<T> ok(String row, Class<T> type) {

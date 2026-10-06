@@ -54,10 +54,9 @@ public class RuleService {
             throw ApiException.unprocessable("unsupported_match_type",
                     "Automatic rules support " + SUPPORTED + "; " + type + " matches are created via POST /matches");
         }
-        JsonNode fields = r.path("match_fields").path("fields");
+        JsonNode fields = r.path("match_fields");
         if (!fields.isArray() || fields.isEmpty()) {
-            throw Fields.invalid("match_fields", "required",
-                    "match_fields must be a non-empty array of field names (or {\"fields\": [...]})");
+            throw Fields.invalid("match_fields", "required", "match_fields must be a non-empty array of field names");
         }
         boolean hasReference = false;
         for (JsonNode f : fields) {

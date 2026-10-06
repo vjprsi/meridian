@@ -3,29 +3,26 @@ package io.meridian.gl.application;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
+import io.meridian.events.OutboxWriter;
 import io.meridian.gl.infrastructure.FileStore;
 import io.meridian.gl.infrastructure.GlStore;
 import io.meridian.web.crud.CrudEngine;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
  * ERP export of a closed period: the trial balance (one line per GL account and currency) as CSV, stored in the file
- * store with its SHA-256 checksum. Downloads hand out short-lived HMAC-signed URLs.
+ * store with its SHA-256 checksum; {@code ledger.erp_export.completed} is published. Download returns the file.
  */
 @Service
 public class ErpExportService {
@@ -34,22 +31,21 @@ public class ErpExportService {
             + "account_class,currency,opening_balance,debits,credits,closing_balance,base_closing_balance";
     private static final long URL_TTL_SECONDS = 900;
 
-    /** A signed, expiring download link. */
-    public record Download(String url, Instant expiresAt, String checksum) {}
+    /** The export file content with its SHA-256 checksum and a suggested file name. */
+    public record Download(String content, String checksum, String fileName) {}
 
     private final GlStore store;
     private final CrudEngine crud;
     private final FileStore files;
-    private final byte[] signingKey;
-    private final String downloadBase;
+    private final OutboxWriter outbox;
+    private final JsonMapper json;
 
-    public ErpExportService(GlStore store, CrudEngine crud, FileStore files, Environment env) {
+    public ErpExportService(GlStore store, CrudEngine crud, FileStore files, OutboxWriter outbox, JsonMapper json) {
         this.store = store;
         this.crud = crud;
         this.files = files;
-        this.signingKey = env.getProperty("meridian.gl.download-signing-key", "dev-only-signing-key")
-                .getBytes(StandardCharsets.UTF_8);
-        this.downloadBase = env.getProperty("meridian.gl.download-base-url", "https://files.meridian.local/");
+        this.outbox = outbox;
+        this.json = json;
     }
 
     @Transactional
@@ -93,25 +89,21 @@ public class ErpExportService {
         v.put("file_uri", uri);
         v.put("line_count", rows.size());
         v.put("checksum", sha256(content));
-        return crud.insert("erp_export", v);
+        String row = crud.insert("erp_export", v);
+        outbox.publish("ledger.erp_export.completed", "erp_export", id, json.readTree(row));
+        return row;
     }
 
+    /** The export file (CSV) of a SUCCEEDED export. */
     @Transactional(readOnly = true)
     public Download download(UUID id) {
         JsonNode e = store.require("erp_export", id);
         if (!"SUCCEEDED".equals(e.get("status").asString()) || !e.hasNonNull("file_uri")) {
             throw ApiException.conflict("export_not_ready", "Export " + id + " is " + e.get("status").asString());
         }
-        Instant expires = Instant.now().plusSeconds(URL_TTL_SECONDS);
-        String path = "gl/erp-exports/" + id + ".csv";
-        String signature = hmac(path + "|" + expires.getEpochSecond() + "|" + e.get("checksum").asString());
-        return new Download(downloadBase + path + "?expires=" + expires.getEpochSecond() + "&signature=" + signature,
-                expires, e.get("checksum").asString());
-    }
-
-    /** The stored file content (for verification and internal transfer to the ERP connector). */
-    public byte[] content(JsonNode export) {
-        return files.get(export.get("file_uri").asString());
+        return new Download(new String(files.get(e.get("file_uri").asString()), StandardCharsets.UTF_8),
+                e.get("checksum").asString(), "gl-" + e.get("target_system").asString().toLowerCase(java.util.Locale.ROOT)
+                        + "-" + id + ".csv");
     }
 
     private static String cell(JsonNode r, String f) {
@@ -126,16 +118,6 @@ public class ErpExportService {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private String hmac(String data) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(signingKey, "HmacSHA256"));
-            return HexFormat.of().formatHex(mac.doFinal(data.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IllegalStateException(e);
         }
     }

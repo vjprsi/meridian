@@ -220,7 +220,7 @@ public class RunService {
                 select row_to_json(t)::text from recon_rule t
                 where t.is_active and (t.recon_source_id is null or t.recon_source_id = ?)""", sourceId)) {
             Set<String> fields = new HashSet<>();
-            r.path("match_fields").path("fields").forEach(f -> fields.add(f.asString()));
+            r.path("match_fields").forEach(f -> fields.add(f.asString()));
             out.add(new Matcher.Rule(UUID.fromString(r.get("id").asString()), r.get("priority").asInt(),
                     r.get("match_type").asString(), fields, new BigDecimal(r.get("amount_tolerance").asString()),
                     r.get("date_tolerance_days").asInt(), r.get("auto_confirm").asBoolean()));

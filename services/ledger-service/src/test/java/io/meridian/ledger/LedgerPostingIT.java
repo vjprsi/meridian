@@ -238,6 +238,91 @@ class LedgerPostingIT {
         assertThat(snaps).hasSize(1);
     }
 
+    @Test
+    @Order(13)
+    void referenceAndValueDateAreCopiedToLedgerEntries() throws Exception {
+        JsonNode je = post("/v1/journal-entries", """
+                {"ledger_id":"%s","description":"wire in","value_date":"2026-03-02","reference":"E2E-REF-1",
+                 "entries":[%s,%s]}""".formatted(ledger, line(cash, "DEBIT", "5.00"), line(alice, "CREDIT", "5.00")), 201);
+        assertThat(je.get("reference").asString()).isEqualTo("E2E-REF-1");
+        for (JsonNode e : je.get("entries")) {
+            assertThat(e.get("value_date").asString()).isEqualTo("2026-03-02");
+            assertThat(e.get("reference").asString()).isEqualTo("E2E-REF-1");
+        }
+        JsonNode lines = get("/v1/journal-entries/" + je.get("id").asString() + "/entries", TENANT).get("data");
+        assertThat(lines).hasSize(2);
+        lines.forEach(e -> assertThat(e.get("value_date").asString()).isEqualTo("2026-03-02"));
+        assertThat(get("/v1/journal-entries?reference=E2E-REF-1", TENANT).get("data")).hasSize(1);
+
+        JsonNode rev = post("/v1/journal-entries/" + je.get("id").asString() + "/reverse", "{\"reason\":\"returned\"}", 201);
+        assertThat(rev.get("reference").asString()).isEqualTo("E2E-REF-1");
+        assertThat(rev.get("entries").get(0).get("reference").asString()).isEqualTo("E2E-REF-1");
+    }
+
+    @Test
+    @Order(14)
+    void batchPostsEachEntryOnItsOwnAndReplays() throws Exception {
+        String body = """
+                {"entries":[
+                  {"ledger_id":"%1$s","description":"b0","entries":[%2$s,%3$s]},
+                  {"ledger_id":"%1$s","description":"b1","entries":[%4$s,%5$s]},
+                  {"ledger_id":"%1$s","description":"b2","entries":[%2$s,%3$s]}]}"""
+                .formatted(ledger, line(cash, "DEBIT", "2.00"), line(fees, "CREDIT", "2.00"),
+                        line(cash, "DEBIT", "2.00"), line(fees, "CREDIT", "1.99"));
+        BigDecimal feesBefore = bal(fees);
+        HttpResponse<String> r = send("POST", "/v1/journal-entries/batch", body, "batch-1", TENANT);
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+        JsonNode res = json.readTree(r.body());
+        assertThat(res.get("posted").asInt()).isEqualTo(2);
+        assertThat(res.get("failed").asInt()).isEqualTo(1);
+        assertThat(res.get("results").get(1).get("code").asString()).isEqualTo("unbalanced_entry");
+        assertThat(res.get("results").get(0).get("journal_entry").get("idempotency_key").asString()).isEqualTo("batch-1:0");
+        assertThat(bal(fees)).isEqualByComparingTo(feesBefore.add(new BigDecimal("4.00")));
+
+        JsonNode replay = json.readTree(send("POST", "/v1/journal-entries/batch", body, "batch-1", TENANT).body());
+        assertThat(replay.get("posted").asInt()).isZero();
+        assertThat(replay.get("replayed").asInt()).isEqualTo(2);
+        assertThat(bal(fees)).isEqualByComparingTo(feesBefore.add(new BigDecimal("4.00")));
+    }
+
+    @Test
+    @Order(15)
+    void overdraftLimitAndFreezeAreIdempotent() throws Exception {
+        String carol = account("2000-C", "Carol deposits", "LIABILITY", "CREDIT", false);
+        postEntry("carol-fund", line(cash, "DEBIT", "100.00"), line(carol, "CREDIT", "100.00"));
+        JsonNode limited = post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"50.00\",\"reason\":\"arranged\"}", 200);
+        assertThat(new BigDecimal(limited.get("overdraft_limit").asString())).isEqualByComparingTo("50");
+        assertBalance(carol, "100", "150");
+        JsonNode same = post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"50\"}", 200);
+        assertThat(same.get("row_version").asInt()).isEqualTo(limited.get("row_version").asInt());
+        assertThat(post("/v1/ledger-accounts/" + carol + "/overdraft-limit", "{\"limit\":\"-1\"}", 422).get("code")
+                .asString()).isEqualTo("invalid_overdraft_limit");
+        postEntry("carol-od", line(carol, "DEBIT", "140.00"), line(cash, "CREDIT", "140.00"));
+        assertBalance(carol, "-40", "10");
+
+        String frz = "{\"status\":\"FROZEN_DEBIT\",\"reason\":\"review\"}";
+        assertThat(post("/v1/ledger-accounts/" + carol + "/freeze", frz, 200).get("status").asString()).isEqualTo("FROZEN_DEBIT");
+        assertThat(post("/v1/ledger-accounts/" + carol + "/freeze", frz, 200).get("status").asString()).isEqualTo("FROZEN_DEBIT");
+        assertThat(post("/v1/ledger-accounts/" + carol + "/freeze", "{\"status\":\"ACTIVE\",\"reason\":\"x\"}", 422)
+                .get("code").asString()).isEqualTo("invalid_status");
+        assertThat(post("/v1/ledger-accounts/" + carol + "/unfreeze", "{\"reason\":\"ok\"}", 200).get("status").asString())
+                .isEqualTo("ACTIVE");
+        assertThat(post("/v1/ledger-accounts/" + carol + "/unfreeze", "{\"reason\":\"ok\"}", 200).get("status").asString())
+                .isEqualTo("ACTIVE");
+
+        // PATCH of overdraft_limit keeps the stored available balance consistent.
+        JsonNode cur = get("/v1/ledger-accounts/" + carol, TENANT);
+        HttpRequest patch = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/ledger-accounts/" + carol))
+                .header("X-Tenant-Id", TENANT).header("Content-Type", "application/json")
+                .header("If-Match", "\"" + cur.get("row_version").asInt() + "\"")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString("{\"overdraft_limit\":\"0\"}"))
+                .build();
+        HttpResponse<String> pr = http.send(patch, HttpResponse.BodyHandlers.ofString());
+        assertThat(pr.statusCode()).as(pr.body()).isEqualTo(200);
+        assertThat(new BigDecimal(json.readTree(pr.body()).get("overdraft_limit").asString())).isEqualByComparingTo("0");
+        assertBalance(carol, "-40", "-40");
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String account(String code, String name, String type, String normal, boolean allowNegative) throws Exception {

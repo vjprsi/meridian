@@ -7,11 +7,13 @@ import io.meridian.gl.api.generated.model.ErpExportCreate;
 import io.meridian.gl.application.ErpExportService;
 import io.meridian.web.idempotency.Idempotency;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
-/** ERP exports: generate the CSV of a closed period; download hands out a signed URL (204 + Location). */
+/** ERP exports: generate the CSV of a closed period; download returns the file (text/csv). */
 @RestController
 public class ErpExportsController implements ErpExportsApi {
     private final ErpExportService exports;
@@ -32,13 +34,13 @@ public class ErpExportsController implements ErpExportsApi {
     }
 
     @Override
-    public ResponseEntity<Void> erpExportsDownload(UUID id) {
+    public ResponseEntity<String> erpExportsDownload(UUID id) {
         TenantContext.require();
         ErpExportService.Download d = exports.download(id);
-        return ResponseEntity.noContent()
-                .header(HttpHeaders.LOCATION, d.url())
-                .header("X-Download-Expires-At", d.expiresAt().toString())
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + d.fileName() + "\"")
                 .header("X-Checksum-SHA256", d.checksum())
-                .build();
+                .body(d.content());
     }
 }

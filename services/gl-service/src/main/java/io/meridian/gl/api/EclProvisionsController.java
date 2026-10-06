@@ -3,18 +3,18 @@ package io.meridian.gl.api;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.gl.api.generated.EclProvisionsApi;
 import io.meridian.gl.api.generated.model.EclProvisionsCalculateRequest;
-import io.meridian.gl.api.generated.model.PeriodCloseRun;
 import io.meridian.gl.application.EclService;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * IFRS 9 ECL. /calculate accepts, beyond the generated request model, {@code exposures}
- * ([{exposure_type, exposure_id, stage, ead, pd_12m, pd_lifetime | pd, lgd, currency}]) and the optional
- * {@code provision_expense_gl_account_id} / {@code allowance_gl_account_id} used to post the provision journal.
+ * IFRS 9 ECL. /calculate takes the exposures ([{exposure_type, exposure_id, stage, ead, pd_12m, pd_lifetime or pd,
+ * lgd, currency}]) and the optional provision GL accounts used to post the provision journal; it returns the
+ * calculation result (totals, journal, persisted provisions).
  */
 @RestController
 public class EclProvisionsController implements EclProvisionsApi {
@@ -31,10 +31,11 @@ public class EclProvisionsController implements EclProvisionsApi {
     }
 
     @Override
-    public ResponseEntity<PeriodCloseRun> eclProvisionsCalculate(String idempotencyKey, EclProvisionsCalculateRequest body) {
+    public ResponseEntity<Map<String, Object>> eclProvisionsCalculate(String idempotencyKey,
+                                                                      EclProvisionsCalculateRequest body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
-        return idempotency.execute(idempotencyKey, req, PeriodCloseRun.class,
-                () -> responses.ok(ecl.calculate(req), PeriodCloseRun.class));
+        JsonNode req = json.valueToTree(body);
+        return responses.object(idempotency.execute(idempotencyKey, body, JsonNode.class,
+                () -> ResponseEntity.ok(ecl.calculate(req))));
     }
 }

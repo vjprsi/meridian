@@ -97,10 +97,10 @@ class ReconciliationFlowIT {
         when(services.get(eq("ledger-service"), startsWith("/v1/ledger-entries?ledger_account_id=" + nostro)))
                 .thenReturn(json.readTree("""
                         {"data":[
-                          {"id":"%s","ledger_account_id":"%s","direction":"CREDIT","amount":"100.00","currency":"USD","effective_at":"2026-03-02T10:00:00Z","description":"E2E-1"},
-                          {"id":"%s","ledger_account_id":"%s","direction":"CREDIT","amount":"250.00","currency":"USD","effective_at":"2026-03-03T10:00:00Z","description":"E2E-2"},
-                          {"id":"%s","ledger_account_id":"%s","direction":"DEBIT","amount":"75.50","currency":"USD","effective_at":"2026-03-05T10:00:00Z","description":"card spend"},
-                          {"id":"%s","ledger_account_id":"%s","direction":"DEBIT","amount":"40.00","currency":"USD","effective_at":"2026-03-20T10:00:00Z","description":"ORPHAN"}],
+                          {"id":"%s","ledger_account_id":"%s","direction":"CREDIT","amount":"100.00","currency":"USD","effective_at":"2026-03-02T10:00:00Z","value_date":"2026-03-02","reference":"E2E-1"},
+                          {"id":"%s","ledger_account_id":"%s","direction":"CREDIT","amount":"250.00","currency":"USD","effective_at":"2026-03-03T10:00:00Z","value_date":"2026-03-03","reference":"E2E-2"},
+                          {"id":"%s","ledger_account_id":"%s","direction":"DEBIT","amount":"75.50","currency":"USD","effective_at":"2026-03-05T10:00:00Z","value_date":"2026-03-05","description":"card spend"},
+                          {"id":"%s","ledger_account_id":"%s","direction":"DEBIT","amount":"40.00","currency":"USD","effective_at":"2026-03-20T10:00:00Z","value_date":"2026-03-20","reference":"ORPHAN"}],
                          "has_more":false}""".formatted(i1, nostro, i2, nostro, i3, nostro, i4, nostro)));
         when(services.post(eq("ledger-service"), eq("/v1/journal-entries"), any(), any()))
                 .thenReturn(json.readTree("{\"id\":\"0199a000-0000-7000-8000-00000000adj1\"}".replace("adj1", "0a01")));
@@ -131,8 +131,8 @@ class ReconciliationFlowIT {
     @Order(2)
     void csvFileIsParsedOnceAndIdempotent() throws Exception {
         String body = fileBody(source, "nostro-2026-03.csv", CSV);
-        HttpResponse<String> created = send("POST", "/v1/reconciliation/files", body, "file-1", null, TENANT);
-        assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
+        HttpResponse<String> created = send("POST", "/v1/reconciliation/files/import", body, "file-1", null, TENANT);
+        assertThat(created.statusCode()).as(created.body()).isEqualTo(200);
         JsonNode f = json.readTree(created.body());
         file = f.get("id").asString();
         assertThat(f.get("status").asString()).isEqualTo("PARSED");
@@ -143,14 +143,16 @@ class ReconciliationFlowIT {
         assertThat(records).hasSize(4);
         assertThat(values(records, "narrative")).contains("Payment 2, invoice 7");
 
-        HttpResponse<String> replay = send("POST", "/v1/reconciliation/files", body, "file-1", null, TENANT);
-        assertThat(replay.statusCode()).isEqualTo(201);
+        HttpResponse<String> replay = send("POST", "/v1/reconciliation/files/import", body, "file-1", null, TENANT);
+        assertThat(replay.statusCode()).isEqualTo(200);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
-        assertThat(code(post("/v1/reconciliation/files", body, 409))).isEqualTo("duplicate_file");
-        assertThat(code(post("/v1/reconciliation/files",
+        assertThat(code(post("/v1/reconciliation/files/import", body, 409))).isEqualTo("duplicate_file");
+        assertThat(code(post("/v1/reconciliation/files/import",
                 "{\"recon_source_id\":\"%s\",\"file_name\":\"empty.csv\"}".formatted(source), 422))).isEqualTo("content_required");
-        assertThat(send("POST", "/v1/reconciliation/files", "{\"recon_source_id\":\"%s\"}".formatted(source), key(), null,
+        assertThat(send("POST", "/v1/reconciliation/files/import", "{\"recon_source_id\":\"%s\"}".formatted(source), key(), null,
                 TENANT).statusCode()).isEqualTo(400);
+        assertThat(send("POST", "/v1/reconciliation/files", body, key(), null, TENANT).statusCode())
+                .as("files are created by /import only").isEqualTo(405);
         assertThat(outboxCount("ledger.recon_file.parsed")).isEqualTo(1);
     }
 
@@ -161,7 +163,7 @@ class ReconciliationFlowIT {
                 {"name":"Card scheme","source_type":"CARD_SCHEME","file_format":"CSV","currency":"USD",
                  "parser_config":{"columns":{"value_date":"settle_date"}}}""", 201);
         String content = "value_date,amount,direction\n2026-03-01,10.00,C\n2026-03-02,-3.00,\n";
-        JsonNode f = post("/v1/reconciliation/files", fileBody(src.get("id").asString(), "scheme.csv", content), 201);
+        JsonNode f = post("/v1/reconciliation/files/import", fileBody(src.get("id").asString(), "scheme.csv", content), 200);
         assertThat(f.get("status").asString()).isEqualTo("FAILED");
         assertThat(f.get("error").asString()).contains("settle_date");
         HttpResponse<String> patched = send("PATCH", "/v1/reconciliation/sources/" + src.get("id").asString(),
@@ -180,7 +182,7 @@ class ReconciliationFlowIT {
         String src = post("/v1/reconciliation/sources",
                 "{\"name\":\"Nostro EUR\",\"source_type\":\"BANK_STATEMENT\",\"file_format\":\"CAMT_053\",\"currency\":\"EUR\"}",
                 201).get("id").asString();
-        JsonNode ok = post("/v1/reconciliation/files", fileBody(src, "stmt.xml", CAMT.formatted("1300.00")), 201);
+        JsonNode ok = post("/v1/reconciliation/files/import", fileBody(src, "stmt.xml", CAMT.formatted("1300.00")), 200);
         assertThat(ok.get("status").asString()).as(ok.toString()).isEqualTo("PARSED");
         assertThat(ok.get("record_count").asInt()).isEqualTo(2);
         assertThat(ok.get("closing_balance").asString()).startsWith("1300");
@@ -189,9 +191,16 @@ class ReconciliationFlowIT {
         assertThat(values(recs, "end_to_end_id")).contains("E2E-C1");
         assertThat(values(recs, "counterparty")).contains("ACME Ltd");
 
-        JsonNode bad = post("/v1/reconciliation/files", fileBody(src, "stmt-bad.xml", CAMT.formatted("1999.00")), 201);
+        JsonNode bad = post("/v1/reconciliation/files/import", fileBody(src, "stmt-bad.xml", CAMT.formatted("1999.00")), 200);
         assertThat(bad.get("status").asString()).isEqualTo("FAILED");
         assertThat(bad.get("error").asString()).contains("Balance check failed");
+
+        JsonNode pre = post("/v1/reconciliation/files/import", """
+                {"recon_source_id":"%s","file_name":"api-push.json","opening_balance":"0","closing_balance":"30.00",
+                 "records":[{"value_date":"2026-03-15","direction":"CREDIT","amount":"30.00","currency":"EUR","end_to_end_id":"E2E-P1"}]}"""
+                .formatted(src), 200);
+        assertThat(pre.get("status").asString()).as(pre.toString()).isEqualTo("PARSED");
+        assertThat(pre.get("record_count").asInt()).isEqualTo(1);
     }
 
     @Test
@@ -204,6 +213,7 @@ class ReconciliationFlowIT {
         assertThat(r.get("status").asString()).isEqualTo("SUCCEEDED");
         assertThat(r.get("matched_count").asInt()).isEqualTo(2);
         assertThat(r.get("exception_count").asInt()).isEqualTo(3);
+        assertThat(outboxCount("ledger.recon_match.created")).isEqualTo(2);
 
         JsonNode matches = get("/v1/reconciliation/matches?recon_run_id=" + run, TENANT).get("data");
         assertThat(matches).hasSize(2);
@@ -244,7 +254,8 @@ class ReconciliationFlowIT {
 
         JsonNode match = post("/v1/reconciliation/exceptions/" + mismatch + "/accept-suggestion", null, 200);
         assertThat(match.get("confirmed_by").asString()).isEqualTo(USER);
-        assertThat(match.get("internal_entry_ids").get("ids").get(0).asString()).isEqualTo(i3);
+        assertThat(match.get("internal_entry_ids").get(0).asString()).isEqualTo(i3);
+        assertThat(match.get("external_record_ids").isArray()).isTrue();
         assertThat(get("/v1/reconciliation/exceptions/" + mismatch, TENANT).get("status").asString()).isEqualTo("RESOLVED");
         assertThat(code(post("/v1/reconciliation/exceptions/" + mismatch + "/accept-suggestion", null, 409)))
                 .isEqualTo("invalid_transition");
@@ -296,6 +307,7 @@ class ReconciliationFlowIT {
         JsonNode rerun = post("/v1/reconciliation/runs", runBody(source, "2026-03-01", "2026-03-31"), 201);
         assertThat(rerun.get("matched_count").asInt()).as("the unmatched pair is matched again").isEqualTo(1);
         assertThat(rerun.get("exception_count").asInt()).isZero();
+        assertThat(outboxCount("ledger.recon_match.unmatched")).isEqualTo(1);
 
         // The 999.00 record (break resolved with an adjustment) is matched manually to the adjustment entry.
         String e4 = breaks.get("MISSING_INTERNAL").get("external_record_id").asString();
@@ -307,6 +319,8 @@ class ReconciliationFlowIT {
         assertThat(code(post("/v1/reconciliation/matches", manual.replace("someone-else", "x"), 409)))
                 .isEqualTo("already_matched");
         assertThat(get("/v1/reconciliation/files/" + file, TENANT).get("status").asString()).isEqualTo("MATCHED");
+        // 2 rule matches + accepted suggestion + rematch after unmatch + manual match
+        assertThat(outboxCount("ledger.recon_match.created")).isEqualTo(5);
     }
 
     @Test

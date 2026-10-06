@@ -42,7 +42,7 @@ public class ReconExceptionsController implements ReconExceptionsApi {
     public ResponseEntity<ReconException> reconExceptionsAssign(UUID id, String idempotencyKey,
                                                                 ReconExceptionsAssignRequest body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
+        JsonNode req = json.valueToTree(body);
         return idempotency.execute(idempotencyKey, responses.action("assign", id, req), ReconException.class,
                 () -> responses.ok(exceptions.assign(id, Fields.text(req, "assigned_to")), ReconException.class));
     }
@@ -51,7 +51,7 @@ public class ReconExceptionsController implements ReconExceptionsApi {
     public ResponseEntity<ReconException> reconExceptionsResolve(UUID id, String idempotencyKey,
                                                                  ReconExceptionsResolveRequest body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
+        JsonNode req = json.valueToTree(body);
         JsonNode adjustment = req.hasNonNull("adjustment") ? req.get("adjustment") : null;
         return idempotency.execute(idempotencyKey, responses.action("resolve", id, req), ReconException.class,
                 () -> responses.ok(exceptions.resolve(id, Fields.text(req, "resolution_note"), adjustment,

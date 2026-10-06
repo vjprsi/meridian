@@ -4,6 +4,7 @@ import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
+import io.meridian.gl.domain.JournalLine;
 import io.meridian.gl.domain.PeriodCalendar;
 import io.meridian.gl.domain.PeriodLifecycle;
 import io.meridian.gl.domain.PeriodStatus;
@@ -12,7 +13,10 @@ import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +27,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Accounting periods and the close: create (non-overlapping per legal entity and type), close as maker (runs the
- * checklist in a period_close_run; the period becomes SOFT_CLOSED only when no blocking step fails), approve the
- * close as a different principal (CLOSED), reopen with a reason.
+ * checklist in a period_close_run, including the year-end transfer of the result to retained earnings; the period
+ * becomes SOFT_CLOSED only when no blocking step fails), approve the close as a different principal (CLOSED),
+ * reopen with a reason.
  */
 @Service
 public class PeriodService {
@@ -32,12 +37,14 @@ public class PeriodService {
 
     private final GlStore store;
     private final CrudEngine crud;
+    private final JournalService journals;
     private final OutboxWriter outbox;
     private final JsonMapper json;
 
-    public PeriodService(GlStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    public PeriodService(GlStore store, CrudEngine crud, JournalService journals, OutboxWriter outbox, JsonMapper json) {
         this.store = store;
         this.crud = crud;
+        this.journals = journals;
         this.outbox = outbox;
         this.json = json;
     }
@@ -85,8 +92,9 @@ public class PeriodService {
         int warnings = 0;
 
         long unapproved = store.count("""
-                select count(*) from gl_journal where legal_entity_id = ? and value_date between ? and ?
-                  and journal_type <> 'AUTO_AGGREGATE' and approved_by is null""", le, start, end);
+                select count(*) from gl_journal j where j.legal_entity_id = ? and j.value_date between ? and ?
+                  and j.journal_type not in ('AUTO_AGGREGATE', 'YEAR_END_CLOSE')
+                  and not exists (select 1 from gl_journal_approval a where a.gl_journal_id = j.id)""", le, start, end);
         failed += step(checklist, "manual_journals_approved", unapproved == 0 ? "PASSED" : "FAILED",
                 unapproved == 0 ? "All manual journals are approved" : unapproved + " manual journal(s) await approval");
 
@@ -121,6 +129,11 @@ public class PeriodService {
         step(checklist, "ecl_provisions", ecl == 0 ? "WARNING" : "PASSED",
                 ecl == 0 ? "No IFRS 9 provisions calculated in the period" : ecl + " provision(s) calculated");
         step(checklist, "reconciliation_checks", "SKIPPED", "Breaks are tracked by reconciliation-service");
+        if (failed == 0) {
+            failed += transferResultToRetainedEarnings(checklist, period, le);
+        } else {
+            step(checklist, "pnl_to_retained_earnings", "SKIPPED", "Not run: earlier blocking steps failed");
+        }
 
         ObjectNode steps = json.createObjectNode();
         steps.set("checklist", checklist);
@@ -202,13 +215,104 @@ public class PeriodService {
         return row.toString();
     }
 
-    /** True when debits equal credits in every currency of the period's GL balances. */
+    /**
+     * Trial balance of a period: every GL balance with its account code, name and class, debit/credit totals per
+     * currency and whether debits equal credits in every currency.
+     */
     @Transactional(readOnly = true)
-    public boolean trialBalanceBalanced(UUID periodId) {
-        store.require(T, periodId);
-        return store.count("""
-                select count(*) from (select currency from gl_balance where accounting_period_id = ?
-                                      group by currency having sum(debits) <> sum(credits)) x""", periodId) == 0;
+    public JsonNode trialBalance(UUID periodId) {
+        JsonNode period = store.require(T, periodId);
+        ObjectNode out = json.createObjectNode();
+        out.put("accounting_period_id", periodId.toString());
+        out.put("legal_entity_id", period.get("legal_entity_id").asString());
+        out.put("period_type", period.get("period_type").asString());
+        out.put("start_date", period.get("start_date").asString());
+        out.put("end_date", period.get("end_date").asString());
+        out.put("status", period.get("status").asString());
+        boolean balanced = true;
+        ArrayNode currencies = out.putArray("currencies");
+        for (JsonNode c : store.rows("""
+                select json_build_object('currency', currency, 'debits', sum(debits), 'credits', sum(credits))::text
+                from gl_balance where accounting_period_id = ? group by currency order by currency""", periodId)) {
+            BigDecimal d = new BigDecimal(c.get("debits").asString());
+            BigDecimal cr = new BigDecimal(c.get("credits").asString());
+            ObjectNode row = currencies.addObject();
+            row.put("currency", c.get("currency").asString().trim());
+            row.put("debits", d.toPlainString());
+            row.put("credits", cr.toPlainString());
+            row.put("balanced", d.compareTo(cr) == 0);
+            balanced &= d.compareTo(cr) == 0;
+        }
+        out.put("balanced", balanced);
+        ArrayNode lines = out.putArray("lines");
+        store.rows("""
+                select (row_to_json(b)::jsonb || jsonb_build_object('gl_account_code', a.code, 'gl_account_name', a.name,
+                        'account_class', a.account_class))::text
+                from gl_balance b join gl_account a on a.id = b.gl_account_id
+                where b.accounting_period_id = ? order by a.code, b.currency""", periodId).forEach(lines::add);
+        return out;
+    }
+
+    /**
+     * Year-end close step: moves the year's net profit or loss out of the INCOME and EXPENSE accounts into the
+     * legal entity's designated retained-earnings account with a YEAR_END_CLOSE journal on the YEAR period
+     * (finer periods are untouched). Retained earnings is EQUITY, so the result rolls into next year's opening.
+     * Returns 1 when the step blocks the close.
+     */
+    private int transferResultToRetainedEarnings(ArrayNode checklist, JsonNode period, UUID le) {
+        final String name = "pnl_to_retained_earnings";
+        if (!"YEAR".equals(period.get("period_type").asString())) {
+            step(checklist, name, "SKIPPED", "Only the YEAR close transfers the result to retained earnings");
+            return 0;
+        }
+        List<JsonNode> pnl = store.rows("""
+                select json_build_object('gl_account_id', b.gl_account_id, 'currency', b.currency,
+                       'closing_balance', b.closing_balance, 'base_closing_balance', b.base_closing_balance)::text
+                from gl_balance b join gl_account a on a.id = b.gl_account_id
+                where b.accounting_period_id = ?::uuid and a.account_class in ('INCOME', 'EXPENSE')
+                  and b.closing_balance <> 0
+                order by a.code, b.currency""", period.get("id").asString());
+        if (pnl.isEmpty()) {
+            step(checklist, name, "PASSED", "No profit or loss to transfer");
+            return 0;
+        }
+        var re = store.row("""
+                select row_to_json(a)::text from gl_account a
+                where a.legal_entity_id = ? and a.is_retained_earnings and a.status = 'ACTIVE'""", le);
+        if (re.isEmpty()) {
+            return step(checklist, name, "FAILED",
+                    "No ACTIVE retained-earnings GL account is designated for the legal entity (is_retained_earnings)");
+        }
+        UUID reId = UUID.fromString(re.get().get("id").asString());
+        List<JournalLine> lines = new ArrayList<>();
+        Map<String, BigDecimal[]> net = new TreeMap<>();
+        for (JsonNode b : pnl) {
+            BigDecimal closing = new BigDecimal(b.get("closing_balance").asString());
+            BigDecimal closingBase = new BigDecimal(b.get("base_closing_balance").asString());
+            String ccy = b.get("currency").asString().trim();
+            // Debit-positive closing balance: a debit balance (loss side) is cleared with a credit, and vice versa.
+            lines.add(new JournalLine(UUID.fromString(b.get("gl_account_id").asString()),
+                    closing.signum() > 0 ? JournalLine.Direction.CREDIT : JournalLine.Direction.DEBIT,
+                    closing.abs(), ccy, closingBase.abs(), null, null, null));
+            BigDecimal[] n = net.computeIfAbsent(ccy, k -> new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO});
+            n[0] = n[0].add(closing);
+            n[1] = n[1].add(closingBase);
+        }
+        StringBuilder result = new StringBuilder();
+        net.forEach((ccy, n) -> {
+            if (n[0].signum() != 0) {
+                lines.add(new JournalLine(reId, n[0].signum() > 0 ? JournalLine.Direction.DEBIT : JournalLine.Direction.CREDIT,
+                        n[0].abs(), ccy, n[1].abs(), null, null, null));
+            }
+            result.append(result.isEmpty() ? "" : ", ").append(n[0].signum() > 0 ? "loss " : "profit ")
+                    .append(n[0].abs().toPlainString()).append(' ').append(ccy);
+        });
+        String j = journals.postClosingJournal(le, period, LocalDate.parse(period.get("end_date").asString()),
+                "Year-end close " + period.get("start_date").asString() + ".." + period.get("end_date").asString()
+                        + ": result to retained earnings", lines);
+        step(checklist, name, "PASSED", "Transferred " + result + " to " + re.get().get("code").asString()
+                + " (journal " + json.readTree(j).get("id").asString() + ")");
+        return 0;
     }
 
     private int step(ArrayNode checklist, String name, String status, String detail) {

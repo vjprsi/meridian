@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /** GL mapping rules: validation on write, deterministic resolution for postings and the /simulate action. */
@@ -28,10 +29,12 @@ public class MappingService {
 
     private final GlStore store;
     private final CrudEngine crud;
+    private final JsonMapper json;
 
-    public MappingService(GlStore store, CrudEngine crud) {
+    public MappingService(GlStore store, CrudEngine crud, JsonMapper json) {
         this.store = store;
         this.crud = crud;
+        this.json = json;
     }
 
     @Transactional
@@ -75,9 +78,9 @@ public class MappingService {
         return Optional.of(new Resolution(winner, store.require("gl_account", winner.glAccountId())));
     }
 
-    /** /simulate: which GL account would a posting with these attributes map to. */
+    /** /simulate: which GL account would a posting with these attributes map to ({gl_account, mapping_rule, as_of}). */
     @Transactional(readOnly = true)
-    public Resolution simulate(JsonNode req) {
+    public JsonNode simulate(JsonNode req) {
         String sign = Fields.text(req, "balance_sign");
         if (sign != null && !SIGNS.contains(sign)) {
             throw Fields.invalid("balance_sign", "invalid_enum", "balance_sign must be POSITIVE or NEGATIVE");
@@ -86,8 +89,13 @@ public class MappingService {
         MappingRule.Criteria c = new MappingRule.Criteria(Fields.uuid(req, "legal_entity_id"),
                 Fields.uuid(req, "product_id"), Fields.text(req, "ledger_account_type"), Fields.text(req, "owner_type"),
                 Fields.text(req, "entry_type"), sign, asOf);
-        return resolve(c).orElseThrow(() -> ApiException.unprocessable("no_mapping_rule",
+        Resolution r = resolve(c).orElseThrow(() -> ApiException.unprocessable("no_mapping_rule",
                 "No GL mapping rule matches the posting attributes on " + asOf));
+        ObjectNode out = json.createObjectNode();
+        out.set("gl_account", r.glAccount());
+        out.set("mapping_rule", store.require(T, r.rule().id()));
+        out.put("as_of", asOf.toString());
+        return out;
     }
 
     private void validate(JsonNode r, UUID self) {

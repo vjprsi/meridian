@@ -65,9 +65,9 @@ services:
           - "gl_account_id uuid ref=gl_account idx | GL control account this account rolls up to"
           - "owner_type string(40) | Business object owning this account, e.g. DEPOSIT_ACCOUNT, WALLET, CARD, LOAN"
           - "owner_id uuid idx | Id of the owning business object in its service"
-          - "status enum:LedgerAccountStatus nn default=ACTIVE | Posting restrictions"
+          - "status enum:LedgerAccountStatus nn default=ACTIVE ro | Posting restrictions (changed by /freeze, /unfreeze, /close)"
           - "allow_negative bool nn default=false | Whether available balance may go below zero"
-          - "overdraft_limit amount nn default=0 | Arranged overdraft; available = balance + limit - holds"
+          - "overdraft_limit amount nn default=0 | Arranged overdraft; available = balance + limit - holds (change via POST /{id}/overdraft-limit)"
           - "min_balance amount nn default=0 | Minimum balance that must remain"
           - "opened_at ts nn default=now | Opening time"
           - "closed_at ts | Closing time"
@@ -92,6 +92,7 @@ services:
           - "source_type string(64) | Business object type, e.g. PAYMENT, CARD_AUTHORIZATION"
           - "source_id uuid idx | Business object id"
           - "correlation_id string(128) idx | Trace / saga correlation id"
+          - "reference string(128) idx | External reference for reconciliation (e.g. ISO 20022 end-to-end id, bank or scheme reference); copied to every ledger entry"
           - "entry_count int nn ro | Number of ledger entries"
           - "total_debits amount nn ro | Sum of debits in base currency (equals credits)"
           - "hash string(64) ro | SHA-256 over this entry and the previous hash (tamper evidence)"
@@ -117,6 +118,8 @@ services:
           - "fx_rate rate | Rate to ledger base currency at posting time"
           - "base_amount amount nn ro | Amount in ledger base currency (amount x fx_rate)"
           - "effective_at ts nn ro | Copied from the journal entry for range queries"
+          - "value_date date nn ro | Copied from the journal entry (reconciliation matches on value date)"
+          - "reference string(128) ro | Copied from the journal entry (reconciliation matches on reference)"
           - "account_version bigint nn ro | Account balance version after this entry (gapless per account)"
           - "balance_after amount nn ro | Posted balance of the account after this entry"
           - "description string(500) | Line narrative"
@@ -242,8 +245,9 @@ services:
           - "GET /{id}/balance-at?at:ts! | Point-in-time balance at a timestamp | | account_balance"
           - "GET /{id}/balance-history?from:date&to:date | Daily balance snapshots in a date range | | balance_snapshot[]"
           - "GET /{id}/entries?from:ts&to:ts | Ledger entries for this account, newest first | | ledger_entry[]"
-          - "POST /{id}/freeze | Restrict debits, credits or both | status enum:LedgerAccountStatus nn, reason string(255) nn"
-          - "POST /{id}/unfreeze | Remove posting restrictions | reason string(255) nn"
+          - "POST /{id}/freeze | Restrict debits, credits or both (idempotent: an account already in the target status is returned unchanged) | status enum:LedgerAccountStatus nn, reason string(255) nn"
+          - "POST /{id}/unfreeze | Remove posting restrictions (idempotent: an ACTIVE account is returned unchanged) | reason string(255) nn"
+          - "POST /{id}/overdraft-limit | Set the arranged overdraft limit and recompute the available balance (idempotent: the same limit returns the account unchanged) | limit amount nn, reason string(255)"
           - "POST /{id}/close | Close an account with zero balance | reason string(255)"
 
       - resource: journal-entries
@@ -251,11 +255,11 @@ services:
         table: journal_entry
         description: Post balanced transactions. Body carries the entries array (see LedgerEntry).
         ops: [list, get, create]
-        filters: [ledger_id, entry_type, source_type, source_id, correlation_id]
+        filters: [ledger_id, entry_type, source_type, source_id, correlation_id, reference]
         actions:
           - "POST /{id}/reverse | Reverse a journal entry with a compensating entry | reason string(255) nn, effective_at ts"
           - "GET /{id}/entries | Lines of a journal entry | | ledger_entry[]"
-          - "POST /batch | Post up to 1,000 journal entries atomically per entry | entries json nn | none"
+          - "POST /batch | Post up to 1,000 journal entries, each atomic on its own (item i uses key <Idempotency-Key>:<i>); returns per-item results | entries json[] nn | object"
 
       - resource: ledger-entries
         path: /v1/ledger-entries
@@ -298,6 +302,7 @@ services:
       - "ledger.eod.completed | ledger_eod_run | End-of-day processing finished for a ledger and business date"
       - "ledger.ledger_account.created | ledger_account | A ledger account was opened"
       - "ledger.ledger_account.status_changed | ledger_account | An account was frozen, unfrozen or closed"
+      - "ledger.ledger_account.overdraft_limit_changed | ledger_account | The arranged overdraft limit of an account changed"
       - "ledger.journal_entry.posted | journal_entry | A balanced journal entry was committed"
       - "ledger.journal_entry.reversed | journal_entry | A journal entry was reversed"
       - "ledger.balance.changed | account_balance | Posted or available balance changed"
@@ -327,6 +332,7 @@ services:
           - "currency currency | Restrict to one currency; empty = multi-currency"
           - "regulatory_code string(64) | Mapping code for regulatory returns"
           - "erp_code string(64) | Mapping code for the ERP"
+          - "is_retained_earnings bool nn default=false | Designated retained-earnings account (postable EQUITY, at most one per legal entity); the year-end close transfers the net profit or loss here"
           - "status enum:GlAccountStatus nn default=ACTIVE | Status"
         unique: [[tenant_id, legal_entity_id, code]]
 
@@ -379,17 +385,20 @@ services:
 
       - name: gl_journal
         prefix: glj
-        description: GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only.
+        description: >-
+          GL-level journal (aggregated from ledger postings or manual GL adjustments). Append-only. Manual journals
+          post to the GL balances only once a gl_journal_approval exists for them.
         immutable: true
         fr: [GL-02, GL-05]
         columns:
           - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
           - "accounting_period_id uuid nn fk=accounting_period | Period"
-          - "journal_type string(32) nn | AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION"
+          - "journal_type string(32) nn | AUTO_AGGREGATE, MANUAL_ADJUSTMENT, ACCRUAL, PROVISION, INTER_ENTITY, REVALUATION, YEAR_END_CLOSE (AUTO_AGGREGATE and YEAR_END_CLOSE are system-only)"
           - "source_journal_entry_id uuid ref=journal_entry idx | Ledger journal entry, when derived"
           - "description string(500) | Narrative"
           - "value_date date nn | Value date"
-          - "approved_by string(64) | Checker for manual journals"
+        nested:
+          - "lines list:gl_journal_line nn | Debit and credit lines; must balance per currency"
 
       - name: gl_journal_line
         prefix: gjl
@@ -397,15 +406,26 @@ services:
         immutable: true
         fr: [GL-02]
         columns:
-          - "gl_journal_id uuid nn fk=gl_journal idx | GL journal"
+          - "gl_journal_id uuid nn fk=gl_journal idx ro | GL journal"
           - "gl_account_id uuid nn fk=gl_account idx | GL account"
           - "direction enum:EntryDirection nn | Debit or credit"
           - "amount amount nn | Amount"
           - "currency currency nn | Currency"
-          - "base_amount amount nn | Amount in entity base currency"
+          - "fx_rate rate | Rate to the entity base currency (default 1)"
+          - "base_amount amount nn ro | Amount in entity base currency (amount x fx_rate)"
           - "cost_center string(32) | Cost centre"
           - "branch_id uuid ref=branch | Branch dimension"
           - "product_id uuid ref=product | Product dimension"
+
+      - name: gl_journal_approval
+        prefix: gja
+        description: Checker sign-off of a GL journal (four-eyes); posts the journal to the GL balances. Append-only.
+        immutable: true
+        fr: [GL-02, GL-05]
+        columns:
+          - "gl_journal_id uuid nn fk=gl_journal uq ro | Approved GL journal (one approval per journal)"
+          - "approved_by string(64) nn ro | Checker (system:<process> for system journals such as provisions)"
+          - "comment string(500) | Checker comment"
 
       - name: period_close_run
         prefix: pcr
@@ -464,17 +484,17 @@ services:
         ops: [list, get, create, update, delete]
         filters: [legal_entity_id, product_id, gl_account_id]
         actions:
-          - "POST /simulate | Show which GL account a posting would map to | product_id uuid, ledger_account_type enum:LedgerAccountType, entry_type enum:JournalEntryType, owner_type string(40) | gl_account"
+          - "POST /simulate | Show which GL account a posting would map to: returns {gl_account, mapping_rule, as_of} | legal_entity_id uuid, product_id uuid, ledger_account_type enum:LedgerAccountType, entry_type enum:JournalEntryType, owner_type string(40), balance_sign string(10), as_of date | object"
       - resource: accounting-periods
         path: /v1/gl/periods
         table: accounting_period
         ops: [list, get, create]
         filters: [legal_entity_id, period_type, status]
         actions:
-          - "POST /{id}/close | Start the period close (maker) | | period_close_run"
+          - "POST /{id}/close | Start the period close (maker): checklist incl. year-end transfer of P&L to retained earnings | | period_close_run"
           - "POST /{id}/approve-close | Approve the close (checker) | comment string(500)"
           - "POST /{id}/reopen | Reopen a closed period (requires approval) | reason string(500) nn"
-          - "GET /{id}/trial-balance | Trial balance for the period | | gl_balance[]"
+          - "GET /{id}/trial-balance | Trial balance for the period: {accounting_period_id, balanced, currencies[{currency, debits, credits, balanced}], lines[GL balance + account code, name, class]} | | object"
       - resource: gl-balances
         path: /v1/gl/balances
         table: gl_balance
@@ -487,7 +507,12 @@ services:
         filters: [legal_entity_id, accounting_period_id, journal_type, source_journal_entry_id]
         actions:
           - "GET /{id}/lines | Lines of a GL journal | | gl_journal_line[]"
-          - "POST /{id}/approve | Approve a manual GL journal (checker) | comment string(500)"
+          - "POST /{id}/approve | Approve a manual GL journal (checker, four-eyes) and post it to the GL balances | comment string(500) | gl_journal_approval"
+      - resource: gl-journal-approvals
+        path: /v1/gl/journal-approvals
+        table: gl_journal_approval
+        ops: [list, get]
+        filters: [gl_journal_id, approved_by]
       - resource: period-close-runs
         path: /v1/gl/close-runs
         table: period_close_run
@@ -499,17 +524,19 @@ services:
         ops: [list, get]
         filters: [legal_entity_id, reporting_date, stage, exposure_type, exposure_id]
         actions:
-          - "POST /calculate | Run the ECL calculation for a reporting date | legal_entity_id uuid nn, reporting_date date nn | period_close_run"
+          - "POST /calculate | Run the ECL calculation for a reporting date; exposures [{exposure_type, exposure_id, stage, ead, pd_12m, pd_lifetime (or pd), lgd, currency}] (omitted = roll forward the latest provisions); with both GL accounts the ECL change is posted as a PROVISION journal. Returns {legal_entity_id, reporting_date, model_version, exposures, total_ecl{ccy}, gl_journal_id, period_close_run_id, provisions[]} | legal_entity_id uuid nn, reporting_date date nn, exposures json[], provision_expense_gl_account_id uuid, allowance_gl_account_id uuid | object"
       - resource: erp-exports
         path: /v1/gl/erp-exports
         table: erp_export
         ops: [list, get, create]
         filters: [legal_entity_id, accounting_period_id, status]
         actions:
-          - "GET /{id}/download | Signed URL to download the export file | | none"
+          - "GET /{id}/download | Download the export file (CSV; checksum in X-Checksum-SHA256) | | text/csv"
 
     events:
       - "ledger.gl_journal.posted | gl_journal | A GL journal was posted"
+      - "ledger.gl_journal.approved | gl_journal_approval | A manual GL journal was approved (four-eyes) and posted"
+      - "ledger.erp_export.completed | erp_export | An ERP export file was generated"
       - "ledger.accounting_period.closed | accounting_period | An accounting period was closed"
       - "ledger.accounting_period.reopened | accounting_period | A closed period was reopened"
       - "ledger.period_close_run.completed | period_close_run | A close run finished"
@@ -582,7 +609,7 @@ services:
           - "name string(120) nn | Rule name"
           - "priority int nn default=100 | Lower runs first"
           - "match_type enum:ReconMatchType nn | Cardinality"
-          - "match_fields json nn | Fields that must be equal, e.g. [end_to_end_id, amount]"
+          - "match_fields json[] nn | Fields that must be equal: amount, value_date, currency, direction, end_to_end_id, external_ref, reference"
           - "amount_tolerance amount nn default=0 | Allowed absolute amount difference"
           - "date_tolerance_days int nn default=0 | Allowed value-date difference"
           - "auto_confirm bool nn default=true | Confirm matches without review"
@@ -611,8 +638,8 @@ services:
           - "recon_run_id uuid fk=recon_run idx | Run that produced it (empty when manual)"
           - "recon_rule_id uuid fk=recon_rule | Rule that matched"
           - "match_type enum:ReconMatchType nn | Cardinality"
-          - "external_record_ids json nn | recon_record ids"
-          - "internal_entry_ids json nn | ledger_entry ids"
+          - "external_record_ids json[] nn | recon_record ids (sorted)"
+          - "internal_entry_ids json[] nn | ledger_entry ids (sorted)"
           - "difference amount nn default=0 | Residual difference within tolerance"
           - "confidence rate | AI / rule confidence 0..1"
           - "confirmed_by string(64) | Who confirmed a manual or suggested match"
@@ -645,9 +672,10 @@ services:
       - resource: recon-files
         path: /v1/reconciliation/files
         table: recon_file
-        ops: [list, get, create]
+        ops: [list, get]
         filters: [recon_source_id, status, statement_date]
         actions:
+          - "POST /import | Import a statement or settlement file, sent as raw content (CSV, camt.053/054 XML, JSON per the source's file_format) or as pre-parsed records [{value_date, direction, amount, currency, external_ref, end_to_end_id, booking_date, counterparty, narrative}]; de-duplicated by SHA-256 and parsed synchronously (status PARSED or FAILED) | recon_source_id uuid nn, file_name string(255) nn, content text, records json[], statement_date date, opening_balance amount, closing_balance amount | recon_file"
           - "GET /{id}/records | Parsed records of a file | | recon_record[]"
           - "POST /{id}/reprocess | Parse a failed file again"
       - resource: recon-rules
@@ -680,5 +708,7 @@ services:
     events:
       - "ledger.recon_file.parsed | recon_file | A statement file was parsed"
       - "ledger.recon_run.completed | recon_run | A reconciliation run finished"
+      - "ledger.recon_match.created | recon_match | External records and ledger entries were matched (rule, accepted suggestion or manual)"
+      - "ledger.recon_match.unmatched | recon_match | A match was undone by a compensating record"
       - "ledger.recon_exception.raised | recon_exception | A reconciliation break was raised"
       - "ledger.recon_exception.resolved | recon_exception | A break was resolved"

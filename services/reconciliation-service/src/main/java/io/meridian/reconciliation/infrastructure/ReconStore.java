@@ -76,13 +76,13 @@ public class ReconStore {
 
     /** External record ids currently covered by an active match. */
     public Set<UUID> matchedExternalIds() {
-        return Set.copyOf(ids("select (jsonb_array_elements_text(m.external_record_ids->'ids'))::uuid from ("
+        return Set.copyOf(ids("select (jsonb_array_elements_text(m.external_record_ids))::uuid from ("
                 + ACTIVE_MATCHES + ") m"));
     }
 
     /** Internal (ledger) entry ids currently covered by an active match. */
     public Set<UUID> matchedInternalIds() {
-        return Set.copyOf(ids("select (jsonb_array_elements_text(m.internal_entry_ids->'ids'))::uuid from ("
+        return Set.copyOf(ids("select (jsonb_array_elements_text(m.internal_entry_ids))::uuid from ("
                 + ACTIVE_MATCHES + ") m"));
     }
 

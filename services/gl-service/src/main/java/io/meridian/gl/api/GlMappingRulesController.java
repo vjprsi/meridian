@@ -2,23 +2,20 @@ package io.meridian.gl.api;
 
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.gl.api.generated.GlMappingRulesApi;
-import io.meridian.gl.api.generated.model.GlAccount;
 import io.meridian.gl.api.generated.model.GlMappingRule;
 import io.meridian.gl.api.generated.model.GlMappingRuleCreate;
 import io.meridian.gl.api.generated.model.GlMappingRuleUpdate;
 import io.meridian.gl.api.generated.model.GlMappingRulesSimulateRequest;
 import io.meridian.gl.application.MappingService;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * GL mapping rules. /simulate also accepts {@code legal_entity_id}, {@code as_of} (date, default today) and
- * {@code balance_sign} beyond the generated request model; the winning rule id is returned in X-Mapping-Rule-Id.
- */
+/** GL mapping rules: validated writes; /simulate returns the GL account and the winning rule. */
 @RestController
 public class GlMappingRulesController implements GlMappingRulesApi {
     private final MappingService mapping;
@@ -46,13 +43,12 @@ public class GlMappingRulesController implements GlMappingRulesApi {
         return responses.ok(mapping.update(id, ifMatch, body), GlMappingRule.class);
     }
 
+    /** Read-only: the key is validated but no response is stored, so a simulation always reflects current rules. */
     @Override
-    public ResponseEntity<GlAccount> glMappingRulesSimulate(String idempotencyKey, GlMappingRulesSimulateRequest body) {
+    public ResponseEntity<Map<String, Object>> glMappingRulesSimulate(String idempotencyKey,
+                                                                     GlMappingRulesSimulateRequest body) {
         TenantContext.require();
-        JsonNode req = RawBody.json(json);
-        // Read-only: the key is validated but no response is stored, so a simulation always reflects current rules.
-        MappingService.Resolution r = mapping.simulate(req);
-        return ResponseEntity.ok().header("X-Mapping-Rule-Id", r.rule().id().toString())
-                .body(json.treeToValue(r.glAccount(), GlAccount.class));
+        JsonNode req = json.valueToTree(body);
+        return responses.object(mapping.simulate(req));
     }
 }

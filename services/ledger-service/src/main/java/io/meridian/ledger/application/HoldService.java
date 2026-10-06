@@ -118,7 +118,7 @@ public class HoldService {
         PostingService.Posted posted = posting.post(new PostingService.Posting(
                 account.ledgerId, postingKey, "STANDARD",
                 description == null ? "Capture of hold " + holdId : description, null, null,
-                TenantContext.principal(), "HOLD", holdId, null, null, null, null,
+                TenantContext.principal(), "HOLD", holdId, null, null, null, null, null,
                 List.of(new PostingLine(h.accountId(), out, amount, h.currency(), null, description),
                         new PostingLine(counterAccountId, in, amount, h.currency(), null, description))));
         UUID journalEntryId = UUID.fromString(json.readTree(posted.json()).get("id").asString());
