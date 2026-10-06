@@ -1,0 +1,225 @@
+package io.meridian.identity.application;
+
+import io.meridian.common.error.ApiException;
+import io.meridian.events.OutboxWriter;
+import io.meridian.identity.domain.Secrets;
+import io.meridian.identity.infrastructure.IdentityStore;
+import io.meridian.web.crud.Crud;
+import io.meridian.web.crud.CrudEngine;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
+
+/** OAuth 2.1 client registration, secret rotation, suspension and usage reporting. */
+@Service
+public class ApiClientService {
+    static final Set<String> SECRET_METHODS = Set.of("CLIENT_SECRET_BASIC", "CLIENT_SECRET_POST");
+
+    private final IdentityStore store;
+    private final CrudEngine crud;
+    private final OutboxWriter outbox;
+    private final JsonMapper json;
+
+    public ApiClientService(IdentityStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+        this.store = store;
+        this.crud = crud;
+        this.outbox = outbox;
+        this.json = json;
+    }
+
+    public record Issued(ObjectNode body, Map<String, String> secrets) {}
+
+    @Transactional
+    public Issued register(Object body) {
+        ObjectNode v = crud.toColumns("api_client", body);
+        if (v.hasNonNull("status") && !"ACTIVE".equals(v.get("status").asString())) {
+            throw ApiException.unprocessable("invalid_initial_status", "A new client starts ACTIVE");
+        }
+        if (!v.hasNonNull("auth_method")) {
+            v.put("auth_method", "PRIVATE_KEY_JWT");
+        }
+        validate(v);
+        v.put("status", "ACTIVE");
+        v.put("client_id", Secrets.clientId());
+        Map<String, String> secrets = Map.of();
+        if (SECRET_METHODS.contains(v.get("auth_method").asString())) {
+            String secret = Secrets.clientSecret();
+            v.put("client_secret_hash", Secrets.sha256Hex(secret));
+            secrets = Map.of("client_secret", secret);
+        }
+        String row = crud.insert("api_client", v);
+        ObjectNode pub = store.publicView(row);
+        outbox.publish("platform.api_client.created", "api_client", UUID.fromString(pub.get("id").asString()), pub);
+        return new Issued(pub, secrets);
+    }
+
+    @Transactional
+    public <T> ResponseEntity<T> update(UUID id, String ifMatch, Object body, Class<T> type) {
+        ObjectNode v = crud.toColumns("api_client", body);
+        if (v.hasNonNull("status")) {
+            throw ApiException.unprocessable("status_change_not_allowed", "Use suspend / reactivate to change status");
+        }
+        ObjectNode merged = (ObjectNode) store.require("api_client", id);
+        merged.setAll(v);
+        validate(merged);
+        return crud.update("api_client", type, body, ifMatch, Crud.params().with("id", id));
+    }
+
+    @Transactional
+    public JsonNode rotateSecret(UUID id, Map<String, String> secretSink) {
+        JsonNode c = store.lock("api_client", id);
+        requireStatus(c, "ACTIVE");
+        if (!SECRET_METHODS.contains(c.get("auth_method").asString())) {
+            throw ApiException.unprocessable("not_confidential_client",
+                    "Client authenticates with " + c.get("auth_method").asString() + " and has no secret");
+        }
+        String secret = Secrets.clientSecret();
+        store.jdbc().sql("update api_client set client_secret_hash = ? where id = ?")
+                .params(Secrets.sha256Hex(secret), id).update();
+        secretSink.put("client_secret", secret);
+        ObjectNode out = json.createObjectNode();
+        out.put("id", id.toString());
+        out.put("client_id", c.get("client_id").asString());
+        out.put("rotated_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        return out;
+    }
+
+    @Transactional
+    public String suspend(UUID id, String reason) {
+        SessionService.requireReason(reason);
+        JsonNode c = store.lock("api_client", id);
+        requireStatus(c, "ACTIVE");
+        return changed(store.updateReturning(
+                "update api_client t set status = 'SUSPENDED' where t.id = ? returning row_to_json(t)::text", id));
+    }
+
+    @Transactional
+    public String reactivate(UUID id) {
+        JsonNode c = store.lock("api_client", id);
+        requireStatus(c, "SUSPENDED");
+        if (c.hasNonNull("expires_at") && OffsetDateTime.parse(c.get("expires_at").asString()).isBefore(OffsetDateTime.now())) {
+            throw ApiException.conflict("client_expired", "Client expired; register a new client");
+        }
+        return changed(store.updateReturning(
+                "update api_client t set status = 'ACTIVE' where t.id = ? returning row_to_json(t)::text", id));
+    }
+
+    /** Request counts, error rate and latency from the gateway request log for [from, to). Default: last 30 days. */
+    public JsonNode usage(UUID id, String fromParam, String toParam) {
+        store.require("api_client", id);
+        OffsetDateTime to = toParam == null ? OffsetDateTime.now(ZoneOffset.UTC) : time(toParam, "to");
+        OffsetDateTime from = fromParam == null ? to.minusDays(30) : time(fromParam, "from");
+        if (!from.isBefore(to)) {
+            throw ApiException.badRequest("invalid_period", "from must be before to");
+        }
+        ObjectNode out = json.createObjectNode();
+        out.put("api_client_id", id.toString());
+        out.put("from", from.toString());
+        out.put("to", to.toString());
+        store.jdbc().sql("""
+                select count(*), count(*) filter (where status_code >= 400), count(*) filter (where status_code >= 500),
+                       coalesce(avg(latency_ms), 0), coalesce(percentile_cont(0.95) within group (order by latency_ms), 0),
+                       coalesce(max(latency_ms), 0)
+                from api_request_log where api_client_id = ? and occurred_at >= ? and occurred_at < ?""")
+                .params(id, from, to)
+                .query((rs, i) -> {
+                    long total = rs.getLong(1);
+                    out.put("request_count", total);
+                    out.put("error_count", rs.getLong(2));
+                    out.put("server_error_count", rs.getLong(3));
+                    out.put("error_rate", total == 0 ? "0" : new java.math.BigDecimal(rs.getLong(2))
+                            .divide(java.math.BigDecimal.valueOf(total), 4, java.math.RoundingMode.HALF_EVEN).toPlainString());
+                    out.put("avg_latency_ms", Math.round(rs.getDouble(4)));
+                    out.put("p95_latency_ms", Math.round(rs.getDouble(5)));
+                    out.put("max_latency_ms", rs.getLong(6));
+                    return null;
+                }).list();
+        ArrayNode ops = out.putArray("by_operation");
+        store.jdbc().sql("""
+                select coalesce(operation_id, method || ' ' || path) op, count(*), count(*) filter (where status_code >= 400)
+                from api_request_log where api_client_id = ? and occurred_at >= ? and occurred_at < ?
+                group by 1 order by 2 desc limit 50""")
+                .params(id, from, to)
+                .query((rs, i) -> {
+                    ObjectNode o = ops.addObject();
+                    o.put("operation", rs.getString(1));
+                    o.put("request_count", rs.getLong(2));
+                    o.put("error_count", rs.getLong(3));
+                    return o;
+                }).list();
+        return out;
+    }
+
+    private static OffsetDateTime time(String s, String name) {
+        try {
+            return s.length() == 10 ? LocalDate.parse(s).atStartOfDay().atOffset(ZoneOffset.UTC) : OffsetDateTime.parse(s);
+        } catch (DateTimeParseException e) {
+            throw ApiException.badRequest("invalid_" + name, name + " must be an ISO date or date-time");
+        }
+    }
+
+    private void validate(ObjectNode v) {
+        List<String> scopes = JsonItems.of(v.get("allowed_scopes"));
+        if (scopes.isEmpty()) {
+            throw ApiException.unprocessable("scopes_required",
+                    "allowed_scopes must list at least one scope, e.g. {\"items\": [\"payments:read\"]}");
+        }
+        for (String s : scopes) {
+            Integer n = store.jdbc().sql("select count(*) from oauth_scope where scope = ?").param(s)
+                    .query(Integer.class).single();
+            if (n == 0) {
+                throw ApiException.unprocessable("unknown_scope", "Scope " + s + " is not in the scope catalogue");
+            }
+        }
+        v.set("allowed_scopes", JsonItems.canonical(json, scopes));
+        String type = v.get("client_type").asString();
+        String auth = v.get("auth_method").asString();
+        if ("PUBLIC_APP".equals(type) != "NONE".equals(auth)) {
+            throw ApiException.unprocessable("invalid_auth_method",
+                    "Public apps use auth_method NONE (PKCE); confidential clients must authenticate");
+        }
+        if ("PUBLIC_APP".equals(type) && JsonItems.of(v.get("redirect_uris")).isEmpty()) {
+            throw ApiException.unprocessable("redirect_uris_required", "Public apps need at least one redirect URI");
+        }
+        if ("PRIVATE_KEY_JWT".equals(auth) && (!v.hasNonNull("jwks_uri") || !v.get("jwks_uri").asString().startsWith("https://"))) {
+            throw ApiException.unprocessable("jwks_uri_required", "private_key_jwt requires an https jwks_uri");
+        }
+        if ("TLS_CLIENT_AUTH".equals(auth) && !v.hasNonNull("mtls_cert_thumbprint")) {
+            throw ApiException.unprocessable("certificate_required", "tls_client_auth requires mtls_cert_thumbprint");
+        }
+        if ("TPP".equals(type)) {
+            if (!v.hasNonNull("tpp_registration_id")) {
+                throw ApiException.unprocessable("tpp_registration_required", "TPP clients need tpp_registration_id");
+            }
+            if (!v.path("fapi_profile").asBoolean(false) || SECRET_METHODS.contains(auth)) {
+                throw ApiException.unprocessable("fapi_required",
+                        "TPP clients must use the FAPI 2.0 profile with private_key_jwt or tls_client_auth");
+            }
+        }
+    }
+
+    private static void requireStatus(JsonNode c, String expected) {
+        String s = c.get("status").asString();
+        if (!expected.equals(s)) {
+            throw ApiException.conflict("invalid_transition", "Client is " + s + "; expected " + expected);
+        }
+    }
+
+    private String changed(String row) {
+        ObjectNode pub = store.publicView(row);
+        outbox.publish("platform.api_client.status_changed", "api_client", UUID.fromString(pub.get("id").asString()), pub);
+        return row;
+    }
+}
