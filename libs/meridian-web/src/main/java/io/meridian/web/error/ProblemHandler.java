@@ -22,6 +22,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -70,6 +71,13 @@ public class ProblemHandler {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     ResponseEntity<ProblemDetail> mediaType(HttpMediaTypeNotSupportedException e, HttpServletRequest req) {
         return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type", e.getMessage(), req, List.of());
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ProblemDetail> missingParam(MissingServletRequestParameterException e, HttpServletRequest req) {
+        return problem(HttpStatus.BAD_REQUEST, "missing_parameter",
+                "Required query parameter '" + e.getParameterName() + "' is missing", req,
+                List.of(Map.of("field", e.getParameterName(), "code", "required", "message", "is required")));
     }
 
     @ExceptionHandler(DuplicateKeyException.class)

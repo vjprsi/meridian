@@ -164,6 +164,8 @@ def parse_column(text: str, ctx: str) -> Column:
         col = Column(name=name, type="enum", arg=typ[5:])
     elif typ == "json[]":
         col = Column(name=name, type="jsonarray")
+    elif typ == "json*":
+        col = Column(name=name, type="jsonany")
     else:
         m = TYPE_RE.match(typ)
         if not m or m.group("base") not in SIMPLE_TYPES:
@@ -397,7 +399,7 @@ def pg_type(c: Column) -> str:
     return {
         "uuid": "uuid", "text": "text", "int": "integer", "bigint": "bigint",
         "amount": "numeric(28,8)", "rate": "numeric(18,10)", "bool": "boolean", "date": "date",
-        "ts": "timestamptz", "json": "jsonb", "jsonarray": "jsonb", "currency": "char(3)", "country": "char(2)",
+        "ts": "timestamptz", "json": "jsonb", "jsonarray": "jsonb", "jsonany": "jsonb", "currency": "char(3)", "country": "char(2)",
         "email": "varchar(320)", "phone": "varchar(20)", "bytes": "bytea", "inet": "inet",
         "enum": "varchar(40)",
     }.get(c.type) or f"varchar({c.arg or 255})"
@@ -597,6 +599,8 @@ def oa_type(c: Column, enums) -> dict:
         s = {"type": "object", "additionalProperties": True}
     elif t == "jsonarray":
         s = {"type": "array", "items": {}}
+    elif t == "jsonany":
+        s = {"description": "Any JSON value (string, number, boolean, array or object)"}
     elif t == "currency":
         s = {"type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217"}
     elif t == "country":

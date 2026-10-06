@@ -93,6 +93,7 @@ services:
 | --- | --- | --- |
 | A JSON list column (ids, codes, rules, rows) | `"rules json[] | ..."` | `jsonb` column; OpenAPI `array` (never wrap lists in objects) |
 | A JSON object column | `"settings json | ..."` | `jsonb`; OpenAPI `object` |
+| Any JSON value (scalar, list or object, e.g. a rule operand) | `"value json* | ..."` | `jsonb`; OpenAPI untyped (Java `Object`) |
 | Child rows sent with the parent on create | table `nested: ["entries list:ledger_entry nn | ..."]` | `entries` array of `<Child>Create` in the create body and of `<Child>` in the response |
 | A value returned once, never stored (API secret, TOTP seed) | table `response_only: ["client_secret string(128) | ..."]` | read-only response property; no column |
 | Action query parameters | `"GET /{id}/balance-at?at:ts!&currency:currency | ..."` (`!` = required) | query params on the operation |
