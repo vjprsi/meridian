@@ -1,11 +1,14 @@
 package io.meridian.liquidity.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.liquidity.domain.StressEngine;
 import io.meridian.liquidity.infrastructure.Rows;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,12 +29,17 @@ public class StressService {
     static final String RESULT = "liquidity_stress_result";
     static final List<String> MATERIAL = List.of("assumptions", "horizon_days", "severity");
 
+    /** Approval resource type for stress scenarios in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = SCENARIO;
+
     private final Rows rows;
     private final Events events;
+    private final Approvals approvals;
 
-    public StressService(Rows rows, Events events) {
+    public StressService(Rows rows, Events events, Approvals approvals) {
         this.rows = rows;
         this.events = events;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -43,7 +51,9 @@ public class StressService {
         if (rows.queryOne("select row_to_json(s)::text from liquidity_stress_scenario s where code = ?", code).isPresent()) {
             throw ApiException.conflict("scenario_code_exists", "a stress scenario with code " + code + " already exists");
         }
-        return rows.insert(SCENARIO, v);
+        ObjectNode created = rows.insert(SCENARIO, v);
+        requestApproval(created);
+        return created;
     }
 
     /** PATCH with optimistic locking; material changes are validated and withdraw the approval. */
@@ -65,7 +75,14 @@ public class StressService {
             v.putNull("approved_by");
             v.putNull("approved_at");
         }
-        return v.isEmpty() ? current : rows.update(SCENARIO, id, v);
+        if (v.isEmpty()) {
+            return current;
+        }
+        ObjectNode updated = rows.update(SCENARIO, id, v);
+        if (!updated.hasNonNull("approved_by")) {
+            requestApproval(updated); // content awaiting approval changed: decisions on the old version are stale
+        }
+        return updated;
     }
 
     @Transactional
@@ -82,7 +99,32 @@ public class StressService {
                 me, me, id);
         ObjectNode approved = rows.get(SCENARIO, id);
         events.publish("treasury.liquidity_stress_scenario.approved", SCENARIO, approved);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return approved;
+    }
+
+    /** True while the scenario is unapproved with the submitted content (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, Integer rowVersion) {
+        return rows.find(SCENARIO, id)
+                .filter(s -> !s.hasNonNull("approved_by"))
+                .filter(s -> rowVersion == null || rowVersion.equals(Rows.integer(s, "row_version")))
+                .isPresent();
+    }
+
+    /** Central maker-checker: the checker decides in the workflow inbox; StressScenarioApprovalHandler applies it. */
+    private void requestApproval(ObjectNode s) {
+        UUID id = Rows.uuid(s, "id");
+        int version = s.get("row_version").asInt();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("code", Rows.str(s, "code"));
+        payload.put("name", Rows.str(s, "name"));
+        payload.put("severity", Rows.str(s, "severity"));
+        payload.put("horizon_days", s.get("horizon_days").asInt());
+        payload.put("assumptions", s.get("assumptions"));
+        payload.put("row_version", version);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Liquidity stress scenario " + Rows.str(s, "code"), payload), "submit:" + id + ":" + version);
     }
 
     @Transactional
