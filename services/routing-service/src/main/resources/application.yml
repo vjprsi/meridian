@@ -37,6 +37,15 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.payments.v1
+  routing:
+    ledger-id: ${MERIDIAN_ROUTING_LEDGER_ID:}
+    # HMAC secret for inbound rail callbacks (X-Rail-Signature); per-rail overrides under callback-secrets.<RAIL_CODE>.
+    # Inject from the secret store in every non-local environment.
+    callback-secret: ${MERIDIAN_ROUTING_CALLBACK_SECRET:local-dev-rail-callback-secret}
+    degraded-threshold: 0.95
+    test-timeout-ms: 3000
+    gl:
+      treasury-funding: ${MERIDIAN_ROUTING_TREASURY_FUNDING:}
 
 management:
   endpoints:

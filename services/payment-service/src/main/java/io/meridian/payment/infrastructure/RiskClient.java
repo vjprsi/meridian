@@ -1,0 +1,57 @@
+package io.meridian.payment.infrastructure;
+
+import io.meridian.web.client.ServiceClient;
+import java.math.BigDecimal;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+/** Risk services: sanctions screening of payments and limits reservation (check / commit / release). */
+@Component
+public class RiskClient {
+    private final ServiceClient client;
+    private final JsonMapper json;
+
+    public RiskClient(ServiceClient client, JsonMapper json) {
+        this.client = client;
+        this.json = json;
+    }
+
+    /** Synchronous screening of the payment's parties and free text; returns the screening result. */
+    public JsonNode screenPayment(UUID paymentId, ObjectNode payload, String key) {
+        ObjectNode body = json.createObjectNode();
+        body.put("payment_id", paymentId.toString());
+        body.set("payload", payload);
+        return client.post("sanctions-service", "/v1/risk/sanctions/screenings/screen-payment", body, LedgerClient.key(key));
+    }
+
+    /** Checks the limits and reserves usage: {@code {id, allowed, status, action, breached_rule_ids}}. */
+    public JsonNode checkLimits(ObjectNode check, String key) {
+        return client.post("limits-service", "/v1/risk/limits/checks", check, LedgerClient.key(key));
+    }
+
+    public void commitLimits(UUID checkId, BigDecimal amount, String key) {
+        ObjectNode body = json.createObjectNode();
+        body.put("amount", amount.toPlainString());
+        client.post("limits-service", "/v1/risk/limits/checks/" + checkId + "/commit", body, LedgerClient.key(key));
+    }
+
+    public void releaseLimits(UUID checkId, String reason, String key) {
+        ObjectNode body = json.createObjectNode();
+        body.put("reason", reason == null ? "payment not completed" : reason.length() > 255 ? reason.substring(0, 255) : reason);
+        client.post("limits-service", "/v1/risk/limits/checks/" + checkId + "/release", body, LedgerClient.key(key));
+    }
+
+    /** Accepts an FX quote for a payment; returns the booked deal ({@code rate, buy_amount, ...}). */
+    public JsonNode acceptFxQuote(UUID quoteId, UUID paymentId, String key) {
+        ObjectNode body = json.createObjectNode();
+        body.put("payment_id", paymentId.toString());
+        return client.post("fx-service", "/v1/fx/quotes/" + quoteId + "/accept", body, LedgerClient.key(key));
+    }
+
+    public JsonNode fxQuote(UUID quoteId) {
+        return client.get("fx-service", "/v1/fx/quotes/" + quoteId);
+    }
+}

@@ -33,8 +33,9 @@ services:
           - "version string(16) nn | Standard version, e.g. 3.1.11, 1.3.12"
           - "base_path string(255) nn | Public base path for the profile"
           - "directory_url string(500) | Trust directory / registry endpoint"
-          - "sca_approaches json nn | Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)"
+          - "sca_approaches json[] nn | Supported SCA approaches (REDIRECT, DECOUPLED, EMBEDDED)"
           - "consent_max_days int nn default=90 | Maximum AIS consent validity"
+          - "authorisation_ttl_minutes int nn default=15 | Validity of an SCA authorisation session"
           - "settings json | Profile settings and field mappings"
           - "is_active bool nn default=true | Active"
         unique: [[tenant_id, standard, version]]
@@ -49,29 +50,37 @@ services:
           - "authorisation_number string(64) nn | Regulator authorisation / licence number"
           - "competent_authority string(64) nn | National competent authority (e.g. GB-FCA)"
           - "country country nn | Home country"
-          - "roles json nn | PSD2 roles: AISP, PISP, CBPII"
+          - "roles json[] nn | PSD2 roles: AISP, PISP, CBPII"
           - "directory_id string(128) | Id in the trust directory"
-          - "client_id string(128) uq | OAuth client id issued via dynamic client registration"
-          - "redirect_uris json | Registered redirect URIs"
+          - "software_id string(128) ro | Software statement id (dynamic client registration)"
+          - "client_id string(128) uq ro | OAuth client id issued via dynamic client registration"
+          - "redirect_uris json[] | Registered redirect URIs"
           - "logo_uri string(500) | Logo shown on the consent screen"
           - "contact_email email | Technical contact"
-          - "status enum:TppStatus nn default=PENDING | Status"
+          - "status enum:TppStatus nn default=PENDING ro | Status"
+          - "status_reason string(255) ro | Reason of the last status change"
           - "last_verified_at ts ro | Last regulator / directory check"
 
       - name: tpp_certificate
         prefix: tpc
-        description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert)
+        description: Certificate presented by a TPP (eIDAS QWAC/QSEAL or directory cert); parsed and validated on upload
         fr: [OBK-01]
         columns:
           - "tpp_id uuid nn fk=tpp idx | TPP"
           - "certificate_type enum:ObCertificateType nn | Type"
-          - "subject_dn string(500) nn | Subject distinguished name"
-          - "issuer_dn string(500) nn | Issuer"
-          - "serial_number string(128) nn | Serial number"
-          - "fingerprint_sha256 string(64) nn uq | Fingerprint"
-          - "valid_from ts nn | Not before"
-          - "valid_to ts nn | Not after"
+          - "certificate_pem text nn | X.509 certificate (PEM)"
+          - "subject_dn string(500) nn ro | Subject distinguished name"
+          - "issuer_dn string(500) nn ro | Issuer"
+          - "serial_number string(128) nn ro | Serial number (hex)"
+          - "fingerprint_sha256 string(64) nn uq ro | Fingerprint"
+          - "organization_identifier string(128) ro | eIDAS organisation identifier (2.5.4.97), e.g. PSDGB-FCA-123456"
+          - "psd2_roles json[] ro | PSD2 roles from the eIDAS QCStatement (PSP_AS, PSP_PI, PSP_AI, PSP_IC)"
+          - "nca_name string(256) ro | Competent authority name from the QCStatement"
+          - "nca_id string(16) ro | Competent authority id from the QCStatement (e.g. GB-FCA)"
+          - "valid_from ts nn ro | Not before"
+          - "valid_to ts nn ro | Not after"
           - "status enum:ObCertificateStatus nn default=VALID ro | Status (OCSP / CRL checked)"
+          - "revocation_reason string(255) ro | Reason when revoked"
           - "last_ocsp_check_at ts ro | Last revocation check"
 
       - name: ob_consent
@@ -82,19 +91,21 @@ services:
           - "tpp_id uuid nn fk=tpp idx | TPP"
           - "ob_standard_profile_id uuid nn fk=ob_standard_profile | Standard used"
           - "consent_type enum:ObConsentType nn | Consent type"
-          - "external_consent_id string(128) nn uq | Consent id exposed to the TPP"
-          - "customer_id uuid ref=customer idx | Customer who authorised (set on authorisation)"
-          - "permissions json nn | Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)"
+          - "external_consent_id string(128) nn uq ro | Consent id exposed to the TPP (server-generated)"
+          - "customer_id uuid ref=customer idx ro | Customer who authorised (set on authorisation)"
+          - "permissions json[] nn | Granted permissions (ReadAccountsDetail, ReadTransactionsDetail...)"
           - "transaction_from ts | Earliest transaction date visible"
           - "transaction_to ts | Latest transaction date visible"
           - "frequency_per_day int | Allowed unattended accesses per day (Berlin Group)"
           - "recurring bool nn default=true | Recurring access"
+          - "initiation json | Payment details for PIS consents (instructed_amount, currency, creditor_name, creditor_account, remittance_information)"
           - "vrp_control_parameters json | Variable recurring payment limits (VRP)"
           - "status enum:ObConsentStatus nn default=AWAITING_AUTHORISATION ro | Status"
           - "authorised_at ts ro | Authorisation time"
-          - "expires_at ts | Expiry"
+          - "expires_at ts | Expiry (defaults to the profile maximum for AIS)"
           - "revoked_at ts ro | Revocation time"
           - "revoked_by string(16) ro | CUSTOMER, TPP or ASPSP"
+          - "status_reason string(255) ro | Reason of rejection or revocation"
           - "last_accessed_at ts ro | Last access by the TPP"
           - "risk json | Payment context / risk indicators supplied by the TPP"
 
@@ -106,7 +117,7 @@ services:
           - "ob_consent_id uuid nn fk=ob_consent idx | Consent"
           - "account_id uuid nn ref=deposit_account | Account"
           - "account_resource_id string(128) nn | Account id exposed to the TPP"
-          - "permissions json | Account-level permission overrides"
+          - "permissions json[] | Account-level permission overrides"
         unique: [[ob_consent_id, account_id]]
 
       - name: ob_authorisation
@@ -120,10 +131,11 @@ services:
           - "state string(255) | OAuth state"
           - "code_challenge string(128) | PKCE code challenge"
           - "status enum:ObAuthorisationStatus nn default=STARTED ro | Status"
-          - "customer_id uuid ref=customer | Authenticated customer"
+          - "customer_id uuid ref=customer ro | Authenticated customer"
+          - "selected_account_ids json[] ro | Accounts the customer selected"
           - "authentication_method string(32) ro | Method used (passkey, app push, OTP)"
           - "failure_reason string(255) ro | Failure reason"
-          - "expires_at ts nn | Session expiry"
+          - "expires_at ts nn ro | Session expiry"
           - "completed_at ts ro | Completion time"
 
       - name: ob_payment_initiation
@@ -133,14 +145,16 @@ services:
         columns:
           - "ob_consent_id uuid nn fk=ob_consent idx | Consent"
           - "tpp_id uuid nn fk=tpp idx | Initiating TPP"
-          - "external_payment_id string(128) nn uq | Payment id exposed to the TPP"
-          - "payment_id uuid ref=payment idx | Core payment created"
+          - "external_payment_id string(128) nn uq ro | Payment id exposed to the TPP (server-generated)"
+          - "payment_id uuid ref=payment idx ro | Core payment created"
+          - "debtor_account_id uuid ref=deposit_account ro | Debtor account selected under the consent"
           - "payment_product string(64) nn | Product, e.g. domestic-payments, sepa-credit-transfers, instant"
           - "amount amount nn | Amount"
           - "currency currency nn | Currency"
           - "creditor_name string(140) nn pii | Creditor name"
           - "creditor_account string(64) nn pii | Creditor account"
           - "remittance_information string(140) | Remittance information"
+          - "requested_execution_date date | Future execution date (empty = immediate)"
           - "status enum:ObPaymentInitiationStatus nn default=RECEIVED ro | Status"
           - "status_reason string(255) ro | Status reason"
 
@@ -155,7 +169,7 @@ services:
           - "account_id uuid nn ref=deposit_account | Account checked"
           - "amount amount nn | Amount checked"
           - "currency currency nn | Currency"
-          - "funds_available bool nn | Result"
+          - "funds_available bool nn ro | Result"
 
       - name: ob_access_log
         prefix: obl
@@ -181,30 +195,35 @@ services:
         table: ob_standard_profile
         ops: [list, get, create, update]
         filters: [standard, is_active]
+        actions:
+          - "GET /{id}/discovery | Well-known discovery document of the profile (endpoints, SCA approaches, limits) | | object"
       - resource: tpps
         path: /v1/open-banking/tpps
         table: tpp
         ops: [list, get, create, update]
-        filters: [status, country, competent_authority]
+        filters: [status, country, competent_authority, client_id]
         actions:
-          - "POST /register | Dynamic client registration with a signed software statement | software_statement text nn | tpp"
-          - "POST /{id}/verify | Re-verify the TPP against the regulator register and directory | | tpp"
+          - "POST /register | Dynamic client registration with a software statement (JWS) signed by the TPP's QSEAL / directory certificate | software_statement text nn, certificate_pem text nn | tpp"
+          - "POST /{id}/verify | Re-verify the TPP against the regulator register and its certificates; activates a pending TPP | | tpp"
           - "POST /{id}/suspend | Suspend TPP access | reason string(255) nn"
-          - "POST /{id}/reactivate | Reactivate a suspended TPP"
+          - "POST /{id}/reactivate | Reactivate a suspended TPP | reason string(255)"
           - "GET /{id}/certificates | Certificates of the TPP | | tpp_certificate[]"
       - resource: tpp-certificates
         path: /v1/open-banking/tpp-certificates
         table: tpp_certificate
         ops: [list, get, create]
         filters: [tpp_id, certificate_type, status]
+        actions:
+          - "POST /{id}/revoke | Mark the certificate revoked (OCSP / CRL result or TPP request) | reason string(255) nn | tpp_certificate"
       - resource: ob-consents
         path: /v1/open-banking/consents
         table: ob_consent
         ops: [list, get, create]
-        filters: [tpp_id, consent_type, status, customer_id]
+        filters: [tpp_id, consent_type, status, customer_id, external_consent_id]
         actions:
           - "POST /{id}/authorise | Start SCA authorisation for the consent | sca_approach string(16) nn, redirect_uri string(500), state string(255), code_challenge string(128) | ob_authorisation"
-          - "POST /{id}/revoke | Revoke a consent (customer or TPP) | revoked_by string(16) nn"
+          - "POST /{id}/revoke | Revoke a consent (customer, TPP or ASPSP) | revoked_by string(16) nn, reason string(255)"
+          - "POST /expire-due | Expire consents and authorisation sessions past their expiry (scheduler) | | object"
           - "GET /{id}/accounts | Accounts selected under the consent | | ob_consent_account[]"
           - "GET /{id}/access-log | Access log of the consent | | ob_access_log[]"
       - resource: ob-authorisations
@@ -212,8 +231,8 @@ services:
         table: ob_authorisation
         ops: [get]
         actions:
-          - "POST /{id}/select-accounts | Customer selects accounts to share | account_ids json nn | ob_authorisation"
-          - "POST /{id}/approve | Customer approves the consent after SCA | | ob_authorisation"
+          - "POST /{id}/select-accounts | Authenticated customer selects the accounts to share (ownership checked) | customer_id uuid nn, account_ids json[] nn | ob_authorisation"
+          - "POST /{id}/approve | Customer approves the consent after SCA | authentication_method string(32) nn | ob_authorisation"
           - "POST /{id}/deny | Customer denies the consent | reason string(255)"
       - resource: ob-payment-initiations
         path: /v1/open-banking/payment-initiations
@@ -221,6 +240,7 @@ services:
         ops: [list, get, create]
         filters: [ob_consent_id, tpp_id, status, payment_id]
         actions:
+          - "POST /{id}/refresh-status | Refresh the status from the core payment | | ob_payment_initiation"
           - "POST /{id}/cancel | Cancel a future-dated initiation | reason string(255)"
       - resource: ob-funds-confirmations
         path: /v1/open-banking/funds-confirmations
@@ -230,15 +250,23 @@ services:
       - resource: ob-access-logs
         path: /v1/open-banking/access-logs
         table: ob_access_log
-        ops: [list, get]
+        description: Append-only access log; the gateway records every TPP call, services record consent-scoped calls.
+        ops: [list, get, create]
         filters: [tpp_id, ob_consent_id, customer_id, http_status]
 
     events:
       - "openbanking.tpp.registered | tpp | A TPP registered"
+      - "openbanking.tpp.verified | tpp | A TPP was verified and activated"
       - "openbanking.tpp.suspended | tpp | A TPP was suspended"
+      - "openbanking.tpp.reactivated | tpp | A suspended TPP was reactivated"
+      - "openbanking.tpp_certificate.added | tpp_certificate | A TPP certificate was validated and registered"
+      - "openbanking.tpp_certificate.revoked | tpp_certificate | A TPP certificate was revoked"
       - "openbanking.ob_consent.created | ob_consent | A consent request was created"
       - "openbanking.ob_consent.authorised | ob_consent | A customer authorised a consent"
+      - "openbanking.ob_consent.rejected | ob_consent | A customer denied a consent"
       - "openbanking.ob_consent.revoked | ob_consent | A consent was revoked"
       - "openbanking.ob_consent.expired | ob_consent | A consent expired"
+      - "openbanking.ob_consent.consumed | ob_consent | A single-use payment consent was used"
       - "openbanking.ob_payment_initiation.received | ob_payment_initiation | A PISP initiated a payment"
       - "openbanking.ob_payment_initiation.status_changed | ob_payment_initiation | A PISP payment changed status"
+      - "openbanking.ob_funds_confirmation.checked | ob_funds_confirmation | A CBPII confirmation of funds was answered"
