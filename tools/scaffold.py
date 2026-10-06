@@ -29,7 +29,7 @@ def write_if_absent(path: Path, content: str) -> bool:
     if path.exists():
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8", newline="\n")
     return True
 
 
@@ -52,7 +52,7 @@ def main():
     settings += [""] + [f'include(":platform:{name}")' for name in platform]
     settings += [""]
     settings += [f'include(":services:{s["name"]}")' for s in sorted(services, key=lambda x: x["name"])]
-    (ROOT / "settings.gradle.kts").write_text("\n".join(settings) + "\n", encoding="utf-8")
+    (ROOT / "settings.gradle.kts").write_text("\n".join(settings) + "\n", encoding="utf-8", newline="\n")
 
     for s in services:
         name, pkg = s["name"], s["package"]
@@ -184,7 +184,7 @@ class {app}Tests {{
     for s in sorted(services, key=lambda x: x["port"]):
         lines.append(f"| {s['name']} | {s['domain_title']} | {s['phase']} | {s['port']} | {s['database']} | "
                      f"`{s['package']}` | {len(s['tags'])} |")
-    (ROOT / "docs" / "SERVICES.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (ROOT / "docs" / "SERVICES.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     print(f"services={len(services)} libs={len(libs)} files_created={created}")
 
 

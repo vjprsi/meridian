@@ -551,7 +551,7 @@ def gen_ddl(domains, enums) -> int:
               ""]
         p = OUT / "db" / db / "V001__init.sql"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("\n".join(L), encoding="utf-8")
+        p.write_text("\n".join(L), encoding="utf-8", newline="\n")
     return count
 
 
@@ -929,7 +929,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
         prune_components(doc)
         p = OUT / "openapi" / f"{d.id}.openapi.yaml"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+        p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
         # one OpenAPI file per service: only that service's paths (input to Spring interface codegen)
         for s in d.services:
             sdoc = yaml.safe_load(yaml.safe_dump(doc))
@@ -942,10 +942,10 @@ def gen_openapi(domains, enums, tables_global) -> list:
             prune_components(sdoc)
             sp = OUT / "openapi" / "services" / f"{s.name}.openapi.yaml"
             sp.parent.mkdir(parents=True, exist_ok=True)
-            sp.write_text(yaml.safe_dump(sdoc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+            sp.write_text(yaml.safe_dump(sdoc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
     prune_components(bundle)
     (OUT / "openapi" / "meridian.openapi.yaml").write_text(
-        yaml.safe_dump(bundle, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+        yaml.safe_dump(bundle, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
     return endpoints
 
 
@@ -986,7 +986,7 @@ def gen_asyncapi(domains, enums, tables_global) -> list:
                 "action": "send", "channel": {"$ref": f"#/channels/{cid}"}}
     p = OUT / "asyncapi" / "meridian.asyncapi.yaml"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8")
+    p.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=120), encoding="utf-8", newline="\n")
     return rows
 
 
@@ -1018,7 +1018,7 @@ def gen_dictionary(domains, api_by_table):
                 L.append("")
     p = OUT / "docs" / "data-dictionary.md"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text("\n".join(L), encoding="utf-8")
+    p.write_text("\n".join(L), encoding="utf-8", newline="\n")
 
 
 # ---------------------------------------------------------------------------
@@ -1056,7 +1056,7 @@ def gen_manifest(domains):
                 "tags": sorted({" ".join(w.capitalize() for w in a.resource.split("-")) for a in s.apis}),
                 "tables": len(s.tables), "events": [e.name for e in s.events],
             })
-    mp.write_text(json.dumps(out, indent=2), encoding="utf-8")
+    mp.write_text(json.dumps(out, indent=2), encoding="utf-8", newline="\n")
 
 
 def gen_routes(endpoints):
@@ -1066,7 +1066,7 @@ def gen_routes(endpoints):
     routes = sorted({(e.method, e.path, e.service) for e in endpoints}, key=lambda r: (r[1], r[0]))
     (OUT / "routes.json").write_text(json.dumps(
         [{"method": m, "path": pth, "service": svc, "port": ports[svc]} for m, pth, svc in routes], indent=1),
-        encoding="utf-8")
+        encoding="utf-8", newline="\n")
 
 
 def main():
