@@ -4,6 +4,8 @@ import io.meridian.aiplatform.domain.Lifecycles;
 import io.meridian.aiplatform.domain.PiiRedactor;
 import io.meridian.aiplatform.domain.Retriever;
 import io.meridian.aiplatform.infrastructure.Store;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
@@ -40,14 +42,19 @@ import tools.jackson.databind.node.ObjectNode;
 public class CopilotService {
     static final String MODEL_VERSION = "retrieval-stub-1";
     static final int MAX_CONTEXT = 50;
+    /** Approval resource type for copilot-proposed actions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "copilot_action";
 
     private final Store store;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
     private final PolicyService policies;
+    private final Approvals approvals;
 
-    public CopilotService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, PolicyService policies) {
+    public CopilotService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, PolicyService policies,
+                          Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -268,6 +275,21 @@ public class CopilotService {
             payload.put("used_tokens", policies.usedThisMonth(UUID.fromString(policy.get("id").asString())));
             outbox.publish("reporting.llm_budget.exceeded", "llm_gateway_policy", UUID.fromString(policy.get("id").asString()), payload);
         }
+        if (answer != null && answer.action() != null) {
+            // Central maker-checker: the proposed write action waits for a human decision in the workflow inbox.
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("copilot_definition_id", copilotId.toString());
+            payload.put("copilot_code", c.path("code").asString(null));
+            payload.put("tool", answer.action().tool());
+            payload.put("arguments", answer.action().arguments());
+            payload.put("subject_type", Fields.text(req, "subject_type"));
+            payload.put("subject_id", Fields.text(req, "subject_id"));
+            payload.put("response_redacted", rowNode.path("response_redacted").asString(null));
+            payload.put("response_sha256", rowNode.path("response_sha256").asString(null));
+            approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                    "Copilot " + c.path("code").asString("") + " proposes " + answer.action().tool(), payload),
+                    "propose:" + id);
+        }
         return row;
     }
 
@@ -330,7 +352,19 @@ public class CopilotService {
         String row = crud.insert("copilot_interaction", v);
         outbox.publish(approve ? "reporting.copilot_action.approved" : "reporting.copilot_action.rejected",
                 "copilot_interaction", id, json.readTree(row));
+        approvals.cancelOpen(APPROVAL_RESOURCE, interactionId, null, approve ? "approved directly" : "rejected directly");
         return row;
+    }
+
+    /** True while the interaction's proposed action (with the given response hash) has no human decision yet. */
+    @Transactional(readOnly = true)
+    public boolean awaitsDecision(UUID interactionId, String responseSha256) {
+        return store.find("copilot_interaction", interactionId)
+                .filter(p -> "ACTION_PROPOSED".equals(p.path("outcome").asString()))
+                .filter(p -> responseSha256 == null || responseSha256.equals(p.path("response_sha256").asString(null)))
+                .filter(p -> store.count("select count(*) from copilot_interaction where parent_interaction_id = ?",
+                        interactionId) == 0)
+                .isPresent();
     }
 
     @Transactional

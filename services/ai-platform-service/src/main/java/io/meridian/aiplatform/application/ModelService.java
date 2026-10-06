@@ -2,12 +2,16 @@ package io.meridian.aiplatform.application;
 
 import io.meridian.aiplatform.domain.Lifecycles;
 import io.meridian.aiplatform.infrastructure.Store;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
 import io.meridian.web.crud.CrudEngine;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,12 +26,17 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Service
 public class ModelService {
+    /** Approval resource type for model versions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "ml_model_version";
+
     private final Store store;
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public ModelService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    public ModelService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -105,6 +114,23 @@ public class ModelService {
                 where t.id = ? returning row_to_json(t)::text""", TenantContext.principal(), comment, TenantContext.principal(), id)
                 .orElseThrow();
         outbox.publish("reporting.ml_model_version.submitted", "ml_model_version", id, row);
+        // Central maker-checker: the checker decides in the workflow inbox; ModelVersionApprovalHandler applies it.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("ml_model_id", model.get("id").asString());
+        payload.put("model_code", model.get("code").asString());
+        payload.put("risk_tier", model.get("risk_tier").asString());
+        payload.put("model_version", row.path("model_version").asString());
+        payload.put("artifact_sha256", Fields.text(row, "artifact_sha256"));
+        payload.put("metrics", row.get("metrics"));
+        payload.put("bias_test_results", row.get("bias_test_results"));
+        payload.put("validation_document_id", Fields.text(row, "validation_document_id"));
+        payload.put("submitted_at", row.get("submitted_at").asString());
+        payload.put("row_version", row.path("row_version").asLong());
+        payload.put("comment", comment);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Model " + model.get("code").asString() + " v" + row.path("model_version").asString(), payload)
+                        .withSummary(model.get("risk_tier").asString() + "-risk model version submitted for approval"),
+                "submit:" + id + ":" + row.get("submitted_at").asString());
         return row.toString();
     }
 
@@ -118,6 +144,7 @@ public class ModelService {
                        updated_by = ? where t.id = ? returning row_to_json(t)::text""",
                 TenantContext.principal(), comment, TenantContext.principal(), id).orElseThrow();
         outbox.publish("reporting.ml_model_version.approved", "ml_model_version", id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return row.toString();
     }
 
@@ -130,7 +157,17 @@ public class ModelService {
                 update ml_model_version t set status = 'REJECTED', rejection_reason = ?, decision_comment = ?, updated_by = ?
                 where t.id = ? returning row_to_json(t)::text""", reason, reason, TenantContext.principal(), id).orElseThrow();
         outbox.publish("reporting.ml_model_version.rejected", "ml_model_version", id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row.toString();
+    }
+
+    /** True while the version is PENDING_APPROVAL for the submission identified by {@code submittedAt}. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String submittedAt) {
+        return store.find("ml_model_version", id)
+                .filter(v -> "PENDING_APPROVAL".equals(v.path("status").asString()))
+                .filter(v -> submittedAt == null || submittedAt.equals(v.path("submitted_at").asString(null)))
+                .isPresent();
     }
 
     private static void requireIndependent(JsonNode v) {

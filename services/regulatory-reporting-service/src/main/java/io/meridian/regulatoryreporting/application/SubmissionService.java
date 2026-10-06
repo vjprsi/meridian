@@ -1,5 +1,7 @@
 package io.meridian.regulatoryreporting.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -10,6 +12,7 @@ import io.meridian.regulatoryreporting.infrastructure.Store;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,8 +34,14 @@ public class SubmissionService {
     private final OutboxWriter outbox;
     private final JsonMapper json;
     private final RegulatorGateway gateway;
+    private final Approvals approvals;
 
-    public SubmissionService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, RegulatorGateway gateway) {
+    /** Approval resource type for submission sign-off in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "report_submission";
+
+    public SubmissionService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, RegulatorGateway gateway,
+                             Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -73,13 +82,73 @@ public class SubmissionService {
         }
         ObjectNode v = crud.toColumns("report_submission", req);
         v.put("status", "PENDING_APPROVAL");
+        JsonNode def = store.require("report_definition", RunService.uuid(run, "report_definition_id"));
         if (!req.hasNonNull("deadline_at")) {
-            JsonNode def = store.require("report_definition", RunService.uuid(run, "report_definition_id"));
             LocalDate due = FilingCalendar.dueDate(Fields.text(def, "deadline_rule"), def.get("frequency").asString(),
                     LocalDate.parse(run.get("period_end").asString()), def.path("filing_offset_days").asInt(0));
             v.put("deadline_at", due.atTime(23, 59, 59).atOffset(ZoneOffset.UTC).toString());
         }
-        return crud.insert("report_submission", v);
+        String inserted = crud.insert("report_submission", v);
+        // Central maker-checker: the checker signs off in the workflow inbox; SubmissionApprovalHandler applies it.
+        JsonNode row = json.readTree(inserted);
+        UUID id = UUID.fromString(row.get("id").asString());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("report_code", def.get("code").asString());
+        payload.put("regulator", Fields.text(def, "regulator"));
+        payload.put("report_run_id", runId.toString());
+        payload.put("period_end", Fields.text(run, "period_end"));
+        payload.put("run_revision", run.path("revision").asInt(1));
+        payload.put("report_output_id", outputId.toString());
+        payload.put("file_name", Fields.text(output, "file_name"));
+        payload.put("sha256", Fields.text(output, "sha256"));
+        payload.put("channel", channel);
+        payload.put("deadline_at", Fields.text(row, "deadline_at"));
+        JsonNode request = approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Sign off " + def.get("code").asString() + " filing for " + Fields.text(run, "period_end"), payload),
+                "signoff:" + id);
+        UUID requestId = Approvals.idOf(request);
+        if (requestId == null) {
+            return inserted;
+        }
+        return store.updateReturning("""
+                update report_submission t set approval_request_id = ? where t.id = ? returning row_to_json(t)::text""",
+                requestId, id).toString();
+    }
+
+    /**
+     * True while the submission awaits sign-off for this approval request (when one was recorded) and the file with
+     * the submitted checksum.
+     */
+    @Transactional(readOnly = true)
+    public boolean awaitsSignOff(UUID id, UUID approvalRequestId, String sha256) {
+        return store.find("report_submission", id)
+                .filter(s -> "PENDING_APPROVAL".equals(s.path("status").asString()))
+                .filter(s -> approvalRequestId == null || !s.hasNonNull("approval_request_id")
+                        || approvalRequestId.toString().equals(s.get("approval_request_id").asString()))
+                .filter(s -> sha256 == null || store.find("report_output", RunService.uuid(s, "report_output_id"))
+                        .map(o -> sha256.equals(Fields.text(o, "sha256"))).orElse(false))
+                .isPresent();
+    }
+
+    /**
+     * Sign-off refused by the checker (workflow-service rejection): the submission is closed as REJECTED so the run
+     * can be corrected and submitted again. Four eyes as for sign-off.
+     */
+    @Transactional
+    public String declineSignOff(UUID id, String reason) {
+        JsonNode sub = store.requireLocked("report_submission", id);
+        String st = sub.get("status").asString();
+        if (!"PENDING_APPROVAL".equals(st)) {
+            throw ApiException.conflict("invalid_transition", "A submission in status " + st + " cannot be declined");
+        }
+        if (TenantContext.principal().equals(Fields.text(sub, "created_by"))) {
+            throw ApiException.unprocessable("four_eyes_violation", "The preparer of a submission cannot decide on it");
+        }
+        JsonNode row = store.updateReturning("""
+                update report_submission t set status = 'REJECTED', rejection_reason = ?, updated_by = ?
+                where t.id = ? returning row_to_json(t)::text""", reason, TenantContext.principal(), id);
+        outbox.publish("reporting.report_submission.rejected", "report_submission", id, row);
+        return row.toString();
     }
 
     /** Sign-off by a principal other than the preparer; auto-submits for auto_submit schedules. */
@@ -98,6 +167,7 @@ public class SubmissionService {
             payload.put("comment", comment);
         }
         outbox.publish("reporting.report_submission.approved", "report_submission", id, payload);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "signed off directly");
         boolean auto = store.scalar("""
                 select coalesce(s.auto_submit, false) from report_run r left join report_schedule s on s.id = r.report_schedule_id
                 where r.id = ?""", Boolean.class, RunService.uuid(sub, "report_run_id")).orElse(false);

@@ -6,16 +6,25 @@ import io.meridian.analytics.domain.Filters;
 import io.meridian.analytics.domain.MetricSpec;
 import io.meridian.analytics.domain.QueryDsl;
 import io.meridian.analytics.infrastructure.Store;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
+import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -36,16 +45,90 @@ public class KpiService {
     static final Set<String> UNITS = Set.of("COUNT", "AMOUNT", "PERCENT", "BPS", "DAYS");
     static final Set<String> DEFINITION_FIELDS = Set.of("metric", "dataset", "time_field");
 
+    /** Approval resource type for KPI certification in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "analytics_kpi";
+
     private final Store store;
     private final DatasetService datasets;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final CrudEngine crud;
+    private final Approvals approvals;
 
-    public KpiService(Store store, DatasetService datasets, OutboxWriter outbox, JsonMapper json) {
+    public KpiService(Store store, DatasetService datasets, OutboxWriter outbox, JsonMapper json, CrudEngine crud,
+                      Approvals approvals) {
         this.store = store;
         this.datasets = datasets;
         this.outbox = outbox;
         this.json = json;
+        this.crud = crud;
+        this.approvals = approvals;
+    }
+
+    /** Inserts a validated KPI; a new KPI awaits certification, so it is sent to the central approvals inbox. */
+    @Transactional
+    public String create(ObjectNode values) {
+        String row = crud.insert("analytics_kpi", values);
+        requestCertification(UUID.fromString(json.readTree(row).get("id").asString()));
+        return row;
+    }
+
+    /**
+     * Updates a validated KPI. A definition change on an uncertified KPI (including one whose certification was just
+     * cleared) is a new submission for certification; cosmetic changes are not.
+     */
+    @Transactional
+    public Optional<String> update(UUID id, ObjectNode values, int version, JsonNode existing) {
+        Optional<String> row = crud.updateRow("analytics_kpi", Map.of("id", id), values, version);
+        row.ifPresent(r -> {
+            JsonNode updated = store.require("analytics_kpi", id);
+            if (!updated.path("is_certified").asBoolean(false)
+                    && !definitionChecksum(updated).equals(definitionChecksum(existing))) {
+                requestCertification(id);
+            }
+        });
+        return row;
+    }
+
+    /**
+     * Central maker-checker (G11): the checker certifies from the workflow inbox; {@code KpiCertificationHandler}
+     * applies the decision. The definition checksum identifies the submitted definition.
+     */
+    void requestCertification(UUID id) {
+        JsonNode k = store.require("analytics_kpi", id);
+        String checksum = definitionChecksum(k);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("kpi_id", id.toString());
+        payload.put("code", Fields.text(k, "code"));
+        payload.put("name", Fields.text(k, "name"));
+        payload.put("dataset", Fields.text(k, "dataset"));
+        payload.put("unit", Fields.text(k, "unit"));
+        payload.put("time_field", Fields.text(k, "time_field"));
+        payload.put("metric", k.get("metric"));
+        payload.put("definition_checksum", checksum);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "certify",
+                "Certify KPI " + Fields.text(k, "code"), payload), "certify:" + id + ":" + checksum);
+    }
+
+    /** True while the KPI is uncertified with the submitted definition (checksum) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsCertification(UUID id, String checksum) {
+        return store.find("analytics_kpi", id)
+                .filter(k -> !k.path("is_certified").asBoolean(false))
+                .filter(k -> checksum == null || checksum.equals(definitionChecksum(k)))
+                .isPresent();
+    }
+
+    /** Fingerprint of the certifiable definition (dataset, metric, time field). */
+    static String definitionChecksum(JsonNode k) {
+        String canonical = DEFINITION_FIELDS.stream().sorted()
+                .map(f -> f + "=" + (k.hasNonNull(f) ? k.get(f).toString() : "null"))
+                .reduce((a, b) -> a + ";" + b).orElse("");
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Validates (merged with the existing row on update) and clears certification when the definition changes. */
@@ -104,6 +187,7 @@ public class KpiService {
             payload.put("comment", comment);
         }
         outbox.publish("reporting.analytics_kpi.certified", "analytics_kpi", id, payload);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "certified directly");
         return row.toString();
     }
 

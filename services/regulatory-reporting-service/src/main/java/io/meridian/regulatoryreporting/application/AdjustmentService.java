@@ -1,5 +1,7 @@
 package io.meridian.regulatoryreporting.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -11,7 +13,9 @@ import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -34,9 +38,14 @@ public class AdjustmentService {
     private final JsonMapper json;
     private final RunService runs;
     private final DefinitionService definitions;
+    private final Approvals approvals;
+
+    /** Approval resource type for report adjustments in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "report_adjustment";
 
     public AdjustmentService(Store store, CrudEngine crud, OutboxWriter outbox, JsonMapper json, RunService runs,
-                             DefinitionService definitions) {
+                             DefinitionService definitions, Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -76,7 +85,34 @@ public class AdjustmentService {
         v.put("reason", reason);
         v.put("status", "PENDING_APPROVAL");
         v.put("adjusted_by", TenantContext.principal());
-        return crud.insert("report_adjustment", v);
+        String inserted = crud.insert("report_adjustment", v);
+        // Central maker-checker: the checker decides in the workflow inbox; AdjustmentApprovalHandler applies it.
+        JsonNode row = json.readTree(inserted);
+        UUID id = UUID.fromString(row.get("id").asString());
+        int rowVersion = row.path("row_version").asInt(1);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("report_run_id", runId.toString());
+        payload.put("run_revision", run.path("revision").asInt(1));
+        payload.put("cell_ref", cellRef);
+        payload.put("original_value", Fields.text(row, "original_value"));
+        payload.put("adjusted_value", value);
+        payload.put("reason", reason);
+        payload.put("row_version", rowVersion);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Report adjustment " + cellRef + " on run " + runId, payload)
+                .withSummary(cellRef + ": " + Fields.text(row, "original_value") + " to " + value + " (" + reason + ")"),
+                "adjust:" + id + ":" + rowVersion);
+        return inserted;
+    }
+
+    /** True while the adjustment is PENDING_APPROVAL with the submitted value and row_version unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID adjustmentId, String adjustedValue, Integer rowVersion) {
+        return store.find("report_adjustment", adjustmentId)
+                .filter(a -> "PENDING_APPROVAL".equals(a.path("status").asString()))
+                .filter(a -> adjustedValue == null || adjustedValue.equals(a.path("adjusted_value").asString(null)))
+                .filter(a -> rowVersion == null || rowVersion == a.path("row_version").asInt())
+                .isPresent();
     }
 
     /** Checker step: applies the overlay and produces the next revision. */
@@ -113,6 +149,7 @@ public class AdjustmentService {
         }
         runs.finish(run, def, version, compiled.rules(), cells, run.path("revision").asInt(1) + 1, null);
         outbox.publish("reporting.report_adjustment.approved", "report_adjustment", adjustmentId, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, adjustmentId, null, "approved directly");
         return row.toString();
     }
 
@@ -128,6 +165,7 @@ public class AdjustmentService {
                        updated_by = ? where t.id = ? returning row_to_json(t)::text""",
                 TenantContext.principal(), reason, TenantContext.principal(), adjustmentId);
         outbox.publish("reporting.report_adjustment.rejected", "report_adjustment", adjustmentId, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, adjustmentId, null, "rejected directly");
         return row.toString();
     }
 

@@ -2,6 +2,8 @@ package io.meridian.campaign.application;
 
 import static io.meridian.campaign.application.Json.text;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.campaign.api.generated.model.Campaign;
 import io.meridian.campaign.domain.Lifecycles;
 import io.meridian.campaign.infrastructure.Rows;
@@ -14,7 +16,9 @@ import java.time.DateTimeException;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
@@ -36,8 +40,13 @@ public class CampaignService {
     private final CrudEngine crud;
     private final Events events;
     private final AudienceService audience;
+    private final Approvals approvals;
 
-    public CampaignService(Rows rows, CrudEngine crud, Events events, AudienceService audience) {
+    /** Approval resource type for submitted campaigns in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "campaign";
+
+    public CampaignService(Rows rows, CrudEngine crud, Events events, AudienceService audience, Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.crud = crud;
         this.events = events;
@@ -149,7 +158,41 @@ public class CampaignService {
         v.put("submitted_by", Json.truncate(TenantContext.principal(), 64));
         v.put("submitted_at", rows.now().toString());
         v.putNull("status_reason");
-        return publish("engagement.campaign.submitted", rows.update(T, id, v));
+        ObjectNode row = publish("engagement.campaign.submitted", rows.update(T, id, v));
+        // Central maker-checker: the checker decides in the workflow inbox; CampaignApprovalHandler applies it.
+        // submitted_at identifies this submission (the definition is frozen while PENDING_APPROVAL).
+        String submittedAt = text(row, "submitted_at");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("campaign_id", id.toString());
+        payload.put("code", text(row, "code"));
+        payload.put("name", text(row, "name"));
+        payload.put("segment_ids", Json.strings(row.get("segment_ids")));
+        payload.put("exclusion_segment_ids", Json.strings(row.get("exclusion_segment_ids")));
+        payload.put("channels", Json.strings(row.get("channels")));
+        payload.put("start_at", text(row, "start_at"));
+        payload.put("end_at", text(row, "end_at"));
+        payload.put("budget_amount", text(row, "budget_amount"));
+        payload.put("currency", text(row, "currency"));
+        payload.put("submitted_by", text(row, "submitted_by"));
+        payload.put("submitted_at", submittedAt);
+        payload.put("row_version", row.path("row_version").asInt());
+        ApprovalSpec spec = ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Campaign " + text(row, "code") + " - " + text(row, "name"), payload);
+        BigDecimal budget = Json.decimal(row, "budget_amount");
+        if (budget != null) {
+            spec = spec.withAmount(budget, text(row, "currency"));
+        }
+        approvals.request(spec, "submit:" + id + ":" + submittedAt);
+        return row;
+    }
+
+    /** True while the campaign is PENDING_APPROVAL for the submission identified by {@code submittedAt}. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String submittedAt) {
+        return rows.find(T, id)
+                .filter(c -> "PENDING_APPROVAL".equals(text(c, "status")))
+                .filter(c -> submittedAt == null || submittedAt.equals(text(c, "submitted_at")))
+                .isPresent();
     }
 
     @Transactional
@@ -168,7 +211,9 @@ public class CampaignService {
         if (comment != null) {
             v.put("approval_comment", Json.truncate(comment, 500));
         }
-        return publish("engagement.campaign.approved", rows.update(T, id, v));
+        ObjectNode row = publish("engagement.campaign.approved", rows.update(T, id, v));
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+        return row;
     }
 
     @Transactional
@@ -183,7 +228,9 @@ public class CampaignService {
         v.put("status_reason", Json.truncate(reason, 255));
         v.putNull("submitted_by");
         v.putNull("submitted_at");
-        return publish("engagement.campaign.rejected", rows.update(T, id, v));
+        ObjectNode row = publish("engagement.campaign.rejected", rows.update(T, id, v));
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
+        return row;
     }
 
     @Transactional
@@ -260,11 +307,16 @@ public class CampaignService {
     @Transactional
     public ObjectNode cancel(UUID id, String reason) {
         ObjectNode c = rows.lock(T, id);
+        boolean pending = "PENDING_APPROVAL".equals(text(c, "status"));
         ObjectNode v = rows.object();
         v.put("status", Lifecycles.CAMPAIGN.apply("cancel", text(c, "status")));
         v.put("status_reason", Json.truncate(reason, 255));
         v.put("completed_at", rows.now().toString());
-        return publish("engagement.campaign.cancelled", rows.update(T, id, v));
+        ObjectNode row = publish("engagement.campaign.cancelled", rows.update(T, id, v));
+        if (pending) {
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "campaign cancelled");
+        }
+        return row;
     }
 
     private ObjectNode publish(String type, ObjectNode row) {
