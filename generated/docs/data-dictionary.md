@@ -6256,7 +6256,73 @@ API: /v1/operations/eod-jobs · Requirements: OPS-01, GL-03, DEP-06
 | failure_policy | varchar(40) (EodFailurePolicy) | no |  | failure_policy | What happens on final failure |
 | is_critical | boolean | no |  | is_critical | Blocks the date roll when it fails |
 | is_active | boolean | no |  | is_active | Active |
-| parameters | jsonb | yes |  | parameters | Default parameters passed to the job |
+| parameters | jsonb | yes |  | parameters | Default parameters passed to the job; {parameters.<name>} placeholders read them |
+| pack_code | varchar(64) | yes |  | pack_code (read-only) | Standard job pack the job was installed from (empty = tenant-defined job) |
+| pack_version | varchar(32) | yes |  | pack_version (read-only) | Version of the pack that last installed or upgraded the job |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `eod_trigger_policy`
+
+When end-of-day starts automatically for a legal entity. The platform scheduler (cross-tenant EOD trigger) starts EOD for the current business date once the local cut-off time has passed in the policy's time zone (default: the legal entity's, else the tenant's time zone). One policy per legal entity plus an optional tenant default (empty legal_entity_id); without any policy the platform default cut-off applies.
+
+
+API: /v1/operations/eod-trigger-policies · Requirements: OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity (empty = default for every legal entity of the tenant) |
+| is_enabled | boolean | no |  | is_enabled | Start EOD automatically when the business date is due |
+| cut_off_time | varchar(5) | no |  | cut_off_time | Local cut-off time HH:mm after which the business date is due for EOD |
+| time_zone | varchar(64) | yes |  | time_zone | IANA time zone of the cut-off (empty = legal entity time zone, else tenant time zone) |
+| auto_roll | boolean | no |  | auto_roll | Roll to the next business date automatically after a fully successful EOD |
+| notes | varchar(500) | yes |  | notes | Operator notes |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `eod_sweep`
+
+One execution of the platform's cross-tenant EOD trigger: lists the ACTIVE tenants from tenant-service and, per tenant and legal entity whose business date is due, starts EOD under that tenant (idempotent per tenant, legal entity and business date: a date with an EOD run is never started again). Platform-global record.
+
+
+API: /v1/operations/eod-sweeps · Requirements: OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| trigger_source | varchar(40) (EodSweepTrigger) | no |  | trigger_source | Scheduler tick or operator request |
+| slot_key | varchar(160) | no | UQ | slot_key | De-duplication key: the scheduler time slot or the operator's Idempotency-Key |
+| as_of | timestamptz | no |  | as_of (read-only) | Evaluation time (database clock) |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Outcome (PARTIALLY_SUCCEEDED when some tenants failed) |
+| requested_by | varchar(64) | yes |  | requested_by (read-only) | Operator or SCHEDULER |
+| tenant_ids | jsonb | yes |  | tenant_ids | Tenants requested (empty = every ACTIVE tenant) |
+| tenants_total | integer | no |  | tenants_total (read-only) | Tenants evaluated |
+| tenants_failed | integer | no |  | tenants_failed (read-only) | Tenants whose evaluation failed |
+| runs_started | integer | no |  | runs_started (read-only) | EOD runs started |
+| dates_rolled | integer | no |  | dates_rolled (read-only) | Business dates rolled automatically |
+| entities_skipped | integer | no |  | entities_skipped (read-only) | Legal entities skipped (not due, disabled, already run) |
+| results | jsonb | yes |  | results (read-only) | Per tenant and legal entity: tenant_id, legal_entity_id, business_date, decision, eod_run_id, due_at, error_code, error |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| error | text | yes |  | error (read-only) | Failure summary |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

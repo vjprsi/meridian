@@ -32,6 +32,15 @@ tags:
     per the failure policy, other 4xx fail the job.
 
     '
+- name: Eod Trigger Policies
+  description: 'When end-of-day starts automatically for a legal entity. The platform scheduler (cross-tenant EOD trigger)
+    starts EOD for the current business date once the local cut-off time has passed in the policy''s time zone (default: the
+    legal entity''s, else the tenant''s time zone). One policy per legal entity plus an optional tenant default (empty legal_entity_id);
+    without any policy the platform default cut-off applies.
+
+    '
+- name: Eod Sweeps
+  description: Platform-operator API of the cross-tenant EOD trigger
 - name: Eod Runs
   description: Execution of a full end-of-period cycle for one legal entity and business date
 - name: Eod Job Runs
@@ -474,6 +483,18 @@ paths:
           - CARD_STATEMENT_CYCLE
           - ARCHIVAL
           - CUSTOM
+          - PAYMENT_EXECUTION
+          - EXPIRY_SCAN
+          - SWEEP
+          - INSTALMENT_DUE
+          - COLLECTIONS
+          - TREASURY
+          - LIQUIDITY
+          - LOYALTY
+          - ENGAGEMENT
+          - ANALYTICS
+          - MONITORING
+          - NOTIFICATIONS
       - name: owning_service
         in: query
         schema:
@@ -770,6 +791,484 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
       x-required-scope: operations:write
       x-table: eod_job_definition
+  /v1/operations/eod-jobs/standard-pack:
+    get:
+      operationId: eodJobDefinitionsStandardPack
+      summary: 'The standard EOD job pack shipped with the service: code, version and every job (owning service, method, path
+        template, dependencies, cycles, criticality)'
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-required-scope: operations:read
+      x-table: eod_job_definition
+  /v1/operations/eod-jobs/install-standard-pack:
+    post:
+      operationId: eodJobDefinitionsInstallStandardPack
+      summary: 'Install or upgrade the standard EOD job pack into the tenant''s job definitions (idempotent: unchanged jobs
+        are left alone, tenant-defined jobs with the same code are never overwritten, jobs retired by the pack are deactivated);
+        returns {pack_code, version, created, updated, unchanged, retired, skipped, dry_run}'
+      tags:
+      - Eod Job Definitions
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodJobDefinitionsInstallStandardPackRequest'
+      x-requirements:
+      - DEP-06
+      - GL-03
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-required-scope: operations:write
+      x-table: eod_job_definition
+  /v1/operations/eod-trigger-policies:
+    get:
+      operationId: eodTriggerPoliciesList
+      summary: List eod trigger policies
+      tags:
+      - Eod Trigger Policies
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_enabled
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodTriggerPolicyPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-required-scope: operations:read
+      x-table: eod_trigger_policy
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: eodTriggerPoliciesCreate
+      summary: Create eod trigger policie
+      tags:
+      - Eod Trigger Policies
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodTriggerPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodTriggerPolicyCreate'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-required-scope: operations:write
+      x-table: eod_trigger_policy
+      x-crud: true
+      x-crud-create: true
+  /v1/operations/eod-trigger-policies/{id}:
+    get:
+      operationId: eodTriggerPoliciesGet
+      summary: Retrieve eod trigger policie
+      tags:
+      - Eod Trigger Policies
+      security:
+      - oauth2:
+        - operations:read
+      parameters: &id008
+      - &id007
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodTriggerPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-required-scope: operations:read
+      x-table: eod_trigger_policy
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: eodTriggerPoliciesUpdate
+      summary: Update eod trigger policie
+      tags:
+      - Eod Trigger Policies
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - *id007
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodTriggerPolicy'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodTriggerPolicyUpdate'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-required-scope: operations:write
+      x-table: eod_trigger_policy
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: eodTriggerPoliciesDelete
+      summary: Delete eod trigger policie
+      tags:
+      - Eod Trigger Policies
+      security:
+      - oauth2:
+        - operations:write
+      parameters: *id008
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:write")'
+      x-required-scope: operations:write
+      x-table: eod_trigger_policy
+      x-crud: true
+      x-crud-delete: true
+  /v1/operations/eod-trigger-policies/evaluation:
+    get:
+      operationId: eodTriggerPoliciesEvaluation
+      summary: 'Evaluate the automatic EOD trigger for the tenant now without starting anything: per legal entity the current
+        business date, effective policy, due time and decision'
+      tags:
+      - Eod Trigger Policies
+      security:
+      - oauth2:
+        - operations:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-required-scope: operations:read
+      x-table: eod_trigger_policy
+  /v1/operations/eod-sweeps:
+    get:
+      operationId: eodSweepsList
+      summary: List eod sweeps
+      tags:
+      - Eod Sweeps
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: trigger_source
+        in: query
+        schema:
+          type: string
+          enum:
+          - SCHEDULER
+          - OPERATOR
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodSweepPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-required-scope: operations:read
+      x-table: eod_sweep
+      x-crud: true
+      x-crud-list: true
+  /v1/operations/eod-sweeps/{id}:
+    get:
+      operationId: eodSweepsGet
+      summary: Retrieve eod sweep
+      tags:
+      - Eod Sweeps
+      security:
+      - oauth2:
+        - operations:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodSweep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("operations:read")'
+      x-required-scope: operations:read
+      x-table: eod_sweep
+      x-crud: true
+      x-crud-get: true
+  /v1/operations/eod-sweeps/run:
+    post:
+      operationId: eodSweepsRun
+      summary: 'Run the cross-tenant EOD trigger now (platform operators): start EOD for every due legal entity of every ACTIVE
+        tenant (or of tenant_ids); one failing tenant never blocks the others'
+      tags:
+      - Eod Sweeps
+      security:
+      - oauth2:
+        - operations:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EodSweep'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EodSweepsRunRequest'
+      x-requirements:
+      - OPS-01
+      x-service: business-day-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("meridian:admin")'
+      x-required-scope: meridian:admin
+      x-table: eod_sweep
   /v1/operations/eod-runs:
     get:
       operationId: eodRunsList
@@ -1452,8 +1951,8 @@ paths:
       security:
       - oauth2:
         - operations:read
-      parameters: &id008
-      - &id007
+      parameters: &id010
+      - &id009
         name: id
         in: path
         required: true
@@ -1490,7 +1989,7 @@ paths:
       - oauth2:
         - operations:write
       parameters:
-      - *id007
+      - *id009
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -1531,7 +2030,7 @@ paths:
       security:
       - oauth2:
         - operations:write
-      parameters: *id008
+      parameters: *id010
       responses:
         '204':
           description: No content
@@ -1970,6 +2469,58 @@ components:
       required:
       - data
       - has_more
+    EodJobDefinitionsInstallStandardPackRequest:
+      type: object
+      properties:
+        version:
+          type: string
+          maxLength: 32
+        dry_run:
+          type: boolean
+    EodTriggerPolicyPage:
+      type: object
+      description: One page of EodTriggerPolicy results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EodTriggerPolicy'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    EodSweepPage:
+      type: object
+      description: One page of EodSweep results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EodSweep'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    EodSweepsRunRequest:
+      type: object
+      properties:
+        tenant_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
     EodRunPage:
       type: object
       description: One page of EodRun results (newest first)
@@ -2597,6 +3148,18 @@ components:
           - CARD_STATEMENT_CYCLE
           - ARCHIVAL
           - CUSTOM
+          - PAYMENT_EXECUTION
+          - EXPIRY_SCAN
+          - SWEEP
+          - INSTALMENT_DUE
+          - COLLECTIONS
+          - TREASURY
+          - LIQUIDITY
+          - LOYALTY
+          - ENGAGEMENT
+          - ANALYTICS
+          - MONITORING
+          - NOTIFICATIONS
           description: Kind of job
         cycle_types:
           type: array
@@ -2671,7 +3234,21 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Default parameters passed to the job
+          description: Default parameters passed to the job; {parameters.<name>} placeholders read them
+        pack_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Standard job pack the job was installed from (empty = tenant-defined job)
+          readOnly: true
+        pack_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Version of the pack that last installed or upgraded the job
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2757,6 +3334,18 @@ components:
           - CARD_STATEMENT_CYCLE
           - ARCHIVAL
           - CUSTOM
+          - PAYMENT_EXECUTION
+          - EXPIRY_SCAN
+          - SWEEP
+          - INSTALMENT_DUE
+          - COLLECTIONS
+          - TREASURY
+          - LIQUIDITY
+          - LOYALTY
+          - ENGAGEMENT
+          - ANALYTICS
+          - MONITORING
+          - NOTIFICATIONS
           description: Kind of job
         cycle_types:
           type: array
@@ -2823,7 +3412,7 @@ components:
         parameters:
           type: object
           additionalProperties: true
-          description: Default parameters passed to the job
+          description: Default parameters passed to the job; {parameters.<name>} placeholders read them
         custom_field_1:
           type: string
           maxLength: 500
@@ -2887,6 +3476,18 @@ components:
           - CARD_STATEMENT_CYCLE
           - ARCHIVAL
           - CUSTOM
+          - PAYMENT_EXECUTION
+          - EXPIRY_SCAN
+          - SWEEP
+          - INSTALMENT_DUE
+          - COLLECTIONS
+          - TREASURY
+          - LIQUIDITY
+          - LOYALTY
+          - ENGAGEMENT
+          - ANALYTICS
+          - MONITORING
+          - NOTIFICATIONS
           description: Kind of job
         cycle_types:
           type: array
@@ -2953,7 +3554,7 @@ components:
         parameters:
           type: object
           additionalProperties: true
-          description: Default parameters passed to the job
+          description: Default parameters passed to the job; {parameters.<name>} placeholders read them
         custom_field_1:
           type: string
           maxLength: 500
@@ -3315,6 +3916,387 @@ components:
       - cycle_type
       - status
       - is_restart
+    EodSweep:
+      type: object
+      description: 'One execution of the platform''s cross-tenant EOD trigger: lists the ACTIVE tenants from tenant-service
+        and, per tenant and legal entity whose business date is due, starts EOD under that tenant (idempotent per tenant,
+        legal entity and business date: a date with an EOD run is never started again). Platform-global record.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        trigger_source:
+          type: string
+          enum:
+          - SCHEDULER
+          - OPERATOR
+          description: Scheduler tick or operator request
+        slot_key:
+          type: string
+          maxLength: 160
+          description: 'De-duplication key: the scheduler time slot or the operator''s Idempotency-Key'
+        as_of:
+          type: string
+          format: date-time
+          description: Evaluation time (database clock)
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Outcome (PARTIALLY_SUCCEEDED when some tenants failed)
+          readOnly: true
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Operator or SCHEDULER
+          readOnly: true
+        tenant_ids:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: Tenants requested (empty = every ACTIVE tenant)
+        tenants_total:
+          type: integer
+          format: int32
+          description: Tenants evaluated
+          readOnly: true
+        tenants_failed:
+          type: integer
+          format: int32
+          description: Tenants whose evaluation failed
+          readOnly: true
+        runs_started:
+          type: integer
+          format: int32
+          description: EOD runs started
+          readOnly: true
+        dates_rolled:
+          type: integer
+          format: int32
+          description: Business dates rolled automatically
+          readOnly: true
+        entities_skipped:
+          type: integer
+          format: int32
+          description: Legal entities skipped (not due, disabled, already run)
+          readOnly: true
+        results:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Per tenant and legal entity: tenant_id, legal_entity_id, business_date, decision, eod_run_id, due_at,
+            error_code, error'
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Failure summary
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - trigger_source
+      - slot_key
+      - as_of
+      - status
+      - tenants_total
+      - tenants_failed
+      - runs_started
+      - dates_rolled
+      - entities_skipped
+    EodTriggerPolicy:
+      type: object
+      description: 'When end-of-day starts automatically for a legal entity. The platform scheduler (cross-tenant EOD trigger)
+        starts EOD for the current business date once the local cut-off time has passed in the policy''s time zone (default:
+        the legal entity''s, else the tenant''s time zone). One policy per legal entity plus an optional tenant default (empty
+        legal_entity_id); without any policy the platform default cut-off applies.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity (empty = default for every legal entity of the tenant)
+        is_enabled:
+          type: boolean
+          description: Start EOD automatically when the business date is due
+        cut_off_time:
+          type: string
+          maxLength: 5
+          description: Local cut-off time HH:mm after which the business date is due for EOD
+        time_zone:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: IANA time zone of the cut-off (empty = legal entity time zone, else tenant time zone)
+        auto_roll:
+          type: boolean
+          description: Roll to the next business date automatically after a fully successful EOD
+        notes:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Operator notes
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - is_enabled
+      - cut_off_time
+      - auto_roll
+    EodTriggerPolicyCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity (empty = default for every legal entity of the tenant)
+        is_enabled:
+          type: boolean
+          description: Start EOD automatically when the business date is due
+        cut_off_time:
+          type: string
+          maxLength: 5
+          description: Local cut-off time HH:mm after which the business date is due for EOD
+        time_zone:
+          type: string
+          maxLength: 64
+          description: IANA time zone of the cut-off (empty = legal entity time zone, else tenant time zone)
+        auto_roll:
+          type: boolean
+          description: Roll to the next business date automatically after a fully successful EOD
+        notes:
+          type: string
+          maxLength: 500
+          description: Operator notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - cut_off_time
+    EodTriggerPolicyUpdate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity (empty = default for every legal entity of the tenant)
+        is_enabled:
+          type: boolean
+          description: Start EOD automatically when the business date is due
+        cut_off_time:
+          type: string
+          maxLength: 5
+          description: Local cut-off time HH:mm after which the business date is due for EOD
+        time_zone:
+          type: string
+          maxLength: 64
+          description: IANA time zone of the cut-off (empty = legal entity time zone, else tenant time zone)
+        auto_roll:
+          type: boolean
+          description: Roll to the next business date automatically after a fully successful EOD
+        notes:
+          type: string
+          maxLength: 500
+          description: Operator notes
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     JobSchedule:
       type: object
       description: Cron schedule for non-EOD batch jobs (sweeps, report generation, file pulls, reindexing)

@@ -653,6 +653,12 @@ channels:
         $ref: '#/components/messages/OperationsJobScheduleRunCompleted'
       OperationsBatchJobLockForceReleased:
         $ref: '#/components/messages/OperationsBatchJobLockForceReleased'
+      OperationsEodJobDefinitionInstalled:
+        $ref: '#/components/messages/OperationsEodJobDefinitionInstalled'
+      OperationsEodSweepCompleted:
+        $ref: '#/components/messages/OperationsEodSweepCompleted'
+      OperationsEodSweepTenantFailed:
+        $ref: '#/components/messages/OperationsEodSweepTenantFailed'
       OperationsInboundFileReceived:
         $ref: '#/components/messages/OperationsInboundFileReceived'
       OperationsInboundFileQuarantined:
@@ -8494,6 +8500,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/BatchJobLock'
+    OperationsEodJobDefinitionInstalled:
+      name: operations.eod_job_definition.installed
+      title: A job of the standard EOD pack was installed or upgraded
+      summary: A job of the standard EOD pack was installed or upgraded
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.eod_job_definition.installed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/EodJobDefinition'
+    OperationsEodSweepCompleted:
+      name: operations.eod_sweep.completed
+      title: A cross-tenant EOD trigger sweep finished (published under the platform tenant)
+      summary: A cross-tenant EOD trigger sweep finished (published under the platform tenant)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.eod_sweep.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/EodSweep'
+    OperationsEodSweepTenantFailed:
+      name: operations.eod_sweep.tenant_failed
+      title: The EOD trigger failed for one tenant (published under that tenant)
+      summary: The EOD trigger failed for one tenant (published under that tenant)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: operations.eod_sweep.tenant_failed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/EodSweep'
     OperationsInboundFileReceived:
       name: operations.inbound_file.received
       title: A file was received from a counterparty
@@ -40651,6 +40723,420 @@ components:
       - acquired_at
       - expires_at
       - fencing_token
+    EodJobDefinition:
+      type: object
+      description: 'A step in an end-of-period job graph, executed by an owning service. Cross-service EOD contract: for every
+        tenant, EOD run, job and partition the orchestrator calls <http_method> <owning_service><http_path> with headers X-Tenant-Id
+        (the tenant whose EOD runs) and Idempotency-Key = "eod:<eod_run_id>:<job code>:<partition_no>" (identical for every
+        retry of the partition, so a lost response is executed once downstream). Placeholders {business_date}, {legal_entity_id},
+        {cycle_type}, {eod_run_id}, {eod_job_run_id}, {job_code}, {partition_no}, {partition_count} and {attempt} are substituted
+        (URL-encoded) in http_path and in the string values of body_template. Without body_template the body is the job context
+        (eod_run_id, eod_job_run_id, job_code, job_type, cycle_type, legal_entity_id, business_date, is_month_end, is_quarter_end,
+        is_year_end, partition_no, partition_count, partition_key, attempt, parameters, checkpoint). Example: deposit-service
+        POST /v1/deposit-accounts/eod/accrue?business_date={business_date}. The job answers 2xx with optional records_processed,
+        records_failed and checkpoint; 408, 409, 429 and 5xx are retried per the failure policy, other 4xx fail the job.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity (empty = all entities)
+        code:
+          type: string
+          maxLength: 64
+          description: Job code, e.g. DEP_INTEREST_ACCRUAL
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        job_type:
+          type: string
+          enum:
+          - INTEREST_ACCRUAL
+          - INTEREST_CAPITALISATION
+          - FEE_CHARGING
+          - DORMANCY
+          - STATEMENTS
+          - LOAN_ACCRUAL
+          - DELINQUENCY_AGEING
+          - ECL_PROVISION
+          - RECONCILIATION
+          - FX_REVALUATION
+          - GL_CLOSE
+          - REGULATORY_REPORTS
+          - BALANCE_SNAPSHOT
+          - STANDING_ORDERS
+          - TERM_DEPOSIT_MATURITY
+          - CARD_STATEMENT_CYCLE
+          - ARCHIVAL
+          - CUSTOM
+          - PAYMENT_EXECUTION
+          - EXPIRY_SCAN
+          - SWEEP
+          - INSTALMENT_DUE
+          - COLLECTIONS
+          - TREASURY
+          - LIQUIDITY
+          - LOYALTY
+          - ENGAGEMENT
+          - ANALYTICS
+          - MONITORING
+          - NOTIFICATIONS
+          description: Kind of job
+        cycle_types:
+          type: array
+          items: {}
+          description: Cycles the job runs in, e.g. [EOD, EOM]
+        owning_service:
+          type: string
+          maxLength: 64
+          description: Service that executes the job, e.g. deposit-service
+        http_method:
+          type: string
+          enum:
+          - POST
+          - PUT
+          - PATCH
+          - GET
+          description: HTTP method of the job endpoint
+        http_path:
+          type: string
+          maxLength: 500
+          description: Path and query template on the owning service, e.g. /v1/deposit-accounts/eod/accrue?business_date={business_date}
+        body_template:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: JSON body template (placeholders in string values); empty = the standard job context
+        depends_on:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Codes of jobs that must finish first
+        sequence:
+          type: integer
+          format: int32
+          description: Ordering hint within the same dependency level
+        parallelism:
+          type: integer
+          format: int32
+          description: Number of partitions run in parallel
+        partition_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Partitioning key, e.g. ACCOUNT_ID_HASH
+        timeout_minutes:
+          type: integer
+          format: int32
+          description: Maximum run time per attempt
+        max_retries:
+          type: integer
+          format: int32
+          description: Automatic retries before the failure policy applies
+        failure_policy:
+          type: string
+          enum:
+          - STOP_CYCLE
+          - CONTINUE
+          - RETRY_THEN_STOP
+          - RETRY_THEN_CONTINUE
+          description: What happens on final failure
+        is_critical:
+          type: boolean
+          description: Blocks the date roll when it fails
+        is_active:
+          type: boolean
+          description: Active
+        parameters:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Default parameters passed to the job; {parameters.<name>} placeholders read them
+        pack_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Standard job pack the job was installed from (empty = tenant-defined job)
+          readOnly: true
+        pack_version:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Version of the pack that last installed or upgraded the job
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - job_type
+      - cycle_types
+      - owning_service
+      - http_method
+      - http_path
+      - sequence
+      - parallelism
+      - timeout_minutes
+      - max_retries
+      - failure_policy
+      - is_critical
+      - is_active
+    EodSweep:
+      type: object
+      description: 'One execution of the platform''s cross-tenant EOD trigger: lists the ACTIVE tenants from tenant-service
+        and, per tenant and legal entity whose business date is due, starts EOD under that tenant (idempotent per tenant,
+        legal entity and business date: a date with an EOD run is never started again). Platform-global record.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        trigger_source:
+          type: string
+          enum:
+          - SCHEDULER
+          - OPERATOR
+          description: Scheduler tick or operator request
+        slot_key:
+          type: string
+          maxLength: 160
+          description: 'De-duplication key: the scheduler time slot or the operator''s Idempotency-Key'
+        as_of:
+          type: string
+          format: date-time
+          description: Evaluation time (database clock)
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Outcome (PARTIALLY_SUCCEEDED when some tenants failed)
+          readOnly: true
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Operator or SCHEDULER
+          readOnly: true
+        tenant_ids:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: Tenants requested (empty = every ACTIVE tenant)
+        tenants_total:
+          type: integer
+          format: int32
+          description: Tenants evaluated
+          readOnly: true
+        tenants_failed:
+          type: integer
+          format: int32
+          description: Tenants whose evaluation failed
+          readOnly: true
+        runs_started:
+          type: integer
+          format: int32
+          description: EOD runs started
+          readOnly: true
+        dates_rolled:
+          type: integer
+          format: int32
+          description: Business dates rolled automatically
+          readOnly: true
+        entities_skipped:
+          type: integer
+          format: int32
+          description: Legal entities skipped (not due, disabled, already run)
+          readOnly: true
+        results:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Per tenant and legal entity: tenant_id, legal_entity_id, business_date, decision, eod_run_id, due_at,
+            error_code, error'
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Failure summary
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - trigger_source
+      - slot_key
+      - as_of
+      - status
+      - tenants_total
+      - tenants_failed
+      - runs_started
+      - dates_rolled
+      - entities_skipped
     InboundFile:
       type: object
       description: A file received from a counterparty

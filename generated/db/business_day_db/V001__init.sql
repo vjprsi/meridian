@@ -93,7 +93,7 @@ CREATE TABLE eod_job_definition (
   legal_entity_id              uuid,
   code                         varchar(64) NOT NULL,
   name                         varchar(160) NOT NULL,
-  job_type                     varchar(40) NOT NULL CHECK (job_type IN ('INTEREST_ACCRUAL', 'INTEREST_CAPITALISATION', 'FEE_CHARGING', 'DORMANCY', 'STATEMENTS', 'LOAN_ACCRUAL', 'DELINQUENCY_AGEING', 'ECL_PROVISION', 'RECONCILIATION', 'FX_REVALUATION', 'GL_CLOSE', 'REGULATORY_REPORTS', 'BALANCE_SNAPSHOT', 'STANDING_ORDERS', 'TERM_DEPOSIT_MATURITY', 'CARD_STATEMENT_CYCLE', 'ARCHIVAL', 'CUSTOM')),
+  job_type                     varchar(40) NOT NULL CHECK (job_type IN ('INTEREST_ACCRUAL', 'INTEREST_CAPITALISATION', 'FEE_CHARGING', 'DORMANCY', 'STATEMENTS', 'LOAN_ACCRUAL', 'DELINQUENCY_AGEING', 'ECL_PROVISION', 'RECONCILIATION', 'FX_REVALUATION', 'GL_CLOSE', 'REGULATORY_REPORTS', 'BALANCE_SNAPSHOT', 'STANDING_ORDERS', 'TERM_DEPOSIT_MATURITY', 'CARD_STATEMENT_CYCLE', 'ARCHIVAL', 'CUSTOM', 'PAYMENT_EXECUTION', 'EXPIRY_SCAN', 'SWEEP', 'INSTALMENT_DUE', 'COLLECTIONS', 'TREASURY', 'LIQUIDITY', 'LOYALTY', 'ENGAGEMENT', 'ANALYTICS', 'MONITORING', 'NOTIFICATIONS')),
   cycle_types                  jsonb NOT NULL,
   owning_service               varchar(64) NOT NULL,
   http_method                  varchar(40) NOT NULL DEFAULT 'POST' CHECK (http_method IN ('POST', 'PUT', 'PATCH', 'GET')),
@@ -109,6 +109,8 @@ CREATE TABLE eod_job_definition (
   is_critical                  boolean NOT NULL DEFAULT true,
   is_active                    boolean NOT NULL DEFAULT true,
   parameters                   jsonb,
+  pack_code                    varchar(64),
+  pack_version                 varchar(32),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -143,7 +145,9 @@ COMMENT ON COLUMN eod_job_definition.max_retries IS 'Automatic retries before th
 COMMENT ON COLUMN eod_job_definition.failure_policy IS 'What happens on final failure';
 COMMENT ON COLUMN eod_job_definition.is_critical IS 'Blocks the date roll when it fails';
 COMMENT ON COLUMN eod_job_definition.is_active IS 'Active';
-COMMENT ON COLUMN eod_job_definition.parameters IS 'Default parameters passed to the job';
+COMMENT ON COLUMN eod_job_definition.parameters IS 'Default parameters passed to the job; {parameters.<name>} placeholders read them';
+COMMENT ON COLUMN eod_job_definition.pack_code IS 'Standard job pack the job was installed from (empty = tenant-defined job)';
+COMMENT ON COLUMN eod_job_definition.pack_version IS 'Version of the pack that last installed or upgraded the job';
 COMMENT ON COLUMN eod_job_definition.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN eod_job_definition.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN eod_job_definition.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -154,6 +158,115 @@ CREATE INDEX ix_eod_job_definition_legal_entity_id ON eod_job_definition (legal_
 ALTER TABLE eod_job_definition ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON eod_job_definition USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_eod_job_definition_touch BEFORE UPDATE ON eod_job_definition FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- eod_trigger_policy: When end-of-day starts automatically for a legal entity. The platform scheduler (cross-tenant EOD trigger) starts EOD for the current business date once the local cut-off time has passed in the policy's time zone (default: the legal entity's, else the tenant's time zone). One policy per legal entity plus an optional tenant default (empty legal_entity_id); without any policy the platform default cut-off applies.
+
+CREATE TABLE eod_trigger_policy (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  legal_entity_id              uuid,
+  is_enabled                   boolean NOT NULL DEFAULT true,
+  cut_off_time                 varchar(5) NOT NULL,
+  time_zone                    varchar(64),
+  auto_roll                    boolean NOT NULL DEFAULT false,
+  notes                        varchar(500),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE eod_trigger_policy IS 'When end-of-day starts automatically for a legal entity. The platform scheduler (cross-tenant EOD trigger) starts EOD for the current business date once the local cut-off time has passed in the policy''s time zone (default: the legal entity''s, else the tenant''s time zone). One policy per legal entity plus an optional tenant default (empty legal_entity_id); without any policy the platform default cut-off applies.
+';
+COMMENT ON COLUMN eod_trigger_policy.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN eod_trigger_policy.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN eod_trigger_policy.created_at IS 'Creation time';
+COMMENT ON COLUMN eod_trigger_policy.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN eod_trigger_policy.updated_at IS 'Last update time';
+COMMENT ON COLUMN eod_trigger_policy.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN eod_trigger_policy.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN eod_trigger_policy.legal_entity_id IS 'Legal entity (empty = default for every legal entity of the tenant)';
+COMMENT ON COLUMN eod_trigger_policy.is_enabled IS 'Start EOD automatically when the business date is due';
+COMMENT ON COLUMN eod_trigger_policy.cut_off_time IS 'Local cut-off time HH:mm after which the business date is due for EOD';
+COMMENT ON COLUMN eod_trigger_policy.time_zone IS 'IANA time zone of the cut-off (empty = legal entity time zone, else tenant time zone)';
+COMMENT ON COLUMN eod_trigger_policy.auto_roll IS 'Roll to the next business date automatically after a fully successful EOD';
+COMMENT ON COLUMN eod_trigger_policy.notes IS 'Operator notes';
+COMMENT ON COLUMN eod_trigger_policy.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_trigger_policy.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_trigger_policy.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_trigger_policy.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_trigger_policy.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_eod_trigger_policy_tenant ON eod_trigger_policy (tenant_id, created_at);
+CREATE INDEX ix_eod_trigger_policy_legal_entity_id ON eod_trigger_policy (legal_entity_id);
+ALTER TABLE eod_trigger_policy ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON eod_trigger_policy USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_eod_trigger_policy_touch BEFORE UPDATE ON eod_trigger_policy FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- eod_sweep: One execution of the platform's cross-tenant EOD trigger: lists the ACTIVE tenants from tenant-service and, per tenant and legal entity whose business date is due, starts EOD under that tenant (idempotent per tenant, legal entity and business date: a date with an EOD run is never started again). Platform-global record.
+
+CREATE TABLE eod_sweep (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  trigger_source               varchar(40) NOT NULL CHECK (trigger_source IN ('SCHEDULER', 'OPERATOR')),
+  slot_key                     varchar(160) NOT NULL,
+  as_of                        timestamptz NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
+  requested_by                 varchar(64),
+  tenant_ids                   jsonb,
+  tenants_total                integer NOT NULL DEFAULT 0,
+  tenants_failed               integer NOT NULL DEFAULT 0,
+  runs_started                 integer NOT NULL DEFAULT 0,
+  dates_rolled                 integer NOT NULL DEFAULT 0,
+  entities_skipped             integer NOT NULL DEFAULT 0,
+  results                      jsonb,
+  started_at                   timestamptz,
+  finished_at                  timestamptz,
+  error                        text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_eod_sweep_slot_key UNIQUE (slot_key)
+);
+COMMENT ON TABLE eod_sweep IS 'One execution of the platform''s cross-tenant EOD trigger: lists the ACTIVE tenants from tenant-service and, per tenant and legal entity whose business date is due, starts EOD under that tenant (idempotent per tenant, legal entity and business date: a date with an EOD run is never started again). Platform-global record.
+';
+COMMENT ON COLUMN eod_sweep.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN eod_sweep.created_at IS 'Creation time';
+COMMENT ON COLUMN eod_sweep.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN eod_sweep.updated_at IS 'Last update time';
+COMMENT ON COLUMN eod_sweep.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN eod_sweep.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN eod_sweep.trigger_source IS 'Scheduler tick or operator request';
+COMMENT ON COLUMN eod_sweep.slot_key IS 'De-duplication key: the scheduler time slot or the operator''s Idempotency-Key';
+COMMENT ON COLUMN eod_sweep.as_of IS 'Evaluation time (database clock)';
+COMMENT ON COLUMN eod_sweep.status IS 'Outcome (PARTIALLY_SUCCEEDED when some tenants failed)';
+COMMENT ON COLUMN eod_sweep.requested_by IS 'Operator or SCHEDULER';
+COMMENT ON COLUMN eod_sweep.tenant_ids IS 'Tenants requested (empty = every ACTIVE tenant)';
+COMMENT ON COLUMN eod_sweep.tenants_total IS 'Tenants evaluated';
+COMMENT ON COLUMN eod_sweep.tenants_failed IS 'Tenants whose evaluation failed';
+COMMENT ON COLUMN eod_sweep.runs_started IS 'EOD runs started';
+COMMENT ON COLUMN eod_sweep.dates_rolled IS 'Business dates rolled automatically';
+COMMENT ON COLUMN eod_sweep.entities_skipped IS 'Legal entities skipped (not due, disabled, already run)';
+COMMENT ON COLUMN eod_sweep.results IS 'Per tenant and legal entity: tenant_id, legal_entity_id, business_date, decision, eod_run_id, due_at, error_code, error';
+COMMENT ON COLUMN eod_sweep.started_at IS 'Start';
+COMMENT ON COLUMN eod_sweep.finished_at IS 'End';
+COMMENT ON COLUMN eod_sweep.error IS 'Failure summary';
+COMMENT ON COLUMN eod_sweep.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_sweep.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_sweep.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_sweep.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN eod_sweep.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE TRIGGER trg_eod_sweep_touch BEFORE UPDATE ON eod_sweep FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- eod_run: Execution of a full end-of-period cycle for one legal entity and business date
 CREATE TABLE eod_run (
