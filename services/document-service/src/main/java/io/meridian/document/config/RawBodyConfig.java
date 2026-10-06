@@ -1,0 +1,49 @@
+package io.meridian.document.config;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.ContentCachingRequestWrapper;
+import org.springframework.web.util.WebUtils;
+
+/**
+ * Keeps the raw request body for endpoints that need it after JSON binding: HMAC verification of provider
+ * callbacks and the free-form {@code data} of document generation (not part of the generated model).
+ */
+@Configuration(proxyBeanMethods = false)
+public class RawBodyConfig {
+    private static final int LIMIT = 1024 * 1024;
+
+    @Bean
+    FilterRegistrationBean<OncePerRequestFilter> rawBodyFilter() {
+        OncePerRequestFilter filter = new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+                    throws ServletException, IOException {
+                chain.doFilter(new ContentCachingRequestWrapper(req, LIMIT), res);
+            }
+        };
+        FilterRegistrationBean<OncePerRequestFilter> reg = new FilterRegistrationBean<>(filter);
+        reg.addUrlPatterns("/v1/generated-documents", "/v1/esign-requests/callbacks/*");
+        return reg;
+    }
+
+    /** Raw bytes of the current request body (empty if it was not cached). */
+    public static byte[] currentBody() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes a) {
+            ContentCachingRequestWrapper w = WebUtils.getNativeRequest(a.getRequest(), ContentCachingRequestWrapper.class);
+            if (w != null) {
+                return w.getContentAsByteArray();
+            }
+        }
+        return new byte[0];
+    }
+}

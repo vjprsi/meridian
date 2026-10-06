@@ -37,6 +37,17 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.platform.v1
+  webhooks:
+    # AES-256-GCM key (base64, 32 bytes) encrypting signing secrets at rest. DEV-ONLY default: set
+    # MERIDIAN_WEBHOOKS_KEY from the secret store in every other environment. Startup fails if it is invalid.
+    key: ${MERIDIAN_WEBHOOKS_KEY:ZGV2LW9ubHktd2ViaG9vay1rZXktMzItYnl0ZXMhISE=}
+    allow-insecure-localhost: false   # http://localhost endpoints (tests / local dev only)
+    disable-after-failures: 20        # consecutive failed attempts before an endpoint is auto-disabled
+    timeout-ms: 10000
+    dispatch-interval-ms: 1000
+    dispatch-batch-size: 100
+    consumer-enabled: true            # fan out events from meridian.<domain>.v1 topics
+    scheduler-enabled: true           # dispatch due deliveries / run replay jobs
 
 management:
   endpoints:
