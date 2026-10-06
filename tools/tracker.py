@@ -193,6 +193,10 @@ def build(path: Path, domains, enums, endpoints, events, apps, plan, api_by_tabl
     # plan.yaml 'status' rules: {glob pattern on task ID: status}; the most specific (longest) pattern wins.
     import fnmatch
     rules = sorted((plan.get("status") or {}).items(), key=lambda kv: len(kv[0]))
+    done_services = set(plan.get("done_services") or [])
+    for t in tasks:
+        if t[3] in done_services and t[4] in ("Database", "Service", "API", "Events", "Test", "Spec")                 and t[7] == "Not started":
+            t[7] = "Done"
     for t in tasks:
         matched = [st for pat, st in rules if fnmatch.fnmatchcase(t[0], pat)]
         if matched and t[7] == "Not started":

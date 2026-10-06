@@ -32,4 +32,9 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
   `KycProviderCreate` omits required `credentials_ref`; `OnboardingApplicationCreate` lacks `legal_entity_id`;
   missing events for privacy reject, journey retire, request-info, document accept/reject; close/deceased cannot
   check product holdings (needs a customer-holdings query across deposit/loan/card/wallet services).
-- Product/accounts/ledger/operations: pending reports.
+- ledger/gl: `gl_journal` is append-only but approval must set `approved_by` (service-local migration
+  V001_1 allows one NULL->value update — move approvals to a separate append-only `gl_journal_approval` table and
+  drop the hack); `gl_journal` needs `nested: lines list:gl_journal_line`; ECL calculate needs `exposures` body and
+  GL accounts; simulate needs inputs; recon file create needs `content`/`records`; missing events for matches and
+  ERP export; P&L close to retained earnings not modelled; ledger entries lack value_date/reference for recon.
+- Product/accounts/operations: pending reports.

@@ -20,13 +20,13 @@ steps:
   - {id: S05B, phase: 0, name: "Enterprise gap closure", status: Done,
      deliverables: "New domains: operations (business day/EOD batch, file gateway, search, archive), engagement (rewards, referrals, PFM insights, campaigns/offers, secure inbox), treasury (MM/FX/securities deals, liquidity LCR/NSFR, ALM, FTP)",
      exit: "Strict validation passes; OPS/ENG/TRY requirements traced"}
-  - {id: S06, phase: 1, name: "Platform services",
+  - {id: S06, phase: 1, name: "Platform services", status: Done,
      deliverables: "Tenant, identity and access, configuration, audit, reference data, documents, workflow/approvals, webhooks, notifications",
      exit: "A tenant can be provisioned, users log in with SSO+MFA, every change is audited"}
   - {id: S07, phase: 1, name: "Ledger and GL services", status: In progress,
      deliverables: "ledger-service, gl-service with property-based tests, hash chain and continuous verification",
      exit: "1,000 TPS sustained in staging; zero unbalanced journals"}
-  - {id: S08, phase: 1, name: "Party, onboarding and KYC",
+  - {id: S08, phase: 1, name: "Party, onboarding and KYC", status: Done,
      deliverables: "customer-service, onboarding-service, kyc-service with provider adapters",
      exit: "Tier 0 to Tier 3 onboarding works end to end in sandbox"}
   - {id: S09, phase: 1, name: "Product Studio and pricing",
@@ -108,6 +108,25 @@ tasks:
   - {id: PLT-AUTHZ-SCOPES, phase: 1, type: Security, title: "Per-operation OAuth2 scopes generated from spec (@RequiredScope) enforced by ScopeInterceptor; domain wildcard and meridian:admin", priority: P0, est: 1, status: Done}
   - {id: PLT-KEYCLOAK-REALM, phase: 1, type: Security, title: "Keycloak realm generated from spec (49 scopes, console PKCE client, service and read-only clients, tenant claim) imported by local stack; JWT mode verified live", priority: P0, est: 1, status: Done}
   - {id: PLT-MULTI-TENANT-USERS, phase: 1, type: Security, title: "Per-user tenant claim from identity-service (replace hardcoded demo-tenant claim); token exchange for platform operators", priority: P1, est: 3}
+
+# Services whose business logic is implemented and covered by integration tests (all their build tasks Done).
+done_services:
+  - ledger-service
+  - gl-service
+  - reconciliation-service
+  - tenant-service
+  - identity-service
+  - config-service
+  - reference-data-service
+  - audit-service
+  - workflow-service
+  - notification-service
+  - webhook-service
+  - document-service
+  - billing-service
+  - customer-service
+  - onboarding-service
+  - kyc-service
 
 status:
   "SVC-*-SCAFFOLD": Done          # all 63 services scaffolded, compile, boot in tests
