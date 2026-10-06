@@ -5,12 +5,15 @@ import io.meridian.collateral.domain.Currencies;
 import io.meridian.collateral.domain.LiquidationAllocator;
 import io.meridian.collateral.infrastructure.ExposureClient;
 import io.meridian.collateral.infrastructure.Rows;
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,8 +42,15 @@ public class CollateralService {
     private final Events events;
     private final LinkService links;
     private final ExposureClient exposures;
+    private final Approvals approvals;
 
-    public CollateralService(Rows rows, Events events, LinkService links, ExposureClient exposures) {
+    /** Approval resource type for collateral verification in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "collateral";
+    static final String APPROVAL_ACTION = "verify";
+
+    public CollateralService(Rows rows, Events events, LinkService links, ExposureClient exposures,
+                             Approvals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.events = events;
         this.links = links;
@@ -121,7 +131,9 @@ public class CollateralService {
         if (haircutChanged) {
             recalcLinksBestEffort(id);
         }
-        return rows.get(TABLE, id);
+        ObjectNode updated = rows.get(TABLE, id);
+        requestVerification(updated);
+        return updated;
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -147,6 +159,7 @@ public class CollateralService {
                 where id = ? returning row_to_json(collateral)::text""",
                 TenantContext.principal(), TenantContext.principal(), id).orElseThrow();
         events.publish("lending.collateral.verified", TABLE, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "verified directly");
         return row;
     }
 
@@ -157,6 +170,7 @@ public class CollateralService {
         requireNoActiveLinks(id);
         ObjectNode row = setStatus(id, "REJECTED", reason);
         events.publish("lending.collateral.rejected", TABLE, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row;
     }
 
@@ -318,9 +332,55 @@ public class CollateralService {
                            next_valuation_date = ?, updated_by = ? where id = ?""",
                     market, forced, haircut, lending, next, TenantContext.principal(), collateralId);
             recalcLinksBestEffort(collateralId);
+            requestVerification(rows.get(TABLE, collateralId));
         }
         events.publish("lending.collateral.revalued", "collateral_valuation", valuation);
         return valuation;
+    }
+
+    // ------------------------------------------------------------------ central maker-checker (G11)
+
+    /**
+     * A PROPOSED collateral with at least one valuation is ready for verification: every content change (latest
+     * valuation, PATCH) submits the current version (row_version fingerprint) to the workflow inbox. Earlier
+     * submissions become stale and their decisions are ignored. No-op in local mode.
+     */
+    private void requestVerification(ObjectNode c) {
+        if (!approvals.centralised() || !"PROPOSED".equals(Rows.str(c, "status"))) {
+            return;
+        }
+        UUID id = Rows.uuid(c, "id");
+        int valuations = rows.scalar("select count(*) from collateral_valuation where collateral_id = ?", Integer.class, id).orElse(0);
+        if (valuations == 0) {
+            return;
+        }
+        int rowVersion = Rows.integer(c, "row_version");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("collateral_number", Rows.str(c, "collateral_number"));
+        payload.put("collateral_type", Rows.str(c, "collateral_type"));
+        payload.put("owner_customer_id", Rows.str(c, "owner_customer_id"));
+        payload.put("description", Rows.str(c, "description"));
+        payload.put("currency", Rows.str(c, "currency"));
+        payload.put("market_value", Rows.dec(c, "market_value").toPlainString());
+        payload.put("lending_value", Rows.dec(c, "lending_value").toPlainString());
+        BigDecimal haircut = Rows.dec(c, "haircut_pct");
+        payload.put("haircut_pct", haircut == null ? null : haircut.toPlainString());
+        payload.put("valuations", valuations);
+        payload.put("registered_by", Rows.str(c, "created_by"));
+        payload.put("row_version", rowVersion);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, APPROVAL_ACTION,
+                        "Verify collateral " + Rows.str(c, "collateral_number"), payload)
+                        .withAmount(Rows.dec(c, "market_value"), Rows.str(c, "currency")),
+                "verify:" + id + ":" + rowVersion);
+    }
+
+    /** True while the collateral is PROPOSED with the submitted version (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsVerification(UUID id, Integer rowVersion) {
+        return rows.find(TABLE, id)
+                .filter(c -> "PROPOSED".equals(Rows.str(c, "status")))
+                .filter(c -> rowVersion == null || rowVersion.equals(Rows.integer(c, "row_version")))
+                .isPresent();
     }
 
     // ------------------------------------------------------------------ insurance

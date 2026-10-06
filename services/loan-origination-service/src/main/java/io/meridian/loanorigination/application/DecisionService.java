@@ -5,6 +5,8 @@ import static io.meridian.loanorigination.infrastructure.Rows.integer;
 import static io.meridian.loanorigination.infrastructure.Rows.str;
 import static io.meridian.loanorigination.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.loanorigination.config.OriginationProperties;
@@ -15,6 +17,7 @@ import io.meridian.loanorigination.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,9 +49,14 @@ public class DecisionService {
     private final OfferService offers;
     private final ProductCatalogClient catalog;
     private final OriginationProperties props;
+    private final Approvals approvals;
+
+    /** Approval resource type for manual credit decision requests in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "credit_decision_request";
 
     public DecisionService(Support support, BureauService bureau, AssessmentService assessment, OfferService offers,
-                           ProductCatalogClient catalog, OriginationProperties props) {
+                           ProductCatalogClient catalog, OriginationProperties props, Approvals approvals) {
+        this.approvals = approvals;
         this.support = support;
         this.rows = support.rows();
         this.events = support.events();
@@ -206,6 +214,7 @@ public class DecisionService {
         v.put("requested_by", TenantContext.principal());
         ObjectNode row = rows.insert(REQUEST, v);
         events.publish("lending.credit_decision_request.created", REQUEST, row);
+        requestApproval(app, row);
         return row;
     }
 
@@ -257,6 +266,7 @@ public class DecisionService {
         }
         r.put("credit_decision_id", str(decision, "id"));
         rows.update(REQUEST, requestId, r);
+        approvals.cancelOpen(APPROVAL_RESOURCE, requestId, null, "approved directly");
         return decision;
     }
 
@@ -272,7 +282,46 @@ public class DecisionService {
         r.put("review_comment", reason);
         ObjectNode updated = rows.update(REQUEST, requestId, r);
         events.publish("lending.credit_decision_request.rejected", REQUEST, updated);
+        approvals.cancelOpen(APPROVAL_RESOURCE, requestId, null, "rejected directly");
         return updated;
+    }
+
+    /** True while the request is PENDING_APPROVAL with the submitted outcome (request content is immutable). */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID requestId, String outcome) {
+        return rows.queryOne("select row_to_json(r)::text from credit_decision_request r where id = ?", requestId)
+                .filter(r -> "PENDING_APPROVAL".equals(str(r, "status")))
+                .filter(r -> outcome == null || outcome.equals(str(r, "outcome")))
+                .isPresent();
+    }
+
+    /** Central maker-checker: the checker decides in the workflow inbox; the approval handler applies it. */
+    private void requestApproval(ObjectNode app, ObjectNode req) {
+        UUID id = uuid(req, "id");
+        String outcome = str(req, "outcome");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("credit_decision_request_id", id.toString());
+        payload.put("loan_application_id", str(app, "id"));
+        payload.put("application_number", str(app, "application_number"));
+        payload.put("customer_id", str(app, "customer_id"));
+        payload.put("outcome", outcome);
+        payload.put("requested_amount", str(app, "requested_amount"));
+        payload.put("currency", str(app, "currency"));
+        for (String f : List.of("approved_amount", "approved_term_months", "approved_rate", "notes", "reason_codes",
+                "conditions")) {
+            if (req.hasNonNull(f)) {
+                payload.put(f, Json.plain(req.get(f)));
+            }
+        }
+        payload.put("is_override", req.path("is_override").asBoolean(false));
+        payload.put("risk_grade", str(app, "risk_grade"));
+        BigDecimal amount = dec(req, "approved_amount") != null ? dec(req, "approved_amount") : dec(app, "requested_amount");
+        ApprovalSpec spec = ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Manual credit decision " + outcome + " for " + str(app, "application_number"), payload);
+        if (amount != null) {
+            spec = spec.withAmount(amount, str(app, "currency"));
+        }
+        approvals.request(spec, "propose:" + id + ":" + outcome);
     }
 
     // ------------------------------------------------------------------ internals

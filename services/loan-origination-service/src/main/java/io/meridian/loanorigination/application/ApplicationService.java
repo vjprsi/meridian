@@ -5,6 +5,8 @@ import static io.meridian.loanorigination.infrastructure.Rows.integer;
 import static io.meridian.loanorigination.infrastructure.Rows.str;
 import static io.meridian.loanorigination.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.loanorigination.config.OriginationProperties;
@@ -15,7 +17,9 @@ import io.meridian.loanorigination.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -37,9 +41,16 @@ public class ApplicationService {
     private final ProductCatalogClient catalog;
     private final OriginationProperties props;
     private final SignatureService signatures;
+    private final Approvals approvals;
+    private final OriginationApprovals originationApprovals;
+
+    /** Approval resource type for document verification in workflow-service (G11). */
+    public static final String DOCUMENT_APPROVAL_RESOURCE = "loan_application_document";
 
     public ApplicationService(Support support, ProductCatalogClient catalog, OriginationProperties props,
-                              SignatureService signatures) {
+                              SignatureService signatures, Approvals approvals, OriginationApprovals originationApprovals) {
+        this.approvals = approvals;
+        this.originationApprovals = originationApprovals;
         this.support = support;
         this.rows = support.rows();
         this.events = support.events();
@@ -166,6 +177,7 @@ public class ApplicationService {
             events.publish("lending.loan_offer.withdrawn", "loan_offer", rows.update("loan_offer", uuid(offer, "id"), v));
             signatures.voidOpenEnvelopes(uuid(offer, "id"), "Application withdrawn");
         }
+        originationApprovals.cancelForApplication(id, "application withdrawn");
         rows.execute("""
                 update credit_decision_request set status = 'CANCELLED', updated_by = ?
                 where loan_application_id = ? and status = 'PENDING_APPROVAL'""", TenantContext.principal(), id);
@@ -340,7 +352,9 @@ public class ApplicationService {
             applicantOf(appId, uuid(v, "loan_applicant_id"));
         }
         v.put("status", v.hasNonNull("document_id") ? "UPLOADED" : "REQUESTED");
-        return rows.insert("loan_application_document", v);
+        ObjectNode row = rows.insert("loan_application_document", v);
+        requestVerification(app, row);
+        return row;
     }
 
     /** After a PATCH: a newly attached document of a requested or rejected item becomes UPLOADED. */
@@ -351,7 +365,12 @@ public class ApplicationService {
             ObjectNode v = rows.object();
             v.put("status", "UPLOADED");
             v.putNull("rejection_reason");
-            return rows.update("loan_application_document", docId, v);
+            ObjectNode updated = rows.update("loan_application_document", docId, v);
+            requestVerification(support.app(appId), updated);
+            return updated;
+        }
+        if ("UPLOADED".equals(str(doc, "status"))) {
+            requestVerification(support.app(appId), doc); // a replaced file needs a fresh check (new key)
         }
         return doc;
     }
@@ -381,6 +400,7 @@ public class ApplicationService {
         v.put("verified_at", support.dbNow().toString());
         ObjectNode updated = rows.update("loan_application_document", docId, v);
         events.publish("lending.loan_application_document.verified", "loan_application_document", updated);
+        approvals.cancelOpen(DOCUMENT_APPROVAL_RESOURCE, docId, null, "verified directly");
         return updated;
     }
 
@@ -393,7 +413,40 @@ public class ApplicationService {
         v.put("rejection_reason", reason);
         ObjectNode updated = rows.update("loan_application_document", docId, v);
         events.publish("lending.loan_application_document.rejected", "loan_application_document", updated);
+        approvals.cancelOpen(DOCUMENT_APPROVAL_RESOURCE, docId, null, "rejected directly");
         return updated;
+    }
+
+    /** True while the document is UPLOADED with the submitted file (document_id) and its application still open. */
+    @Transactional(readOnly = true)
+    public boolean awaitsVerification(UUID appId, UUID docId, String documentId) {
+        return rows.queryOne("""
+                select row_to_json(d)::text from loan_application_document d
+                where d.id = ? and d.loan_application_id = ? and d.status = 'UPLOADED'""", docId, appId)
+                .filter(d -> documentId == null || documentId.equals(str(d, "document_id")))
+                .filter(d -> {
+                    String appStatus = str(support.app(appId), "status");
+                    return !Lifecycles.APPLICATION_TERMINAL.contains(appStatus) && !"BOOKED".equals(appStatus);
+                })
+                .isPresent();
+    }
+
+    /** Central maker-checker: an uploaded document goes to the workflow inbox for verification by a second user. */
+    private void requestVerification(ObjectNode app, ObjectNode doc) {
+        if (!"UPLOADED".equals(str(doc, "status")) || !doc.hasNonNull("document_id")) {
+            return;
+        }
+        UUID id = uuid(doc, "id");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("loan_application_id", str(app, "id"));
+        payload.put("application_number", str(app, "application_number"));
+        payload.put("document_type", str(doc, "document_type"));
+        payload.put("document_id", str(doc, "document_id"));
+        payload.put("loan_applicant_id", str(doc, "loan_applicant_id"));
+        payload.put("is_mandatory", doc.path("is_mandatory").asBoolean(false));
+        approvals.request(ApprovalSpec.of(DOCUMENT_APPROVAL_RESOURCE, id, "verify",
+                "Verify " + str(doc, "document_type") + " for " + str(app, "application_number"), payload),
+                "verify:" + id + ":" + str(doc, "document_id"));
     }
 
     // ------------------------------------------------------------------ helpers

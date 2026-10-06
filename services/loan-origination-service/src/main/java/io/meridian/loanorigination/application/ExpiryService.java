@@ -23,8 +23,10 @@ public class ExpiryService {
     private final Support support;
     private final Rows rows;
     private final Events events;
+    private final OriginationApprovals approvals;
 
-    public ExpiryService(Support support) {
+    public ExpiryService(Support support, OriginationApprovals approvals) {
+        this.approvals = approvals;
         this.support = support;
         this.rows = support.rows();
         this.events = support.events();
@@ -73,6 +75,7 @@ public class ExpiryService {
                         select 1 from loan_offer o where o.loan_application_id = a.id and o.status in ('ISSUED', 'ACCEPTED'))))
                 for update""".formatted(PRE_DECISION))) {
             ObjectNode extra = rows.object();
+            approvals.cancelForApplication(UUID.fromString(str(a, "id")), "application expired");
             rows.execute("""
                     update credit_decision_request set status = 'CANCELLED' where loan_application_id = ? and status = 'PENDING_APPROVAL'""",
                     UUID.fromString(str(a, "id")));
