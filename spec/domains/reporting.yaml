@@ -11,11 +11,14 @@ enums:
   ReportFrequency: [DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, AD_HOC, EVENT_DRIVEN]
   ReportFormat: [XBRL, XML, CSV, XLSX, JSON, PDF, FIXED_WIDTH]
   ReportDefinitionStatus: [DRAFT, ACTIVE, DEPRECATED]
+  ReportVersionStatus: [DRAFT, ACTIVE, SUPERSEDED, DEPRECATED]
   ReportTrigger: [SCHEDULE, MANUAL, API, RESUBMISSION]
   ReportSubmissionStatus: [PENDING_APPROVAL, APPROVED, SUBMITTED, ACKNOWLEDGED, ACCEPTED, REJECTED, RESUBMISSION_REQUIRED]
   ReportSubmissionChannel: [API, SFTP, PORTAL_UPLOAD, EMAIL, MANUAL]
   ReportValidationSeverity: [INFO, WARNING, ERROR]
   ReportAdjustmentStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
+  ReportJob: [SCHEDULED_RUNS, DEADLINE_ALERTS]
+  ScheduledJobStatus: [RUNNING, COMPLETED, COMPLETED_WITH_ERRORS]
   CrsReportingRegime: [CRS, FATCA]
   CrsAccountHolderType: [INDIVIDUAL, ENTITY, CONTROLLING_PERSON]
   AnalyticsVisibility: [PRIVATE, TEAM, TENANT]
@@ -23,16 +26,19 @@ enums:
   DataExportFormat: [CSV, PARQUET, JSON, XLSX]
   DataShareTarget: [S3, GCS, AZURE_BLOB, SNOWFLAKE, BIGQUERY, DATABRICKS, SFTP, ICEBERG_REST]
   DataShareStatus: [ACTIVE, PAUSED, FAILED, REVOKED]
+  AnalyticsJob: [DATA_SHARE_DELIVERY]
   MlModelType: [FRAUD, CREDIT_SCORE, AML, COLLECTIONS, CHURN, PROPENSITY, RECON_MATCHING, DOCUMENT_AI, LLM]
   MlModelStatus: [ACTIVE, UNDER_REVIEW, RETIRED]
   ModelRiskTier: [LOW, MEDIUM, HIGH]
   MlModelVersionStatus: [TRAINING, VALIDATING, PENDING_APPROVAL, APPROVED, REJECTED, DEPLOYED, RETIRED]
   ModelDeploymentMode: [SHADOW, CANARY, CHAMPION, CHALLENGER]
   ModelDeploymentStatus: [DEPLOYING, ACTIVE, ROLLED_BACK, RETIRED]
+  AiJob: [MODEL_MONITORING]
   CopilotType: [OPERATIONS, DISPUTES, AML_INVESTIGATION, COLLECTIONS, RECONCILIATION, PRODUCT_STUDIO,
                 CUSTOMER_ASSISTANT, DEVELOPER, SERVICING]
   CopilotStatus: [DRAFT, ACTIVE, DISABLED]
   CopilotOutcome: [ANSWERED, ACTION_PROPOSED, ACTION_APPROVED, ACTION_REJECTED, REFUSED, HANDED_OFF, ERROR]
+  PiiEntity: [EMAIL, PHONE, PAN, IBAN, NATIONAL_ID, ACCOUNT_NUMBER, IP_ADDRESS]
 
 services:
   # ------------------------------------------------------------------ regulatory-reporting-service
@@ -40,7 +46,7 @@ services:
     database: regreport_db
     description: >
       Catalogue of regulatory reports per country pack with versioned templates and data mappings; runs
-      reports reproducibly from lakehouse snapshots, validates them, tracks manual adjustments and submits
+      reports reproducibly from source snapshots, validates them, tracks manual adjustments and submits
       to regulators with acknowledgements. Also builds CRS and FATCA records.
     tables:
       - name: report_definition
@@ -55,10 +61,12 @@ services:
           - "regulator string(64) nn | Regulator / authority"
           - "report_family string(40) nn | BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER"
           - "frequency enum:ReportFrequency nn | Frequency"
-          - "format enum:ReportFormat nn | Submission format"
-          - "deadline_rule string(64) | Deadline expression, e.g. T+15BD or MONTH_END+10D"
-          - "status enum:ReportDefinitionStatus nn default=DRAFT | Status"
+          - "format enum:ReportFormat nn | Submission format (XBRL, XML, CSV and JSON are rendered by the service)"
+          - "deadline_rule string(64) | Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days); default per frequency"
+          - "filing_offset_days int nn default=0 | Jurisdiction-specific extension in calendar days added to the deadline"
+          - "status enum:ReportDefinitionStatus nn default=DRAFT ro | Status (ACTIVE on first publication, DEPRECATED by deprecate)"
           - "active_version int ro | Version currently in force"
+          - "status_reason text ro | Reason of the last status change (deprecation)"
           - "description text | Purpose and scope"
           - "owner string(64) | Accountable owner (finance / compliance)"
 
@@ -68,16 +76,18 @@ services:
         fr: [REG-01, REG-02, REG-03]
         columns:
           - "report_definition_id uuid nn fk=report_definition idx | Report definition"
-          - "definition_version int nn | Version number"
+          - "definition_version int nn ro | Version number (server-assigned, 1, 2, ...)"
           - "template_document_id uuid ref=document | Template file (XBRL taxonomy entry point, XLSX, XSD)"
-          - "mapping json nn | Cell/element to dataset mapping (SQL or dbt model references)"
-          - "validation_rules json | Validation rules (cross-checks, totals, regulator formulas)"
+          - "data_sources json[] nn | Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end} {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}"
+          - "field_mappings json[] nn | Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter (row condition), expression (over other cells), scale, type NUMBER|TEXT}"
+          - "validation_rules json[] | Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance, debit, credit, cell, min, max, expression, message}"
           - "xbrl_taxonomy string(255) | XBRL taxonomy and entry point, when XBRL"
           - "effective_from date nn | First reporting date this version applies to"
           - "effective_to date | Last reporting date"
-          - "status enum:ReportDefinitionStatus nn default=DRAFT | Status"
+          - "status enum:ReportVersionStatus nn default=DRAFT ro | Status"
           - "change_note text | What changed"
-          - "approved_by string(64) ro | Approver"
+          - "approved_by string(64) ro | Checker who published the version"
+          - "approved_at ts ro | Publication time"
         unique: [[report_definition_id, definition_version]]
 
       - name: report_schedule
@@ -87,12 +97,15 @@ services:
         columns:
           - "report_definition_id uuid nn fk=report_definition idx | Report definition"
           - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
-          - "cron string(64) nn | Cron expression"
+          - "cron string(64) nn | Spring cron expression (second minute hour day month weekday) evaluated in the time zone"
           - "timezone string(64) nn | IANA time zone"
           - "next_run_at ts ro | Next scheduled run"
-          - "notify json | Recipients notified on completion or failure"
+          - "parameters json | Run parameters passed to every scheduled run"
+          - "notify json[] | Recipients notified on completion or failure"
           - "auto_submit bool nn default=false | Submit automatically after validation and approval"
           - "is_active bool nn default=true | Active"
+          - "last_run_date date ro | Business date of the last scheduled run"
+          - "last_run_id uuid ro | Last run created by the schedule"
 
       - name: report_run
         prefix: rpr
@@ -100,23 +113,45 @@ services:
         fr: [REG-01, REG-02]
         columns:
           - "report_definition_id uuid nn fk=report_definition idx | Report definition"
-          - "report_definition_version_id uuid nn fk=report_definition_version | Version used"
+          - "report_definition_version_id uuid nn fk=report_definition_version ro | Version used (effective at as_of_date)"
           - "legal_entity_id uuid nn ref=legal_entity idx | Legal entity"
           - "as_of_date date nn | Reporting date"
-          - "period_start date | Period start"
-          - "period_end date | Period end"
-          - "parameters json | Run parameters"
+          - "period_start date | Period start (default: start of the frequency period ending at as_of_date)"
+          - "period_end date | Period end (default: as_of_date)"
+          - "parameters json | Run parameters (available as {param.x} and param_x in expressions)"
           - "trigger enum:ReportTrigger nn default=MANUAL | What started the run"
-          - "status enum:RunStatus nn default=QUEUED ro | Status"
-          - "data_snapshot_id string(128) ro | Lakehouse (Iceberg) snapshot id for reproducibility"
+          - "status enum:RunStatus nn default=QUEUED ro | Status (PARTIALLY_SUCCEEDED = produced with validation errors)"
+          - "data_snapshot_id string(128) ro | Fingerprint (sha256) of the source data collected, for reproducibility"
           - "row_count int ro | Rows / facts produced"
           - "error_count int ro | Validation errors"
           - "warning_count int ro | Validation warnings"
-          - "supersedes_run_id uuid fk=report_run | Run this one corrects (resubmission)"
+          - "revision int nn default=1 ro | Output revision (approved adjustments produce a new revision)"
+          - "supersedes_run_id uuid fk=report_run ro | Run this one corrects (rerun / resubmission)"
+          - "superseded_by_run_id uuid ro | Run that corrects this one"
+          - "report_schedule_id uuid fk=report_schedule ro | Schedule that created the run"
           - "started_at ts ro | Start"
           - "finished_at ts ro | End"
-          - "error text ro | Failure details"
+          - "error text ro | Failure or cancellation details"
+        request_only:
+          - "execute bool | Execute immediately (default true); false leaves the run QUEUED for /execute"
         indexes: [[report_definition_id, legal_entity_id, as_of_date]]
+
+      - name: report_cell
+        prefix: rce
+        description: A computed cell / fact of a report run with its lineage to source records
+        fr: [REG-02, REG-03]
+        columns:
+          - "report_run_id uuid nn fk=report_run idx | Run"
+          - "cell_ref string(128) nn | Cell / XBRL element reference"
+          - "label string(255) | Label"
+          - "data_type string(16) nn | NUMBER or TEXT"
+          - "value string(255) | Reported value (after approved adjustments)"
+          - "computed_value string(255) | Value produced by the mapping"
+          - "is_adjusted bool nn default=false | An approved adjustment overrides the computed value"
+          - "source_name string(64) | Data source the cell aggregates"
+          - "source_count int nn default=0 | Source records contributing"
+          - "source_records json[] | Contributing source records (id and value; first 500)"
+        unique: [[report_run_id, cell_ref]]
 
       - name: report_output
         prefix: rpo
@@ -126,11 +161,14 @@ services:
         columns:
           - "report_run_id uuid nn fk=report_run idx | Run"
           - "format enum:ReportFormat nn | Format"
-          - "document_id uuid nn ref=document | Stored file"
+          - "revision int nn default=1 | Run revision the file renders"
+          - "document_id uuid ref=document | Stored file in document-service, when archived"
           - "file_name string(255) nn | File name"
+          - "content_type string(64) nn | MIME type"
           - "size_bytes bigint nn | Size"
           - "sha256 string(64) nn | Checksum"
           - "record_count int | Rows / facts in the file"
+          - "content text nn hide | File content (served by the format endpoints)"
 
       - name: report_validation_result
         prefix: rvr
@@ -139,6 +177,7 @@ services:
         fr: [REG-02]
         columns:
           - "report_run_id uuid nn fk=report_run idx | Run"
+          - "revision int nn default=1 | Run revision validated"
           - "rule_code string(64) nn | Rule code"
           - "severity enum:ReportValidationSeverity nn | Severity"
           - "message string(1000) nn | Message"
@@ -148,17 +187,19 @@ services:
 
       - name: report_adjustment
         prefix: rad
-        description: Manual adjustment (overlay) to a reported value, with justification and approval
+        description: Manual adjustment (overlay) to a reported value, with justification and four-eyes approval
         fr: [REG-02]
         columns:
           - "report_run_id uuid nn fk=report_run idx | Run"
           - "cell_ref string(128) nn | Cell / XBRL element adjusted"
-          - "original_value string(255) | Value produced by the mapping"
+          - "original_value string(255) ro | Value produced by the mapping"
           - "adjusted_value string(255) nn | Value reported"
           - "reason text nn | Justification"
           - "status enum:ReportAdjustmentStatus nn default=PENDING_APPROVAL ro | Status"
           - "adjusted_by string(64) ro | Maker"
           - "approved_by string(64) ro | Checker"
+          - "decision_comment text ro | Checker comment or rejection reason"
+          - "decided_at ts ro | Decision time"
 
       - name: report_submission
         prefix: rsb
@@ -168,16 +209,19 @@ services:
           - "report_run_id uuid nn fk=report_run idx | Run"
           - "report_output_id uuid nn fk=report_output | File submitted"
           - "channel enum:ReportSubmissionChannel nn | Submission channel"
-          - "status enum:ReportSubmissionStatus nn default=PENDING_APPROVAL | Status"
+          - "status enum:ReportSubmissionStatus nn default=PENDING_APPROVAL ro | Status"
           - "approval_request_id uuid ref=approval_request | Sign-off workflow"
           - "approved_by string(64) ro | Sign-off"
+          - "approved_at ts ro | Sign-off time"
           - "submitted_at ts ro | Submission time"
           - "submitted_by string(64) ro | Submitter"
-          - "regulator_reference string(128) | Regulator receipt / reference"
-          - "acknowledgement_document_id uuid ref=document | Acknowledgement file"
+          - "regulator_reference string(128) ro | Regulator receipt / reference"
+          - "gateway_message text ro | Message returned by the regulator gateway"
+          - "acknowledgement_document_id uuid ref=document ro | Acknowledgement file"
           - "acknowledged_at ts ro | Acknowledgement time"
-          - "rejection_reason text | Regulator rejection reason"
-          - "deadline_at ts | Submission deadline"
+          - "rejection_reason text ro | Regulator rejection reason"
+          - "deadline_at ts | Submission deadline (default: due date of the reporting period)"
+          - "deadline_alerted_on date ro | Business date a deadline alert was last raised"
 
       - name: crs_fatca_record
         prefix: crs
@@ -205,18 +249,32 @@ services:
           - "report_run_id uuid fk=report_run | Run that reported it"
         unique: [[tenant_id, regime, reporting_year, account_ref, customer_id]]
 
+      - name: report_job_run
+        prefix: rjr
+        description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+        fr: [REG-02]
+        columns:
+          - "job enum:ReportJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:ScheduledJobStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
+
     apis:
       - resource: report-definitions
         path: /v1/reporting/definitions
         table: report_definition
         ops: [list, get, create, update]
-        filters: [country_pack, jurisdiction, regulator, report_family, frequency, status]
+        filters: [country_pack, jurisdiction, regulator, report_family, frequency, status, code]
         actions:
           - "GET /{id}/versions | Versions of the definition | | report_definition_version[]"
-          - "POST /{id}/versions | Create a new version | template_document_id uuid, mapping json nn, validation_rules json, xbrl_taxonomy string(255), effective_from date nn, change_note text | report_definition_version"
-          - "POST /{id}/publish | Make a version active (maker-checker) | definition_version int nn"
-          - "POST /{id}/deprecate | Deprecate the report | reason text nn"
-          - "GET /{id}/calendar | Upcoming due dates per legal entity | | none"
+          - "POST /{id}/versions | Create a new DRAFT version (maker) | template_document_id uuid, data_sources json[] nn, field_mappings json[] nn, validation_rules json[], xbrl_taxonomy string(255), effective_from date nn, effective_to date, change_note text | report_definition_version"
+          - "POST /{id}/publish | Make a version active (checker: must not be the version's author); the previous active version is superseded | definition_version int nn, comment text | report_definition_version"
+          - "POST /{id}/deprecate | Deprecate the report | reason text nn | report_definition"
+          - "GET /{id}/calendar?from:date&to:date&legal_entity_id:uuid | Filing calendar: reporting periods whose due date (frequency + deadline rule + jurisdiction offset) falls in [from, to] (default today..+90 days) per legal entity with run / submission status | | object"
 
       - resource: report-definition-versions
         path: /v1/reporting/definition-versions
@@ -229,28 +287,34 @@ services:
         table: report_schedule
         ops: [list, get, create, update, delete]
         filters: [report_definition_id, legal_entity_id, is_active]
+        actions:
+          - "POST /run-due?business_date:date! | Scheduled (per tenant) - create and execute a run for every active schedule whose cron fires on business_date in its time zone (idempotent per business date) | | object"
 
       - resource: report-runs
         path: /v1/reporting/runs
         table: report_run
         ops: [list, get, create]
-        filters: [report_definition_id, legal_entity_id, as_of_date, status, trigger]
+        filters: [report_definition_id, legal_entity_id, as_of_date, status, trigger, supersedes_run_id]
         actions:
           - "GET /{id}/outputs | Files produced | | report_output[]"
+          - "GET /{id}/cells | Computed cells with lineage counts | | report_cell[]"
           - "GET /{id}/validation-results | Validation results | | report_validation_result[]"
           - "GET /{id}/adjustments | Manual adjustments | | report_adjustment[]"
-          - "POST /{id}/adjustments | Record a manual adjustment | cell_ref string(128) nn, adjusted_value string(255) nn, reason text nn | report_adjustment"
-          - "POST /{id}/rerun | Produce a corrected run superseding this one | parameters json | report_run"
-          - "POST /{id}/cancel | Cancel a queued or running run | reason string(255)"
-          - "GET /{id}/drilldown | Source records behind a reported cell (?cell_ref=) | | none"
+          - "POST /{id}/adjustments | Record a manual adjustment (maker) | cell_ref string(128) nn, adjusted_value string(255) nn, reason text nn | report_adjustment"
+          - "POST /{id}/execute | Execute a QUEUED run: collect, transform, validate, render | | report_run"
+          - "POST /{id}/rerun | Produce a corrected run superseding this one | parameters json, reason string(255) | report_run"
+          - "POST /{id}/cancel | Cancel a queued or running run | reason string(255) | report_run"
+          - "GET /{id}/drilldown?cell_ref:string(128)! | Source records behind a reported cell (value, mapping, adjustments, contributing records) | | object"
 
       - resource: report-outputs
         path: /v1/reporting/outputs
         table: report_output
         ops: [list, get]
-        filters: [report_run_id, format]
+        filters: [report_run_id, format, revision]
         actions:
-          - "GET /{id}/download | Signed URL to download the file | | none"
+          - "GET /{id}/xml | Content of an XML / XBRL output | | application/xml"
+          - "GET /{id}/csv | Content of a CSV output | | text/csv"
+          - "GET /{id}/json | Content of a JSON output | | application/json"
 
       - resource: report-adjustments
         path: /v1/reporting/adjustments
@@ -258,8 +322,8 @@ services:
         ops: [list, get]
         filters: [report_run_id, status]
         actions:
-          - "POST /{id}/approve | Approve the adjustment (checker) | comment text"
-          - "POST /{id}/reject | Reject the adjustment | reason text nn"
+          - "POST /{id}/approve | Approve the adjustment (checker); the run is re-validated and re-rendered as a new revision | comment text | report_adjustment"
+          - "POST /{id}/reject | Reject the adjustment (checker) | reason text nn | report_adjustment"
 
       - resource: report-submissions
         path: /v1/reporting/submissions
@@ -267,10 +331,11 @@ services:
         ops: [list, get, create]
         filters: [report_run_id, status, channel]
         actions:
-          - "POST /{id}/approve | Sign off the submission | comment text"
-          - "POST /{id}/submit | Submit to the regulator | | report_submission"
-          - "POST /{id}/acknowledge | Record the regulator acknowledgement | regulator_reference string(128) nn, acknowledgement_document_id uuid"
-          - "POST /{id}/record-rejection | Record a regulator rejection | rejection_reason text nn"
+          - "POST /{id}/approve | Sign off the submission (checker: not the preparer) | comment text | report_submission"
+          - "POST /{id}/submit | Submit to the regulator through the gateway adapter | | report_submission"
+          - "POST /{id}/acknowledge | Record the regulator acknowledgement | regulator_reference string(128) nn, acknowledgement_document_id uuid | report_submission"
+          - "POST /{id}/record-rejection | Record a regulator rejection | rejection_reason text nn | report_submission"
+          - "POST /deadline-alerts?business_date:date!&days:int | Scheduled (per tenant) - raise deadline_approaching for open submissions due within days (default 3) of business_date (idempotent per business date) | | object"
 
       - resource: crs-fatca-records
         path: /v1/reporting/crs-fatca-records
@@ -278,13 +343,25 @@ services:
         ops: [list, get, update]
         filters: [regime, reporting_year, legal_entity_id, customer_id, tax_residence, is_undocumented]
         actions:
-          - "POST /generate | Build reportable records for a year | regime enum:CrsReportingRegime nn, reporting_year int nn, legal_entity_id uuid nn | report_run"
+          - "POST /generate | Build reportable records for a year from customer tax residency and deposit balances (upsert per account) | regime enum:CrsReportingRegime nn, reporting_year int nn, legal_entity_id uuid nn, reporting_jurisdiction country nn | object"
+          - "GET /oecd-xml?regime:enum:CrsReportingRegime!&reporting_year:int!&legal_entity_id:uuid!&transmitting_country:country! | OECD CRS / FATCA XML message of the records of a year | | application/xml"
+
+      - resource: report-job-runs
+        path: /v1/reporting/job-runs
+        table: report_job_run
+        ops: [list, get]
+        filters: [job, business_date, status]
 
     events:
       - "reporting.report_definition.published | report_definition_version | A report definition version was published"
+      - "reporting.report_definition.deprecated | report_definition | A report definition was deprecated"
       - "reporting.report_run.completed | report_run | A report run finished"
       - "reporting.report_run.failed | report_run | A report run failed"
       - "reporting.report_run.validation_failed | report_run | A report run has validation errors"
+      - "reporting.report_run.cancelled | report_run | A report run was cancelled"
+      - "reporting.report_adjustment.approved | report_adjustment | A manual adjustment was approved"
+      - "reporting.report_adjustment.rejected | report_adjustment | A manual adjustment was rejected"
+      - "reporting.report_submission.approved | report_submission | A submission was signed off"
       - "reporting.report_submission.submitted | report_submission | A report was submitted to the regulator"
       - "reporting.report_submission.acknowledged | report_submission | The regulator acknowledged a submission"
       - "reporting.report_submission.rejected | report_submission | The regulator rejected a submission"
@@ -294,35 +371,40 @@ services:
   - name: analytics-service
     database: analytics_db
     description: >
-      Self-service analytics over the Iceberg lakehouse via Trino: KPI catalogue, dashboards and widgets
-      embedded in the console, saved parameterised queries, exports and scheduled data shares to the
-      tenant's warehouse or bucket.
+      Self-service analytics over whitelisted datasets: governed KPI catalogue with SQL-free metric specs,
+      dashboards and widgets embedded in the console, saved queries in a safe query DSL, exports and scheduled
+      data shares to the tenant's warehouse or bucket.
     tables:
       - name: analytics_kpi
         prefix: kpi
-        description: Governed KPI definition (formula, unit, dataset, owner)
+        description: Governed KPI definition (metric spec, unit, dataset, owner)
         columns:
           - "code string(64) nn uq | KPI code, e.g. ACTIVE_ACCOUNTS_30D"
           - "name string(160) nn | KPI name"
           - "description text | Business definition"
-          - "formula text nn | SQL expression over the canonical model"
-          - "dataset string(128) nn | Source dataset / dbt model"
+          - "formula text | Human-readable formula (documentation only; never executed)"
+          - "metric json nn | Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row condition), numerator, denominator (metric specs for RATIO), scale}"
+          - "dataset string(128) nn | Whitelisted source dataset"
+          - "time_field string(64) | Dataset field used for time series (default: the dataset's time field)"
           - "unit string(16) nn | COUNT, AMOUNT, PERCENT, BPS, DAYS"
           - "owner string(64) | Data owner"
-          - "is_certified bool nn default=false | Certified by data governance"
+          - "is_certified bool nn default=false ro | Certified by data governance (cleared when the metric changes)"
+          - "certified_by string(64) ro | Certifier"
+          - "certified_at ts ro | Certification time"
 
       - name: analytics_saved_query
         prefix: asq
-        description: Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)
+        description: Saved, parameterised query in the Meridian query DSL over a whitelisted dataset (read-only, tenant-scoped)
         columns:
           - "name string(160) nn | Query name"
           - "description text | Description"
-          - "sql text nn | Trino SQL (read-only, row-level security applied)"
-          - "dataset string(128) | Primary dataset"
-          - "parameters json | Parameter definitions"
-          - "owner string(64) nn | Owner"
-          - "visibility enum:AnalyticsVisibility nn default=PRIVATE | Sharing"
+          - "query text nn | SELECT <items> FROM <dataset> [WHERE <condition>] [GROUP BY <fields>] [ORDER BY <item> [ASC|DESC]] [LIMIT <n>]; parameters as :name; parsed and interpreted, never executed as SQL"
+          - "dataset string(128) ro | Dataset the query reads (from the query)"
+          - "parameters json[] | Parameter definitions {name, type STRING|NUMBER|DATE|BOOL, required, default}"
+          - "owner string(64) ro | Owner (the creator)"
+          - "visibility enum:AnalyticsVisibility nn default=PRIVATE | Sharing (PRIVATE queries are visible to their owner only)"
           - "last_run_at ts ro | Last run"
+          - "last_row_count int ro | Rows returned by the last run"
 
       - name: analytics_dashboard
         prefix: adb
@@ -330,13 +412,13 @@ services:
         columns:
           - "name string(160) nn | Dashboard name"
           - "description text | Description"
-          - "owner string(64) nn | Owner"
+          - "owner string(64) ro | Owner (the creator)"
           - "visibility enum:AnalyticsVisibility nn default=PRIVATE | Sharing"
-          - "is_system bool nn default=false | Shipped with the platform"
+          - "is_system bool nn default=false ro | Shipped with the platform"
           - "layout json | Grid layout"
-          - "filters json | Global filters"
+          - "filters json[] | Global filters {field, op =|!=|>|>=|<|<=|IN, value} applied to every widget whose dataset has the field"
           - "refresh_seconds int nn default=300 | Auto-refresh interval"
-          - "tags json | Tags"
+          - "tags string(40)[] | Tags"
 
       - name: analytics_widget
         prefix: awg
@@ -347,24 +429,27 @@ services:
           - "widget_type enum:AnalyticsWidgetType nn | Widget type"
           - "analytics_saved_query_id uuid fk=analytics_saved_query | Query feeding the widget"
           - "analytics_kpi_id uuid fk=analytics_kpi | KPI feeding the widget"
-          - "config json | Visual configuration (axes, series, thresholds)"
-          - "position json nn | Position and size on the grid"
+          - "config json | Visual configuration {x, y[], series, parameters, granularity, from, to, text}"
+          - "position json nn | Position and size on the grid {x, y, w, h}"
 
       - name: analytics_export_job
         prefix: aej
-        description: Export of a saved query's results to a file
+        description: Asynchronous export of a saved query's results to a file
         columns:
           - "analytics_saved_query_id uuid nn fk=analytics_saved_query idx | Query"
-          - "format enum:DataExportFormat nn | Format"
+          - "format enum:DataExportFormat nn | Format (CSV and JSON are produced; PARQUET and XLSX are rejected)"
           - "parameters json | Parameter values"
           - "status enum:RunStatus nn default=QUEUED ro | Status"
           - "row_count bigint ro | Rows exported"
-          - "document_id uuid ref=document ro | Result file"
+          - "size_bytes bigint ro | File size"
+          - "sha256 string(64) ro | File checksum"
+          - "document_id uuid ref=document ro | Archived file in document-service"
           - "requested_by string(64) ro | Requester"
           - "expires_at ts ro | Download expiry"
           - "started_at ts ro | Start"
           - "finished_at ts ro | End"
-          - "error text ro | Error"
+          - "error text ro | Error or cancellation reason"
+          - "content text hide | File content (served by the download endpoints until expiry)"
 
       - name: analytics_data_share
         prefix: ads
@@ -372,12 +457,30 @@ services:
         columns:
           - "name string(160) nn | Share name"
           - "target enum:DataShareTarget nn | Destination type"
-          - "target_config json nn secret | Destination connection details (stored encrypted)"
-          - "datasets json nn | Datasets / tables shared"
-          - "schedule_cron string(64) | Delivery schedule (empty = continuous)"
-          - "status enum:DataShareStatus nn default=ACTIVE | Status"
+          - "target_config json nn secret | Destination connection details (stored encrypted, never returned)"
+          - "target_summary string(255) ro | Non-secret summary of the destination (e.g. bucket / host)"
+          - "datasets string(128)[] nn | Whitelisted datasets shared"
+          - "schedule_cron string(64) | Delivery schedule (empty = every business day)"
+          - "status enum:DataShareStatus nn default=ACTIVE ro | Status"
+          - "status_reason string(255) ro | Reason of the last pause / failure"
           - "last_delivery_at ts ro | Last successful delivery"
+          - "last_delivery_rows bigint ro | Rows delivered last time"
           - "last_error text ro | Last error"
+        request_only:
+          - "target_config json nn | Destination connection details (secret; validated per target type)"
+
+      - name: analytics_job_run
+        prefix: ajr
+        description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+        columns:
+          - "job enum:AnalyticsJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:ScheduledJobStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
 
     apis:
       - resource: analytics-kpis
@@ -386,8 +489,9 @@ services:
         ops: [list, get, create, update]
         filters: [code, dataset, is_certified]
         actions:
-          - "GET /{id}/values | KPI values over time (?from=&to=&granularity=) | | none"
-          - "POST /{id}/certify | Certify the KPI definition | comment text"
+          - "GET /{id}/values?from:date!&to:date!&granularity:string(8) | KPI series over the dataset's time field, granularity DAY, WEEK or MONTH (default DAY) | | object"
+          - "POST /{id}/evaluate | Evaluate the KPI over provided rows (or its dataset when rows are omitted) | rows json[], filters json[] | object"
+          - "POST /{id}/certify | Certify the KPI definition (data governance; not the author) | comment text | analytics_kpi"
 
       - resource: analytics-saved-queries
         path: /v1/analytics/saved-queries
@@ -395,9 +499,10 @@ services:
         ops: [list, get, create, update, delete]
         filters: [owner, visibility, dataset]
         actions:
-          - "POST /{id}/run | Run the query and return rows (?limit=) | parameters json | none"
-          - "POST /{id}/export | Export results to a file | format enum:DataExportFormat nn, parameters json | analytics_export_job"
-          - "POST /validate | Validate SQL without running it | sql text nn | none"
+          - "POST /{id}/run?limit:int | Run the query and return {columns, rows, row_count, truncated} (limit 1-1000, default 100) | parameters json | object"
+          - "POST /{id}/export | Export results to a file (asynchronous job) | format enum:DataExportFormat nn, parameters json | analytics_export_job"
+          - "POST /validate | Validate a query without running it: {valid, dataset, columns, parameters, errors} | query text nn | object"
+          - "GET /datasets | Whitelisted datasets with their fields and time field | | object"
 
       - resource: analytics-dashboards
         path: /v1/analytics/dashboards
@@ -406,8 +511,9 @@ services:
         filters: [owner, visibility, is_system]
         actions:
           - "GET /{id}/widgets | Widgets of the dashboard | | analytics_widget[]"
-          - "POST /{id}/duplicate | Copy a dashboard | name string(160) nn | analytics_dashboard"
-          - "GET /{id}/embed-token | Short-lived token to embed the dashboard | | none"
+          - "POST /{id}/duplicate | Copy a dashboard with its widgets | name string(160) nn | analytics_dashboard"
+          - "GET /{id}/embed-token?ttl_seconds:int | Signed short-lived token to embed the dashboard {token, expires_at} (ttl 60-3600, default 900) | | object"
+          - "POST /embed-tokens/verify | Verify an embed token {valid, dashboard_id, expires_at, reason} | token text nn | object"
 
       - resource: analytics-widgets
         path: /v1/analytics/widgets
@@ -415,7 +521,7 @@ services:
         ops: [list, get, create, update, delete]
         filters: [analytics_dashboard_id, widget_type]
         actions:
-          - "GET /{id}/data | Data for the widget with dashboard filters applied | | none"
+          - "GET /{id}/data | Data for the widget with dashboard filters applied {columns, rows, series[{name, points[{x, y}]}]} | | object"
 
       - resource: analytics-exports
         path: /v1/analytics/exports
@@ -423,8 +529,10 @@ services:
         ops: [list, get, create]
         filters: [analytics_saved_query_id, status, requested_by]
         actions:
-          - "GET /{id}/download | Signed URL to download | | none"
-          - "POST /{id}/cancel | Cancel the export | reason string(255)"
+          - "GET /{id}/csv | Download a finished CSV export | | text/csv"
+          - "GET /{id}/json | Download a finished JSON export | | application/json"
+          - "POST /{id}/cancel | Cancel a queued or running export | reason string(255) | analytics_export_job"
+          - "POST /process-queued | Worker (per tenant) - process QUEUED exports now (normally done asynchronously) | | object"
 
       - resource: analytics-data-shares
         path: /v1/analytics/data-shares
@@ -432,13 +540,25 @@ services:
         ops: [list, get, create, update, delete]
         filters: [target, status]
         actions:
-          - "POST /{id}/pause | Pause deliveries | reason string(255)"
-          - "POST /{id}/resume | Resume deliveries"
-          - "POST /{id}/test | Test connectivity and permissions | | none"
+          - "POST /{id}/pause | Pause deliveries | reason string(255) | analytics_data_share"
+          - "POST /{id}/resume | Resume deliveries | | analytics_data_share"
+          - "POST /{id}/test | Test connectivity and permissions {ok, checks[{name, ok, message}]} | | object"
+          - "POST /{id}/target-config | Replace the destination connection details | target_config json nn | analytics_data_share"
+          - "POST /deliver?business_date:date! | Scheduled (per tenant) - deliver every ACTIVE share due on business_date (idempotent per business date) | | object"
+
+      - resource: analytics-job-runs
+        path: /v1/analytics/job-runs
+        table: analytics_job_run
+        ops: [list, get]
+        filters: [job, business_date, status]
 
     events:
       - "reporting.analytics_export.completed | analytics_export_job | An analytics export finished"
+      - "reporting.analytics_export.failed | analytics_export_job | An analytics export failed"
+      - "reporting.data_share.delivered | analytics_data_share | A data share delivery succeeded"
       - "reporting.data_share.failed | analytics_data_share | A data share delivery failed"
+      - "reporting.data_share.paused | analytics_data_share | A data share was paused"
+      - "reporting.data_share.resumed | analytics_data_share | A data share was resumed"
       - "reporting.analytics_kpi.certified | analytics_kpi | A KPI definition was certified"
 
   # ------------------------------------------------------------------ ai-platform-service
@@ -462,8 +582,8 @@ services:
           - "risk_tier enum:ModelRiskTier nn default=MEDIUM | Model risk tier"
           - "owner_team string(64) nn | Owning team"
           - "validator string(64) | Independent model validator"
-          - "status enum:MlModelStatus nn default=ACTIVE | Status"
-          - "champion_version_id uuid ro | Version currently serving as champion"
+          - "status enum:MlModelStatus nn default=ACTIVE | Status (UNDER_REVIEW when the periodic review is due)"
+          - "champion_version_id uuid ro | Version currently serving as production champion"
           - "next_review_date date | Periodic model review date"
 
       - name: ml_model_version
@@ -473,22 +593,27 @@ services:
         columns:
           - "ml_model_id uuid nn fk=ml_model idx | Model"
           - "model_version string(32) nn | Version label"
-          - "status enum:MlModelVersionStatus nn default=TRAINING | Status"
+          - "status enum:MlModelVersionStatus nn default=TRAINING ro | Status"
           - "framework string(32) | XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM"
           - "artifact_uri string(500) nn | Model artifact location (MLflow)"
-          - "artifact_sha256 string(64) nn | Artifact checksum"
+          - "artifact_sha256 string(64) nn | Artifact checksum (64 hex)"
           - "training_dataset_ref string(255) | Training data snapshot reference"
           - "training_from date | Training window start"
           - "training_to date | Training window end"
-          - "features json | Feature list"
+          - "features string(128)[] | Feature names"
           - "hyperparameters json | Hyperparameters"
-          - "metrics json | Offline metrics (AUC, KS, Gini, precision at k, calibration)"
-          - "bias_test_results json | Fairness tests across protected attributes"
+          - "metrics json | Offline metrics {AUC, KS, GINI, PRECISION_AT_K, ...} (numbers)"
+          - "bias_test_results json[] | Fairness tests {attribute, metric, value, threshold, passed}"
+          - "explainability_notes text | Explainability summary (top drivers, reason codes)"
           - "explainability_document_id uuid ref=document | Explainability report (SHAP)"
           - "validation_document_id uuid ref=document | Independent validation report"
           - "approval_request_id uuid ref=approval_request | Approval workflow"
+          - "submitted_by string(64) ro | Submitter for approval"
+          - "submitted_at ts ro | Submission time"
           - "approved_by string(64) ro | Approver"
           - "approved_at ts ro | Approval time"
+          - "rejection_reason text ro | Reason of rejection"
+          - "decision_comment text ro | Committee comment"
         unique: [[ml_model_id, model_version]]
 
       - name: model_deployment
@@ -496,12 +621,17 @@ services:
         description: Deployment of a model version to an environment in shadow, canary, champion or challenger mode
         fr: [AI-02]
         columns:
-          - "ml_model_version_id uuid nn fk=ml_model_version idx | Version deployed"
-          - "environment string(32) nn | SANDBOX, STAGING, PRODUCTION"
-          - "mode enum:ModelDeploymentMode nn | Serving mode"
-          - "traffic_percent int nn default=0 | Share of traffic served (canary / challenger)"
+          - "ml_model_version_id uuid nn fk=ml_model_version idx ro | Version deployed"
+          - "ml_model_id uuid nn fk=ml_model idx ro | Model"
+          - "environment string(32) nn ro | SANDBOX, STAGING, PRODUCTION"
+          - "mode enum:ModelDeploymentMode nn ro | Serving mode (changed by promote)"
+          - "traffic_percent int nn default=0 ro | Share of traffic served (changed by promote)"
           - "status enum:ModelDeploymentStatus nn default=DEPLOYING ro | Status"
           - "endpoint string(255) ro | Serving endpoint (KServe)"
+          - "thresholds json | Alert thresholds per metric name, e.g. {\"PSI\": 0.25, \"AUC\": 0.70}"
+          - "auto_rollback bool nn default=false | Scheduled monitoring rolls back a breaching canary / challenger"
+          - "previous_deployment_id uuid fk=model_deployment ro | Champion replaced by this deployment (restored on rollback)"
+          - "status_reason text ro | Reason of the last status change"
           - "deployed_by string(64) ro | Deployer"
           - "deployed_at ts ro | Deployment time"
           - "retired_at ts ro | Retirement time"
@@ -514,9 +644,10 @@ services:
         columns:
           - "model_deployment_id uuid nn fk=model_deployment idx | Deployment"
           - "metric_name string(40) nn | PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE"
+          - "feature string(128) | Feature measured (drift metrics)"
           - "metric_value rate nn | Value"
-          - "threshold rate | Alert threshold"
-          - "breached bool nn default=false | Threshold breached"
+          - "threshold rate | Alert threshold (default: deployment threshold, else the platform default)"
+          - "breached bool nn default=false ro | Threshold breached (higher-is-worse for PSI/CSI/latency/error rate, lower-is-worse otherwise)"
           - "window_start ts nn | Window start"
           - "window_end ts nn | Window end"
 
@@ -546,11 +677,11 @@ services:
           - "description text | Description"
           - "system_prompt_ref string(255) nn | Versioned prompt reference"
           - "model_alias string(64) nn | Model alias resolved by the LLM gateway"
-          - "allowed_tools json nn | Read / write tools the copilot may call"
-          - "data_scopes json | Data the copilot may read"
+          - "allowed_tools json[] nn | Tools {name, mode READ|WRITE, keywords[]}; WRITE tools are only ever proposed"
+          - "data_scopes string(64)[] | Context source types the copilot may read (empty = all)"
           - "requires_human_approval bool nn default=true | Any write action needs a human approval"
           - "llm_gateway_policy_id uuid fk=llm_gateway_policy | Gateway policy applied"
-          - "status enum:CopilotStatus nn default=DRAFT | Status"
+          - "status enum:CopilotStatus nn default=DRAFT ro | Status"
 
       - name: copilot_interaction
         prefix: cpi
@@ -559,6 +690,7 @@ services:
         fr: [AI-01, SRV-02]
         columns:
           - "copilot_definition_id uuid nn fk=copilot_definition idx | Copilot"
+          - "parent_interaction_id uuid fk=copilot_interaction | Turn decided by this record (approval / rejection of a proposed action)"
           - "user_id uuid ref=app_user idx | Staff user (empty for customer assistant)"
           - "customer_id uuid ref=customer idx | Customer, for the customer assistant or a customer context"
           - "session_id string(64) nn idx | Conversation session"
@@ -573,12 +705,15 @@ services:
           - "input_tokens int | Input tokens"
           - "output_tokens int | Output tokens"
           - "latency_ms int | End-to-end latency"
-          - "tool_calls json | Tools called with arguments and results summary"
-          - "citations json | Sources cited (records, documents, events)"
+          - "tool_calls json[] | Tools called or proposed {tool, mode, arguments, status}"
+          - "citations json[] | Sources cited {index, source_id, source_type, title, score}"
+          - "redactions json | Redaction counts per entity"
           - "outcome enum:CopilotOutcome nn | Outcome"
-          - "approved_by string(64) | Human who approved a proposed action"
+          - "approved_by string(64) | Human who approved or rejected a proposed action"
+          - "decision_comment text | Approval comment or rejection reason"
           - "cost amount | Cost of the call"
           - "cost_currency currency | Cost currency"
+        unique: [[parent_interaction_id]]
 
       - name: ai_copilot_feedback
         prefix: cpf
@@ -589,7 +724,8 @@ services:
           - "copilot_interaction_id uuid nn fk=copilot_interaction idx | Interaction"
           - "rating int nn | 1-5"
           - "comment text | Comment"
-          - "given_by string(64) nn | User"
+          - "given_by string(64) nn ro | User"
+        unique: [[copilot_interaction_id, given_by]]
 
       - name: llm_gateway_policy
         prefix: lgp
@@ -598,16 +734,33 @@ services:
         columns:
           - "name string(160) nn | Policy name"
           - "tenant_opt_in bool nn default=false | Tenant has opted in to LLM features"
-          - "allowed_models json nn | Models / providers allowed"
+          - "allowed_models string(64)[] nn | Model aliases allowed"
           - "self_hosted_only bool nn default=false | Only self-hosted models (data cannot leave region)"
           - "data_residency_region string(32) | Region requests must stay in"
           - "pii_redaction bool nn default=true | Redact PII before sending"
-          - "redaction_entities json | Entity types redacted (names, account numbers, PAN, national ids)"
+          - "redaction_entities enum:PiiEntity[] | Entity types redacted (default: all)"
+          - "redaction_patterns json[] | Additional patterns {name, pattern} (Java regex, max 200 chars)"
           - "max_tokens_per_request int nn default=8000 | Per-request token cap"
           - "monthly_token_budget bigint | Monthly token budget"
+          - "cost_per_1k_tokens amount | Blended price per 1,000 tokens"
+          - "cost_currency currency | Price currency"
           - "log_prompts bool nn default=true | Store redacted prompts in the audit log"
           - "retention_days int nn default=365 | Interaction retention"
           - "is_active bool nn default=true | Active"
+
+      - name: ai_job_run
+        prefix: aij
+        description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+        fr: [AI-02]
+        columns:
+          - "job enum:AiJob nn | Job"
+          - "business_date date nn | Business date processed"
+          - "status enum:ScheduledJobStatus nn default=RUNNING ro | Outcome; COMPLETED runs are replayed, others may be re-run"
+          - "attempts int nn default=1 ro | Executions for this job and date"
+          - "result json ro | Counts and per-item errors of the last execution"
+          - "started_at ts nn default=now ro | Start of the last execution"
+          - "completed_at ts ro | End of the last execution"
+        unique: [[tenant_id, job, business_date]]
 
     apis:
       - resource: ml-models
@@ -625,27 +778,29 @@ services:
         ops: [list, get, create, update]
         filters: [ml_model_id, status, framework]
         actions:
-          - "POST /{id}/submit-for-approval | Send to model risk for approval | comment text"
-          - "POST /{id}/approve | Approve the version (model risk committee) | comment text"
-          - "POST /{id}/reject | Reject the version | reason text nn"
-          - "POST /{id}/deploy | Deploy to an environment | environment string(32) nn, mode enum:ModelDeploymentMode nn, traffic_percent int nn | model_deployment"
+          - "POST /{id}/submit-for-approval | Send to model risk for approval (metrics and passing bias tests required) | comment text | ml_model_version"
+          - "POST /{id}/approve | Approve the version (model risk committee; not the submitter) | comment text | ml_model_version"
+          - "POST /{id}/reject | Reject the version | reason text nn | ml_model_version"
+          - "POST /{id}/deploy | Deploy an approved version to an environment | environment string(32) nn, mode enum:ModelDeploymentMode nn, traffic_percent int, thresholds json, auto_rollback bool | model_deployment"
 
       - resource: model-deployments
         path: /v1/ai/deployments
         table: model_deployment
         ops: [list, get, update]
-        filters: [ml_model_version_id, environment, mode, status]
+        filters: [ml_model_version_id, ml_model_id, environment, mode, status]
         actions:
-          - "POST /{id}/promote | Promote a challenger to champion | comment text"
-          - "POST /{id}/rollback | Roll back the deployment | reason text nn"
-          - "POST /{id}/retire | Retire the deployment | reason text"
+          - "POST /{id}/promote | Promote shadow -> canary (traffic_percent, default 10), raise canary traffic, or canary / challenger -> champion (100%) | traffic_percent int, comment text | model_deployment"
+          - "POST /{id}/rollback | Roll back the deployment (a replaced champion is restored) | reason text nn | model_deployment"
+          - "POST /{id}/retire | Retire a non-champion deployment | reason text | model_deployment"
           - "GET /{id}/metrics | Monitoring metrics | | model_monitoring_metric[]"
+          - "POST /{id}/drift | Compute PSI per feature from expected (training) and actual (serving) bin distributions; records one PSI metric per feature | features json[] nn, window_start ts nn, window_end ts nn, threshold rate | object"
+          - "POST /monitor?business_date:date! | Scheduled (per tenant) - model monitoring for business_date: breach summary, stale metrics, auto-rollback, review due dates (idempotent per business date) | | object"
 
       - resource: model-metrics
         path: /v1/ai/model-metrics
         table: model_monitoring_metric
         ops: [list, get, create]
-        filters: [model_deployment_id, metric_name, breached]
+        filters: [model_deployment_id, metric_name, feature, breached]
 
       - resource: ml-features
         path: /v1/ai/features
@@ -659,19 +814,19 @@ services:
         ops: [list, get, create, update]
         filters: [copilot_type, status, code]
         actions:
-          - "POST /{id}/ask | Ask the copilot (Accept text/event-stream to stream) | prompt text nn, session_id string(64), subject_type string(40), subject_id uuid | copilot_interaction"
-          - "POST /{id}/activate | Activate the copilot | comment text"
-          - "POST /{id}/disable | Disable the copilot | reason text nn"
+          - "POST /{id}/ask | Ask the copilot: deterministic retrieval over the provided context with citations; WRITE tools are proposed for human approval | prompt text nn, session_id string(64), subject_type string(40), subject_id uuid, customer_id uuid, context json[] | copilot_interaction"
+          - "POST /{id}/activate | Activate the copilot (an active, opted-in gateway policy allowing its model is required) | comment text | copilot_definition"
+          - "POST /{id}/disable | Disable the copilot | reason text nn | copilot_definition"
 
       - resource: copilot-interactions
         path: /v1/ai/copilot-interactions
         table: copilot_interaction
         ops: [list, get]
-        filters: [copilot_definition_id, user_id, customer_id, session_id, subject_type, subject_id, outcome]
+        filters: [copilot_definition_id, parent_interaction_id, user_id, customer_id, session_id, subject_type, subject_id, outcome]
         actions:
-          - "POST /{id}/approve-action | Approve the action proposed in this turn | comment text | copilot_interaction"
-          - "POST /{id}/reject-action | Reject the proposed action | reason text nn | copilot_interaction"
-          - "POST /{id}/feedback | Rate the answer | rating int nn, comment text | ai_copilot_feedback"
+          - "POST /{id}/approve-action | Approve the action proposed in this turn (not the requester); recorded as a new audit record | comment text | copilot_interaction"
+          - "POST /{id}/reject-action | Reject the proposed action; recorded as a new audit record | reason text nn | copilot_interaction"
+          - "POST /{id}/feedback | Rate the answer (once per user) | rating int nn, comment text | ai_copilot_feedback"
 
       - resource: ai-copilot-feedback
         path: /v1/ai/copilot-feedback
@@ -685,14 +840,27 @@ services:
         ops: [list, get, create, update]
         filters: [is_active, tenant_opt_in]
         actions:
-          - "GET /{id}/usage | Token usage and cost against budget | | none"
+          - "GET /{id}/usage?month:string(7) | Token usage and cost against the monthly budget (month YYYY-MM, default current) | | object"
+          - "POST /{id}/redact | Preview PII redaction of a text under this policy | text text nn | object"
+
+      - resource: ai-job-runs
+        path: /v1/ai/job-runs
+        table: ai_job_run
+        ops: [list, get]
+        filters: [job, business_date, status]
 
     events:
+      - "reporting.ml_model_version.submitted | ml_model_version | A model version was submitted for approval"
       - "reporting.ml_model_version.approved | ml_model_version | A model version was approved"
       - "reporting.ml_model_version.rejected | ml_model_version | A model version was rejected"
       - "reporting.model_deployment.activated | model_deployment | A model deployment went live"
+      - "reporting.model_deployment.promoted | model_deployment | A model deployment was promoted"
       - "reporting.model_deployment.rolled_back | model_deployment | A model deployment was rolled back"
+      - "reporting.model_deployment.retired | model_deployment | A model deployment was retired"
       - "reporting.model_metric.breached | model_monitoring_metric | A model monitoring threshold was breached"
+      - "reporting.copilot.activated | copilot_definition | A copilot was activated"
+      - "reporting.copilot.disabled | copilot_definition | A copilot was disabled"
       - "reporting.copilot_interaction.recorded | copilot_interaction | A copilot interaction was recorded"
       - "reporting.copilot_action.approved | copilot_interaction | A human approved a copilot-proposed action"
+      - "reporting.copilot_action.rejected | copilot_interaction | A human rejected a copilot-proposed action"
       - "reporting.llm_budget.exceeded | llm_gateway_policy | A tenant exceeded its LLM token budget"

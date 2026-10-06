@@ -37,6 +37,12 @@ meridian:
   security-mode: dev          # dev = X-Tenant-Id header; jwt = OAuth2 tokens (all non-local environments)
   events:
     topic: meridian.reporting.v1
+  analytics:
+    # HMAC key for dashboard embed tokens (32+ bytes); always set MERIDIAN_ANALYTICS_EMBED_SECRET outside local dev.
+    embed-secret: ${MERIDIAN_ANALYTICS_EMBED_SECRET:local-dev-embed-secret-change-me-0123456789}
+    exports:
+      async: true             # process export jobs on a virtual thread after the request returns
+      retention-days: 7       # download window of a finished export
 
 management:
   endpoints:
