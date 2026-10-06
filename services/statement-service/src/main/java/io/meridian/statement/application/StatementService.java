@@ -46,6 +46,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class StatementService {
     static final String TABLE = "statement";
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(StatementService.class);
 
     private final Rows rows;
     private final BankData bank;
@@ -67,15 +68,16 @@ public class StatementService {
 
     // ------------------------------------------------------------------ generate
 
+    /**
+     * Creates and generates a statement. {@code statement_no} is assigned here: all formats of one account period share
+     * a number (the period's existing number, else the account's next number); one statement per period and format.
+     */
     @Transactional
     public ObjectNode create(Object body) {
         ObjectNode v = rows.columns(TABLE, body);
         LocalDate start = date(v, "period_start");
         LocalDate end = date(v, "period_end");
         StatementPeriods.validatePeriod(start, end, today());
-        if (v.path("statement_no").asInt(0) < 1) {
-            throw ApiException.unprocessable("invalid_statement_no", "statement_no must be a positive sequence number");
-        }
         UUID accountId = uuid(v, "deposit_account_id");
         JsonNode account = bank.account(accountId);
         if (!str(v, "currency").equals(account.path("currency").asString())) {
@@ -86,11 +88,22 @@ public class StatementService {
             throw ApiException.unprocessable("account_not_open", "The account has no ledger account yet");
         }
         String format = v.path("format").asString("PDF");
-        if (rows.scalar("select 1 from statement where deposit_account_id = ? and statement_no = ? and format = ?",
-                Integer.class, accountId, v.get("statement_no").asInt(), format).isPresent()) {
-            throw ApiException.conflict("duplicate_statement", "Statement " + v.get("statement_no").asInt() + " in "
-                    + format + " already exists for this account");
+        rows.scalar("select count(*) from (select pg_advisory_xact_lock(hashtextextended(?, 0))) l", Long.class,
+                "statement-no:" + accountId); // serialises numbering per account
+        Optional<Integer> existing = rows.scalar("""
+                select statement_no from statement where deposit_account_id = ? and period_start = ? and period_end = ?
+                order by statement_no limit 1""", Integer.class, accountId, start, end);
+        if (existing.isPresent() && rows.scalar("""
+                select 1 from statement where deposit_account_id = ? and period_start = ? and period_end = ? and format = ?""",
+                Integer.class, accountId, start, end, format).isPresent()) {
+            throw ApiException.conflict("duplicate_statement", "A " + format + " statement for " + start + " to " + end
+                    + " already exists for this account (statement " + existing.get() + "); download, resend or "
+                    + "regenerate it");
         }
+        int number = existing.orElseGet(() -> rows.scalar(
+                "select coalesce(max(statement_no), 0) + 1 from statement where deposit_account_id = ?",
+                Integer.class, accountId).orElse(1));
+        v.put("statement_no", number);
         v.put("status", "GENERATING");
         ObjectNode statement = rows.insert(TABLE, v);
         return generate(statement, account);
@@ -169,6 +182,7 @@ public class StatementService {
             }
             ObjectNode v = rows.object();
             v.put("status", "READY");
+            v.putNull("failure_reason");
             v.put("opening_balance", opening.toPlainString());
             v.put("total_credits", totals.credits().toPlainString());
             v.put("total_debits", totals.debits().toPlainString());
@@ -178,8 +192,11 @@ public class StatementService {
             v.put("line_count", lines.size());
             v.put("generated_at", OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC).withNano(0).toString());
             ObjectNode ready = rows.update(TABLE, id, v);
-            String checksum = render(ready, account).sha256();
-            ready = rows.update(TABLE, id, rows.object().put("checksum", checksum));
+            StatementRenderer.Rendered file = render(ready, account);
+            String checksum = file.sha256();
+            ObjectNode done = rows.object().put("checksum", checksum);
+            registerDocument(ready, file, checksum).ifPresent(doc -> done.put("document_id", doc.toString()));
+            ready = rows.update(TABLE, id, done);
             outbox.publish("accounts.statement.generated", TABLE, id, ready);
             return ready;
         } catch (ApiException e) {
@@ -192,11 +209,31 @@ public class StatementService {
 
     private ObjectNode fail(ObjectNode statement, String reason) {
         UUID id = uuid(statement, "id");
-        ObjectNode failed = rows.update(TABLE, id, rows.object().put("status", "FAILED"));
-        ObjectNode payload = failed.deepCopy();
-        payload.put("failure_reason", reason);
-        outbox.publish("accounts.statement.failed", TABLE, id, payload);
+        ObjectNode v = rows.object().put("status", "FAILED")
+                .put("failure_reason", reason == null ? "unknown" : truncate(reason, 500));
+        ObjectNode failed = rows.update(TABLE, id, v);
+        outbox.publish("accounts.statement.failed", TABLE, id, failed);
         return failed;
+    }
+
+    /**
+     * Registers the rendered file with document-service (document type ACCOUNT_STATEMENT). Best effort: the statement
+     * stays READY and downloadable from this service when document-service is unavailable.
+     */
+    private Optional<UUID> registerDocument(JsonNode s, StatementRenderer.Rendered file, String checksum) {
+        UUID id = uuid(s, "id");
+        try {
+            return Optional.ofNullable(bank.registerDocument(uuid(s, "deposit_account_id"), "ACCOUNT_STATEMENT",
+                    filename(s, file), file.contentType(), checksum, "statement:" + id,
+                    "statement-document:" + id + ":" + checksum));
+        } catch (RuntimeException e) {
+            log.warn("statement {} not registered with document-service: {}", id, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static String filename(JsonNode s, StatementRenderer.Rendered r) {
+        return "statement-" + s.get("statement_no").asInt() + "-" + str(s, "period_end") + "." + r.extension();
     }
 
     // ------------------------------------------------------------------ rendering and download
@@ -229,8 +266,7 @@ public class StatementService {
         if (!r.sha256().equals(str(s, "checksum"))) {
             throw new ApiException(500, "checksum_mismatch", "The statement content no longer matches its checksum");
         }
-        String filename = "statement-" + s.get("statement_no").asInt() + "-" + str(s, "period_end") + "." + r.extension();
-        return new Download(r.content(), r.contentType(), filename, str(s, "checksum"));
+        return new Download(r.content(), r.contentType(), filename(s, r), str(s, "checksum"));
     }
 
     public record Download(byte[] content, String contentType, String filename, String checksum) {}

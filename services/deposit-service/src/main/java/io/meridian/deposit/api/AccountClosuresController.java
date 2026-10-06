@@ -1,6 +1,5 @@
 package io.meridian.deposit.api;
 
-import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.deposit.api.generated.AccountClosuresApi;
 import io.meridian.deposit.api.generated.model.AccountClosure;
@@ -9,6 +8,7 @@ import io.meridian.deposit.api.generated.model.AccountClosuresApproveRequest;
 import io.meridian.deposit.api.generated.model.AccountClosuresCancelRequest;
 import io.meridian.deposit.api.generated.model.AccountClosuresRejectRequest;
 import io.meridian.deposit.application.ClosureService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,21 +29,10 @@ public class AccountClosuresController implements AccountClosuresApi {
         return actions.create(idempotencyKey, body, AccountClosure.class, () -> closures.request(body));
     }
 
-    /** GET /v1/account-closures/quote?deposit_account_id= (the query parameter is described in the contract text only). */
     @Override
-    public ResponseEntity<Void> accountClosuresQuote() {
+    public ResponseEntity<Map<String, Object>> accountClosuresQuote(UUID depositAccountId) {
         TenantContext.require();
-        String account = Http.query("deposit_account_id");
-        if (account == null) {
-            throw ApiException.badRequest("deposit_account_id_required", "Query parameter deposit_account_id is required");
-        }
-        UUID id;
-        try {
-            id = UUID.fromString(account);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest("invalid_deposit_account_id", "deposit_account_id must be a UUID");
-        }
-        return Http.json(actions.json(), closures.quote(id));
+        return actions.object(closures.quote(depositAccountId));
     }
 
     @Override

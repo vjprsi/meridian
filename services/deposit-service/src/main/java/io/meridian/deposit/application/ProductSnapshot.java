@@ -14,8 +14,8 @@ import java.util.Optional;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The product terms pinned on an account at opening ({@code metadata.product_snapshot}), in the product catalog's
- * shapes:
+ * The product terms pinned on an account or term deposit ({@code product_terms} column, copied from the product
+ * catalog at opening, placement or product change), in the product catalog's shapes:
  * <pre>
  * { "interest_rates": [ { "rate_kind": "CREDIT_INTEREST", "rate_type": "TIERED", "fixed_rate": "0.02",
  *                         "day_count": "ACT_365", "min_balance_for_interest": "0", "capitalisation_frequency": "MONTHLY",
@@ -33,10 +33,14 @@ public final class ProductSnapshot {
         this.root = root;
     }
 
-    public static ProductSnapshot of(JsonNode accountOrMetadataHolder) {
-        JsonNode meta = accountOrMetadataHolder.path("metadata");
-        JsonNode snap = meta.path("product_snapshot");
-        return new ProductSnapshot(snap.isObject() ? snap : meta.isObject() && meta.has("interest_rates") ? meta : null);
+    /** The terms pinned on a deposit_account or term_deposit row. */
+    public static ProductSnapshot of(JsonNode row) {
+        return terms(row.path("product_terms"));
+    }
+
+    /** Terms in the catalog shape (e.g. a snapshot just read from product-catalog-service). */
+    public static ProductSnapshot terms(JsonNode terms) {
+        return new ProductSnapshot(terms != null && terms.isObject() ? terms : null);
     }
 
     public boolean present() {
@@ -118,7 +122,7 @@ public final class ProductSnapshot {
                     DayCount.parse(text(r, "day_count")), dec(r, "min_balance_for_interest"), dec(r, "floor_rate"),
                     dec(r, "cap_rate"));
         } catch (IllegalArgumentException e) {
-            throw ApiException.unprocessable("invalid_product_snapshot", "Product rate configuration is invalid: "
+            throw ApiException.unprocessable("invalid_product_terms", "Product rate configuration is invalid: "
                     + e.getMessage());
         }
     }

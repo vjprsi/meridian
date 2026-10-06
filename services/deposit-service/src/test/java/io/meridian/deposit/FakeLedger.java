@@ -92,11 +92,11 @@ public class FakeLedger {
             Account a = account(UUID.fromString(p[3]));
             switch (p[4]) {
                 case "freeze" -> a.status = b.get("status").asString();
-                case "unfreeze" -> {
-                    if (!a.status.startsWith("FROZEN")) {
-                        throw ApiException.conflict("not_frozen", "not frozen");
-                    }
-                    a.status = "ACTIVE";
+                case "unfreeze" -> a.status = "ACTIVE"; // idempotent like ledger-service: ACTIVE stays ACTIVE (200)
+                case "overdraft-limit" -> {
+                    a.overdraft = new BigDecimal(b.get("limit").asString());
+                    a.row.put("overdraft_limit", a.overdraft.toPlainString());
+                    a.rowVersion++;
                 }
                 case "close" -> {
                     if (a.balance.signum() != 0 || a.pending.signum() != 0) {
@@ -159,20 +159,6 @@ public class FakeLedger {
             }
             default -> throw new IllegalArgumentException("unexpected GET " + path);
         };
-    }
-
-    public synchronized JsonNode patch(String service, String path, Object body, String ifMatch) {
-        JsonNode b = json.valueToTree(body);
-        calls.add(new Call("PATCH", path, b, ifMatch));
-        Account a = account(UUID.fromString(path.split("/")[3]));
-        if (!String.valueOf(a.rowVersion).equals(ifMatch)) {
-            throw ApiException.conflict("version_conflict", "stale");
-        }
-        if (b.has("overdraft_limit")) {
-            a.overdraft = new BigDecimal(b.get("overdraft_limit").asString());
-        }
-        a.rowVersion++;
-        return a.row;
     }
 
     // ------------------------------------------------------------------ test helpers

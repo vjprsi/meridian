@@ -6,7 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -44,12 +46,33 @@ class Actions {
                 () -> ResponseEntity.status(HttpStatus.CREATED).body(model(work.get(), type)));
     }
 
-    /** Idempotent action whose response is a free-form JSON document. */
-    JsonNode document(String key, String action, Object body, Supplier<JsonNode> work) {
+    /** Idempotent POST action whose response is a computed JSON object ({@code object} in the contract). */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    ResponseEntity<Map<String, Object>> objectAction(String key, String action, Object body, Supplier<JsonNode> work) {
         TenantContext.require();
-        ResponseEntity<JsonNode> r = idempotency.execute(key, Map.of("action", action, "body", tree(body)), JsonNode.class,
-                () -> ResponseEntity.ok(work.get()));
-        return r.getBody();
+        Map<String, Object> fingerprint = new LinkedHashMap<>();
+        fingerprint.put("action", action);
+        fingerprint.put("body", tree(body));
+        ResponseEntity raw = idempotency.execute(key, fingerprint, Map.class, () -> ResponseEntity.ok(map(work.get())));
+        return (ResponseEntity<Map<String, Object>>) raw;
+    }
+
+    /** 200 with a computed JSON object. */
+    ResponseEntity<Map<String, Object>> object(JsonNode result) {
+        return ResponseEntity.ok(map(result));
+    }
+
+    /** 200 with a printable text document offered as a download. */
+    static ResponseEntity<String> text(String content, String filename) {
+        return ResponseEntity.ok()
+                .contentType(new MediaType(MediaType.TEXT_PLAIN, java.nio.charset.StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(content);
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> map(JsonNode node) {
+        return json.treeToValue(node, Map.class);
     }
 
     /**

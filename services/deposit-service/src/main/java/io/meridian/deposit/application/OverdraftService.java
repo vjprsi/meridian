@@ -91,7 +91,7 @@ public class OverdraftService {
         UUID ledgerAccount = accounts.requireLedger(acc);
         accounts.requireNotClosed(acc);
         BigDecimal limit = dec(f, "limit_amount");
-        ledger.setOverdraftLimit(ledgerAccount, limit);
+        ledger.setOverdraftLimit(ledgerAccount, limit, "Overdraft facility approved", limitKey(f, "approve"));
         ObjectNode a = rows.object();
         a.put("overdraft_limit", limit.toPlainString());
         rows.update(AccountSupport.TABLE, uuid(acc, "id"), a);
@@ -135,7 +135,8 @@ public class OverdraftService {
         v.put("status", status);
         if ("ACTIVE".equals(str(f, "status"))) {
             UUID ledgerAccount = accounts.requireLedger(acc);
-            ledger.setOverdraftLimit(ledgerAccount, BigDecimal.ZERO);
+            ledger.setOverdraftLimit(ledgerAccount, BigDecimal.ZERO, "Overdraft facility " + status.toLowerCase(java.util.Locale.ROOT)
+                    + (reason == null ? "" : ": " + reason), limitKey(f, status.toLowerCase(java.util.Locale.ROOT)));
             ObjectNode a = rows.object();
             a.put("overdraft_limit", "0");
             rows.update(AccountSupport.TABLE, uuid(acc, "id"), a);
@@ -148,6 +149,11 @@ public class OverdraftService {
             return updated;
         }
         return rows.update("overdraft_facility", id, v);
+    }
+
+    /** Ledger key per facility state change: stable when the same change is retried, new for every later change. */
+    private static String limitKey(JsonNode facility, String action) {
+        return LedgerPort.key("overdraft-limit", uuid(facility, "id"), action + ":" + facility.path("row_version").asInt(1));
     }
 
     @Transactional
@@ -169,7 +175,7 @@ public class OverdraftService {
                 throw ApiException.unprocessable("limit_below_utilisation", "The account is overdrawn by "
                         + utilised.toPlainString() + "; the limit cannot go below the current utilisation");
             }
-            ledger.setOverdraftLimit(ledgerAccount, newLimit);
+            ledger.setOverdraftLimit(ledgerAccount, newLimit, reason, limitKey(f, "change-limit"));
             ObjectNode a = rows.object();
             a.put("overdraft_limit", newLimit.toPlainString());
             rows.update(AccountSupport.TABLE, uuid(acc, "id"), a);

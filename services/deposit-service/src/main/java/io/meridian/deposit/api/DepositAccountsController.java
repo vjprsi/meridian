@@ -23,12 +23,14 @@ import io.meridian.deposit.api.generated.model.InterestCapitalisationPage;
 import io.meridian.deposit.api.generated.model.LedgerEntryPage;
 import io.meridian.deposit.application.AccountSupport;
 import io.meridian.deposit.application.DepositAccountService;
+import io.meridian.deposit.application.EndOfDayJobs;
 import io.meridian.deposit.application.FeeService;
 import io.meridian.deposit.application.InterestService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -48,9 +50,12 @@ public class DepositAccountsController implements DepositAccountsApi {
     private final CrudEngine crud;
     private final Idempotency idempotency;
     private final JsonMapper json;
+    private final Actions actions;
+    private final EndOfDayJobs eod;
 
     public DepositAccountsController(DepositAccountService service, InterestService interest, FeeService fees,
-                                     AccountSupport accounts, CrudEngine crud, Idempotency idempotency, JsonMapper json) {
+                                     AccountSupport accounts, CrudEngine crud, Idempotency idempotency, JsonMapper json,
+                                     Actions actions, EndOfDayJobs eod) {
         this.service = service;
         this.interest = interest;
         this.fees = fees;
@@ -58,6 +63,8 @@ public class DepositAccountsController implements DepositAccountsApi {
         this.crud = crud;
         this.idempotency = idempotency;
         this.json = json;
+        this.actions = actions;
+        this.eod = eod;
     }
 
     @Override
@@ -72,7 +79,7 @@ public class DepositAccountsController implements DepositAccountsApi {
                                                                io.meridian.deposit.api.generated.model.DepositAccountUpdate body) {
         TenantContext.require();
         JsonNode req = tree(body);
-        for (String f : java.util.List.of("account_number", "iban", "bban", "currency", "product_id", "product_version_id",
+        for (String f : java.util.List.of("iban", "bban", "currency", "product_id", "product_version_id",
                 "legal_entity_id", "account_type")) {
             if (req.hasNonNull(f)) {
                 throw io.meridian.common.error.ApiException.unprocessable("field_not_updatable", f
@@ -157,22 +164,64 @@ public class DepositAccountsController implements DepositAccountsApi {
     }
 
     @Override
-    public ResponseEntity<LedgerEntryPage> depositAccountsTransactions(UUID id, Integer limit, String cursor) {
+    public ResponseEntity<LedgerEntryPage> depositAccountsTransactions(UUID id, OffsetDateTime from, OffsetDateTime to,
+                                                                     Integer limit, String cursor) {
         TenantContext.require();
-        return ResponseEntity.ok(json.treeToValue(service.transactions(id, Http.queryTime("from"), Http.queryTime("to"),
-                limit, cursor), LedgerEntryPage.class));
+        return ResponseEntity.ok(json.treeToValue(service.transactions(id, from, to, limit, cursor), LedgerEntryPage.class));
     }
 
     @Override
-    public ResponseEntity<Void> depositAccountsInterestProjection(UUID id) {
+    public ResponseEntity<Map<String, Object>> depositAccountsInterestProjection(UUID id, Integer days) {
         TenantContext.require();
-        return Http.json(json, interest.projection(id, Http.queryInt("days", 30)));
+        return actions.object(interest.projection(id, days == null ? 30 : days));
     }
 
     @Override
-    public ResponseEntity<Void> depositAccountsConfirmationLetter(UUID id) {
+    public ResponseEntity<String> depositAccountsConfirmationLetter(UUID id) {
         TenantContext.require();
-        return Http.text(service.confirmationLetter(id), "confirmation-letter-" + id + ".txt");
+        return Actions.text(service.confirmationLetter(id), "confirmation-letter-" + id + ".txt");
+    }
+
+    // ------------------------------------------------------------------ end of day (called by business-day-service)
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodAccrue(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.INTEREST_ACCRUAL, businessDate, idempotencyKey);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodProductChanges(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.PRODUCT_CHANGES, businessDate, idempotencyKey);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodMaturities(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.MATURITY_PROCESSING, businessDate, idempotencyKey);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodStandingOrders(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.STANDING_ORDERS, businessDate, idempotencyKey);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodPotRules(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.POT_RULES, businessDate, idempotencyKey);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodSweeps(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.SWEEPS, businessDate, idempotencyKey);
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> depositAccountsEodDormancy(LocalDate businessDate, String idempotencyKey) {
+        return eod(EndOfDayJobs.Job.DORMANCY_SCAN, businessDate, idempotencyKey);
+    }
+
+    private ResponseEntity<Map<String, Object>> eod(EndOfDayJobs.Job job, LocalDate businessDate, String key) {
+        return actions.objectAction(key, "eod-" + job.name(), Map.of("business_date", String.valueOf(businessDate)),
+                () -> eod.run(job, businessDate));
     }
 
     @Override
@@ -196,12 +245,11 @@ public class DepositAccountsController implements DepositAccountsApi {
     }
 
     @Override
-    public ResponseEntity<InterestAccrualPage> depositAccountsAccruals(UUID id, Integer limit, String cursor) {
+    public ResponseEntity<InterestAccrualPage> depositAccountsAccruals(UUID id, LocalDate from, LocalDate to, String kind,
+                                                                     Integer limit, String cursor) {
         TenantContext.require();
-        accounts.get(id);
-        return crud.list("interest_accrual", InterestAccrualPage.class, Crud.params().with("deposit_account_id", id)
-                .with("accrual_date", Http.query("accrual_date")).with("kind", Http.query("kind"))
-                .with("limit", limit).with("cursor", cursor));
+        return ResponseEntity.ok(json.treeToValue(interest.accruals(id, from, to, kind, limit, cursor),
+                InterestAccrualPage.class));
     }
 
     @Override

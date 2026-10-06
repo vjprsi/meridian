@@ -94,6 +94,43 @@ public class ChequeService {
         return book;
     }
 
+    /** REQUESTED/PRINTED -> DISPATCHED: the book left the bank (courier or collection branch). */
+    @Transactional
+    public ObjectNode dispatchBook(UUID bookId, String reference, UUID deliveryBranch) {
+        ObjectNode book = rows.lock("cheque_book", bookId);
+        String status = str(book, "status");
+        if (!"REQUESTED".equals(status) && !"PRINTED".equals(status)) {
+            throw ApiException.conflict("invalid_transition", "Only a REQUESTED or PRINTED cheque book can be dispatched; "
+                    + "this one is " + status);
+        }
+        ObjectNode v = rows.object();
+        v.put("status", "DISPATCHED");
+        v.put("dispatched_at", accounts.now().toString());
+        if (reference != null) {
+            v.put("dispatch_reference", truncate(reference, 64));
+        }
+        if (deliveryBranch != null) {
+            v.put("delivery_branch_id", deliveryBranch.toString());
+        }
+        return rows.update("cheque_book", bookId, v);
+    }
+
+    /** DISPATCHED -> ACTIVE once the customer confirms receipt; only then can its cheques clear. */
+    @Transactional
+    public ObjectNode activateBook(UUID bookId) {
+        ObjectNode book = rows.lock("cheque_book", bookId);
+        if (!"DISPATCHED".equals(str(book, "status"))) {
+            throw ApiException.conflict("invalid_transition", "Only a DISPATCHED cheque book can be activated; this one is "
+                    + str(book, "status"));
+        }
+        ObjectNode acc = accounts.get(uuid(book, "deposit_account_id"));
+        accounts.requireNotClosed(acc);
+        ObjectNode v = rows.object();
+        v.put("status", "ACTIVE");
+        v.put("activated_at", accounts.now().toString());
+        return rows.update("cheque_book", bookId, v);
+    }
+
     @Transactional
     public ObjectNode cancelBook(UUID bookId, String reason) {
         ObjectNode book = rows.lock("cheque_book", bookId);
@@ -132,6 +169,10 @@ public class ChequeService {
         if ("CANCELLED".equals(str(book, "status"))) {
             throw ApiException.conflict("cheque_book_cancelled", "The cheque book was cancelled");
         }
+        if (!"ACTIVE".equals(str(book, "status"))) {
+            throw ApiException.conflict("cheque_book_not_active", "Cheques clear only from an ACTIVE book; this book is "
+                    + str(book, "status") + " (dispatch it and activate it on customer receipt)");
+        }
         ObjectNode acc = accounts.lock(uuid(c, "deposit_account_id"));
         accounts.requireCurrency(acc, currency);
         if (amount.signum() <= 0 || !Currencies.fitsMinorUnit(amount, currency)) {
@@ -150,9 +191,6 @@ public class ChequeService {
         }
         if (issueDate != null) {
             v.put("issue_date", issueDate.toString());
-        }
-        if (!"ACTIVE".equals(str(book, "status"))) {
-            rows.update("cheque_book", uuid(book, "id"), rows.object().put("status", "ACTIVE"));
         }
         LocalDate written = issueDate != null ? issueDate : date(c, "issue_date");
         String returnReason = null;

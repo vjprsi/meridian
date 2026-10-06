@@ -15,12 +15,14 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Reads from other services through {@link ServiceClient}: deposit accounts and interest capitalisations from
- * deposit-service, balances, entries and journal entries from ledger-service.
+ * deposit-service, balances, entries and journal entries from ledger-service; registers generated files with
+ * document-service.
  */
 @Component
 public class BankData {
     static final String DEPOSITS = "deposit-service";
     static final String LEDGER = "ledger-service";
+    static final String DOCUMENTS = "document-service";
     private static final int MAX_PAGES = 500;
 
     private final ServiceClient client;
@@ -39,6 +41,25 @@ public class BankData {
             }
             throw e;
         }
+    }
+
+    /**
+     * Registers a generated file with document-service (owner = the deposit account) and returns the document id.
+     * The idempotency key is derived from the statement and its checksum, so a retry never registers twice.
+     */
+    public UUID registerDocument(UUID accountId, String documentType, String fileName, String contentType,
+                                 String sha256, String sourceRef, String idempotencyKey) {
+        java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("owner_type", "ACCOUNT");
+        body.put("owner_id", accountId.toString());
+        body.put("document_type", documentType);
+        body.put("file_name", fileName);
+        body.put("content_type", contentType);
+        body.put("classification", "CONFIDENTIAL");
+        body.put("uploaded_via", "SYSTEM");
+        body.put("metadata", java.util.Map.of("sha256", sha256, "source", sourceRef));
+        JsonNode doc = client.post(DOCUMENTS, "/v1/documents", body, idempotencyKey);
+        return doc == null || !doc.hasNonNull("id") ? null : UUID.fromString(doc.get("id").asString());
     }
 
     public List<JsonNode> accountsOfCustomer(UUID customerId, String currency) {

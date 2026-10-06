@@ -1,12 +1,13 @@
 package io.meridian.statement;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
-import io.meridian.statement.application.ScheduleService;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
 import java.math.BigDecimal;
@@ -19,7 +20,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -69,6 +69,7 @@ class StatementFlowIT {
     static final String JE_TRANSFER = "0199a000-0000-7000-8000-0000000000d1";
     static final String JE_FEE = "0199a000-0000-7000-8000-0000000000d2";
     static final String JE_INTEREST = "0199a000-0000-7000-8000-0000000000d3";
+    static final String DOCUMENT = "0199a000-0000-7000-8000-0000000000f1";
     static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-06T12:00:00Z"), ZoneOffset.UTC);
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -89,14 +90,13 @@ class StatementFlowIT {
     @Autowired
     JdbcClient jdbc;
 
-    @Autowired
-    ScheduleService schedules;
-
     @MockitoBean
     ServiceClient serviceClient;
 
     final HttpClient http = HttpClient.newHttpClient();
     final List<String> calls = new CopyOnWriteArrayList<>();
+    final List<JsonNode> documents = new CopyOnWriteArrayList<>();
+    final List<String> keys = new CopyOnWriteArrayList<>();
     volatile BigDecimal closingOverride;
     volatile boolean ledgerDown;
     String statementId;
@@ -104,6 +104,12 @@ class StatementFlowIT {
     @BeforeEach
     void stubs() {
         when(serviceClient.get(anyString(), anyString())).thenAnswer(i -> route(i.getArgument(0), i.getArgument(1)));
+        when(serviceClient.post(eq("document-service"), eq("/v1/documents"), any(), anyString())).thenAnswer(i -> {
+            JsonNode body = json.valueToTree(i.getArgument(2));
+            documents.add(body);
+            keys.add(i.getArgument(3));
+            return json.readTree("{\"id\":\"" + DOCUMENT + "\"}");
+        });
     }
 
     // ------------------------------------------------------------------ downstream stubs
@@ -202,9 +208,19 @@ class StatementFlowIT {
     @Test
     @Order(1)
     void generatesAStatementFromLedgerEntries() throws Exception {
-        JsonNode s = post("/v1/statements", body(1, "CSV"), 201);
+        JsonNode s = post("/v1/statements", body("CSV"), 201);
         statementId = s.get("id").asString();
         assertThat(s.get("status").asString()).isEqualTo("READY");
+        assertThat(s.get("statement_no").asInt()).isEqualTo(1);
+        assertThat(s.hasNonNull("failure_reason")).isFalse();
+        assertThat(s.get("document_id").asString()).isEqualTo(DOCUMENT);
+        JsonNode doc = documents.getFirst();
+        assertThat(doc.get("owner_type").asString()).isEqualTo("ACCOUNT");
+        assertThat(doc.get("owner_id").asString()).isEqualTo(ACCOUNT);
+        assertThat(doc.get("document_type").asString()).isEqualTo("ACCOUNT_STATEMENT");
+        assertThat(doc.get("file_name").asString()).isEqualTo("statement-1-2026-09-30.csv");
+        assertThat(doc.get("metadata").get("sha256").asString()).isEqualTo(s.get("checksum").asString());
+        assertThat(keys.getFirst()).isEqualTo("statement-document:" + statementId + ":" + s.get("checksum").asString());
         assertThat(dec(s, "opening_balance")).isEqualByComparingTo("1000.00");
         assertThat(dec(s, "total_credits")).isEqualByComparingTo("501.25");
         assertThat(dec(s, "total_debits")).isEqualByComparingTo("20.00");
@@ -244,63 +260,79 @@ class StatementFlowIT {
         assertThat(file.headers().firstValue("X-Content-SHA256")).contains(sha);
         assertThat(get("/v1/statements/" + statementId, TENANT).get("checksum").asString()).isEqualTo(sha);
 
-        JsonNode link = get("/v1/statements/" + statementId + "/download?as=url", TENANT);
+        JsonNode link = get("/v1/statements/" + statementId + "/download-link", TENANT);
+        assertThat(link.get("checksum").asString()).isEqualTo(sha);
+        assertThat(link.get("expires_at").asString()).isNotBlank();
         String url = link.get("url").asString();
         assertThat(url).contains("expires=").contains("signature=");
         assertThat(send("GET", url, null, null, TENANT).statusCode()).isEqualTo(200);
         assertThat(send("GET", url.replaceAll("signature=.{4}", "signature=0000"), null, null, TENANT).statusCode())
                 .isEqualTo(403);
         assertThat(send("GET", url, null, null, OTHER_TENANT).statusCode()).isEqualTo(403);
+        assertThat(send("GET", "/v1/statements/" + statementId + "/download?expires=soon&signature=x", null, null, TENANT)
+                .statusCode()).isEqualTo(400);
     }
 
     @Test
     @Order(3)
     void otherFormatsAndValidation() throws Exception {
-        JsonNode camt = post("/v1/statements", body(1, "CAMT_053"), 201);
+        JsonNode camt = post("/v1/statements", body("CAMT_053"), 201);
+        assertThat(camt.get("statement_no").asInt()).isEqualTo(1);
         HttpResponse<String> xml = send("GET", "/v1/statements/" + camt.get("id").asString() + "/download", null, null, TENANT);
         assertThat(xml.headers().firstValue("Content-Type").orElse("")).startsWith("application/xml");
         assertThat(xml.body()).contains("<Cd>CLBD</Cd>").contains("<NbOfNtries>3</NbOfNtries>");
-        JsonNode pdf = post("/v1/statements", body(1, "PDF"), 201);
+        JsonNode pdf = post("/v1/statements", body("PDF"), 201);
         HttpResponse<String> p = send("GET", "/v1/statements/" + pdf.get("id").asString() + "/download", null, null, TENANT);
         assertThat(p.headers().firstValue("Content-Type").orElse("")).startsWith("application/pdf");
-        assertThat(p.body()).startsWith("%PDF-1.4");
+        assertThat(p.body()).startsWith("%PDF-1.4").endsWith("%%EOF\n");
+        String pdfSha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(p.body().getBytes(StandardCharsets.US_ASCII)));
+        assertThat(pdfSha).isEqualTo(pdf.get("checksum").asString());
 
-        assertThat(post("/v1/statements", body(1, "CSV"), 409).get("code").asString()).isEqualTo("duplicate_statement");
-        assertThat(post("/v1/statements", body(2, "CSV").replace("\"EUR\"", "\"USD\""), 422).get("code").asString())
+        assertThat(post("/v1/statements", body("CSV"), 409).get("code").asString()).isEqualTo("duplicate_statement");
+        assertThat(post("/v1/statements", body("CSV").replace("\"EUR\"", "\"USD\""), 422).get("code").asString())
                 .isEqualTo("currency_mismatch");
-        assertThat(post("/v1/statements", body(2, "CSV").replace("2026-09-30", "2026-10-06"), 422).get("code").asString())
+        assertThat(post("/v1/statements", body("CSV").replace("2026-09-30", "2026-10-06"), 422).get("code").asString())
                 .isEqualTo("period_not_closed");
-        assertThat(post("/v1/statements", body(2, "CSV").replace(ACCOUNT, UUID.randomUUID().toString()), 422)
+        assertThat(post("/v1/statements", body("CSV").replace(ACCOUNT, UUID.randomUUID().toString()), 422)
                 .get("code").asString()).isEqualTo("account_not_found");
-        HttpResponse<String> noKey = send("POST", "/v1/statements", body(3, "CSV"), null, TENANT);
+        HttpResponse<String> noKey = send("POST", "/v1/statements", body("CSV"), null, TENANT);
         assertThat(noKey.statusCode()).isEqualTo(400);
-        HttpResponse<String> first = send("POST", "/v1/statements", body(4, "JSON"), "stm-4", TENANT);
-        HttpResponse<String> replay = send("POST", "/v1/statements", body(4, "JSON"), "stm-4", TENANT);
+        HttpResponse<String> first = send("POST", "/v1/statements", body("JSON"), "stm-4", TENANT);
+        HttpResponse<String> replay = send("POST", "/v1/statements", body("JSON"), "stm-4", TENANT);
         assertThat(first.statusCode()).isEqualTo(201);
         assertThat(replay.statusCode()).isEqualTo(201);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
         assertThat(json.readTree(replay.body()).get("id").asString()).isEqualTo(json.readTree(first.body()).get("id").asString());
+        JsonNode august = post("/v1/statements", body("CSV").replace("2026-09-01", "2026-08-01")
+                .replace("2026-09-30", "2026-08-31"), 201);
+        assertThat(august.get("statement_no").asInt()).isEqualTo(2); // a new period gets the next number
+        assertThat(august.get("status").asString()).isEqualTo("FAILED"); // the stub ledger only has September data
     }
 
     @Test
     @Order(4)
     void inconsistentOrUnavailableLedgerFailsAndCanBeRegenerated() throws Exception {
         closingOverride = new BigDecimal("1481.24");
-        JsonNode failed = post("/v1/statements", body(5, "CSV"), 201);
+        JsonNode failed = post("/v1/statements", body("OFX"), 201);
         assertThat(failed.get("status").asString()).isEqualTo("FAILED");
-        assertThat(events("accounts.statement.failed")).isEqualTo(1);
+        assertThat(failed.get("failure_reason").asString()).contains("Ledger data is inconsistent");
+        assertThat(failed.hasNonNull("document_id")).isFalse();
+        assertThat(events("accounts.statement.failed")).isEqualTo(2);
         String id = failed.get("id").asString();
         assertThat(send("GET", "/v1/statements/" + id + "/download", null, null, TENANT).statusCode()).isEqualTo(409);
         assertThat(post("/v1/statements/" + statementId + "/regenerate", null, 409).get("code").asString())
                 .isEqualTo("invalid_transition");
         closingOverride = null;
         ledgerDown = true;
-        assertThat(post("/v1/statements/" + id + "/regenerate", null, 200).get("status").asString()).isEqualTo("FAILED");
+        JsonNode down = post("/v1/statements/" + id + "/regenerate", null, 200);
+        assertThat(down.get("status").asString()).isEqualTo("FAILED");
+        assertThat(down.get("failure_reason").asString()).startsWith("upstream_error");
         ledgerDown = false;
         JsonNode ok = post("/v1/statements/" + id + "/regenerate", null, 200);
         assertThat(ok.get("status").asString()).isEqualTo("READY");
         assertThat(ok.get("line_count").asInt()).isEqualTo(3);
-        assertThat(events("accounts.statement.failed")).isEqualTo(2);
+        assertThat(ok.hasNonNull("failure_reason")).isFalse();
+        assertThat(events("accounts.statement.failed")).isEqualTo(3);
     }
 
     @Test
@@ -324,28 +356,42 @@ class StatementFlowIT {
     @Order(6)
     void schedulesValidateAndDriveTheCycle() throws Exception {
         assertThat(post("/v1/statement-schedules", """
-                {"deposit_account_id":"%s","formats":{"formats":["PDF","XLS"]}}""".formatted(ACCOUNT), 422)
+                {"deposit_account_id":"%s","formats":["PDF","XLS"]}""".formatted(ACCOUNT), 422)
                 .get("code").asString()).isEqualTo("invalid_format");
         assertThat(post("/v1/statement-schedules", """
-                {"deposit_account_id":"%s","formats":{"formats":["CSV"]},"delivery_channel":"EMAIL"}""".formatted(ACCOUNT), 422)
+                {"deposit_account_id":"%s","formats":{"formats":["PDF"]}}""".formatted(ACCOUNT), 400)
+                .get("code").asString()).isEqualTo("malformed_request");
+        assertThat(post("/v1/statement-schedules", """
+                {"deposit_account_id":"%s","formats":[]}""".formatted(ACCOUNT), 422)
+                .get("code").asString()).isEqualTo("formats_required");
+        assertThat(post("/v1/statement-schedules", """
+                {"deposit_account_id":"%s","formats":["CSV"],"delivery_channel":"EMAIL"}""".formatted(ACCOUNT), 422)
                 .get("code").asString()).isEqualTo("email_required");
         assertThat(post("/v1/statement-schedules", """
-                {"deposit_account_id":"%s","formats":{"formats":["CSV"]},"cycle_day":32}""".formatted(ACCOUNT), 422)
+                {"deposit_account_id":"%s","formats":["CSV"],"cycle_day":32}""".formatted(ACCOUNT), 422)
                 .get("code").asString()).isEqualTo("invalid_cycle_day");
         JsonNode schedule = post("/v1/statement-schedules", """
-                {"deposit_account_id":"%s","formats":{"formats":["CSV","MT940"]},"frequency":"MONTHLY","cycle_day":30,
+                {"deposit_account_id":"%s","formats":["CSV","MT940"],"frequency":"MONTHLY","cycle_day":30,
                  "delivery_channel":"EMAIL","email":"jane@example.com"}""".formatted(ACCOUNT), 201);
         assertThat(schedule.get("is_active").asBoolean()).isTrue();
+        assertThat(schedule.get("formats")).hasSize(2);
+        assertThat(schedule.get("formats").get(1).asString()).isEqualTo("MT940");
 
-        List<?> produced = asTenant(() -> schedules.runCycle(LocalDate.of(2026, 9, 30)));
-        assertThat(produced).hasSize(2);
+        assertThat(send("POST", "/v1/statements/cycle", null, UUID.randomUUID().toString(), TENANT).statusCode())
+                .isEqualTo(400);
+        JsonNode cycle = post("/v1/statements/cycle?business_date=2026-09-30", null, 200);
+        assertThat(cycle.get("produced").asInt()).isEqualTo(2); // cycle period 2026-08-31..2026-09-30, both formats
+        assertThat(cycle.get("statements").get(0).get("statement_no").asInt())
+                .isEqualTo(cycle.get("statements").get(1).get("statement_no").asInt());
         JsonNode list = get("/v1/statements?deposit_account_id=" + ACCOUNT + "&format=MT940", TENANT);
         assertThat(list.get("data")).hasSize(1);
         JsonNode mt = list.get("data").get(0);
         assertThat(mt.get("status").asString()).isEqualTo("DELIVERED");
-        assertThat(mt.get("statement_no").asInt()).isEqualTo(6);
-        assertThat(asTenant(() -> schedules.runCycle(LocalDate.of(2026, 9, 30)))).isEmpty(); // idempotent re-run
-        assertThat(asTenant(() -> schedules.runCycle(LocalDate.of(2026, 9, 29)))).isEmpty(); // not a cycle end
+        assertThat(mt.get("statement_no").asInt()).isEqualTo(3); // next number after September (1) and August (2)
+        assertThat(post("/v1/statements/cycle?business_date=2026-09-30", null, 200).get("produced").asInt())
+                .isZero(); // idempotent re-run
+        assertThat(post("/v1/statements/cycle?business_date=2026-09-29", null, 200).get("produced").asInt())
+                .isZero(); // not a cycle end
     }
 
     @Test
@@ -377,7 +423,10 @@ class StatementFlowIT {
         HttpResponse<String> text = send("GET", "/v1/tax-certificates/" + cert.get("id").asString() + "/download", null,
                 null, TENANT);
         assertThat(text.statusCode()).isEqualTo(200);
+        assertThat(text.headers().firstValue("Content-Type").orElse("")).startsWith("text/plain");
         assertThat(text.body()).contains("Gross interest : 5.90 EUR").contains("Tax withheld   : 1.18 EUR");
+        JsonNode certLink = get("/v1/tax-certificates/" + cert.get("id").asString() + "/download-link", TENANT);
+        assertThat(send("GET", certLink.get("url").asString(), null, null, TENANT).statusCode()).isEqualTo(200);
     }
 
     @Test
@@ -391,10 +440,10 @@ class StatementFlowIT {
 
     // ------------------------------------------------------------------ helpers
 
-    private static String body(int no, String format) {
+    private static String body(String format) {
         return """
-                {"deposit_account_id":"%s","statement_no":%d,"period_start":"2026-09-01","period_end":"2026-09-30",
-                 "format":"%s","currency":"EUR","is_on_demand":true}""".formatted(ACCOUNT, no, format);
+                {"deposit_account_id":"%s","period_start":"2026-09-01","period_end":"2026-09-30",
+                 "format":"%s","currency":"EUR","is_on_demand":true}""".formatted(ACCOUNT, format);
     }
 
     private <T> T asTenant(Callable<T> body) throws Exception {

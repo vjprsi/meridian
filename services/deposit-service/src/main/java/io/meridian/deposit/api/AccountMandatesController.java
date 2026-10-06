@@ -11,6 +11,7 @@ import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -44,8 +45,8 @@ public class AccountMandatesController implements AccountMandatesApi {
         if (req.path("required_approvals").asInt(1) < 1) {
             throw ApiException.unprocessable("invalid_required_approvals", "required_approvals must be at least 1");
         }
-        if ("CUSTOM".equals(Http.text(req, "rule")) && !req.hasNonNull("approver_groups")
-                && req.path("required_approvals").asInt(1) < 2) {
+        boolean hasGroups = !HolderService.combinations(req.get("approver_groups")).isEmpty();
+        if ("CUSTOM".equals(Http.text(req, "rule")) && !hasGroups && req.path("required_approvals").asInt(1) < 2) {
             throw ApiException.unprocessable("approver_groups_required",
                     "CUSTOM mandates need approver_groups or required_approvals >= 2");
         }
@@ -55,26 +56,21 @@ public class AccountMandatesController implements AccountMandatesApi {
         return crud.create("account_mandate", AccountMandate.class, body, idempotencyKey, Crud.params());
     }
 
-    /**
-     * POST /v1/account-mandates/evaluate. The contract's request has no signatories field, so the signing
-     * customers are passed as {@code ?signatories=<uuid>,<uuid>}; without them the response lists who may sign.
-     */
+    /** Which approvals an operation needs; with {@code signatories} also whether those customers satisfy them. */
     @Override
-    public ResponseEntity<Void> accountMandatesEvaluate(String idempotencyKey, AccountMandatesEvaluateRequest body) {
-        TenantContext.require();
+    public ResponseEntity<Map<String, Object>> accountMandatesEvaluate(String idempotencyKey,
+                                                                      AccountMandatesEvaluateRequest body) {
         JsonNode req = actions.tree(body);
         Set<UUID> signatories = new LinkedHashSet<>();
-        String raw = Http.query("signatories");
-        if (raw != null) {
-            for (String s : raw.split(",")) {
-                try {
-                    signatories.add(UUID.fromString(s.trim()));
-                } catch (IllegalArgumentException e) {
-                    throw ApiException.badRequest("invalid_signatories", "signatories must be comma-separated UUIDs");
-                }
+        for (JsonNode s : req.path("signatories")) {
+            try {
+                signatories.add(UUID.fromString(s.asString()));
+            } catch (IllegalArgumentException e) {
+                throw ApiException.badRequest("invalid_signatories", "signatories must be customer ids (UUIDs)");
             }
         }
-        return Http.json(actions.json(), holders.evaluate(UUID.fromString(Http.text(req, "deposit_account_id")),
-                Http.text(req, "operation_type"), Http.decimal(req, "amount"), signatories));
+        return actions.objectAction(idempotencyKey, "evaluate", body, () -> holders.evaluate(
+                Http.uuid(req, "deposit_account_id"), Http.text(req, "operation_type"), Http.decimal(req, "amount"),
+                signatories));
     }
 }

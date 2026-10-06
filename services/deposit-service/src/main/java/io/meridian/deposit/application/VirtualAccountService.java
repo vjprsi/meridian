@@ -67,11 +67,8 @@ public class VirtualAccountService {
         if (expected != null && expected.signum() <= 0) {
             throw ApiException.unprocessable("invalid_expected_amount", "expected_amount must be positive");
         }
-        String number = str(v, "virtual_account_number");
-        if (number == null || AUTO.contains(number.trim().toUpperCase(Locale.ROOT))) {
-            number = uniqueNumber();
-            v.put("virtual_account_number", number);
-        }
+        String number = uniqueNumber();
+        v.put("virtual_account_number", number);
         String iban = str(v, "iban");
         if (iban != null && AUTO.contains(iban.trim().toUpperCase(Locale.ROOT))) {
             Optional<String> built = number.chars().allMatch(Character::isDigit)
@@ -105,26 +102,14 @@ public class VirtualAccountService {
         throw ApiException.conflict("account_number_exhausted", "Could not allocate a unique virtual account number");
     }
 
-    /**
-     * Bulk creation, all-or-nothing. The contract types {@code items} as an object; accepted shapes are
-     * {"accounts": [ {...}, ... ]} (also "data"/"items") or an object keyed by client reference.
-     */
+    /** Bulk creation, all-or-nothing: {@code items} is an array of VirtualAccountCreate objects. */
     @Transactional
     public ObjectNode bulk(JsonNode items) {
         List<JsonNode> list = new ArrayList<>();
-        JsonNode arr = items.isArray() ? items : items.has("accounts") ? items.get("accounts")
-                : items.has("data") ? items.get("data") : items.get("items");
-        if (arr != null && arr.isArray()) {
-            arr.forEach(list::add);
-        } else {
-            for (String k : items.propertyNames()) {
-                ObjectNode item = ((ObjectNode) items.get(k)).deepCopy();
-                if (!item.has("owner_reference")) {
-                    item.put("owner_reference", k);
-                }
-                list.add(item);
-            }
+        if (items == null || !items.isArray()) {
+            throw ApiException.unprocessable("invalid_items", "items must be an array of virtual accounts");
         }
+        items.forEach(list::add);
         if (list.isEmpty()) {
             throw ApiException.unprocessable("no_items", "items contains no virtual accounts");
         }
@@ -140,7 +125,7 @@ public class VirtualAccountService {
                 throw ApiException.unprocessable("invalid_item", "items[" + index + "] must be an object");
             }
             ObjectNode v = rows.object();
-            for (String f : List.of("master_account_id", "virtual_account_number", "iban", "purpose", "owner_customer_id",
+            for (String f : List.of("master_account_id", "iban", "purpose", "owner_customer_id",
                     "owner_reference", "currency", "expected_amount", "single_use", "expires_at", "metadata")) {
                 if (item.hasNonNull(f)) {
                     v.set(f, item.get(f));

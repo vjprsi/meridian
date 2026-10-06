@@ -154,32 +154,30 @@ public class HolderService {
     }
 
     /**
-     * approver_groups is declared as a JSON object in the contract; accepted shapes:
-     * {"any_of": [["A"], ["B","B"]]} (alternative combinations) or {"A": 1, "B": 2} (one combination with counts).
+     * approver_groups: alternative combinations, each a list of signing groups that must all sign, e.g.
+     * {@code [["A"], ["B", "B"]]} = one A signatory, or two B signatories. Rejects any other shape.
      */
-    static List<List<String>> combinations(JsonNode groups) {
+    public static List<List<String>> combinations(JsonNode groups) {
         List<List<String>> out = new ArrayList<>();
         if (groups == null || groups.isNull()) {
             return out;
         }
-        JsonNode anyOf = groups.isArray() ? groups : groups.get("any_of");
-        if (anyOf != null && anyOf.isArray()) {
-            for (JsonNode combo : anyOf) {
-                List<String> c = new ArrayList<>();
-                combo.forEach(g -> c.add(g.asString()));
-                out.add(c);
-            }
-            return out;
+        if (!groups.isArray()) {
+            throw ApiException.unprocessable("invalid_approver_groups", "approver_groups must be a list of lists of groups");
         }
-        List<String> single = new ArrayList<>();
-        for (String name : groups.propertyNames()) {
-            int n = groups.get(name).asInt(1);
-            for (int i = 0; i < n; i++) {
-                single.add(name);
+        for (JsonNode combo : groups) {
+            if (!combo.isArray() || combo.isEmpty()) {
+                throw ApiException.unprocessable("invalid_approver_groups",
+                        "each approver_groups entry must be a non-empty list of signing groups, e.g. [\"A\",\"B\"]");
             }
-        }
-        if (!single.isEmpty()) {
-            out.add(single);
+            List<String> c = new ArrayList<>();
+            for (JsonNode g : combo) {
+                if (!g.isString() || g.asString().isBlank() || g.asString().length() > 16) {
+                    throw ApiException.unprocessable("invalid_approver_groups", "signing groups are labels of 1-16 characters");
+                }
+                c.add(g.asString());
+            }
+            out.add(c);
         }
         return out;
     }
