@@ -11,4 +11,12 @@ public interface ApprovalOutcomeHandler {
     String resourceType();
 
     void onDecided(ApprovalDecision decision);
+
+    /**
+     * True when the resource can only be decided centrally (the service has no local approve endpoint and opens
+     * requests with {@link Approvals#requestCentral}); the decision listener then runs even in local mode.
+     */
+    default boolean centralOnly() {
+        return false;
+    }
 }

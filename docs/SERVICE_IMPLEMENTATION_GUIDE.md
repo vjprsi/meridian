@@ -68,6 +68,22 @@ add the central path on top (reference: pricing-rules `DecisionTableService` + `
    Add one `*WorkflowApprovalIT` with `meridian.approvals.mode=workflow`, a mocked `ServiceClient`, and decisions fed
    through `ApprovalEventsDispatcher.dispatch(...)`.
 
+Lessons from the rollout (all 63 services):
+- Fingerprint: something that changes when the submission changes but not on unrelated writes (checksum of
+  content, `submitted_at`, amount). `row_version` works only if nothing else writes the row while pending. Put the
+  submission marker in the idempotency key too, so resubmitting identical content after a rejection opens a new
+  request instead of returning the decided one.
+- Resubmission: open the new request, then `cancelOpenExcept(type, id, null, newRequestId, "superseded")`.
+- No local rejected state: map REJECTED to the closest existing transition (cancel, back to DRAFT, archive) or
+  leave it pending and log; say which in the handler Javadoc. CHANGES_REQUESTED may map to a "request info" step.
+- Where the request id has a home (`approval_request_id` column) store it and match decisions on it.
+- Multi-level approvals: one request per level (fingerprint = approvals received so far); open the next level
+  outside the transaction that cancels the previous one.
+- Payloads carry ids, amounts and what a checker needs to decide; never PAN/CVV/PIN, secrets, or tipping-off
+  sensitive narrative (SAR).
+- Flows without a maker step (a checker acting alone, e.g. activating an editable rule) stay local until the spec
+  gets a submit action.
+
 ## Service identity (JWT mode)
 
 - A call made while handling a user request forwards the user's token (the user's permissions apply).

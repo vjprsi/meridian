@@ -19,7 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Consumes {@code platform.approval_request.*} CloudEvents from workflow-service and hands final decisions for
  * this service's resource types to their {@link ApprovalOutcomeHandler}. Business rejections by the handler
- * ({@link ApiException}) are logged and the event is acknowledged; other failures are retried by the container.
+ * ({@link ApiException} 4xx) are logged and the event is acknowledged; 5xx and other failures are retried.
  */
 public class ApprovalEventsDispatcher {
     private static final Logger log = LoggerFactory.getLogger(ApprovalEventsDispatcher.class);
@@ -35,7 +35,8 @@ public class ApprovalEventsDispatcher {
     }
 
     @KafkaListener(topics = "${meridian.approvals.topic:meridian.platform.v1}",
-            groupId = "${spring.application.name}-approvals")
+            groupId = "${spring.application.name}-approvals",
+            autoStartup = "#{@approvalsListenerSwitch.active()}")
     public void onEvent(ConsumerRecord<String, String> record) throws Exception {
         String type = header(record, "ce_type");
         String tenant = header(record, "ce_tenantid");
@@ -54,7 +55,8 @@ public class ApprovalEventsDispatcher {
         if (handler == null) {
             return false;
         }
-        String decidedBy = row.path("updated_by").asString(row.path("maker").asString("workflow-service"));
+        // never fall back to the maker: a missing approver must not look like a self-approval
+        String decidedBy = row.hasNonNull("updated_by") ? row.get("updated_by").asString() : "workflow-service";
         ApprovalDecision decision = new ApprovalDecision(uuid(row, "id"), row.path("resource_type").asString(),
                 uuid(row, "resource_id"), row.path("action").asString(null), outcome,
                 row.path("maker").asString(null), decidedBy, row.path("payload"), row);
@@ -66,6 +68,9 @@ public class ApprovalEventsDispatcher {
             log.info("Approval {} {} for {} {} applied", decision.approvalRequestId(), outcome,
                     decision.resourceType(), decision.resourceId());
         } catch (ApiException e) {
+            if (e.status() >= 500) {
+                throw e; // downstream outcome unknown: let the container retry the event
+            }
             log.warn("Approval {} {} for {} {} not applied: {} {}", decision.approvalRequestId(), outcome,
                     decision.resourceType(), decision.resourceId(), e.code(), e.getMessage());
         }

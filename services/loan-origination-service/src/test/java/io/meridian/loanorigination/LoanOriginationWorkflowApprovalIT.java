@@ -84,6 +84,25 @@ class LoanOriginationWorkflowApprovalIT {
         });
     }
 
+    static volatile boolean scorecardReady;
+
+    /** Auto-decide needs an active champion APPLICATION scorecard in this test's tenant (same as the FlowIT). */
+    @BeforeEach
+    void champion() throws Exception {
+        if (scorecardReady) {
+            return;
+        }
+        String sc = post("/v1/scorecards", """
+                {"code":"APP-WF","name":"Workflow IT application","scorecard_type":"APPLICATION","owner":"mrm"}""",
+                201, "modeler").get("id").asString();
+        String base = "/v1/scorecards/" + sc + "/versions";
+        String v = post(base, "{\"scorecard_id\":\"" + sc + "\",\"version\":\"1.0\",\"base_points\":550,\"features\":"
+                + LoanOriginationFlowIT.FEATURES + ",\"cutoffs\":" + LoanOriginationFlowIT.CUTOFFS + "}", 201, "modeler")
+                .get("id").asString();
+        post(base + "/" + v + "/activate", "{}", 200, "mrm");
+        scorecardReady = true;
+    }
+
     // ------------------------------------------------------------------ manual credit decisions
 
     @Test
@@ -98,7 +117,7 @@ class LoanOriginationWorkflowApprovalIT {
         Map<?, ?> payload = (Map<?, ?>) req.get("payload");
         assertThat(payload.get("outcome")).isEqualTo("APPROVED");
         assertThat(payload.get("loan_application_id")).isEqualTo(a);
-        assertThat(lastKey.get()).isEqualTo("propose:" + requestId + ":APPROVED");
+        assertThat(lastKey.get()).endsWith(":propose:" + requestId + ":APPROVED");
 
         // the maker approving in the inbox is still refused by the four-eyes rule
         dispatch("credit_decision_request", requestId, payload, "underwriter", Outcome.APPROVED);

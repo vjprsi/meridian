@@ -26,6 +26,10 @@ public record ApprovalSpec(String resourceType, UUID resourceId, String action, 
         return new ApprovalSpec(resourceType, resourceId, action, title, summary, payload, value, ccy, priority);
     }
 
+    public ApprovalSpec withPriority(String value) {
+        return new ApprovalSpec(resourceType, resourceId, action, title, summary, payload, amount, currency, value);
+    }
+
     public ApprovalSpec withSummary(String text) {
         return new ApprovalSpec(resourceType, resourceId, action, title, text, payload, amount, currency, priority);
     }

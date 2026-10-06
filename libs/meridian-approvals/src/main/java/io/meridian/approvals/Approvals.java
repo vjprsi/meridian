@@ -42,6 +42,15 @@ public class Approvals {
         if (!workflowMode) {
             return null;
         }
+        return requestCentral(spec, idempotencyKey);
+    }
+
+    /**
+     * Opens the request whatever the mode, for resources that can only be decided centrally (pair with a
+     * {@link ApprovalOutcomeHandler#centralOnly() central-only} handler). Fails with 502 when workflow-service
+     * returns no request id.
+     */
+    public JsonNode requestCentral(ApprovalSpec spec, String idempotencyKey) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("resource_type", spec.resourceType());
         if (spec.resourceId() != null) {
@@ -58,7 +67,12 @@ public class Approvals {
             body.put("currency", spec.currency());
         }
         body.put("priority", spec.priority());
-        return client.post(WORKFLOW, "/v1/approval-requests", body, key(idempotencyKey));
+        JsonNode created = client.post(WORKFLOW, "/v1/approval-requests", body, key(idempotencyKey));
+        if (idOf(created) == null) {
+            throw new io.meridian.common.error.ApiException(502, "upstream_error",
+                    "workflow-service did not return an approval request id");
+        }
+        return created;
     }
 
     /** The id of a request returned by {@link #request}, or null. */
@@ -83,6 +97,14 @@ public class Approvals {
      * the change directly. Inside a transaction this runs after commit (and returns 0); otherwise returns how many were cancelled. 0 in local mode.
      */
     public int cancelOpen(String resourceType, UUID resourceId, String action, String reason) {
+        return cancelOpenExcept(resourceType, resourceId, action, null, reason);
+    }
+
+    /**
+     * Like {@link #cancelOpen} but keeps {@code keepRequestId}: use after a resubmission to retire the superseded
+     * request(s) without cancelling the one just opened.
+     */
+    public int cancelOpenExcept(String resourceType, UUID resourceId, String action, UUID keepRequestId, String reason) {
         if (!workflowMode || resourceId == null) {
             return 0;
         }
@@ -96,7 +118,7 @@ public class Approvals {
                         @Override
                         public void afterCommit() {
                             try {
-                                TenantContext.callAs(tenant, principal, () -> cancelOpenNow(resourceType, resourceId, action, reason));
+                                TenantContext.callAs(tenant, principal, () -> cancelOpenNow(resourceType, resourceId, action, keepRequestId, reason));
                             } catch (Exception e) {
                                 org.slf4j.LoggerFactory.getLogger(Approvals.class).warn(
                                         "Could not cancel open approvals for {} {}: {}", resourceType, resourceId, e.getMessage());
@@ -105,16 +127,17 @@ public class Approvals {
                     });
             return 0;
         }
-        return cancelOpenNow(resourceType, resourceId, action, reason);
+        return cancelOpenNow(resourceType, resourceId, action, keepRequestId, reason);
     }
 
-    private int cancelOpenNow(String resourceType, UUID resourceId, String action, String reason) {
+    private int cancelOpenNow(String resourceType, UUID resourceId, String action, UUID keepRequestId, String reason) {
         JsonNode page = client.get(WORKFLOW, "/v1/approval-requests?status=PENDING&resource_type="
                 + java.net.URLEncoder.encode(resourceType, java.nio.charset.StandardCharsets.UTF_8)
                 + "&resource_id=" + resourceId + "&limit=50");
         int n = 0;
         for (JsonNode r : page == null ? JsonNodeHolder.EMPTY : page.path("data")) {
-            if (action == null || action.equals(r.path("action").asString(null))) {
+            boolean kept = keepRequestId != null && keepRequestId.toString().equals(r.path("id").asString(null));
+            if (!kept && (action == null || action.equals(r.path("action").asString(null)))) {
                 cancel(UUID.fromString(r.get("id").asString()), reason);
                 n++;
             }

@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -23,8 +22,15 @@ public class MeridianApprovalsAutoConfiguration {
 
     @Bean
     @ConditionalOnBean(ApprovalOutcomeHandler.class)
-    // only in workflow mode: in local mode no decisions arrive, so no consumer group is started
-    @ConditionalOnExpression("'${meridian.approvals.mode:local}' == 'workflow' && '${meridian.approvals.listener-enabled:true}' == 'true'")
+    ApprovalsListenerSwitch approvalsListenerSwitch(List<ApprovalOutcomeHandler> handlers,
+            @Value("${meridian.approvals.listener-enabled:true}") boolean listenerEnabled,
+            @Value("${meridian.approvals.mode:local}") String mode) {
+        return new ApprovalsListenerSwitch(listenerEnabled, mode, handlers);
+    }
+
+    /** Always registered with handlers (tests dispatch directly); its Kafka listener starts per the switch. */
+    @Bean
+    @ConditionalOnBean(ApprovalOutcomeHandler.class)
     ApprovalEventsDispatcher approvalEventsDispatcher(List<ApprovalOutcomeHandler> handlers, JsonMapper json) {
         return new ApprovalEventsDispatcher(handlers, json);
     }
