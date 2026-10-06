@@ -18,6 +18,9 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
 | G8 | Scheduled jobs cannot enumerate tenants under RLS (workaround: tenants seen in idempotency_key) | Business-day-service drives per-tenant jobs; services expose job endpoints; or a tenant registry fed by `platform.tenant.*` events | Open |
 | G9 | Callbacks from external providers require `Idempotency-Key` and tenant headers they cannot send | Mark provider callback actions as `public` with signature auth; tenant resolved from the referenced entity | Open |
 | G10 | Unsupported HTTP method returned 500 | Fixed in libs ProblemHandler (405/415) | Done |
+| G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | Open |
+| G12 | Read-style operations declared 204 (view, ownership-tree, exposure, evaluate, simulate, test-connection, registration-options) | Same as G2: response schemas | Open |
+| G13 | Search endpoints lack `q` parameter | Add `?q:string!` to search actions | Open |
 
 ## Per-domain notes
 
@@ -25,4 +28,8 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
   `price_plan` has no tenant (global catalogue editable by any tenant — needs operator-only scope); billing has no payment table;
   notification provider `credentials_ref` is `secret` but required on create; webhook needs previous-secret column (rotation grace);
   generated-document create lacks `data`; send-templated lacks destination; workflow task has no direct create.
-- Product/accounts/party/ledger/operations: pending reports.
+- party: no OTP state table (uses customer_credential SMS_OTP rows); kyc_profile has no create op (implicit creation);
+  `KycProviderCreate` omits required `credentials_ref`; `OnboardingApplicationCreate` lacks `legal_entity_id`;
+  missing events for privacy reject, journey retire, request-info, document accept/reject; close/deceased cannot
+  check product holdings (needs a customer-holdings query across deposit/loan/card/wallet services).
+- Product/accounts/ledger/operations: pending reports.
