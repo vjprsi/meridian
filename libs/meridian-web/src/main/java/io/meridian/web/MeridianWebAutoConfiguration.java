@@ -5,6 +5,7 @@ import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.crud.TableCatalog;
 import io.meridian.web.error.ProblemHandler;
 import io.meridian.web.json.MeridianJsonCustomizer;
+import io.meridian.web.security.ScopeInterceptor;
 import io.meridian.web.idempotency.Idempotency;
 import io.meridian.web.tenancy.TenantAwareDataSource;
 import io.meridian.web.tenancy.TenantFilter;
@@ -25,6 +26,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Wires tenancy, security, errors, request ids and idempotency into every Meridian service. */
@@ -100,5 +103,15 @@ public class MeridianWebAutoConfiguration {
     @ConditionalOnMissingBean
     ServiceClient serviceClient(JsonMapper json, Environment env) {
         return new ServiceClient(json, env);
+    }
+
+    @Bean
+    WebMvcConfigurer meridianScopeEnforcement(MeridianProperties props) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(new ScopeInterceptor(props)).addPathPatterns("/v1/**");
+            }
+        };
     }
 }

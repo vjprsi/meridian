@@ -823,6 +823,7 @@ def gen_openapi(domains, enums, tables_global) -> list:
                     if a.fr or t.fr:
                         o["x-requirements"] = sorted(set(a.fr + t.fr))
                     o["x-service"] = s.name
+                    o["x-operation-extra-annotation"] = f'@io.meridian.web.security.RequiredScope("{d.id}:{scope}")'
                     o["x-table"] = t.name
                     if kind in ("list", "get", "create", "update", "delete"):
                         o["x-crud"] = True
