@@ -24,6 +24,15 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
 
 Domain hardening status: product ✔, ledger/gl/recon ✔ (merged); platform, party, accounts, operations in progress.
 
+## Cross-cutting items raised in wave A (open)
+
+- Operator (platform-admin) scope notation for global catalogues: sanctions lists, bank directory, price plans, MCC codes.
+- Service-to-service tokens for internal calls in JWT mode (rail callback → payment-service, EOD jobs).
+- Public-callback tenant resolution: standardise (routing uses a SECURITY DEFINER lookup, document/notification use signed tenant ids).
+- Maker-checker via workflow-service everywhere (G11): onboarding journey publish, crm redress, risk four-eyes still local.
+- FX conversion for limits/velocity/approval thresholds (amounts compared in transaction currency today).
+- Kafka feed to transaction monitoring needs customer/counterparty on posting events.
+
 ## Per-domain notes
 
 - platform: `ssoProviderCreate` lacks `client_secret`; `config_entry` lacks submitter; `audit_event` lacks consumed-event id;

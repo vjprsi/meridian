@@ -193,7 +193,7 @@ paths:
   /v1/risk/fraud/scores/evaluate:
     post:
       operationId: fraudScoresEvaluate
-      summary: Score an event synchronously (50 ms budget); returns the decision
+      summary: Score an event synchronously (50 ms budget); returns decision, score, reason codes, rule hits and alert
       tags:
       - Fraud Scores
       security:
@@ -207,7 +207,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FraudScore'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -284,8 +286,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -649,7 +657,7 @@ paths:
   /v1/risk/fraud/rules/{id}/backtest:
     post:
       operationId: fraudRulesBacktest
-      summary: Replay the rule over historical evaluations
+      summary: Replay the rule over historical evaluations (hit rate and precision against labels)
       tags:
       - Fraud Rules
       security:
@@ -664,8 +672,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -690,7 +704,7 @@ paths:
   /v1/risk/fraud/rules/test-expression:
     post:
       operationId: fraudRulesTestExpression
-      summary: Evaluate a CEL expression against a sample event
+      summary: Evaluate a rule expression against a sample event
       tags:
       - Fraud Rules
       security:
@@ -699,8 +713,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2147,8 +2167,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2570,13 +2596,30 @@ components:
           - ECOMMERCE
           - CONTACTLESS
           - OPEN_BANKING
+        merchant_category_code:
+          type: string
+          maxLength: 4
+        counterparty_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
         device_fingerprint:
           type: string
           maxLength: 128
+        device:
+          type: object
+          additionalProperties: true
         ip_address:
           type: string
           description: IPv4 or IPv6 address
+        ip_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
         session_id:
+          type: string
+          maxLength: 128
+        correlation_id:
           type: string
           maxLength: 128
         context:
@@ -2688,6 +2731,9 @@ components:
         to_ts:
           type: string
           format: date-time
+        max_events:
+          type: integer
+          format: int32
       required:
       - from_ts
       - to_ts
@@ -3003,7 +3049,8 @@ components:
           - ESCALATED
           - SAR_FILED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         priority:
           type: string
           enum:
@@ -3075,7 +3122,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: MLRO or senior reviewer
+          description: MLRO or senior reviewer (use /escalate)
+          readOnly: true
+        escalation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the case was escalated
+          readOnly: true
         closed_at:
           type:
           - string
@@ -3091,9 +3145,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags
         custom_field_1:
           type:
@@ -3425,10 +3479,19 @@ components:
           readOnly: true
         trusted:
           type: boolean
-          description: Marked trusted after strong authentication
+          description: Marked trusted after strong authentication (use /trust)
+          readOnly: true
         blocked:
           type: boolean
-          description: Blocked device
+          description: Blocked device (use /block and /unblock)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the last trust / block / unblock
+          readOnly: true
         first_seen_at:
           type: string
           format: date-time
@@ -3531,12 +3594,6 @@ components:
           type: string
           pattern: ^[A-Z]{2}$
           description: Last seen country (IP geolocation) (ISO 3166-1 alpha-2)
-        trusted:
-          type: boolean
-          description: Marked trusted after strong authentication
-        blocked:
-          type: boolean
-          description: Blocked device
         custom_field_1:
           type: string
           maxLength: 500
@@ -3641,7 +3698,14 @@ components:
           - FALSE_POSITIVE
           - ESCALATED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reason codes of the evaluation that raised the alert
         typology:
           type:
           - string
@@ -3687,12 +3751,27 @@ components:
           description: Review deadline
         customer_contacted:
           type: boolean
-          description: Customer confirmation obtained
+          description: Customer confirm-or-deny message sent
+          readOnly: true
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Confirm-or-deny notification
+          readOnly: true
         resolution:
           type:
           - string
           - 'null'
           description: Resolution notes
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Analyst who resolved
+          readOnly: true
         resolved_at:
           type:
           - string
@@ -3706,6 +3785,7 @@ components:
           - 'null'
           format: uuid
           description: Case opened from this alert
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3782,16 +3862,10 @@ components:
           - HIGH
           - CRITICAL
           description: Severity
-        status:
-          type: string
-          enum:
-          - OPEN
-          - IN_REVIEW
-          - CONFIRMED_FRAUD
-          - FALSE_POSITIVE
-          - ESCALATED
-          - CLOSED
-          description: Status
+        reason_codes:
+          type: array
+          items: {}
+          description: Reason codes of the evaluation that raised the alert
         typology:
           type: string
           enum:
@@ -3825,16 +3899,9 @@ components:
           type: string
           format: date-time
           description: Review deadline
-        customer_contacted:
-          type: boolean
-          description: Customer confirmation obtained
         resolution:
           type: string
           description: Resolution notes
-        aml_case_id:
-          type: string
-          format: uuid
-          description: Case opened from this alert
         custom_field_1:
           type: string
           maxLength: 500
@@ -4766,7 +4833,8 @@ components:
           - SHADOW
           - ACTIVE
           - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
+          description: Lifecycle (changed only by activate/deactivate); SHADOW logs hits without acting
+          readOnly: true
         rule_version:
           type: integer
           format: int32
@@ -4774,9 +4842,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type:
@@ -4802,6 +4870,13 @@ components:
           - 'null'
           maxLength: 64
           description: Checker
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the rule was disabled
           readOnly: true
         custom_field_1:
           type:
@@ -4895,17 +4970,9 @@ components:
           type: integer
           format: int32
           description: Lower runs first; BLOCK rules short-circuit
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - SHADOW
-          - ACTIVE
-          - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type: string
@@ -4993,17 +5060,9 @@ components:
           type: integer
           format: int32
           description: Lower runs first; BLOCK rules short-circuit
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - SHADOW
-          - ACTIVE
-          - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type: string
@@ -5092,7 +5151,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Values that made the expression true
+          description: Values of the identifiers the expression referenced
         custom_field_1:
           type:
           - string
@@ -5279,15 +5338,15 @@ components:
           - STEP_UP
           description: Decision returned to the caller
         reason_codes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ordered reason codes explaining the decision
         features:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Feature values used (for audit and explainability)
+          description: Feature values used (for audit, explainability and rule backtesting)
         shadow_decision:
           type:
           - string
@@ -5308,6 +5367,26 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        session_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: App session (links behavioural signals)
+        fraud_alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Alert raised for REVIEW / BLOCK decisions
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Client key; a replay returns the original evaluation
+          readOnly: true
         custom_field_1:
           type:
           - string

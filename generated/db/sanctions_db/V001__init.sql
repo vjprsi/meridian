@@ -34,6 +34,7 @@ CREATE TABLE sanctions_list (
   published_at                 timestamptz,
   loaded_at                    timestamptz,
   entry_count                  integer,
+  content_sha256               varchar(64),
   source_url                   varchar(500),
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
@@ -50,7 +51,7 @@ COMMENT ON COLUMN sanctions_list.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN sanctions_list.updated_at IS 'Last update time';
 COMMENT ON COLUMN sanctions_list.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN sanctions_list.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN sanctions_list.owner_tenant_id IS 'Tenant for INTERNAL lists; empty for global lists';
+COMMENT ON COLUMN sanctions_list.owner_tenant_id IS 'Owning tenant (lists created through the API); empty for platform-managed global lists';
 COMMENT ON COLUMN sanctions_list.source IS 'Publisher';
 COMMENT ON COLUMN sanctions_list.code IS 'List code, e.g. OFAC_SDN';
 COMMENT ON COLUMN sanctions_list.name IS 'List name';
@@ -58,6 +59,7 @@ COMMENT ON COLUMN sanctions_list.list_version IS 'Publisher version / publicatio
 COMMENT ON COLUMN sanctions_list.published_at IS 'Publication time';
 COMMENT ON COLUMN sanctions_list.loaded_at IS 'Time loaded into Meridian';
 COMMENT ON COLUMN sanctions_list.entry_count IS 'Active entries';
+COMMENT ON COLUMN sanctions_list.content_sha256 IS 'Hash of the last loaded file (unchanged files are skipped)';
 COMMENT ON COLUMN sanctions_list.source_url IS 'Download location';
 COMMENT ON COLUMN sanctions_list.is_active IS 'Used for screening';
 COMMENT ON COLUMN sanctions_list.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -113,8 +115,8 @@ COMMENT ON COLUMN sanctions_list_entry.aliases IS 'Aliases, AKAs and translitera
 COMMENT ON COLUMN sanctions_list_entry.date_of_birth IS 'Date of birth (may be partial, e.g. 1970 or 1970-05)';
 COMMENT ON COLUMN sanctions_list_entry.place_of_birth IS 'Place of birth';
 COMMENT ON COLUMN sanctions_list_entry.nationality IS 'Nationality';
-COMMENT ON COLUMN sanctions_list_entry.countries IS 'Associated countries';
-COMMENT ON COLUMN sanctions_list_entry.identifiers IS 'Passports, national ids, IMO numbers, registration numbers';
+COMMENT ON COLUMN sanctions_list_entry.countries IS 'Associated countries (ISO 3166-1 alpha-2)';
+COMMENT ON COLUMN sanctions_list_entry.identifiers IS 'Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)';
 COMMENT ON COLUMN sanctions_list_entry.programs IS 'Sanctions programmes, e.g. SDGT, UKRAINE-EO13662';
 COMMENT ON COLUMN sanctions_list_entry.pep_level IS 'PEP class for PEP lists';
 COMMENT ON COLUMN sanctions_list_entry.remarks IS 'Publisher remarks';
@@ -128,6 +130,59 @@ COMMENT ON COLUMN sanctions_list_entry.custom_field_5 IS 'Tenant-defined custom 
 CREATE INDEX ix_sanctions_list_entry_sanctions_list_id ON sanctions_list_entry (sanctions_list_id);
 CREATE INDEX ix_sanctions_list_entry_primary_name ON sanctions_list_entry (primary_name);
 CREATE TRIGGER trg_sanctions_list_entry_touch BEFORE UPDATE ON sanctions_list_entry FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- screening_batch: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+CREATE TABLE screening_batch (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  trigger                      varchar(40) NOT NULL CHECK (trigger IN ('ONBOARDING', 'CUSTOMER_CHANGE', 'PERIODIC_RESCREEN', 'LIST_UPDATE', 'PAYMENT', 'MANUAL')),
+  status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
+  total                        integer NOT NULL DEFAULT 0,
+  processed                    integer NOT NULL DEFAULT 0,
+  potential_matches            integer NOT NULL DEFAULT 0,
+  errors                       integer NOT NULL DEFAULT 0,
+  subjects                     jsonb,
+  started_at                   timestamptz,
+  finished_at                  timestamptz,
+  error                        text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE screening_batch IS 'Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)';
+COMMENT ON COLUMN screening_batch.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN screening_batch.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN screening_batch.created_at IS 'Creation time';
+COMMENT ON COLUMN screening_batch.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN screening_batch.updated_at IS 'Last update time';
+COMMENT ON COLUMN screening_batch.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN screening_batch.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN screening_batch.trigger IS 'Why the batch ran';
+COMMENT ON COLUMN screening_batch.status IS 'Status';
+COMMENT ON COLUMN screening_batch.total IS 'Subjects submitted';
+COMMENT ON COLUMN screening_batch.processed IS 'Subjects screened';
+COMMENT ON COLUMN screening_batch.potential_matches IS 'Subjects with potential matches';
+COMMENT ON COLUMN screening_batch.errors IS 'Subjects that failed';
+COMMENT ON COLUMN screening_batch.subjects IS 'Submitted subjects (processed asynchronously)';
+COMMENT ON COLUMN screening_batch.started_at IS 'Start';
+COMMENT ON COLUMN screening_batch.finished_at IS 'End';
+COMMENT ON COLUMN screening_batch.error IS 'Error details';
+COMMENT ON COLUMN screening_batch.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN screening_batch.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN screening_batch.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN screening_batch.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN screening_batch.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_screening_batch_tenant ON screening_batch (tenant_id, created_at);
+ALTER TABLE screening_batch ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON screening_batch USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_screening_batch_touch BEFORE UPDATE ON screening_batch FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- screening_request: A request to screen a customer, related party, payee or payment
 CREATE TABLE screening_request (
@@ -151,6 +206,9 @@ CREATE TABLE screening_request (
   threshold                    numeric(18,10) NOT NULL DEFAULT 0.85,
   requested_by_service         varchar(64) NOT NULL,
   correlation_id               varchar(128),
+  screening_batch_id           uuid REFERENCES screening_batch(id),
+  status                       varchar(40) CHECK (status IN ('PENDING', 'CLEAR', 'POTENTIAL_MATCH', 'CONFIRMED_MATCH', 'FALSE_POSITIVE', 'ERROR')),
+  screening_result_id          uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -174,10 +232,13 @@ COMMENT ON COLUMN screening_request.country IS 'Country of residence / registrat
 COMMENT ON COLUMN screening_request.nationality IS 'Nationality';
 COMMENT ON COLUMN screening_request.identifiers IS 'Identity document numbers [PII]';
 COMMENT ON COLUMN screening_request.payload IS 'Payment fields screened (parties, agents, free text)';
-COMMENT ON COLUMN screening_request.list_codes IS 'Lists to screen against (empty = tenant default)';
+COMMENT ON COLUMN screening_request.list_codes IS 'Lists to screen against (empty = all active lists visible to the tenant)';
 COMMENT ON COLUMN screening_request.threshold IS 'Minimum match score that raises a hit';
 COMMENT ON COLUMN screening_request.requested_by_service IS 'Calling service';
 COMMENT ON COLUMN screening_request.correlation_id IS 'Trace / saga correlation id';
+COMMENT ON COLUMN screening_request.screening_batch_id IS 'Batch the request belongs to';
+COMMENT ON COLUMN screening_request.status IS 'Outcome of the screening';
+COMMENT ON COLUMN screening_request.screening_result_id IS 'Result produced by the screening';
 COMMENT ON COLUMN screening_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN screening_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN screening_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -186,6 +247,7 @@ COMMENT ON COLUMN screening_request.custom_field_5 IS 'Tenant-defined custom fie
 CREATE INDEX ix_screening_request_tenant ON screening_request (tenant_id, created_at);
 CREATE INDEX ix_screening_request_subject_id ON screening_request (subject_id);
 CREATE INDEX ix_screening_request_correlation_id ON screening_request (correlation_id);
+CREATE INDEX ix_screening_request_screening_batch_id ON screening_request (screening_batch_id);
 ALTER TABLE screening_request ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON screening_request USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_screening_request_touch BEFORE UPDATE ON screening_request FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -207,6 +269,7 @@ CREATE TABLE screening_result (
   match_count                  integer NOT NULL DEFAULT 0,
   is_pep                       boolean NOT NULL DEFAULT false,
   has_adverse_media            boolean NOT NULL DEFAULT false,
+  suppressed_count             integer NOT NULL DEFAULT 0,
   reviewed_by                  varchar(64),
   reviewed_at                  timestamptz,
   decision_reason              text,
@@ -231,11 +294,12 @@ COMMENT ON COLUMN screening_result.row_version IS 'Optimistic lock version; send
 COMMENT ON COLUMN screening_result.screening_request_id IS 'Request';
 COMMENT ON COLUMN screening_result.subject_type IS 'What was screened';
 COMMENT ON COLUMN screening_result.subject_id IS 'Business id of the subject';
-COMMENT ON COLUMN screening_result.status IS 'Outcome';
+COMMENT ON COLUMN screening_result.status IS 'Outcome (changed only by /review)';
 COMMENT ON COLUMN screening_result.highest_score IS 'Best match score 0..1';
 COMMENT ON COLUMN screening_result.match_count IS 'Number of hits';
 COMMENT ON COLUMN screening_result.is_pep IS 'PEP hit confirmed';
 COMMENT ON COLUMN screening_result.has_adverse_media IS 'Adverse media found';
+COMMENT ON COLUMN screening_result.suppressed_count IS 'Candidate matches suppressed by the good-guy whitelist';
 COMMENT ON COLUMN screening_result.reviewed_by IS 'Compliance reviewer';
 COMMENT ON COLUMN screening_result.reviewed_at IS 'Review time';
 COMMENT ON COLUMN screening_result.decision_reason IS 'Reviewer rationale';
@@ -271,6 +335,7 @@ CREATE TABLE screening_match (
   matched_fields               jsonb,
   disposition                  varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (disposition IN ('PENDING', 'TRUE_MATCH', 'FALSE_POSITIVE')),
   disposition_reason           text,
+  dispositioned_by             varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -291,8 +356,9 @@ COMMENT ON COLUMN screening_match.matched_name IS 'Name that matched';
 COMMENT ON COLUMN screening_match.match_score IS 'Match score 0..1';
 COMMENT ON COLUMN screening_match.match_algorithm IS 'JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID';
 COMMENT ON COLUMN screening_match.matched_fields IS 'Fields compared and their individual scores';
-COMMENT ON COLUMN screening_match.disposition IS 'Reviewer decision';
+COMMENT ON COLUMN screening_match.disposition IS 'Reviewer decision (clearing a TRUE_MATCH needs a second reviewer)';
 COMMENT ON COLUMN screening_match.disposition_reason IS 'Rationale';
+COMMENT ON COLUMN screening_match.dispositioned_by IS 'Reviewer who set the disposition';
 COMMENT ON COLUMN screening_match.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN screening_match.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN screening_match.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

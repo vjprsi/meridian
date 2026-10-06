@@ -929,26 +929,52 @@ channels:
         $ref: '#/components/messages/RiskFraudScoreBlocked'
       RiskFraudRuleActivated:
         $ref: '#/components/messages/RiskFraudRuleActivated'
+      RiskFraudRuleDeactivated:
+        $ref: '#/components/messages/RiskFraudRuleDeactivated'
+      RiskFraudRuleChanged:
+        $ref: '#/components/messages/RiskFraudRuleChanged'
       RiskFraudAlertRaised:
         $ref: '#/components/messages/RiskFraudAlertRaised'
+      RiskFraudAlertAssigned:
+        $ref: '#/components/messages/RiskFraudAlertAssigned'
+      RiskFraudAlertCustomerContacted:
+        $ref: '#/components/messages/RiskFraudAlertCustomerContacted'
+      RiskFraudAlertEscalated:
+        $ref: '#/components/messages/RiskFraudAlertEscalated'
       RiskFraudAlertResolved:
         $ref: '#/components/messages/RiskFraudAlertResolved'
       RiskDeviceBlocked:
         $ref: '#/components/messages/RiskDeviceBlocked'
+      RiskDeviceUnblocked:
+        $ref: '#/components/messages/RiskDeviceUnblocked'
+      RiskDeviceTrusted:
+        $ref: '#/components/messages/RiskDeviceTrusted'
+      RiskFraudListEntryAdded:
+        $ref: '#/components/messages/RiskFraudListEntryAdded'
       RiskFraudFeedbackRecorded:
         $ref: '#/components/messages/RiskFraudFeedbackRecorded'
       RiskTmScenarioVersionActivated:
         $ref: '#/components/messages/RiskTmScenarioVersionActivated'
+      RiskTmScenarioRetired:
+        $ref: '#/components/messages/RiskTmScenarioRetired'
       RiskTmRunCompleted:
         $ref: '#/components/messages/RiskTmRunCompleted'
+      RiskTmRunCancelled:
+        $ref: '#/components/messages/RiskTmRunCancelled'
       RiskTmAlertRaised:
         $ref: '#/components/messages/RiskTmAlertRaised'
+      RiskTmAlertAssigned:
+        $ref: '#/components/messages/RiskTmAlertAssigned'
       RiskTmAlertClosed:
         $ref: '#/components/messages/RiskTmAlertClosed'
       RiskTmAlertEscalated:
         $ref: '#/components/messages/RiskTmAlertEscalated'
       RiskCustomerRiskRatingChanged:
         $ref: '#/components/messages/RiskCustomerRiskRatingChanged'
+      RiskCustomerRiskRatingOverrideRequested:
+        $ref: '#/components/messages/RiskCustomerRiskRatingOverrideRequested'
+      RiskCustomerRiskRatingOverrideRejected:
+        $ref: '#/components/messages/RiskCustomerRiskRatingOverrideRejected'
       RiskGraphEntityMuleSuspected:
         $ref: '#/components/messages/RiskGraphEntityMuleSuspected'
       RiskSanctionsListUpdated:
@@ -961,28 +987,54 @@ channels:
         $ref: '#/components/messages/RiskScreeningConfirmedMatch'
       RiskScreeningCleared:
         $ref: '#/components/messages/RiskScreeningCleared'
+      RiskScreeningWhitelistAdded:
+        $ref: '#/components/messages/RiskScreeningWhitelistAdded'
+      RiskScreeningBatchCompleted:
+        $ref: '#/components/messages/RiskScreeningBatchCompleted'
       RiskAmlCaseOpened:
         $ref: '#/components/messages/RiskAmlCaseOpened'
+      RiskAmlCaseAssigned:
+        $ref: '#/components/messages/RiskAmlCaseAssigned'
       RiskAmlCaseEscalated:
         $ref: '#/components/messages/RiskAmlCaseEscalated'
+      RiskAmlCaseAlertLinked:
+        $ref: '#/components/messages/RiskAmlCaseAlertLinked'
       RiskAmlCaseClosed:
         $ref: '#/components/messages/RiskAmlCaseClosed'
+      RiskAmlCaseReopened:
+        $ref: '#/components/messages/RiskAmlCaseReopened'
       RiskAmlCaseDispositionRecorded:
         $ref: '#/components/messages/RiskAmlCaseDispositionRecorded'
+      RiskAmlCaseDispositionApproved:
+        $ref: '#/components/messages/RiskAmlCaseDispositionApproved'
+      RiskAmlCaseDispositionRejected:
+        $ref: '#/components/messages/RiskAmlCaseDispositionRejected'
+      RiskSarReportSubmittedForApproval:
+        $ref: '#/components/messages/RiskSarReportSubmittedForApproval'
       RiskSarReportApproved:
         $ref: '#/components/messages/RiskSarReportApproved'
       RiskSarReportFiled:
         $ref: '#/components/messages/RiskSarReportFiled'
       RiskSarReportAcknowledged:
         $ref: '#/components/messages/RiskSarReportAcknowledged'
+      RiskSarReportRejected:
+        $ref: '#/components/messages/RiskSarReportRejected'
       RiskLimitRuleActivated:
         $ref: '#/components/messages/RiskLimitRuleActivated'
       RiskLimitRuleChanged:
         $ref: '#/components/messages/RiskLimitRuleChanged'
       RiskLimitBreached:
         $ref: '#/components/messages/RiskLimitBreached'
+      RiskLimitRuleDeactivated:
+        $ref: '#/components/messages/RiskLimitRuleDeactivated'
+      RiskLimitUsageReset:
+        $ref: '#/components/messages/RiskLimitUsageReset'
+      RiskLimitOverrideRequested:
+        $ref: '#/components/messages/RiskLimitOverrideRequested'
       RiskLimitOverrideApproved:
         $ref: '#/components/messages/RiskLimitOverrideApproved'
+      RiskLimitOverrideRejected:
+        $ref: '#/components/messages/RiskLimitOverrideRejected'
       RiskLimitOverrideExpired:
         $ref: '#/components/messages/RiskLimitOverrideExpired'
       RiskAppetiteMetricBreached:
@@ -10784,6 +10836,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/FraudRule'
+    RiskFraudRuleDeactivated:
+      name: risk.fraud_rule.deactivated
+      title: A fraud rule was disabled
+      summary: A fraud rule was disabled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.fraud_rule.deactivated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FraudRule'
+    RiskFraudRuleChanged:
+      name: risk.fraud_rule.changed
+      title: A fraud rule definition changed (new rule_version)
+      summary: A fraud rule definition changed (new rule_version)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.fraud_rule.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FraudRule'
     RiskFraudAlertRaised:
       name: risk.fraud_alert.raised
       title: A fraud alert was raised
@@ -10794,6 +10890,72 @@ components:
           ce_type:
             type: string
             const: risk.fraud_alert.raised
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FraudAlert'
+    RiskFraudAlertAssigned:
+      name: risk.fraud_alert.assigned
+      title: A fraud alert was assigned to an analyst
+      summary: A fraud alert was assigned to an analyst
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.fraud_alert.assigned
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FraudAlert'
+    RiskFraudAlertCustomerContacted:
+      name: risk.fraud_alert.customer_contacted
+      title: A confirm-or-deny message was sent to the customer
+      summary: A confirm-or-deny message was sent to the customer
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.fraud_alert.customer_contacted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FraudAlert'
+    RiskFraudAlertEscalated:
+      name: risk.fraud_alert.escalated
+      title: A fraud alert was escalated to a case
+      summary: A fraud alert was escalated to a case
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.fraud_alert.escalated
           ce_source:
             type: string
           ce_id:
@@ -10850,6 +11012,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/DeviceFingerprint'
+    RiskDeviceUnblocked:
+      name: risk.device.unblocked
+      title: A device was unblocked
+      summary: A device was unblocked
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.device.unblocked
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DeviceFingerprint'
+    RiskDeviceTrusted:
+      name: risk.device.trusted
+      title: A device was marked trusted
+      summary: A device was marked trusted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.device.trusted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DeviceFingerprint'
+    RiskFraudListEntryAdded:
+      name: risk.fraud_list_entry.added
+      title: A value was added to a fraud list
+      summary: A value was added to a fraud list
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.fraud_list_entry.added
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/FraudListEntry'
     RiskFraudFeedbackRecorded:
       name: risk.fraud_feedback.recorded
       title: An outcome label was recorded
@@ -10894,6 +11122,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/TmScenarioVersion'
+    RiskTmScenarioRetired:
+      name: risk.tm_scenario.retired
+      title: A scenario was retired
+      summary: A scenario was retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.tm_scenario.retired
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TmScenario'
     RiskTmRunCompleted:
       name: risk.tm_run.completed
       title: A monitoring run finished
@@ -10916,6 +11166,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/TmRun'
+    RiskTmRunCancelled:
+      name: risk.tm_run.cancelled
+      title: A monitoring run was cancelled
+      summary: A monitoring run was cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.tm_run.cancelled
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TmRun'
     RiskTmAlertRaised:
       name: risk.tm_alert.raised
       title: A transaction monitoring alert was raised
@@ -10926,6 +11198,28 @@ components:
           ce_type:
             type: string
             const: risk.tm_alert.raised
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/TmAlert'
+    RiskTmAlertAssigned:
+      name: risk.tm_alert.assigned
+      title: A TM alert was assigned to an analyst
+      summary: A TM alert was assigned to an analyst
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.tm_alert.assigned
           ce_source:
             type: string
           ce_id:
@@ -10992,6 +11286,50 @@ components:
           ce_type:
             type: string
             const: risk.customer_risk_rating.changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerRiskRating'
+    RiskCustomerRiskRatingOverrideRequested:
+      name: risk.customer_risk_rating.override_requested
+      title: A rating override awaits approval
+      summary: A rating override awaits approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.customer_risk_rating.override_requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CustomerRiskRating'
+    RiskCustomerRiskRatingOverrideRejected:
+      name: risk.customer_risk_rating.override_rejected
+      title: A rating override was rejected
+      summary: A rating override was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.customer_risk_rating.override_rejected
           ce_source:
             type: string
           ce_id:
@@ -11136,6 +11474,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ScreeningResult'
+    RiskScreeningWhitelistAdded:
+      name: risk.screening_whitelist.added
+      title: A good-guy whitelist entry was added
+      summary: A good-guy whitelist entry was added
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.screening_whitelist.added
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ScreeningWhitelist'
+    RiskScreeningBatchCompleted:
+      name: risk.screening_batch.completed
+      title: A batch screening finished
+      summary: A batch screening finished
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.screening_batch.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ScreeningBatch'
     RiskAmlCaseOpened:
       name: risk.aml_case.opened
       title: An investigation case was opened
@@ -11146,6 +11528,28 @@ components:
           ce_type:
             type: string
             const: risk.aml_case.opened
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AmlCase'
+    RiskAmlCaseAssigned:
+      name: risk.aml_case.assigned
+      title: A case was assigned to an investigator
+      summary: A case was assigned to an investigator
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.aml_case.assigned
           ce_source:
             type: string
           ce_id:
@@ -11180,6 +11584,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AmlCase'
+    RiskAmlCaseAlertLinked:
+      name: risk.aml_case.alert_linked
+      title: An alert or referral was linked to a case
+      summary: An alert or referral was linked to a case
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.aml_case.alert_linked
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AmlCaseAlert'
     RiskAmlCaseClosed:
       name: risk.aml_case.closed
       title: A case was closed with a disposition
@@ -11202,10 +11628,32 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AmlCase'
+    RiskAmlCaseReopened:
+      name: risk.aml_case.reopened
+      title: A closed case was reopened
+      summary: A closed case was reopened
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.aml_case.reopened
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AmlCase'
     RiskAmlCaseDispositionRecorded:
       name: risk.aml_case_disposition.recorded
-      title: A case disposition was recorded
-      summary: A case disposition was recorded
+      title: A case disposition was proposed
+      summary: A case disposition was proposed
       headers:
         type: object
         properties:
@@ -11224,6 +11672,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AmlCaseDisposition'
+    RiskAmlCaseDispositionApproved:
+      name: risk.aml_case_disposition.approved
+      title: A case disposition was approved
+      summary: A case disposition was approved
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.aml_case_disposition.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AmlCaseDisposition'
+    RiskAmlCaseDispositionRejected:
+      name: risk.aml_case_disposition.rejected
+      title: A case disposition was rejected
+      summary: A case disposition was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.aml_case_disposition.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AmlCaseDisposition'
+    RiskSarReportSubmittedForApproval:
+      name: risk.sar_report.submitted_for_approval
+      title: A SAR/STR was sent to the MLRO
+      summary: A SAR/STR was sent to the MLRO
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.sar_report.submitted_for_approval
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/SarReport'
     RiskSarReportApproved:
       name: risk.sar_report.approved
       title: A SAR/STR was approved
@@ -11278,6 +11792,28 @@ components:
           ce_type:
             type: string
             const: risk.sar_report.acknowledged
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/SarReport'
+    RiskSarReportRejected:
+      name: risk.sar_report.rejected
+      title: The FIU rejected a report
+      summary: The FIU rejected a report
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.sar_report.rejected
           ce_source:
             type: string
           ce_id:
@@ -11356,6 +11892,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/LimitCheck'
+    RiskLimitRuleDeactivated:
+      name: risk.limit_rule.deactivated
+      title: A limit rule was deactivated
+      summary: A limit rule was deactivated
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.limit_rule.deactivated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LimitRule'
+    RiskLimitUsageReset:
+      name: risk.limit_usage.reset
+      title: A usage counter was reset by operations
+      summary: A usage counter was reset by operations
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.limit_usage.reset
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LimitUsage'
+    RiskLimitOverrideRequested:
+      name: risk.limit_override.requested
+      title: A limit override awaits approval
+      summary: A limit override awaits approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.limit_override.requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LimitOverride'
     RiskLimitOverrideApproved:
       name: risk.limit_override.approved
       title: A limit override was approved
@@ -11366,6 +11968,28 @@ components:
           ce_type:
             type: string
             const: risk.limit_override.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/LimitOverride'
+    RiskLimitOverrideRejected:
+      name: risk.limit_override.rejected
+      title: A limit override was rejected
+      summary: A limit override was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.limit_override.rejected
           ce_source:
             type: string
           ce_id:
@@ -49055,15 +49679,15 @@ components:
           - STEP_UP
           description: Decision returned to the caller
         reason_codes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ordered reason codes explaining the decision
         features:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Feature values used (for audit and explainability)
+          description: Feature values used (for audit, explainability and rule backtesting)
         shadow_decision:
           type:
           - string
@@ -49084,6 +49708,26 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        session_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: App session (links behavioural signals)
+        fraud_alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Alert raised for REVIEW / BLOCK decisions
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Client key; a replay returns the original evaluation
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -49215,7 +49859,8 @@ components:
           - SHADOW
           - ACTIVE
           - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
+          description: Lifecycle (changed only by activate/deactivate); SHADOW logs hits without acting
+          readOnly: true
         rule_version:
           type: integer
           format: int32
@@ -49223,9 +49868,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type:
@@ -49251,6 +49896,13 @@ components:
           - 'null'
           maxLength: 64
           description: Checker
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the rule was disabled
           readOnly: true
         custom_field_1:
           type:
@@ -49380,7 +50032,14 @@ components:
           - FALSE_POSITIVE
           - ESCALATED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reason codes of the evaluation that raised the alert
         typology:
           type:
           - string
@@ -49426,12 +50085,27 @@ components:
           description: Review deadline
         customer_contacted:
           type: boolean
-          description: Customer confirmation obtained
+          description: Customer confirm-or-deny message sent
+          readOnly: true
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Confirm-or-deny notification
+          readOnly: true
         resolution:
           type:
           - string
           - 'null'
           description: Resolution notes
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Analyst who resolved
+          readOnly: true
         resolved_at:
           type:
           - string
@@ -49445,6 +50119,7 @@ components:
           - 'null'
           format: uuid
           description: Case opened from this alert
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -49592,10 +50267,19 @@ components:
           readOnly: true
         trusted:
           type: boolean
-          description: Marked trusted after strong authentication
+          description: Marked trusted after strong authentication (use /trust)
+          readOnly: true
         blocked:
           type: boolean
-          description: Blocked device
+          description: Blocked device (use /block and /unblock)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the last trust / block / unblock
+          readOnly: true
         first_seen_at:
           type: string
           format: date-time
@@ -49652,6 +50336,113 @@ components:
       - blocked
       - first_seen_at
       - last_seen_at
+    FraudListEntry:
+      type: object
+      description: A value on a fraud list (stored hashed; masked value for display)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        fraud_list_id:
+          type: string
+          format: uuid
+          description: List
+        value_hash:
+          type: string
+          maxLength: 128
+          description: SHA-256 of the normalised value
+        value_masked:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Masked value for display
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why it was added
+        source:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: ANALYST, CONSORTIUM, CHARGEBACK, AUTOMATED
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Automatic removal time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - fraud_list_id
+      - value_hash
     FraudFeedback:
       type: object
       description: Confirmed outcome label for a scored event, used for model training and rule tuning
@@ -49850,12 +50641,14 @@ components:
           - TUNING
           - RETIRED
           description: Lifecycle
+          readOnly: true
         effective_from:
           type:
           - string
           - 'null'
           format: date-time
-          description: Effective from
+          description: Effective from (set on activation)
+          readOnly: true
         tuning_rationale:
           type:
           - string
@@ -49915,6 +50708,154 @@ components:
       - lookback_days
       - risk_weight
       - status
+    TmScenario:
+      type: object
+      description: AML monitoring scenario (structuring, rapid movement, mule, dormant reactivation, ...)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Scenario code
+        name:
+          type: string
+          maxLength: 160
+          description: Scenario name
+        scenario_type:
+          type: string
+          enum:
+          - STRUCTURING
+          - RAPID_MOVEMENT
+          - MULE_ACCOUNT
+          - DORMANT_REACTIVATION
+          - HIGH_RISK_JURISDICTION
+          - LARGE_CASH
+          - ROUND_AMOUNTS
+          - FAN_IN
+          - FAN_OUT
+          - PROFILE_DEVIATION
+          - TERRORIST_FINANCING
+          - CUSTOM
+          description: Typology
+        description:
+          type:
+          - string
+          - 'null'
+          description: Logic description for auditors
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - TUNING
+          - RETIRED
+          description: Lifecycle (changed only by activate / retire)
+          readOnly: true
+        customer_segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Segment it applies to (empty = all)
+        run_mode:
+          type: string
+          enum:
+          - STREAMING
+          - BATCH
+          - BACKTEST
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
+        active_version:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Version currently in force
+          readOnly: true
+        owner:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Accountable owner (MLRO team)
+        retired_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the scenario was retired
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - scenario_type
+      - status
+      - run_mode
     TmRun:
       type: object
       description: Execution of scenarios in batch, backtest or a streaming checkpoint window
@@ -49966,6 +50907,27 @@ components:
           - 'null'
           format: uuid
           description: Single scenario version (empty = all active)
+        customers_evaluated:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Customers evaluated
+          readOnly: true
+        results:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Per-scenario figures (alerts, would-be alerts for backtests)
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the run was cancelled
+          readOnly: true
         from_ts:
           type: string
           format: date-time
@@ -50140,7 +51102,14 @@ components:
           - ESCALATED
           - CLOSED_NO_ACTION
           - CLOSED_CASE_OPENED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        reason:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Scenario figures that triggered the alert (thresholds vs observed)
         total_amount:
           type: string
           format: decimal
@@ -50180,12 +51149,14 @@ components:
           - 'null'
           format: uuid
           description: Case opened from the alert
+          readOnly: true
         closed_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason when closed without a case
+          readOnly: true
         closed_at:
           type:
           - string
@@ -50288,15 +51259,18 @@ components:
           - MEDIUM
           - HIGH
           - PROHIBITED
-          description: AML risk level
+          description: AML risk level (calculated)
+          readOnly: true
         score:
           type: integer
           format: int32
-          description: Risk score 0-1000
+          description: Risk score 0-1000 (calculated)
+          readOnly: true
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type:
           - string
@@ -50307,6 +51281,7 @@ components:
           type: string
           format: date
           description: Periodic review due date (EDD for high risk)
+          readOnly: true
         override_rating:
           type:
           - string
@@ -50316,12 +51291,49 @@ components:
           - MEDIUM
           - HIGH
           - PROHIBITED
-          description: Manual override
+          description: Manual override (in force once approved)
+          readOnly: true
         override_reason:
           type:
           - string
           - 'null'
           description: Override justification
+          readOnly: true
+        override_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Maker-checker status of the latest override
+          readOnly: true
+        override_requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker of the override
+          readOnly: true
+        override_approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker of the override
+          readOnly: true
+        effective_rating:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          description: 'Rating in force: approved override, else the calculated rating'
+          readOnly: true
         rated_at:
           type: string
           format: date-time
@@ -50541,7 +51553,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
+          description: Owning tenant (lists created through the API); empty for platform-managed global lists
+          readOnly: true
         source:
           type: string
           enum:
@@ -50588,6 +51601,13 @@ components:
           - 'null'
           format: int32
           description: Active entries
+          readOnly: true
+        content_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last loaded file (unchanged files are skipped)
           readOnly: true
         source_url:
           type:
@@ -50703,7 +51723,8 @@ components:
           - CONFIRMED_MATCH
           - FALSE_POSITIVE
           - ERROR
-          description: Outcome
+          description: Outcome (changed only by /review)
+          readOnly: true
         highest_score:
           type: string
           format: decimal
@@ -50724,29 +51745,38 @@ components:
           type: boolean
           description: Adverse media found
           readOnly: true
+        suppressed_count:
+          type: integer
+          format: int32
+          description: Candidate matches suppressed by the good-guy whitelist
+          readOnly: true
         reviewed_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Compliance reviewer
+          readOnly: true
         reviewed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Review time
+          readOnly: true
         decision_reason:
           type:
           - string
           - 'null'
           description: Reviewer rationale
+          readOnly: true
         aml_case_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Case opened for a confirmed match
+          readOnly: true
         rescreen_due_at:
           type:
           - string
@@ -50803,6 +51833,259 @@ components:
       - match_count
       - is_pep
       - has_adverse_media
+      - suppressed_count
+    ScreeningWhitelist:
+      type: object
+      description: Good-guy list suppressing a known false positive for one subject and list entry
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        subject_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - RELATED_PARTY
+          - PAYMENT
+          - PAYEE
+          - MERCHANT
+          - AGENT
+          - EMPLOYEE
+          description: Subject type
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        sanctions_list_entry_id:
+          type: string
+          format: uuid
+          description: Entry that is suppressed
+        reason:
+          type: string
+          description: Why this is a false positive
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Approver
+          readOnly: true
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Review / expiry date
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - subject_type
+      - subject_id
+      - sanctions_list_entry_id
+      - reason
+    ScreeningBatch:
+      type: object
+      description: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          description: Why the batch ran
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        total:
+          type: integer
+          format: int32
+          description: Subjects submitted
+          readOnly: true
+        processed:
+          type: integer
+          format: int32
+          description: Subjects screened
+          readOnly: true
+        potential_matches:
+          type: integer
+          format: int32
+          description: Subjects with potential matches
+          readOnly: true
+        errors:
+          type: integer
+          format: int32
+          description: Subjects that failed
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Error details
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - trigger
+      - status
+      - total
+      - processed
+      - potential_matches
+      - errors
     AmlCase:
       type: object
       description: An AML / fraud / sanctions investigation case consolidating related alerts
@@ -50866,7 +52149,8 @@ components:
           - ESCALATED
           - SAR_FILED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         priority:
           type: string
           enum:
@@ -50938,7 +52222,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: MLRO or senior reviewer
+          description: MLRO or senior reviewer (use /escalate)
+          readOnly: true
+        escalation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the case was escalated
+          readOnly: true
         closed_at:
           type:
           - string
@@ -50954,9 +52245,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags
         custom_field_1:
           type:
@@ -50999,9 +52290,9 @@ components:
       - priority
       - title
       - opened_at
-    AmlCaseDisposition:
+    AmlCaseAlert:
       type: object
-      description: Final decision on a case with rationale and approval. Append-only.
+      description: Link between a case and an alert or referral that contributed to it
       properties:
         id:
           type: string
@@ -51020,43 +52311,55 @@ components:
           maxLength: 64
           description: Principal that created the row
           readOnly: true
-        aml_case_id:
+        updated_at:
           type: string
-          format: uuid
-          description: Case
-        disposition:
-          type: string
-          enum:
-          - NO_SUSPICION
-          - SAR_FILED
-          - EXIT_RELATIONSHIP
-          - ENHANCED_MONITORING
-          - ACCOUNT_RESTRICTED
-          - REFERRED_TO_LAW_ENFORCEMENT
-          description: Decision
-        rationale:
-          type: string
-          description: Rationale
-        decided_by:
-          type: string
-          maxLength: 64
-          description: Investigator (maker)
-        approved_by:
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: MLRO (checker)
-        decided_at:
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        aml_case_id:
           type: string
-          format: date-time
-          description: Decision time
-        actions_taken:
+          format: uuid
+          description: Case
+        source:
+          type: string
+          enum:
+          - FRAUD_ALERT
+          - TM_ALERT
+          - SCREENING_RESULT
+          - MANUAL_REFERRAL
+          - LAW_ENFORCEMENT_REQUEST
+          - WHISTLEBLOWER
+          description: Alert source
+        alert_id:
           type:
-          - object
+          - string
           - 'null'
-          additionalProperties: true
-          description: Restrictions applied, relationship exit, monitoring changes
+          format: uuid
+          description: Alert / result id in its service
+        summary:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Alert summary
+        added_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why it was added
         custom_field_1:
           type:
           - string
@@ -51090,11 +52393,150 @@ components:
       required:
       - id
       - created_at
+      - updated_at
+      - row_version
+      - aml_case_id
+      - source
+    AmlCaseDisposition:
+      type: object
+      description: Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        aml_case_id:
+          type: string
+          format: uuid
+          description: Case
+        disposition:
+          type: string
+          enum:
+          - NO_SUSPICION
+          - SAR_FILED
+          - EXIT_RELATIONSHIP
+          - ENHANCED_MONITORING
+          - ACCOUNT_RESTRICTED
+          - REFERRED_TO_LAW_ENFORCEMENT
+          description: Decision
+        rationale:
+          type: string
+          description: Rationale
+        decided_by:
+          type: string
+          maxLength: 64
+          description: Investigator (maker)
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: MLRO (checker)
+          readOnly: true
+        decided_at:
+          type: string
+          format: date-time
+          description: Decision time
+          readOnly: true
+        actions_taken:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Restrictions applied, relationship exit, monitoring changes
+        approval_status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Maker-checker status
+          readOnly: true
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          description: Checker comment or rejection reason
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval / rejection time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
       - aml_case_id
       - disposition
       - rationale
       - decided_by
       - decided_at
+      - approval_status
     SarReport:
       type: object
       description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
@@ -51166,7 +52608,8 @@ components:
           - SUBMITTED
           - ACKNOWLEDGED
           - REJECTED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         narrative:
           type:
           - string
@@ -51206,22 +52649,29 @@ components:
           description: Suspicious activity end
         subjects:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Persons and entities reported
+          items: {}
+          description: Persons and entities reported ({name, type, id_number, country, role})
         transactions:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Transactions reported
+          items: {}
+          description: Transactions reported ({transaction_id, date, amount, currency, from, to, description})
         filing_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Regulatory deadline
+        filing_channel:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: API, EXPORT or PORTAL
+          readOnly: true
         export_document_id:
           type:
           - string
@@ -51229,24 +52679,20 @@ components:
           format: uuid
           description: goAML XML / FinCEN BSA XML file
           readOnly: true
-        regulator_reference:
-          type:
-          - string
-          - 'null'
-          maxLength: 128
-          description: FIU reference number
         prepared_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Preparer
+          description: Preparer (submitter for approval)
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: MLRO approval
+          readOnly: true
         submitted_at:
           type:
           - string
@@ -51261,11 +52707,19 @@ components:
           format: date-time
           description: FIU acknowledgement time
           readOnly: true
+        regulator_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: FIU reference number
+          readOnly: true
         rejection_reason:
           type:
           - string
           - 'null'
           description: FIU rejection reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -51453,10 +52907,11 @@ components:
           - DRAFT
           - ACTIVE
           - INACTIVE
-          description: Status
+          description: Status (changed only by activate / deactivate)
+          readOnly: true
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type:
           - string
@@ -51475,6 +52930,19 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who activated the rule
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the rule was deactivated
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -51540,10 +53008,27 @@ components:
           maxLength: 64
           description: Principal that created the row
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
         subject_type:
           type: string
           maxLength: 32
-          description: Primary subject type
+          description: 'Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT'
         subject_id:
           type: string
           format: uuid
@@ -51553,7 +53038,25 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Customer
+          description: Customer (customer-level limits are counted per customer)
+        kyc_tier:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Customer KYC tier code (matches KYC_TIER limits)
+        customer_segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Customer segment (matches CUSTOMER_SEGMENT limits)
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product (matches PRODUCT limits)
         transaction_type:
           type: string
           maxLength: 40
@@ -51585,9 +53088,18 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        current_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance before the transaction (BALANCE limits)
         allowed:
           type: boolean
           description: Whether the transaction is within limits
+          readOnly: true
         status:
           type: string
           enum:
@@ -51596,7 +53108,9 @@ components:
           - RELEASED
           - REJECTED
           - DRY_RUN
-          description: Reservation status at creation
+          - EXPIRED
+          description: Reservation status (RESERVED until committed, released or expired)
+          readOnly: true
         action:
           type:
           - string
@@ -51606,23 +53120,50 @@ components:
           - REVIEW
           - STEP_UP
           - ALLOW_AND_ALERT
-          description: Action when a limit was breached
+          description: Strictest action of the breached limits
+          readOnly: true
         evaluated_rule_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Rules evaluated
+          readOnly: true
         breached_rule_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Rules breached
+          readOnly: true
         remaining:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
+          items: {}
+          description: 'Per rule: limit, used, reserved, remaining amount / count for the period'
+          readOnly: true
+        committed_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount committed
+          readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Commit / release time
+          readOnly: true
+        release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the reservation was released
+          readOnly: true
         idempotency_key:
           type: string
           maxLength: 128
@@ -51639,13 +53180,14 @@ components:
           - string
           - 'null'
           format: date-time
-          description: Reservation expiry (auto-release)
+          description: Reservation expiry (default 15 minutes; released by /expire-reservations)
         latency_ms:
           type:
           - integer
           - 'null'
           format: int32
           description: Evaluation time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -51679,6 +53221,8 @@ components:
       required:
       - id
       - created_at
+      - updated_at
+      - row_version
       - subject_type
       - subject_id
       - transaction_type
@@ -51688,6 +53232,144 @@ components:
       - status
       - evaluated_rule_ids
       - idempotency_key
+    LimitUsage:
+      type: object
+      description: Usage counter of a limit for one subject and period
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        limit_rule_id:
+          type: string
+          format: uuid
+          description: Limit
+        subject_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject
+        period_start:
+          type: string
+          format: date-time
+          description: Period start
+        period_end:
+          type: string
+          format: date-time
+          description: Period end
+        used_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Committed amount
+          readOnly: true
+        used_count:
+          type: integer
+          format: int32
+          description: Committed count
+          readOnly: true
+        reserved_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reserved, not yet committed
+          readOnly: true
+        reserved_count:
+          type: integer
+          format: int32
+          description: Reserved count
+          readOnly: true
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        last_reset_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of the last operational reset
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - limit_rule_id
+      - subject_type
+      - subject_id
+      - period_start
+      - period_end
+      - used_amount
+      - used_count
+      - reserved_amount
+      - reserved_count
     LimitOverride:
       type: object
       description: Temporary limit increase or decrease for one subject, approved by a checker
@@ -51764,6 +53446,12 @@ components:
           - EXPIRED
           - REVOKED
           description: Status
+          readOnly: true
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          description: Approval comment, rejection or revocation reason
           readOnly: true
         valid_from:
           type: string

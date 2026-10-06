@@ -36,6 +36,7 @@ CREATE TABLE tm_scenario (
   run_mode                     varchar(40) NOT NULL DEFAULT 'STREAMING' CHECK (run_mode IN ('STREAMING', 'BATCH', 'BACKTEST')),
   active_version               integer,
   owner                        varchar(64),
+  retired_reason               text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -55,11 +56,12 @@ COMMENT ON COLUMN tm_scenario.code IS 'Scenario code';
 COMMENT ON COLUMN tm_scenario.name IS 'Scenario name';
 COMMENT ON COLUMN tm_scenario.scenario_type IS 'Typology';
 COMMENT ON COLUMN tm_scenario.description IS 'Logic description for auditors';
-COMMENT ON COLUMN tm_scenario.status IS 'Lifecycle';
+COMMENT ON COLUMN tm_scenario.status IS 'Lifecycle (changed only by activate / retire)';
 COMMENT ON COLUMN tm_scenario.customer_segment IS 'Segment it applies to (empty = all)';
-COMMENT ON COLUMN tm_scenario.run_mode IS 'Streaming or batch';
+COMMENT ON COLUMN tm_scenario.run_mode IS 'Streaming (evaluated on ingest) or batch (evaluated by runs)';
 COMMENT ON COLUMN tm_scenario.active_version IS 'Version currently in force';
 COMMENT ON COLUMN tm_scenario.owner IS 'Accountable owner (MLRO team)';
+COMMENT ON COLUMN tm_scenario.retired_reason IS 'Why the scenario was retired';
 COMMENT ON COLUMN tm_scenario.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tm_scenario.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tm_scenario.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -114,7 +116,7 @@ COMMENT ON COLUMN tm_scenario_version.min_amount IS 'Minimum aggregate amount';
 COMMENT ON COLUMN tm_scenario_version.min_count IS 'Minimum transaction count';
 COMMENT ON COLUMN tm_scenario_version.risk_weight IS 'Weight in alert scoring';
 COMMENT ON COLUMN tm_scenario_version.status IS 'Lifecycle';
-COMMENT ON COLUMN tm_scenario_version.effective_from IS 'Effective from';
+COMMENT ON COLUMN tm_scenario_version.effective_from IS 'Effective from (set on activation)';
 COMMENT ON COLUMN tm_scenario_version.tuning_rationale IS 'Why thresholds were set or changed (below/above-the-line testing)';
 COMMENT ON COLUMN tm_scenario_version.approval_request_id IS 'Maker-checker approval';
 COMMENT ON COLUMN tm_scenario_version.approved_by IS 'Approver';
@@ -141,6 +143,9 @@ CREATE TABLE tm_run (
   row_version                  integer NOT NULL DEFAULT 1,
   mode                         varchar(40) NOT NULL CHECK (mode IN ('STREAMING', 'BATCH', 'BACKTEST')),
   tm_scenario_version_id       uuid REFERENCES tm_scenario_version(id),
+  customers_evaluated          integer,
+  results                      jsonb,
+  cancel_reason                varchar(255),
   from_ts                      timestamptz NOT NULL,
   to_ts                        timestamptz NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
@@ -165,6 +170,9 @@ COMMENT ON COLUMN tm_run.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN tm_run.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN tm_run.mode IS 'Batch, backtest or streaming window';
 COMMENT ON COLUMN tm_run.tm_scenario_version_id IS 'Single scenario version (empty = all active)';
+COMMENT ON COLUMN tm_run.customers_evaluated IS 'Customers evaluated';
+COMMENT ON COLUMN tm_run.results IS 'Per-scenario figures (alerts, would-be alerts for backtests)';
+COMMENT ON COLUMN tm_run.cancel_reason IS 'Why the run was cancelled';
 COMMENT ON COLUMN tm_run.from_ts IS 'Window start';
 COMMENT ON COLUMN tm_run.to_ts IS 'Window end';
 COMMENT ON COLUMN tm_run.status IS 'Status';
@@ -201,6 +209,7 @@ CREATE TABLE tm_alert (
   score                        integer NOT NULL,
   severity                     varchar(40) NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'TRIAGED', 'ESCALATED', 'CLOSED_NO_ACTION', 'CLOSED_CASE_OPENED')),
+  reason                       jsonb,
   total_amount                 numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   transaction_count            integer NOT NULL,
@@ -232,7 +241,8 @@ COMMENT ON COLUMN tm_alert.customer_id IS 'Customer';
 COMMENT ON COLUMN tm_alert.account_id IS 'Account';
 COMMENT ON COLUMN tm_alert.score IS 'Alert risk score 0-1000';
 COMMENT ON COLUMN tm_alert.severity IS 'Severity';
-COMMENT ON COLUMN tm_alert.status IS 'Status';
+COMMENT ON COLUMN tm_alert.status IS 'Status (changed only by actions)';
+COMMENT ON COLUMN tm_alert.reason IS 'Scenario figures that triggered the alert (thresholds vs observed)';
 COMMENT ON COLUMN tm_alert.total_amount IS 'Aggregate amount of contributing transactions';
 COMMENT ON COLUMN tm_alert.currency IS 'Currency';
 COMMENT ON COLUMN tm_alert.transaction_count IS 'Number of contributing transactions';
@@ -311,6 +321,67 @@ ALTER TABLE tm_alert_transaction ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON tm_alert_transaction USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_tm_alert_transaction_append_only BEFORE UPDATE OR DELETE ON tm_alert_transaction FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
+-- tm_transaction: Monitored transaction feed (one row per customer leg), ingested from payments, cards, wallets and the ledger. Append-only.
+CREATE TABLE tm_transaction (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  transaction_id               uuid NOT NULL,
+  transaction_type             varchar(40) NOT NULL,
+  customer_id                  uuid NOT NULL,
+  account_id                   uuid,
+  journal_entry_id             uuid,
+  direction                    varchar(40) NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  is_cash                      boolean NOT NULL DEFAULT false,
+  channel                      varchar(40) CHECK (channel IN ('MOBILE_APP', 'WEB', 'API', 'USSD', 'AGENT', 'BRANCH', 'POS', 'ATM', 'ECOMMERCE', 'CONTACTLESS', 'OPEN_BANKING')),
+  counterparty_name            varchar(255),
+  counterparty_account         varchar(64),
+  counterparty_country         char(2),
+  occurred_at                  timestamptz NOT NULL,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_tm_transaction_1 UNIQUE (tenant_id, transaction_id, customer_id, direction)
+);
+COMMENT ON TABLE tm_transaction IS 'Monitored transaction feed (one row per customer leg), ingested from payments, cards, wallets and the ledger. Append-only.';
+COMMENT ON COLUMN tm_transaction.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN tm_transaction.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN tm_transaction.created_at IS 'Creation time';
+COMMENT ON COLUMN tm_transaction.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN tm_transaction.transaction_id IS 'Business transaction id';
+COMMENT ON COLUMN tm_transaction.transaction_type IS 'PAYMENT, CARD, WALLET, CASH, TRANSFER';
+COMMENT ON COLUMN tm_transaction.customer_id IS 'Customer the leg belongs to';
+COMMENT ON COLUMN tm_transaction.account_id IS 'Customer account';
+COMMENT ON COLUMN tm_transaction.journal_entry_id IS 'Ledger posting';
+COMMENT ON COLUMN tm_transaction.direction IS 'DEBIT = money out of the customer, CREDIT = money in';
+COMMENT ON COLUMN tm_transaction.amount IS 'Amount (positive)';
+COMMENT ON COLUMN tm_transaction.currency IS 'Currency';
+COMMENT ON COLUMN tm_transaction.is_cash IS 'Cash deposit / withdrawal';
+COMMENT ON COLUMN tm_transaction.channel IS 'Channel';
+COMMENT ON COLUMN tm_transaction.counterparty_name IS 'Counterparty';
+COMMENT ON COLUMN tm_transaction.counterparty_account IS 'Counterparty account / IBAN / wallet reference';
+COMMENT ON COLUMN tm_transaction.counterparty_country IS 'Counterparty country';
+COMMENT ON COLUMN tm_transaction.occurred_at IS 'Transaction time';
+COMMENT ON COLUMN tm_transaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tm_transaction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tm_transaction.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tm_transaction.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tm_transaction.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_tm_transaction_tenant ON tm_transaction (tenant_id, created_at);
+CREATE INDEX ix_tm_transaction_customer_id ON tm_transaction (customer_id);
+CREATE INDEX ix_tm_transaction_account_id ON tm_transaction (account_id);
+CREATE INDEX ix_tm_transaction_journal_entry_id ON tm_transaction (journal_entry_id);
+CREATE INDEX ix_tm_transaction_c1 ON tm_transaction (customer_id, occurred_at);
+CREATE INDEX ix_tm_transaction_c2 ON tm_transaction (occurred_at);
+ALTER TABLE tm_transaction ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON tm_transaction USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_tm_transaction_append_only BEFORE UPDATE OR DELETE ON tm_transaction FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
 -- customer_risk_rating: Customer AML risk rating (CRR) with contributing factors and next review date
 CREATE TABLE customer_risk_rating (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -328,6 +399,10 @@ CREATE TABLE customer_risk_rating (
   next_review_date             date NOT NULL,
   override_rating              varchar(40) CHECK (override_rating IN ('LOW', 'MEDIUM', 'HIGH', 'PROHIBITED')),
   override_reason              text,
+  override_status              varchar(40) CHECK (override_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')),
+  override_requested_by        varchar(64),
+  override_approved_by         varchar(64),
+  effective_rating             varchar(40) CHECK (effective_rating IN ('LOW', 'MEDIUM', 'HIGH', 'PROHIBITED')),
   rated_at                     timestamptz NOT NULL DEFAULT now(),
   rated_by                     varchar(64),
   custom_field_1               varchar(500),
@@ -346,13 +421,17 @@ COMMENT ON COLUMN customer_risk_rating.updated_at IS 'Last update time';
 COMMENT ON COLUMN customer_risk_rating.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN customer_risk_rating.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN customer_risk_rating.customer_id IS 'Customer';
-COMMENT ON COLUMN customer_risk_rating.rating IS 'AML risk level';
-COMMENT ON COLUMN customer_risk_rating.score IS 'Risk score 0-1000';
-COMMENT ON COLUMN customer_risk_rating.factors IS 'Weighted factors: geography, product, channel, occupation, PEP, behaviour';
+COMMENT ON COLUMN customer_risk_rating.rating IS 'AML risk level (calculated)';
+COMMENT ON COLUMN customer_risk_rating.score IS 'Risk score 0-1000 (calculated)';
+COMMENT ON COLUMN customer_risk_rating.factors IS 'Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the calculation adds weights, contributions and behaviour';
 COMMENT ON COLUMN customer_risk_rating.model_version IS 'Rating model version';
 COMMENT ON COLUMN customer_risk_rating.next_review_date IS 'Periodic review due date (EDD for high risk)';
-COMMENT ON COLUMN customer_risk_rating.override_rating IS 'Manual override';
+COMMENT ON COLUMN customer_risk_rating.override_rating IS 'Manual override (in force once approved)';
 COMMENT ON COLUMN customer_risk_rating.override_reason IS 'Override justification';
+COMMENT ON COLUMN customer_risk_rating.override_status IS 'Maker-checker status of the latest override';
+COMMENT ON COLUMN customer_risk_rating.override_requested_by IS 'Maker of the override';
+COMMENT ON COLUMN customer_risk_rating.override_approved_by IS 'Checker of the override';
+COMMENT ON COLUMN customer_risk_rating.effective_rating IS 'Rating in force: approved override, else the calculated rating';
 COMMENT ON COLUMN customer_risk_rating.rated_at IS 'Last rating time';
 COMMENT ON COLUMN customer_risk_rating.rated_by IS 'SYSTEM or analyst';
 COMMENT ON COLUMN customer_risk_rating.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';

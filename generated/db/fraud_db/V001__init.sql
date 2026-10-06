@@ -42,6 +42,7 @@ CREATE TABLE fraud_rule (
   valid_to                     timestamptz,
   approval_request_id          uuid,
   approved_by                  varchar(64),
+  deactivation_reason          varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -65,13 +66,14 @@ COMMENT ON COLUMN fraud_rule.expression IS 'CEL expression over the event, featu
 COMMENT ON COLUMN fraud_rule.action IS 'Action when the rule fires';
 COMMENT ON COLUMN fraud_rule.score_adjustment IS 'Points added to the score when it fires';
 COMMENT ON COLUMN fraud_rule.priority IS 'Lower runs first; BLOCK rules short-circuit';
-COMMENT ON COLUMN fraud_rule.status IS 'Lifecycle; SHADOW logs hits without acting';
+COMMENT ON COLUMN fraud_rule.status IS 'Lifecycle (changed only by activate/deactivate); SHADOW logs hits without acting';
 COMMENT ON COLUMN fraud_rule.rule_version IS 'Incremented on every change';
 COMMENT ON COLUMN fraud_rule.tags IS 'Free tags, e.g. typology';
 COMMENT ON COLUMN fraud_rule.valid_from IS 'Effective from';
 COMMENT ON COLUMN fraud_rule.valid_to IS 'Effective to';
 COMMENT ON COLUMN fraud_rule.approval_request_id IS 'Maker-checker approval';
 COMMENT ON COLUMN fraud_rule.approved_by IS 'Checker';
+COMMENT ON COLUMN fraud_rule.deactivation_reason IS 'Why the rule was disabled';
 COMMENT ON COLUMN fraud_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -162,6 +164,7 @@ CREATE TABLE device_fingerprint (
   risk_score                   integer NOT NULL DEFAULT 0,
   trusted                      boolean NOT NULL DEFAULT false,
   blocked                      boolean NOT NULL DEFAULT false,
+  status_reason                varchar(255),
   first_seen_at                timestamptz NOT NULL DEFAULT now(),
   last_seen_at                 timestamptz NOT NULL DEFAULT now(),
   custom_field_1               varchar(500),
@@ -193,8 +196,9 @@ COMMENT ON COLUMN device_fingerprint.last_ip_address IS 'Last seen IP';
 COMMENT ON COLUMN device_fingerprint.last_country IS 'Last seen country (IP geolocation)';
 COMMENT ON COLUMN device_fingerprint.customers_seen IS 'Distinct customers seen on this device';
 COMMENT ON COLUMN device_fingerprint.risk_score IS 'Device reputation 0-1000';
-COMMENT ON COLUMN device_fingerprint.trusted IS 'Marked trusted after strong authentication';
-COMMENT ON COLUMN device_fingerprint.blocked IS 'Blocked device';
+COMMENT ON COLUMN device_fingerprint.trusted IS 'Marked trusted after strong authentication (use /trust)';
+COMMENT ON COLUMN device_fingerprint.blocked IS 'Blocked device (use /block and /unblock)';
+COMMENT ON COLUMN device_fingerprint.status_reason IS 'Reason for the last trust / block / unblock';
 COMMENT ON COLUMN device_fingerprint.first_seen_at IS 'First seen';
 COMMENT ON COLUMN device_fingerprint.last_seen_at IS 'Last seen';
 COMMENT ON COLUMN device_fingerprint.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -380,11 +384,15 @@ CREATE TABLE fraud_score (
   shadow_decision              varchar(40) CHECK (shadow_decision IN ('ALLOW', 'REVIEW', 'BLOCK', 'STEP_UP')),
   latency_ms                   integer NOT NULL,
   correlation_id               varchar(128),
+  session_id                   varchar(128),
+  fraud_alert_id               uuid,
+  idempotency_key              varchar(128),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_fraud_score_1 UNIQUE (tenant_id, idempotency_key)
 );
 COMMENT ON TABLE fraud_score IS 'Immutable fraud evaluation of one event (authorisation, payment, login, ...) with decision and reasons';
 COMMENT ON COLUMN fraud_score.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -410,10 +418,13 @@ COMMENT ON COLUMN fraud_score.model_id IS 'Model used';
 COMMENT ON COLUMN fraud_score.model_version IS 'Model version used';
 COMMENT ON COLUMN fraud_score.decision IS 'Decision returned to the caller';
 COMMENT ON COLUMN fraud_score.reason_codes IS 'Ordered reason codes explaining the decision';
-COMMENT ON COLUMN fraud_score.features IS 'Feature values used (for audit and explainability)';
+COMMENT ON COLUMN fraud_score.features IS 'Feature values used (for audit, explainability and rule backtesting)';
 COMMENT ON COLUMN fraud_score.shadow_decision IS 'Decision of the shadow / challenger model';
 COMMENT ON COLUMN fraud_score.latency_ms IS 'Evaluation time in milliseconds';
 COMMENT ON COLUMN fraud_score.correlation_id IS 'Trace / saga correlation id';
+COMMENT ON COLUMN fraud_score.session_id IS 'App session (links behavioural signals)';
+COMMENT ON COLUMN fraud_score.fraud_alert_id IS 'Alert raised for REVIEW / BLOCK decisions';
+COMMENT ON COLUMN fraud_score.idempotency_key IS 'Client key; a replay returns the original evaluation';
 COMMENT ON COLUMN fraud_score.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_score.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_score.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -429,6 +440,7 @@ CREATE INDEX ix_fraud_score_model_id ON fraud_score (model_id);
 CREATE INDEX ix_fraud_score_correlation_id ON fraud_score (correlation_id);
 CREATE INDEX ix_fraud_score_c1 ON fraud_score (subject_type, subject_id);
 CREATE INDEX ix_fraud_score_c2 ON fraud_score (customer_id, created_at);
+CREATE INDEX ix_fraud_score_c3 ON fraud_score (device_fingerprint_id, created_at);
 ALTER TABLE fraud_score ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON fraud_score USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_fraud_score_append_only BEFORE UPDATE OR DELETE ON fraud_score FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
@@ -463,7 +475,7 @@ COMMENT ON COLUMN fraud_rule_hit.rule_version IS 'Rule version evaluated';
 COMMENT ON COLUMN fraud_rule_hit.action IS 'Action taken';
 COMMENT ON COLUMN fraud_rule_hit.score_adjustment IS 'Points applied';
 COMMENT ON COLUMN fraud_rule_hit.shadow IS 'Rule was in shadow mode';
-COMMENT ON COLUMN fraud_rule_hit.matched_values IS 'Values that made the expression true';
+COMMENT ON COLUMN fraud_rule_hit.matched_values IS 'Values of the identifiers the expression referenced';
 COMMENT ON COLUMN fraud_rule_hit.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_rule_hit.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN fraud_rule_hit.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -491,13 +503,16 @@ CREATE TABLE fraud_alert (
   subject_id                   uuid NOT NULL,
   severity                     varchar(40) NOT NULL CHECK (severity IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'IN_REVIEW', 'CONFIRMED_FRAUD', 'FALSE_POSITIVE', 'ESCALATED', 'CLOSED')),
+  reason_codes                 jsonb,
   typology                     varchar(40) CHECK (typology IN ('ACCOUNT_TAKEOVER', 'CARD_NOT_PRESENT', 'CARD_PRESENT_COUNTERFEIT', 'AUTHORISED_PUSH_PAYMENT_SCAM', 'FIRST_PARTY', 'SYNTHETIC_IDENTITY', 'MONEY_MULE', 'FRIENDLY_FRAUD', 'SIM_SWAP', 'INSIDER', 'OTHER')),
   amount                       numeric(28,8),
   currency                     char(3),
   assigned_to                  varchar(64),
   sla_due_at                   timestamptz,
   customer_contacted           boolean NOT NULL DEFAULT false,
+  notification_id              uuid,
   resolution                   text,
+  resolved_by                  varchar(64),
   resolved_at                  timestamptz,
   aml_case_id                  uuid,
   custom_field_1               varchar(500),
@@ -519,14 +534,17 @@ COMMENT ON COLUMN fraud_alert.customer_id IS 'Customer';
 COMMENT ON COLUMN fraud_alert.subject_type IS 'Event type';
 COMMENT ON COLUMN fraud_alert.subject_id IS 'Event id';
 COMMENT ON COLUMN fraud_alert.severity IS 'Severity';
-COMMENT ON COLUMN fraud_alert.status IS 'Status';
+COMMENT ON COLUMN fraud_alert.status IS 'Status (changed only by actions)';
+COMMENT ON COLUMN fraud_alert.reason_codes IS 'Reason codes of the evaluation that raised the alert';
 COMMENT ON COLUMN fraud_alert.typology IS 'Suspected or confirmed typology';
 COMMENT ON COLUMN fraud_alert.amount IS 'Amount at risk';
 COMMENT ON COLUMN fraud_alert.currency IS 'Currency';
 COMMENT ON COLUMN fraud_alert.assigned_to IS 'Analyst';
 COMMENT ON COLUMN fraud_alert.sla_due_at IS 'Review deadline';
-COMMENT ON COLUMN fraud_alert.customer_contacted IS 'Customer confirmation obtained';
+COMMENT ON COLUMN fraud_alert.customer_contacted IS 'Customer confirm-or-deny message sent';
+COMMENT ON COLUMN fraud_alert.notification_id IS 'Confirm-or-deny notification';
 COMMENT ON COLUMN fraud_alert.resolution IS 'Resolution notes';
+COMMENT ON COLUMN fraud_alert.resolved_by IS 'Analyst who resolved';
 COMMENT ON COLUMN fraud_alert.resolved_at IS 'Resolution time';
 COMMENT ON COLUMN fraud_alert.aml_case_id IS 'Case opened from this alert';
 COMMENT ON COLUMN fraud_alert.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -538,6 +556,7 @@ CREATE INDEX ix_fraud_alert_tenant ON fraud_alert (tenant_id, created_at);
 CREATE INDEX ix_fraud_alert_fraud_score_id ON fraud_alert (fraud_score_id);
 CREATE INDEX ix_fraud_alert_customer_id ON fraud_alert (customer_id);
 CREATE INDEX ix_fraud_alert_assigned_to ON fraud_alert (assigned_to);
+CREATE INDEX ix_fraud_alert_notification_id ON fraud_alert (notification_id);
 CREATE INDEX ix_fraud_alert_aml_case_id ON fraud_alert (aml_case_id);
 ALTER TABLE fraud_alert ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON fraud_alert USING (tenant_id = current_setting('app.tenant_id')::uuid);

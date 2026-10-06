@@ -1070,6 +1070,10 @@ tags:
 - name: Tm Alerts
   description: AML alert raised by a scenario, with score and aggregate figures
   x-domain: Risk, Fraud, AML and Limits
+- name: Tm Transactions
+  description: Transaction feed. Each ingested leg updates the risk graph and runs the active streaming scenarios for the
+    customer.
+  x-domain: Risk, Fraud, AML and Limits
 - name: Customer Risk Ratings
   description: Customer AML risk rating (CRR) with contributing factors and next review date
   x-domain: Risk, Fraud, AML and Limits
@@ -1097,6 +1101,9 @@ tags:
 - name: Screening Whitelist
   description: Good-guy list suppressing a known false positive for one subject and list entry
   x-domain: Risk, Fraud, AML and Limits
+- name: Screening Batches
+  description: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+  x-domain: Risk, Fraud, AML and Limits
 - name: Aml Cases
   description: An AML / fraud / sanctions investigation case consolidating related alerts
   x-domain: Risk, Fraud, AML and Limits
@@ -1107,7 +1114,7 @@ tags:
   description: Evidence attached to a case (statements, KYC documents, screenshots, graph exports)
   x-domain: Risk, Fraud, AML and Limits
 - name: Aml Case Dispositions
-  description: Final decision on a case with rationale and approval. Append-only.
+  description: Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
   x-domain: Risk, Fraud, AML and Limits
 - name: Sar Reports
   description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
@@ -90851,7 +90858,7 @@ paths:
   /v1/risk/fraud/scores/evaluate:
     post:
       operationId: fraudScoresEvaluate
-      summary: Score an event synchronously (50 ms budget); returns the decision
+      summary: Score an event synchronously (50 ms budget); returns decision, score, reason codes, rule hits and alert
       tags:
       - Fraud Scores
       security:
@@ -90865,7 +90872,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FraudScore'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -90942,8 +90951,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -91307,7 +91322,7 @@ paths:
   /v1/risk/fraud/rules/{id}/backtest:
     post:
       operationId: fraudRulesBacktest
-      summary: Replay the rule over historical evaluations
+      summary: Replay the rule over historical evaluations (hit rate and precision against labels)
       tags:
       - Fraud Rules
       security:
@@ -91322,8 +91337,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -91348,7 +91369,7 @@ paths:
   /v1/risk/fraud/rules/test-expression:
     post:
       operationId: fraudRulesTestExpression
-      summary: Evaluate a CEL expression against a sample event
+      summary: Evaluate a rule expression against a sample event
       tags:
       - Fraud Rules
       security:
@@ -91357,8 +91378,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -92805,8 +92832,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -93417,7 +93450,7 @@ paths:
   /v1/risk/monitoring/scenarios/{id}/activate:
     post:
       operationId: tmScenariosActivate
-      summary: Activate a version (maker-checker)
+      summary: 'Activate a version (maker-checker: activator differs from the version author)'
       tags:
       - Tm Scenarios
       security:
@@ -94201,6 +94234,205 @@ paths:
       x-service: transaction-monitoring-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-table: tm_alert
+  /v1/risk/monitoring/transactions:
+    get:
+      operationId: tmTransactionsList
+      summary: List tm transactions
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: transaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: transaction_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmTransactionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: tm_transaction
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tmTransactionsCreate
+      summary: Create tm transaction
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmTransactionCreate'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: tm_transaction
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/monitoring/transactions/{id}:
+    get:
+      operationId: tmTransactionsGet
+      summary: Retrieve tm transaction
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: tm_transaction
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/monitoring/transactions/ingest:
+    post:
+      operationId: tmTransactionsIngest
+      summary: Ingest up to 1000 transaction legs and evaluate streaming scenarios
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmTransactionsIngestRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: tm_transaction
   /v1/risk/monitoring/customer-risk-ratings:
     get:
       operationId: customerRiskRatingsList
@@ -94440,7 +94672,7 @@ paths:
   /v1/risk/monitoring/customer-risk-ratings/{id}/override:
     post:
       operationId: customerRiskRatingsOverride
-      summary: Override the rating with justification (maker-checker)
+      summary: Request an override of the rating with justification (maker)
       tags:
       - Customer Risk Ratings
       security:
@@ -94477,6 +94709,98 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerRiskRatingsOverrideRequest'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: customer_risk_rating
+  /v1/risk/monitoring/customer-risk-ratings/{id}/approve-override:
+    post:
+      operationId: customerRiskRatingsApproveOverride
+      summary: Approve the pending override (checker, not the maker)
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingsApproveOverrideRequest'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: customer_risk_rating
+  /v1/risk/monitoring/customer-risk-ratings/{id}/reject-override:
+    post:
+      operationId: customerRiskRatingsRejectOverride
+      summary: Reject the pending override
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingsRejectOverrideRequest'
       x-requirements:
       - CIF-03
       - FRM-02
@@ -94652,7 +94976,7 @@ paths:
   /v1/risk/graph/entities/{id}/network:
     get:
       operationId: riskGraphEntitiesNetwork
-      summary: Subgraph around the node (?depth=1..3) for visual investigation
+      summary: Subgraph around the node (breadth-first, depth 1..3) for visual investigation
       tags:
       - Risk Graph Entities
       security:
@@ -94665,9 +94989,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: depth
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: max_nodes
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -94790,6 +95132,46 @@ paths:
       x-table: risk_graph_link
       x-crud: true
       x-crud-get: true
+  /v1/risk/graph/links/observe:
+    post:
+      operationId: riskGraphLinksObserve
+      summary: Record an observed link (shared device, phone, address, transfer) creating both nodes if needed
+      tags:
+      - Risk Graph Links
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskGraphLinksObserveRequest'
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: risk_graph_link
   /v1/risk/sanctions/lists:
     get:
       operationId: sanctionsListsList
@@ -94993,7 +95375,8 @@ paths:
   /v1/risk/sanctions/lists/{id}/sync:
     post:
       operationId: sanctionsListsSync
-      summary: Download and load the latest list version
+      summary: Download (source_url) or load the given content as the latest list version; entries missing from the file are
+        delisted
       tags:
       - Sanctions Lists
       security:
@@ -95024,6 +95407,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListsSyncRequest'
       x-requirements:
       - FRM-03
       - ONB-03
@@ -95070,7 +95459,7 @@ paths:
   /v1/risk/sanctions/lists/{id}/import:
     post:
       operationId: sanctionsListsImport
-      summary: Import an internal list file
+      summary: Import an internal list file (CSV or JSON) from document-service or inline content, adding / updating entries
       tags:
       - Sanctions Lists
       security:
@@ -95085,8 +95474,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -95481,7 +95876,7 @@ paths:
   /v1/risk/sanctions/screenings/screen-payment:
     post:
       operationId: screeningRequestsScreenPayment
-      summary: Synchronously screen an ISO 20022 payment's parties and free text
+      summary: Synchronously screen an ISO 20022 payment's parties (debtor, creditor, agents) and free text
       tags:
       - Screening Requests
       security:
@@ -95530,8 +95925,12 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningBatch'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -95726,7 +96125,8 @@ paths:
   /v1/risk/sanctions/results/{id}/review:
     post:
       operationId: screeningResultsReview
-      summary: Record the compliance decision
+      summary: Record the compliance decision (CONFIRMED_MATCH or FALSE_POSITIVE; four-eyes against the match reviewer for
+        confirmations)
       tags:
       - Screening Results
       security:
@@ -96140,6 +96540,121 @@ paths:
       x-table: screening_whitelist
       x-crud: true
       x-crud-delete: true
+  /v1/risk/sanctions/batches:
+    get:
+      operationId: screeningBatchesList
+      summary: List screening batches
+      tags:
+      - Screening Batches
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningBatchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: screening_batch
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/sanctions/batches/{id}:
+    get:
+      operationId: screeningBatchesGet
+      summary: Retrieve screening batche
+      tags:
+      - Screening Batches
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: screening_batch
+      x-crud: true
+      x-crud-get: true
   /v1/risk/cases:
     get:
       operationId: amlCasesList
@@ -96459,7 +96974,7 @@ paths:
   /v1/risk/cases/{id}/close:
     post:
       operationId: amlCasesClose
-      summary: Record the disposition and close (maker-checker)
+      summary: Propose the disposition; the case closes when a different user approves it (maker-checker)
       tags:
       - Aml Cases
       security:
@@ -96715,7 +97230,7 @@ paths:
   /v1/risk/cases/{id}/timeline:
     get:
       operationId: amlCasesTimeline
-      summary: Merged timeline of alerts, transactions, notes and actions
+      summary: Merged timeline of alerts, notes, tasks, evidence, dispositions and reports
       tags:
       - Aml Cases
       security:
@@ -96728,9 +97243,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: include_restricted
+        in: query
+        required: false
+        schema:
+          type: boolean
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -96746,7 +97272,7 @@ paths:
   /v1/risk/cases/{id}/ai-summary:
     post:
       operationId: amlCasesAiSummary
-      summary: Generate an AI case summary with citations
+      summary: Generate a case summary with citations (deterministic template over case facts)
       tags:
       - Aml Cases
       security:
@@ -96766,7 +97292,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AmlCase'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -97278,7 +97806,7 @@ paths:
   /v1/risk/case-dispositions/{id}/approve:
     post:
       operationId: amlCaseDispositionsApprove
-      summary: Approve the disposition (checker)
+      summary: Approve the disposition (checker, not the maker); closes the case
       tags:
       - Aml Case Dispositions
       security:
@@ -97315,6 +97843,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AmlCaseDispositionsApproveRequest'
+      x-requirements:
+      - FRM-02
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: aml_case_disposition
+  /v1/risk/case-dispositions/{id}/reject:
+    post:
+      operationId: amlCaseDispositionsReject
+      summary: Reject the disposition (checker); the case returns to investigation
+      tags:
+      - Aml Case Dispositions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AmlCaseDisposition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmlCaseDispositionsRejectRequest'
       x-requirements:
       - FRM-02
       - FRM-04
@@ -97534,7 +98108,7 @@ paths:
   /v1/risk/sar-reports/{id}/draft-narrative:
     post:
       operationId: sarReportsDraftNarrative
-      summary: Draft the narrative with the AML copilot
+      summary: Draft the narrative from case facts (deterministic template)
       tags:
       - Sar Reports
       security:
@@ -97554,7 +98128,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SarReport'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -97663,7 +98239,7 @@ paths:
   /v1/risk/sar-reports/{id}/file:
     post:
       operationId: sarReportsFile
-      summary: File with the FIU (API or export)
+      summary: File with the FIU (API, EXPORT or PORTAL)
       tags:
       - Sar Reports
       security:
@@ -97798,7 +98374,7 @@ paths:
   /v1/risk/sar-reports/{id}/export:
     get:
       operationId: sarReportsExport
-      summary: Download goAML / BSA XML
+      summary: Download the goAML XML report
       tags:
       - Sar Reports
       security:
@@ -97812,8 +98388,12 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -98165,7 +98745,7 @@ paths:
   /v1/risk/limits/rules/simulate:
     post:
       operationId: limitRulesSimulate
-      summary: Show which limits would apply to a subject and transaction
+      summary: Show which limits would apply to a subject and transaction (including superseded rules)
       tags:
       - Limit Rules
       security:
@@ -98174,8 +98754,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -98309,7 +98895,7 @@ paths:
   /v1/risk/limits/usages/{id}/reset:
     post:
       operationId: limitUsagesReset
-      summary: Reset a counter (operations correction, audited)
+      summary: Reset the committed usage of a counter (operations correction, audited)
       tags:
       - Limit Usages
       security:
@@ -98691,6 +99277,7 @@ paths:
           - RELEASED
           - REJECTED
           - DRY_RUN
+          - EXPIRED
       - name: correlation_id
         in: query
         schema:
@@ -98816,7 +99403,7 @@ paths:
   /v1/risk/limits/checks/{id}/commit:
     post:
       operationId: limitChecksCommit
-      summary: Commit the reserved usage after the transaction succeeds
+      summary: Commit the reserved usage after the transaction succeeds (amount at most the reserved amount; the rest is released)
       tags:
       - Limit Checks
       security:
@@ -98906,7 +99493,7 @@ paths:
   /v1/risk/limits/checks/evaluate:
     post:
       operationId: limitChecksEvaluate
-      summary: Dry-run evaluation without reservation
+      summary: Dry-run evaluation without reservation or persistence
       tags:
       - Limit Checks
       security:
@@ -98920,7 +99507,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LimitCheck'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -98937,6 +99526,47 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LimitChecksEvaluateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: limit_check
+  /v1/risk/limits/checks/expire-reservations:
+    post:
+      operationId: limitChecksExpireReservations
+      summary: Release reservations past expires_at (called by the scheduler)
+      tags:
+      - Limit Checks
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LimitChecksExpireReservationsRequest'
       x-requirements:
       - LIM-01
       x-service: limits-service
@@ -99177,6 +99807,41 @@ paths:
       - LIM-01
       x-service: limits-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: risk_appetite_metric
+    get:
+      operationId: riskAppetiteMetricsGetMeasurements
+      summary: Measurement history
+      tags:
+      - Risk Appetite Metrics
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskAppetiteMeasurementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
       x-table: risk_appetite_metric
   /v1/servicing/sla-policies:
     get:
@@ -220095,13 +220760,30 @@ components:
           - ECOMMERCE
           - CONTACTLESS
           - OPEN_BANKING
+        merchant_category_code:
+          type: string
+          maxLength: 4
+        counterparty_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
         device_fingerprint:
           type: string
           maxLength: 128
+        device:
+          type: object
+          additionalProperties: true
         ip_address:
           type: string
           description: IPv4 or IPv6 address
+        ip_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
         session_id:
+          type: string
+          maxLength: 128
+        correlation_id:
           type: string
           maxLength: 128
         context:
@@ -220213,6 +220895,9 @@ components:
         to_ts:
           type: string
           format: date-time
+        max_events:
+          type: integer
+          format: int32
       required:
       - from_ts
       - to_ts
@@ -220659,6 +221344,32 @@ components:
           type: string
       required:
       - reason
+    TmTransactionPage:
+      type: object
+      description: One page of TmTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TmTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TmTransactionsIngestRequest:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items: {}
+      required:
+      - transactions
     CustomerRiskRatingPage:
       type: object
       description: One page of CustomerRiskRating results (newest first)
@@ -220692,6 +221403,18 @@ components:
       required:
       - override_rating
       - override_reason
+    CustomerRiskRatingsApproveOverrideRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    CustomerRiskRatingsRejectOverrideRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     RiskGraphEntityPage:
       type: object
       description: One page of RiskGraphEntity results (newest first)
@@ -220728,6 +221451,61 @@ components:
       required:
       - data
       - has_more
+    RiskGraphLinksObserveRequest:
+      type: object
+      properties:
+        from_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - DEVICE
+          - IP_ADDRESS
+          - PHONE
+          - EMAIL
+          - ADDRESS
+          - BENEFICIARY
+          - MERCHANT
+        from_ref:
+          type: string
+          maxLength: 128
+        from_customer_id:
+          type: string
+          format: uuid
+        to_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - DEVICE
+          - IP_ADDRESS
+          - PHONE
+          - EMAIL
+          - ADDRESS
+          - BENEFICIARY
+          - MERCHANT
+        to_ref:
+          type: string
+          maxLength: 128
+        to_customer_id:
+          type: string
+          format: uuid
+        link_type:
+          type: string
+          maxLength: 40
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - from_type
+      - from_ref
+      - to_type
+      - to_ref
+      - link_type
     SanctionsListPage:
       type: object
       description: One page of SanctionsList results (newest first)
@@ -220746,6 +221524,20 @@ components:
       required:
       - data
       - has_more
+    SanctionsListsSyncRequest:
+      type: object
+      properties:
+        content:
+          type: string
+        format:
+          type: string
+          maxLength: 8
+        list_version:
+          type: string
+          maxLength: 64
+        published_at:
+          type: string
+          format: date-time
     SanctionsListEntryPage:
       type: object
       description: One page of SanctionsListEntry results (newest first)
@@ -220770,8 +221562,11 @@ components:
         document_id:
           type: string
           format: uuid
-      required:
-      - document_id
+        content:
+          type: string
+        format:
+          type: string
+          maxLength: 8
     ScreeningRequestPage:
       type: object
       description: One page of ScreeningRequest results (newest first)
@@ -220799,6 +221594,14 @@ components:
         payload:
           type: object
           additionalProperties: true
+        threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        correlation_id:
+          type: string
+          maxLength: 128
       required:
       - payment_id
       - payload
@@ -220806,8 +221609,8 @@ components:
       type: object
       properties:
         subjects:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
         trigger:
           type: string
           enum:
@@ -220817,6 +221620,11 @@ components:
           - LIST_UPDATE
           - PAYMENT
           - MANUAL
+        threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subjects
       - trigger
@@ -220870,6 +221678,8 @@ components:
           - ERROR
         decision_reason:
           type: string
+        whitelist_false_positives:
+          type: boolean
       required:
       - status
       - decision_reason
@@ -220881,6 +221691,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScreeningWhitelist'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ScreeningBatchPage:
+      type: object
+      description: One page of ScreeningBatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScreeningBatch'
         next_cursor:
           type:
           - string
@@ -220946,8 +221774,8 @@ components:
         rationale:
           type: string
         actions_taken:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
       required:
       - disposition
       - rationale
@@ -221026,8 +221854,8 @@ components:
           type: string
           maxLength: 16
         attachments:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
       required:
       - body
     AmlCaseTaskPage:
@@ -221094,6 +221922,13 @@ components:
       properties:
         comment:
           type: string
+    AmlCaseDispositionsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     SarReportPage:
       type: object
       description: One page of SarReport results (newest first)
@@ -221184,6 +222019,18 @@ components:
         subject_id:
           type: string
           format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        kyc_tier:
+          type: string
+          maxLength: 32
+        customer_segment:
+          type: string
+          maxLength: 64
+        product_id:
+          type: string
+          format: uuid
         transaction_type:
           type: string
           maxLength: 40
@@ -221210,6 +222057,11 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subject_type
       - subject_id
@@ -221319,6 +222171,18 @@ components:
         subject_id:
           type: string
           format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        kyc_tier:
+          type: string
+          maxLength: 32
+        customer_segment:
+          type: string
+          maxLength: 64
+        product_id:
+          type: string
+          format: uuid
         transaction_type:
           type: string
           maxLength: 40
@@ -221345,12 +222209,23 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subject_type
       - subject_id
       - transaction_type
       - amount
       - currency
+    LimitChecksExpireReservationsRequest:
+      type: object
+      properties:
+        max_checks:
+          type: integer
+          format: int32
     RiskAppetiteMetricPage:
       type: object
       description: One page of RiskAppetiteMetric results (newest first)
@@ -221380,9 +222255,30 @@ components:
         measured_at:
           type: string
           format: date-time
+        source:
+          type: string
+          maxLength: 64
       required:
       - current_value
       - measured_at
+    RiskAppetiteMeasurementPage:
+      type: object
+      description: One page of RiskAppetiteMeasurement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskAppetiteMeasurement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AmlCase:
       type: object
       description: An AML / fraud / sanctions investigation case consolidating related alerts
@@ -221446,7 +222342,8 @@ components:
           - ESCALATED
           - SAR_FILED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         priority:
           type: string
           enum:
@@ -221518,7 +222415,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: MLRO or senior reviewer
+          description: MLRO or senior reviewer (use /escalate)
+          readOnly: true
+        escalation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the case was escalated
+          readOnly: true
         closed_at:
           type:
           - string
@@ -221534,9 +222438,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags
         custom_field_1:
           type:
@@ -221593,16 +222497,6 @@ components:
           - TERRORIST_FINANCING
           - BRIBERY_CORRUPTION
           description: Case type
-        status:
-          type: string
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - PENDING_APPROVAL
-          - ESCALATED
-          - SAR_FILED
-          - CLOSED
-          description: Status
         priority:
           type: string
           enum:
@@ -221648,13 +222542,9 @@ components:
           type: string
           format: date-time
           description: Regulatory / internal deadline
-        escalated_to:
-          type: string
-          maxLength: 64
-          description: MLRO or senior reviewer
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Free tags
         custom_field_1:
           type: string
@@ -221693,16 +222583,6 @@ components:
           - TERRORIST_FINANCING
           - BRIBERY_CORRUPTION
           description: Case type
-        status:
-          type: string
-          enum:
-          - OPEN
-          - INVESTIGATING
-          - PENDING_APPROVAL
-          - ESCALATED
-          - SAR_FILED
-          - CLOSED
-          description: Status
         priority:
           type: string
           enum:
@@ -221748,13 +222628,9 @@ components:
           type: string
           format: date-time
           description: Regulatory / internal deadline
-        escalated_to:
-          type: string
-          maxLength: 64
-          description: MLRO or senior reviewer
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Free tags
         custom_field_1:
           type: string
@@ -221885,7 +222761,7 @@ components:
       - source
     AmlCaseDisposition:
       type: object
-      description: Final decision on a case with rationale and approval. Append-only.
+      description: Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
       properties:
         id:
           type: string
@@ -221903,6 +222779,23 @@ components:
           - 'null'
           maxLength: 64
           description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
           readOnly: true
         aml_case_id:
           type: string
@@ -221925,22 +222818,46 @@ components:
           type: string
           maxLength: 64
           description: Investigator (maker)
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: MLRO (checker)
+          readOnly: true
         decided_at:
           type: string
           format: date-time
           description: Decision time
+          readOnly: true
         actions_taken:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Restrictions applied, relationship exit, monitoring changes
+        approval_status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Maker-checker status
+          readOnly: true
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          description: Checker comment or rejection reason
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval / rejection time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -221974,11 +222891,14 @@ components:
       required:
       - id
       - created_at
+      - updated_at
+      - row_version
       - aml_case_id
       - disposition
       - rationale
       - decided_by
       - decided_at
+      - approval_status
     AmlCaseEvidence:
       type: object
       description: Evidence attached to a case (statements, KYC documents, screenshots, graph exports)
@@ -222164,9 +223084,9 @@ components:
           description: INTERNAL or RESTRICTED (tipping-off protection)
         attachments:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Document ids
         custom_field_1:
           type:
@@ -222269,7 +223189,7 @@ components:
           - IN_PROGRESS
           - DONE
           - CANCELLED
-          description: Status
+          description: Status (OPEN, IN_PROGRESS or CANCELLED via PATCH; DONE only via /complete)
         due_at:
           type:
           - string
@@ -222282,6 +223202,13 @@ components:
           - 'null'
           format: date-time
           description: Completed
+          readOnly: true
+        completed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who completed the task
           readOnly: true
         custom_field_1:
           type:
@@ -222346,7 +223273,7 @@ components:
           - IN_PROGRESS
           - DONE
           - CANCELLED
-          description: Status
+          description: Status (OPEN, IN_PROGRESS or CANCELLED via PATCH; DONE only via /complete)
         due_at:
           type: string
           format: date-time
@@ -222399,7 +223326,7 @@ components:
           - IN_PROGRESS
           - DONE
           - CANCELLED
-          description: Status
+          description: Status (OPEN, IN_PROGRESS or CANCELLED via PATCH; DONE only via /complete)
         due_at:
           type: string
           format: date-time
@@ -222655,15 +223582,18 @@ components:
           - MEDIUM
           - HIGH
           - PROHIBITED
-          description: AML risk level
+          description: AML risk level (calculated)
+          readOnly: true
         score:
           type: integer
           format: int32
-          description: Risk score 0-1000
+          description: Risk score 0-1000 (calculated)
+          readOnly: true
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type:
           - string
@@ -222674,6 +223604,7 @@ components:
           type: string
           format: date
           description: Periodic review due date (EDD for high risk)
+          readOnly: true
         override_rating:
           type:
           - string
@@ -222683,12 +223614,49 @@ components:
           - MEDIUM
           - HIGH
           - PROHIBITED
-          description: Manual override
+          description: Manual override (in force once approved)
+          readOnly: true
         override_reason:
           type:
           - string
           - 'null'
           description: Override justification
+          readOnly: true
+        override_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Maker-checker status of the latest override
+          readOnly: true
+        override_requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker of the override
+          readOnly: true
+        override_approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker of the override
+          readOnly: true
+        effective_rating:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          description: 'Rating in force: approved override, else the calculated rating'
+          readOnly: true
         rated_at:
           type: string
           format: date-time
@@ -222748,41 +223716,15 @@ components:
           type: string
           format: uuid
           description: Customer
-        rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: AML risk level
-        score:
-          type: integer
-          format: int32
-          description: Risk score 0-1000
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type: string
           maxLength: 32
           description: Rating model version
-        next_review_date:
-          type: string
-          format: date
-          description: Periodic review due date (EDD for high risk)
-        override_rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: Manual override
-        override_reason:
-          type: string
-          description: Override justification
         rated_by:
           type: string
           maxLength: 64
@@ -222809,10 +223751,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - customer_id
-      - rating
-      - score
       - factors
-      - next_review_date
     CustomerRiskRatingUpdate:
       type: object
       properties:
@@ -222820,41 +223759,15 @@ components:
           type: string
           format: uuid
           description: Customer
-        rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: AML risk level
-        score:
-          type: integer
-          format: int32
-          description: Risk score 0-1000
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type: string
           maxLength: 32
           description: Rating model version
-        next_review_date:
-          type: string
-          format: date
-          description: Periodic review due date (EDD for high risk)
-        override_rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: Manual override
-        override_reason:
-          type: string
-          description: Override justification
         rated_by:
           type: string
           maxLength: 64
@@ -222986,10 +223899,19 @@ components:
           readOnly: true
         trusted:
           type: boolean
-          description: Marked trusted after strong authentication
+          description: Marked trusted after strong authentication (use /trust)
+          readOnly: true
         blocked:
           type: boolean
-          description: Blocked device
+          description: Blocked device (use /block and /unblock)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the last trust / block / unblock
+          readOnly: true
         first_seen_at:
           type: string
           format: date-time
@@ -223092,12 +224014,6 @@ components:
           type: string
           pattern: ^[A-Z]{2}$
           description: Last seen country (IP geolocation) (ISO 3166-1 alpha-2)
-        trusted:
-          type: boolean
-          description: Marked trusted after strong authentication
-        blocked:
-          type: boolean
-          description: Blocked device
         custom_field_1:
           type: string
           maxLength: 500
@@ -223202,7 +224118,14 @@ components:
           - FALSE_POSITIVE
           - ESCALATED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        reason_codes:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Reason codes of the evaluation that raised the alert
         typology:
           type:
           - string
@@ -223248,12 +224171,27 @@ components:
           description: Review deadline
         customer_contacted:
           type: boolean
-          description: Customer confirmation obtained
+          description: Customer confirm-or-deny message sent
+          readOnly: true
+        notification_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Confirm-or-deny notification
+          readOnly: true
         resolution:
           type:
           - string
           - 'null'
           description: Resolution notes
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Analyst who resolved
+          readOnly: true
         resolved_at:
           type:
           - string
@@ -223267,6 +224205,7 @@ components:
           - 'null'
           format: uuid
           description: Case opened from this alert
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -223343,16 +224282,10 @@ components:
           - HIGH
           - CRITICAL
           description: Severity
-        status:
-          type: string
-          enum:
-          - OPEN
-          - IN_REVIEW
-          - CONFIRMED_FRAUD
-          - FALSE_POSITIVE
-          - ESCALATED
-          - CLOSED
-          description: Status
+        reason_codes:
+          type: array
+          items: {}
+          description: Reason codes of the evaluation that raised the alert
         typology:
           type: string
           enum:
@@ -223386,16 +224319,9 @@ components:
           type: string
           format: date-time
           description: Review deadline
-        customer_contacted:
-          type: boolean
-          description: Customer confirmation obtained
         resolution:
           type: string
           description: Resolution notes
-        aml_case_id:
-          type: string
-          format: uuid
-          description: Case opened from this alert
         custom_field_1:
           type: string
           maxLength: 500
@@ -224327,7 +225253,8 @@ components:
           - SHADOW
           - ACTIVE
           - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
+          description: Lifecycle (changed only by activate/deactivate); SHADOW logs hits without acting
+          readOnly: true
         rule_version:
           type: integer
           format: int32
@@ -224335,9 +225262,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type:
@@ -224363,6 +225290,13 @@ components:
           - 'null'
           maxLength: 64
           description: Checker
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the rule was disabled
           readOnly: true
         custom_field_1:
           type:
@@ -224456,17 +225390,9 @@ components:
           type: integer
           format: int32
           description: Lower runs first; BLOCK rules short-circuit
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - SHADOW
-          - ACTIVE
-          - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type: string
@@ -224554,17 +225480,9 @@ components:
           type: integer
           format: int32
           description: Lower runs first; BLOCK rules short-circuit
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - SHADOW
-          - ACTIVE
-          - DISABLED
-          description: Lifecycle; SHADOW logs hits without acting
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Free tags, e.g. typology
         valid_from:
           type: string
@@ -224653,7 +225571,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Values that made the expression true
+          description: Values of the identifiers the expression referenced
         custom_field_1:
           type:
           - string
@@ -224840,15 +225758,15 @@ components:
           - STEP_UP
           description: Decision returned to the caller
         reason_codes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Ordered reason codes explaining the decision
         features:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Feature values used (for audit and explainability)
+          description: Feature values used (for audit, explainability and rule backtesting)
         shadow_decision:
           type:
           - string
@@ -224869,6 +225787,26 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        session_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: App session (links behavioural signals)
+        fraud_alert_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Alert raised for REVIEW / BLOCK decisions
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Client key; a replay returns the original evaluation
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -224929,10 +225867,27 @@ components:
           maxLength: 64
           description: Principal that created the row
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
         subject_type:
           type: string
           maxLength: 32
-          description: Primary subject type
+          description: 'Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT'
         subject_id:
           type: string
           format: uuid
@@ -224942,7 +225897,25 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Customer
+          description: Customer (customer-level limits are counted per customer)
+        kyc_tier:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Customer KYC tier code (matches KYC_TIER limits)
+        customer_segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Customer segment (matches CUSTOMER_SEGMENT limits)
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product (matches PRODUCT limits)
         transaction_type:
           type: string
           maxLength: 40
@@ -224974,9 +225947,18 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        current_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance before the transaction (BALANCE limits)
         allowed:
           type: boolean
           description: Whether the transaction is within limits
+          readOnly: true
         status:
           type: string
           enum:
@@ -224985,7 +225967,9 @@ components:
           - RELEASED
           - REJECTED
           - DRY_RUN
-          description: Reservation status at creation
+          - EXPIRED
+          description: Reservation status (RESERVED until committed, released or expired)
+          readOnly: true
         action:
           type:
           - string
@@ -224995,23 +225979,50 @@ components:
           - REVIEW
           - STEP_UP
           - ALLOW_AND_ALERT
-          description: Action when a limit was breached
+          description: Strictest action of the breached limits
+          readOnly: true
         evaluated_rule_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Rules evaluated
+          readOnly: true
         breached_rule_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Rules breached
+          readOnly: true
         remaining:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
+          items: {}
+          description: 'Per rule: limit, used, reserved, remaining amount / count for the period'
+          readOnly: true
+        committed_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount committed
+          readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Commit / release time
+          readOnly: true
+        release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the reservation was released
+          readOnly: true
         idempotency_key:
           type: string
           maxLength: 128
@@ -225028,13 +226039,14 @@ components:
           - string
           - 'null'
           format: date-time
-          description: Reservation expiry (auto-release)
+          description: Reservation expiry (default 15 minutes; released by /expire-reservations)
         latency_ms:
           type:
           - integer
           - 'null'
           format: int32
           description: Evaluation time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -225068,6 +226080,8 @@ components:
       required:
       - id
       - created_at
+      - updated_at
+      - row_version
       - subject_type
       - subject_id
       - transaction_type
@@ -225083,7 +226097,7 @@ components:
         subject_type:
           type: string
           maxLength: 32
-          description: Primary subject type
+          description: 'Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT'
         subject_id:
           type: string
           format: uuid
@@ -225091,7 +226105,19 @@ components:
         customer_id:
           type: string
           format: uuid
-          description: Customer
+          description: Customer (customer-level limits are counted per customer)
+        kyc_tier:
+          type: string
+          maxLength: 32
+          description: Customer KYC tier code (matches KYC_TIER limits)
+        customer_segment:
+          type: string
+          maxLength: 64
+          description: Customer segment (matches CUSTOMER_SEGMENT limits)
+        product_id:
+          type: string
+          format: uuid
+          description: Product (matches PRODUCT limits)
         transaction_type:
           type: string
           maxLength: 40
@@ -225121,38 +226147,12 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        allowed:
-          type: boolean
-          description: Whether the transaction is within limits
-        status:
+        current_balance:
           type: string
-          enum:
-          - RESERVED
-          - COMMITTED
-          - RELEASED
-          - REJECTED
-          - DRY_RUN
-          description: Reservation status at creation
-        action:
-          type: string
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          description: Action when a limit was breached
-        evaluated_rule_ids:
-          type: object
-          additionalProperties: true
-          description: Rules evaluated
-        breached_rule_ids:
-          type: object
-          additionalProperties: true
-          description: Rules breached
-        remaining:
-          type: object
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance before the transaction (BALANCE limits)
         correlation_id:
           type: string
           maxLength: 128
@@ -225160,11 +226160,7 @@ components:
         expires_at:
           type: string
           format: date-time
-          description: Reservation expiry (auto-release)
-        latency_ms:
-          type: integer
-          format: int32
-          description: Evaluation time
+          description: Reservation expiry (default 15 minutes; released by /expire-reservations)
         custom_field_1:
           type: string
           maxLength: 500
@@ -225191,9 +226187,6 @@ components:
       - transaction_type
       - amount
       - currency
-      - allowed
-      - status
-      - evaluated_rule_ids
     LimitOverride:
       type: object
       description: Temporary limit increase or decrease for one subject, approved by a checker
@@ -225270,6 +226263,12 @@ components:
           - EXPIRED
           - REVOKED
           description: Status
+          readOnly: true
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          description: Approval comment, rejection or revocation reason
           readOnly: true
         valid_from:
           type: string
@@ -225556,10 +226555,11 @@ components:
           - DRAFT
           - ACTIVE
           - INACTIVE
-          description: Status
+          description: Status (changed only by activate / deactivate)
+          readOnly: true
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type:
           - string
@@ -225578,6 +226578,19 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who activated the rule
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the rule was deactivated
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -225717,16 +226730,9 @@ components:
           type: integer
           format: int32
           description: Tie-breaker between equally specific rules
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          description: Status
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type: string
           format: date-time
@@ -225860,16 +226866,9 @@ components:
           type: integer
           format: int32
           description: Tie-breaker between equally specific rules
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          description: Status
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type: string
           format: date-time
@@ -225990,6 +226989,12 @@ components:
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        last_reset_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of the last operational reset
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -226034,6 +227039,91 @@ components:
       - used_count
       - reserved_amount
       - reserved_count
+    RiskAppetiteMeasurement:
+      type: object
+      description: One measurement of a risk appetite metric with the status it implied. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        risk_appetite_metric_id:
+          type: string
+          format: uuid
+          description: Metric
+        value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Measured value
+        status:
+          type: string
+          enum:
+          - GREEN
+          - AMBER
+          - RED
+          description: Traffic-light status implied by the thresholds at the time
+        measured_at:
+          type: string
+          format: date-time
+          description: Measurement time
+        source:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Producer of the measurement
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - risk_appetite_metric_id
+      - value
+      - status
+      - measured_at
     RiskAppetiteMetric:
       type: object
       description: Board-approved risk appetite metric with amber/red thresholds and its latest value
@@ -226577,7 +227667,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
+          description: Owning tenant (lists created through the API); empty for platform-managed global lists
+          readOnly: true
         source:
           type: string
           enum:
@@ -226624,6 +227715,13 @@ components:
           - 'null'
           format: int32
           description: Active entries
+          readOnly: true
+        content_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last loaded file (unchanged files are skipped)
           readOnly: true
         source_url:
           type:
@@ -226676,10 +227774,6 @@ components:
     SanctionsListCreate:
       type: object
       properties:
-        owner_tenant_id:
-          type: string
-          format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
         source:
           type: string
           enum:
@@ -226743,10 +227837,6 @@ components:
     SanctionsListUpdate:
       type: object
       properties:
-        owner_tenant_id:
-          type: string
-          format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
         source:
           type: string
           enum:
@@ -226864,9 +227954,9 @@ components:
           description: Primary name
         aliases:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Aliases, AKAs and transliterations
         date_of_birth:
           type:
@@ -226888,21 +227978,21 @@ components:
           description: Nationality (ISO 3166-1 alpha-2)
         countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Associated countries
+          items: {}
+          description: Associated countries (ISO 3166-1 alpha-2)
         identifiers:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
+          items: {}
+          description: Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)
         programs:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
         pep_level:
           type:
@@ -226991,8 +228081,8 @@ components:
           maxLength: 500
           description: Primary name
         aliases:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Aliases, AKAs and transliterations
         date_of_birth:
           type: string
@@ -227007,16 +228097,16 @@ components:
           pattern: ^[A-Z]{2}$
           description: Nationality (ISO 3166-1 alpha-2)
         countries:
-          type: object
-          additionalProperties: true
-          description: Associated countries
+          type: array
+          items: {}
+          description: Associated countries (ISO 3166-1 alpha-2)
         identifiers:
-          type: object
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
+          type: array
+          items: {}
+          description: Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)
         programs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
         pep_level:
           type: string
@@ -227083,8 +228173,8 @@ components:
           maxLength: 500
           description: Primary name
         aliases:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Aliases, AKAs and transliterations
         date_of_birth:
           type: string
@@ -227099,16 +228189,16 @@ components:
           pattern: ^[A-Z]{2}$
           description: Nationality (ISO 3166-1 alpha-2)
         countries:
-          type: object
-          additionalProperties: true
-          description: Associated countries
+          type: array
+          items: {}
+          description: Associated countries (ISO 3166-1 alpha-2)
         identifiers:
-          type: object
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
+          type: array
+          items: {}
+          description: Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)
         programs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
         pep_level:
           type: string
@@ -227216,7 +228306,8 @@ components:
           - SUBMITTED
           - ACKNOWLEDGED
           - REJECTED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         narrative:
           type:
           - string
@@ -227256,22 +228347,29 @@ components:
           description: Suspicious activity end
         subjects:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Persons and entities reported
+          items: {}
+          description: Persons and entities reported ({name, type, id_number, country, role})
         transactions:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Transactions reported
+          items: {}
+          description: Transactions reported ({transaction_id, date, amount, currency, from, to, description})
         filing_deadline:
           type:
           - string
           - 'null'
           format: date
           description: Regulatory deadline
+        filing_channel:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: API, EXPORT or PORTAL
+          readOnly: true
         export_document_id:
           type:
           - string
@@ -227279,24 +228377,20 @@ components:
           format: uuid
           description: goAML XML / FinCEN BSA XML file
           readOnly: true
-        regulator_reference:
-          type:
-          - string
-          - 'null'
-          maxLength: 128
-          description: FIU reference number
         prepared_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Preparer
+          description: Preparer (submitter for approval)
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: MLRO approval
+          readOnly: true
         submitted_at:
           type:
           - string
@@ -227311,11 +228405,19 @@ components:
           format: date-time
           description: FIU acknowledgement time
           readOnly: true
+        regulator_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: FIU reference number
+          readOnly: true
         rejection_reason:
           type:
           - string
           - 'null'
           description: FIU rejection reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -227380,16 +228482,6 @@ components:
           type: string
           maxLength: 64
           description: FIU, e.g. FinCEN, NCA, FIC
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - APPROVED
-          - SUBMITTED
-          - ACKNOWLEDGED
-          - REJECTED
-          description: Status
         narrative:
           type: string
           description: Final narrative
@@ -227412,32 +228504,17 @@ components:
           format: date
           description: Suspicious activity end
         subjects:
-          type: object
-          additionalProperties: true
-          description: Persons and entities reported
+          type: array
+          items: {}
+          description: Persons and entities reported ({name, type, id_number, country, role})
         transactions:
-          type: object
-          additionalProperties: true
-          description: Transactions reported
+          type: array
+          items: {}
+          description: Transactions reported ({transaction_id, date, amount, currency, from, to, description})
         filing_deadline:
           type: string
           format: date
           description: Regulatory deadline
-        regulator_reference:
-          type: string
-          maxLength: 128
-          description: FIU reference number
-        prepared_by:
-          type: string
-          maxLength: 64
-          description: Preparer
-        approved_by:
-          type: string
-          maxLength: 64
-          description: MLRO approval
-        rejection_reason:
-          type: string
-          description: FIU rejection reason
         custom_field_1:
           type: string
           maxLength: 500
@@ -227487,16 +228564,6 @@ components:
           type: string
           maxLength: 64
           description: FIU, e.g. FinCEN, NCA, FIC
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - APPROVED
-          - SUBMITTED
-          - ACKNOWLEDGED
-          - REJECTED
-          description: Status
         narrative:
           type: string
           description: Final narrative
@@ -227519,32 +228586,17 @@ components:
           format: date
           description: Suspicious activity end
         subjects:
-          type: object
-          additionalProperties: true
-          description: Persons and entities reported
+          type: array
+          items: {}
+          description: Persons and entities reported ({name, type, id_number, country, role})
         transactions:
-          type: object
-          additionalProperties: true
-          description: Transactions reported
+          type: array
+          items: {}
+          description: Transactions reported ({transaction_id, date, amount, currency, from, to, description})
         filing_deadline:
           type: string
           format: date
           description: Regulatory deadline
-        regulator_reference:
-          type: string
-          maxLength: 128
-          description: FIU reference number
-        prepared_by:
-          type: string
-          maxLength: 64
-          description: Preparer
-        approved_by:
-          type: string
-          maxLength: 64
-          description: MLRO approval
-        rejection_reason:
-          type: string
-          description: FIU rejection reason
         custom_field_1:
           type: string
           maxLength: 500
@@ -227565,6 +228617,146 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ScreeningBatch:
+      type: object
+      description: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          description: Why the batch ran
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        total:
+          type: integer
+          format: int32
+          description: Subjects submitted
+          readOnly: true
+        processed:
+          type: integer
+          format: int32
+          description: Subjects screened
+          readOnly: true
+        potential_matches:
+          type: integer
+          format: int32
+          description: Subjects with potential matches
+          readOnly: true
+        errors:
+          type: integer
+          format: int32
+          description: Subjects that failed
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Error details
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - trigger
+      - status
+      - total
+      - processed
+      - potential_matches
+      - errors
     ScreeningMatch:
       type: object
       description: A candidate list entry matched for a screening result, with its disposition
@@ -227637,12 +228829,19 @@ components:
           - PENDING
           - TRUE_MATCH
           - FALSE_POSITIVE
-          description: Reviewer decision
+          description: Reviewer decision (clearing a TRUE_MATCH needs a second reviewer)
         disposition_reason:
           type:
           - string
           - 'null'
           description: Rationale
+        dispositioned_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Reviewer who set the disposition
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -227719,7 +228918,7 @@ components:
           - PENDING
           - TRUE_MATCH
           - FALSE_POSITIVE
-          description: Reviewer decision
+          description: Reviewer decision (clearing a TRUE_MATCH needs a second reviewer)
         disposition_reason:
           type: string
           description: Rationale
@@ -227830,9 +229029,9 @@ components:
           description: Nationality (ISO 3166-1 alpha-2)
         identifiers:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Identity document numbers
         payload:
           type:
@@ -227842,10 +229041,10 @@ components:
           description: Payment fields screened (parties, agents, free text)
         list_codes:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Lists to screen against (empty = tenant default)
+          items: {}
+          description: Lists to screen against (empty = all active lists visible to the tenant)
         threshold:
           type: string
           format: decimal
@@ -227862,6 +229061,32 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        screening_batch_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Batch the request belongs to
+        status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          description: Outcome of the screening
+          readOnly: true
+        screening_result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Result produced by the screening
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -227948,17 +229173,17 @@ components:
           pattern: ^[A-Z]{2}$
           description: Nationality (ISO 3166-1 alpha-2)
         identifiers:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Identity document numbers
         payload:
           type: object
           additionalProperties: true
           description: Payment fields screened (parties, agents, free text)
         list_codes:
-          type: object
-          additionalProperties: true
-          description: Lists to screen against (empty = tenant default)
+          type: array
+          items: {}
+          description: Lists to screen against (empty = all active lists visible to the tenant)
         threshold:
           type: string
           format: decimal
@@ -227973,6 +229198,10 @@ components:
           type: string
           maxLength: 128
           description: Trace / saga correlation id
+        screening_batch_id:
+          type: string
+          format: uuid
+          description: Batch the request belongs to
         custom_field_1:
           type: string
           maxLength: 500
@@ -228065,7 +229294,8 @@ components:
           - CONFIRMED_MATCH
           - FALSE_POSITIVE
           - ERROR
-          description: Outcome
+          description: Outcome (changed only by /review)
+          readOnly: true
         highest_score:
           type: string
           format: decimal
@@ -228086,29 +229316,38 @@ components:
           type: boolean
           description: Adverse media found
           readOnly: true
+        suppressed_count:
+          type: integer
+          format: int32
+          description: Candidate matches suppressed by the good-guy whitelist
+          readOnly: true
         reviewed_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Compliance reviewer
+          readOnly: true
         reviewed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Review time
+          readOnly: true
         decision_reason:
           type:
           - string
           - 'null'
           description: Reviewer rationale
+          readOnly: true
         aml_case_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Case opened for a confirmed match
+          readOnly: true
         rescreen_due_at:
           type:
           - string
@@ -228165,6 +229404,7 @@ components:
       - match_count
       - is_pep
       - has_adverse_media
+      - suppressed_count
     ScreeningWhitelist:
       type: object
       description: Good-guy list suppressing a known false positive for one subject and list entry
@@ -228231,6 +229471,7 @@ components:
           - 'null'
           maxLength: 64
           description: Approver
+          readOnly: true
         expires_at:
           type:
           - string
@@ -228301,10 +229542,6 @@ components:
         reason:
           type: string
           description: Why this is a false positive
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Approver
         expires_at:
           type: string
           format: date-time
@@ -228416,7 +229653,14 @@ components:
           - ESCALATED
           - CLOSED_NO_ACTION
           - CLOSED_CASE_OPENED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        reason:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Scenario figures that triggered the alert (thresholds vs observed)
         total_amount:
           type: string
           format: decimal
@@ -228456,12 +229700,14 @@ components:
           - 'null'
           format: uuid
           description: Case opened from the alert
+          readOnly: true
         closed_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason when closed without a case
+          readOnly: true
         closed_at:
           type:
           - string
@@ -228550,15 +229796,10 @@ components:
           - HIGH
           - CRITICAL
           description: Severity
-        status:
-          type: string
-          enum:
-          - OPEN
-          - TRIAGED
-          - ESCALATED
-          - CLOSED_NO_ACTION
-          - CLOSED_CASE_OPENED
-          description: Status
+        reason:
+          type: object
+          additionalProperties: true
+          description: Scenario figures that triggered the alert (thresholds vs observed)
         total_amount:
           type: string
           format: decimal
@@ -228588,14 +229829,6 @@ components:
         triage_note:
           type: string
           description: Level-1 triage note
-        aml_case_id:
-          type: string
-          format: uuid
-          description: Case opened from the alert
-        closed_reason:
-          type: string
-          maxLength: 255
-          description: Reason when closed without a case
         custom_field_1:
           type: string
           maxLength: 500
@@ -228786,6 +230019,27 @@ components:
           - 'null'
           format: uuid
           description: Single scenario version (empty = all active)
+        customers_evaluated:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Customers evaluated
+          readOnly: true
+        results:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Per-scenario figures (alerts, would-be alerts for backtests)
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the run was cancelled
+          readOnly: true
         from_ts:
           type: string
           format: date-time
@@ -228998,7 +230252,8 @@ components:
           - ACTIVE
           - TUNING
           - RETIRED
-          description: Lifecycle
+          description: Lifecycle (changed only by activate / retire)
+          readOnly: true
         customer_segment:
           type:
           - string
@@ -229011,7 +230266,7 @@ components:
           - STREAMING
           - BATCH
           - BACKTEST
-          description: Streaming or batch
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
         active_version:
           type:
           - integer
@@ -229025,6 +230280,12 @@ components:
           - 'null'
           maxLength: 64
           description: Accountable owner (MLRO team)
+        retired_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the scenario was retired
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -229095,14 +230356,6 @@ components:
         description:
           type: string
           description: Logic description for auditors
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - TUNING
-          - RETIRED
-          description: Lifecycle
         customer_segment:
           type: string
           maxLength: 64
@@ -229113,7 +230366,7 @@ components:
           - STREAMING
           - BATCH
           - BACKTEST
-          description: Streaming or batch
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
         owner:
           type: string
           maxLength: 64
@@ -229172,14 +230425,6 @@ components:
         description:
           type: string
           description: Logic description for auditors
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - TUNING
-          - RETIRED
-          description: Lifecycle
         customer_segment:
           type: string
           maxLength: 64
@@ -229190,7 +230435,7 @@ components:
           - STREAMING
           - BATCH
           - BACKTEST
-          description: Streaming or batch
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
         owner:
           type: string
           maxLength: 64
@@ -229297,12 +230542,14 @@ components:
           - TUNING
           - RETIRED
           description: Lifecycle
+          readOnly: true
         effective_from:
           type:
           - string
           - 'null'
           format: date-time
-          description: Effective from
+          description: Effective from (set on activation)
+          readOnly: true
         tuning_rationale:
           type:
           - string
@@ -229362,6 +230609,252 @@ components:
       - lookback_days
       - risk_weight
       - status
+    TmTransaction:
+      type: object
+      description: Monitored transaction feed (one row per customer leg), ingested from payments, cards, wallets and the ledger.
+        Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        transaction_id:
+          type: string
+          format: uuid
+          description: Business transaction id
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: PAYMENT, CARD, WALLET, CASH, TRANSFER
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer the leg belongs to
+        account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer account
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: DEBIT = money out of the customer, CREDIT = money in
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount (positive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        is_cash:
+          type: boolean
+          description: Cash deposit / withdrawal
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        counterparty_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Counterparty
+        counterparty_account:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Counterparty account / IBAN / wallet reference
+        counterparty_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Counterparty country (ISO 3166-1 alpha-2)
+        occurred_at:
+          type: string
+          format: date-time
+          description: Transaction time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - transaction_id
+      - transaction_type
+      - customer_id
+      - direction
+      - amount
+      - currency
+      - is_cash
+      - occurred_at
+    TmTransactionCreate:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+          description: Business transaction id
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: PAYMENT, CARD, WALLET, CASH, TRANSFER
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer the leg belongs to
+        account_id:
+          type: string
+          format: uuid
+          description: Customer account
+        journal_entry_id:
+          type: string
+          format: uuid
+          description: Ledger posting
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: DEBIT = money out of the customer, CREDIT = money in
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount (positive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        is_cash:
+          type: boolean
+          description: Cash deposit / withdrawal
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        counterparty_name:
+          type: string
+          maxLength: 255
+          description: Counterparty
+        counterparty_account:
+          type: string
+          maxLength: 64
+          description: Counterparty account / IBAN / wallet reference
+        counterparty_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Counterparty country (ISO 3166-1 alpha-2)
+        occurred_at:
+          type: string
+          format: date-time
+          description: Transaction time
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - transaction_id
+      - transaction_type
+      - customer_id
+      - direction
+      - amount
+      - currency
+      - occurred_at
     SlaPolicyPage:
       type: object
       description: One page of SlaPolicy results (newest first)

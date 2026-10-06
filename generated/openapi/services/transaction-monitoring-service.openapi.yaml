@@ -26,6 +26,9 @@ tags:
   description: Execution of scenarios in batch, backtest or a streaming checkpoint window
 - name: Tm Alerts
   description: AML alert raised by a scenario, with score and aggregate figures
+- name: Tm Transactions
+  description: Transaction feed. Each ingested leg updates the risk graph and runs the active streaming scenarios for the
+    customer.
 - name: Customer Risk Ratings
   description: Customer AML risk rating (CRR) with contributing factors and next review date
 - name: Risk Graph Entities
@@ -332,7 +335,7 @@ paths:
   /v1/risk/monitoring/scenarios/{id}/activate:
     post:
       operationId: tmScenariosActivate
-      summary: Activate a version (maker-checker)
+      summary: 'Activate a version (maker-checker: activator differs from the version author)'
       tags:
       - Tm Scenarios
       security:
@@ -1116,6 +1119,205 @@ paths:
       x-service: transaction-monitoring-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-table: tm_alert
+  /v1/risk/monitoring/transactions:
+    get:
+      operationId: tmTransactionsList
+      summary: List tm transactions
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: transaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: transaction_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmTransactionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: tm_transaction
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: tmTransactionsCreate
+      summary: Create tm transaction
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmTransactionCreate'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: tm_transaction
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/monitoring/transactions/{id}:
+    get:
+      operationId: tmTransactionsGet
+      summary: Retrieve tm transaction
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TmTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: tm_transaction
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/monitoring/transactions/ingest:
+    post:
+      operationId: tmTransactionsIngest
+      summary: Ingest up to 1000 transaction legs and evaluate streaming scenarios
+      tags:
+      - Tm Transactions
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TmTransactionsIngestRequest'
+      x-requirements:
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: tm_transaction
   /v1/risk/monitoring/customer-risk-ratings:
     get:
       operationId: customerRiskRatingsList
@@ -1355,7 +1557,7 @@ paths:
   /v1/risk/monitoring/customer-risk-ratings/{id}/override:
     post:
       operationId: customerRiskRatingsOverride
-      summary: Override the rating with justification (maker-checker)
+      summary: Request an override of the rating with justification (maker)
       tags:
       - Customer Risk Ratings
       security:
@@ -1392,6 +1594,98 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CustomerRiskRatingsOverrideRequest'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: customer_risk_rating
+  /v1/risk/monitoring/customer-risk-ratings/{id}/approve-override:
+    post:
+      operationId: customerRiskRatingsApproveOverride
+      summary: Approve the pending override (checker, not the maker)
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingsApproveOverrideRequest'
+      x-requirements:
+      - CIF-03
+      - FRM-02
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: customer_risk_rating
+  /v1/risk/monitoring/customer-risk-ratings/{id}/reject-override:
+    post:
+      operationId: customerRiskRatingsRejectOverride
+      summary: Reject the pending override
+      tags:
+      - Customer Risk Ratings
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerRiskRating'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRiskRatingsRejectOverrideRequest'
       x-requirements:
       - CIF-03
       - FRM-02
@@ -1567,7 +1861,7 @@ paths:
   /v1/risk/graph/entities/{id}/network:
     get:
       operationId: riskGraphEntitiesNetwork
-      summary: Subgraph around the node (?depth=1..3) for visual investigation
+      summary: Subgraph around the node (breadth-first, depth 1..3) for visual investigation
       tags:
       - Risk Graph Entities
       security:
@@ -1580,9 +1874,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: depth
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: max_nodes
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1705,6 +2017,46 @@ paths:
       x-table: risk_graph_link
       x-crud: true
       x-crud-get: true
+  /v1/risk/graph/links/observe:
+    post:
+      operationId: riskGraphLinksObserve
+      summary: Record an observed link (shared device, phone, address, transfer) creating both nodes if needed
+      tags:
+      - Risk Graph Links
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskGraphLink'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskGraphLinksObserveRequest'
+      x-requirements:
+      - FRM-02
+      - FRM-05
+      x-service: transaction-monitoring-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: risk_graph_link
 components:
   schemas:
     Problem:
@@ -1937,6 +2289,32 @@ components:
           type: string
       required:
       - reason
+    TmTransactionPage:
+      type: object
+      description: One page of TmTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TmTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TmTransactionsIngestRequest:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items: {}
+      required:
+      - transactions
     CustomerRiskRatingPage:
       type: object
       description: One page of CustomerRiskRating results (newest first)
@@ -1970,6 +2348,18 @@ components:
       required:
       - override_rating
       - override_reason
+    CustomerRiskRatingsApproveOverrideRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    CustomerRiskRatingsRejectOverrideRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     RiskGraphEntityPage:
       type: object
       description: One page of RiskGraphEntity results (newest first)
@@ -2006,6 +2396,61 @@ components:
       required:
       - data
       - has_more
+    RiskGraphLinksObserveRequest:
+      type: object
+      properties:
+        from_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - DEVICE
+          - IP_ADDRESS
+          - PHONE
+          - EMAIL
+          - ADDRESS
+          - BENEFICIARY
+          - MERCHANT
+        from_ref:
+          type: string
+          maxLength: 128
+        from_customer_id:
+          type: string
+          format: uuid
+        to_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - ACCOUNT
+          - CARD
+          - DEVICE
+          - IP_ADDRESS
+          - PHONE
+          - EMAIL
+          - ADDRESS
+          - BENEFICIARY
+          - MERCHANT
+        to_ref:
+          type: string
+          maxLength: 128
+        to_customer_id:
+          type: string
+          format: uuid
+        link_type:
+          type: string
+          maxLength: 40
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - from_type
+      - from_ref
+      - to_type
+      - to_ref
+      - link_type
     AmlCase:
       type: object
       description: An AML / fraud / sanctions investigation case consolidating related alerts
@@ -2069,7 +2514,8 @@ components:
           - ESCALATED
           - SAR_FILED
           - CLOSED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
         priority:
           type: string
           enum:
@@ -2141,7 +2587,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: MLRO or senior reviewer
+          description: MLRO or senior reviewer (use /escalate)
+          readOnly: true
+        escalation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the case was escalated
+          readOnly: true
         closed_at:
           type:
           - string
@@ -2157,9 +2610,9 @@ components:
           readOnly: true
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Free tags
         custom_field_1:
           type:
@@ -2251,15 +2704,18 @@ components:
           - MEDIUM
           - HIGH
           - PROHIBITED
-          description: AML risk level
+          description: AML risk level (calculated)
+          readOnly: true
         score:
           type: integer
           format: int32
-          description: Risk score 0-1000
+          description: Risk score 0-1000 (calculated)
+          readOnly: true
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type:
           - string
@@ -2270,6 +2726,7 @@ components:
           type: string
           format: date
           description: Periodic review due date (EDD for high risk)
+          readOnly: true
         override_rating:
           type:
           - string
@@ -2279,12 +2736,49 @@ components:
           - MEDIUM
           - HIGH
           - PROHIBITED
-          description: Manual override
+          description: Manual override (in force once approved)
+          readOnly: true
         override_reason:
           type:
           - string
           - 'null'
           description: Override justification
+          readOnly: true
+        override_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Maker-checker status of the latest override
+          readOnly: true
+        override_requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker of the override
+          readOnly: true
+        override_approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker of the override
+          readOnly: true
+        effective_rating:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - PROHIBITED
+          description: 'Rating in force: approved override, else the calculated rating'
+          readOnly: true
         rated_at:
           type: string
           format: date-time
@@ -2344,41 +2838,15 @@ components:
           type: string
           format: uuid
           description: Customer
-        rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: AML risk level
-        score:
-          type: integer
-          format: int32
-          description: Risk score 0-1000
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type: string
           maxLength: 32
           description: Rating model version
-        next_review_date:
-          type: string
-          format: date
-          description: Periodic review due date (EDD for high risk)
-        override_rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: Manual override
-        override_reason:
-          type: string
-          description: Override justification
         rated_by:
           type: string
           maxLength: 64
@@ -2405,10 +2873,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - customer_id
-      - rating
-      - score
       - factors
-      - next_review_date
     CustomerRiskRatingUpdate:
       type: object
       properties:
@@ -2416,41 +2881,15 @@ components:
           type: string
           format: uuid
           description: Customer
-        rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: AML risk level
-        score:
-          type: integer
-          format: int32
-          description: Risk score 0-1000
         factors:
           type: object
           additionalProperties: true
-          description: 'Weighted factors: geography, product, channel, occupation, PEP, behaviour'
+          description: Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the
+            calculation adds weights, contributions and behaviour
         model_version:
           type: string
           maxLength: 32
           description: Rating model version
-        next_review_date:
-          type: string
-          format: date
-          description: Periodic review due date (EDD for high risk)
-        override_rating:
-          type: string
-          enum:
-          - LOW
-          - MEDIUM
-          - HIGH
-          - PROHIBITED
-          description: Manual override
-        override_reason:
-          type: string
-          description: Override justification
         rated_by:
           type: string
           maxLength: 64
@@ -2802,7 +3241,14 @@ components:
           - ESCALATED
           - CLOSED_NO_ACTION
           - CLOSED_CASE_OPENED
-          description: Status
+          description: Status (changed only by actions)
+          readOnly: true
+        reason:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Scenario figures that triggered the alert (thresholds vs observed)
         total_amount:
           type: string
           format: decimal
@@ -2842,12 +3288,14 @@ components:
           - 'null'
           format: uuid
           description: Case opened from the alert
+          readOnly: true
         closed_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Reason when closed without a case
+          readOnly: true
         closed_at:
           type:
           - string
@@ -2936,15 +3384,10 @@ components:
           - HIGH
           - CRITICAL
           description: Severity
-        status:
-          type: string
-          enum:
-          - OPEN
-          - TRIAGED
-          - ESCALATED
-          - CLOSED_NO_ACTION
-          - CLOSED_CASE_OPENED
-          description: Status
+        reason:
+          type: object
+          additionalProperties: true
+          description: Scenario figures that triggered the alert (thresholds vs observed)
         total_amount:
           type: string
           format: decimal
@@ -2974,14 +3417,6 @@ components:
         triage_note:
           type: string
           description: Level-1 triage note
-        aml_case_id:
-          type: string
-          format: uuid
-          description: Case opened from the alert
-        closed_reason:
-          type: string
-          maxLength: 255
-          description: Reason when closed without a case
         custom_field_1:
           type: string
           maxLength: 500
@@ -3172,6 +3607,27 @@ components:
           - 'null'
           format: uuid
           description: Single scenario version (empty = all active)
+        customers_evaluated:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Customers evaluated
+          readOnly: true
+        results:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Per-scenario figures (alerts, would-be alerts for backtests)
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the run was cancelled
+          readOnly: true
         from_ts:
           type: string
           format: date-time
@@ -3384,7 +3840,8 @@ components:
           - ACTIVE
           - TUNING
           - RETIRED
-          description: Lifecycle
+          description: Lifecycle (changed only by activate / retire)
+          readOnly: true
         customer_segment:
           type:
           - string
@@ -3397,7 +3854,7 @@ components:
           - STREAMING
           - BATCH
           - BACKTEST
-          description: Streaming or batch
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
         active_version:
           type:
           - integer
@@ -3411,6 +3868,12 @@ components:
           - 'null'
           maxLength: 64
           description: Accountable owner (MLRO team)
+        retired_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the scenario was retired
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3481,14 +3944,6 @@ components:
         description:
           type: string
           description: Logic description for auditors
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - TUNING
-          - RETIRED
-          description: Lifecycle
         customer_segment:
           type: string
           maxLength: 64
@@ -3499,7 +3954,7 @@ components:
           - STREAMING
           - BATCH
           - BACKTEST
-          description: Streaming or batch
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
         owner:
           type: string
           maxLength: 64
@@ -3558,14 +4013,6 @@ components:
         description:
           type: string
           description: Logic description for auditors
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - TUNING
-          - RETIRED
-          description: Lifecycle
         customer_segment:
           type: string
           maxLength: 64
@@ -3576,7 +4023,7 @@ components:
           - STREAMING
           - BATCH
           - BACKTEST
-          description: Streaming or batch
+          description: Streaming (evaluated on ingest) or batch (evaluated by runs)
         owner:
           type: string
           maxLength: 64
@@ -3683,12 +4130,14 @@ components:
           - TUNING
           - RETIRED
           description: Lifecycle
+          readOnly: true
         effective_from:
           type:
           - string
           - 'null'
           format: date-time
-          description: Effective from
+          description: Effective from (set on activation)
+          readOnly: true
         tuning_rationale:
           type:
           - string
@@ -3748,6 +4197,252 @@ components:
       - lookback_days
       - risk_weight
       - status
+    TmTransaction:
+      type: object
+      description: Monitored transaction feed (one row per customer leg), ingested from payments, cards, wallets and the ledger.
+        Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        transaction_id:
+          type: string
+          format: uuid
+          description: Business transaction id
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: PAYMENT, CARD, WALLET, CASH, TRANSFER
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer the leg belongs to
+        account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer account
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger posting
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: DEBIT = money out of the customer, CREDIT = money in
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount (positive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        is_cash:
+          type: boolean
+          description: Cash deposit / withdrawal
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        counterparty_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Counterparty
+        counterparty_account:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Counterparty account / IBAN / wallet reference
+        counterparty_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Counterparty country (ISO 3166-1 alpha-2)
+        occurred_at:
+          type: string
+          format: date-time
+          description: Transaction time
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - transaction_id
+      - transaction_type
+      - customer_id
+      - direction
+      - amount
+      - currency
+      - is_cash
+      - occurred_at
+    TmTransactionCreate:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+          description: Business transaction id
+        transaction_type:
+          type: string
+          maxLength: 40
+          description: PAYMENT, CARD, WALLET, CASH, TRANSFER
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer the leg belongs to
+        account_id:
+          type: string
+          format: uuid
+          description: Customer account
+        journal_entry_id:
+          type: string
+          format: uuid
+          description: Ledger posting
+        direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: DEBIT = money out of the customer, CREDIT = money in
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount (positive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        is_cash:
+          type: boolean
+          description: Cash deposit / withdrawal
+        channel:
+          type: string
+          enum:
+          - MOBILE_APP
+          - WEB
+          - API
+          - USSD
+          - AGENT
+          - BRANCH
+          - POS
+          - ATM
+          - ECOMMERCE
+          - CONTACTLESS
+          - OPEN_BANKING
+          description: Channel
+        counterparty_name:
+          type: string
+          maxLength: 255
+          description: Counterparty
+        counterparty_account:
+          type: string
+          maxLength: 64
+          description: Counterparty account / IBAN / wallet reference
+        counterparty_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Counterparty country (ISO 3166-1 alpha-2)
+        occurred_at:
+          type: string
+          format: date-time
+          description: Transaction time
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - transaction_id
+      - transaction_type
+      - customer_id
+      - direction
+      - amount
+      - currency
+      - occurred_at
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

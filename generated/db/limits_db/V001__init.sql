@@ -45,6 +45,8 @@ CREATE TABLE limit_rule (
   valid_from                   timestamptz,
   valid_to                     timestamptz,
   approval_request_id          uuid,
+  approved_by                  varchar(64),
+  deactivation_reason          text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -73,11 +75,13 @@ COMMENT ON COLUMN limit_rule.max_amount IS 'Maximum amount per period';
 COMMENT ON COLUMN limit_rule.max_count IS 'Maximum transactions per period';
 COMMENT ON COLUMN limit_rule.breach_action IS 'Action on breach';
 COMMENT ON COLUMN limit_rule.priority IS 'Tie-breaker between equally specific rules';
-COMMENT ON COLUMN limit_rule.status IS 'Status';
-COMMENT ON COLUMN limit_rule.is_regulatory IS 'Regulatory limit (cannot be overridden)';
+COMMENT ON COLUMN limit_rule.status IS 'Status (changed only by activate / deactivate)';
+COMMENT ON COLUMN limit_rule.is_regulatory IS 'Regulatory limit (cannot be overridden or superseded)';
 COMMENT ON COLUMN limit_rule.valid_from IS 'Effective from';
 COMMENT ON COLUMN limit_rule.valid_to IS 'Effective to';
 COMMENT ON COLUMN limit_rule.approval_request_id IS 'Maker-checker approval';
+COMMENT ON COLUMN limit_rule.approved_by IS 'Checker who activated the rule';
+COMMENT ON COLUMN limit_rule.deactivation_reason IS 'Why the rule was deactivated';
 COMMENT ON COLUMN limit_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -110,6 +114,7 @@ CREATE TABLE limit_usage (
   reserved_amount              numeric(28,8) NOT NULL DEFAULT 0,
   reserved_count               integer NOT NULL DEFAULT 0,
   currency                     char(3),
+  last_reset_reason            text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -135,6 +140,7 @@ COMMENT ON COLUMN limit_usage.used_count IS 'Committed count';
 COMMENT ON COLUMN limit_usage.reserved_amount IS 'Reserved, not yet committed';
 COMMENT ON COLUMN limit_usage.reserved_count IS 'Reserved count';
 COMMENT ON COLUMN limit_usage.currency IS 'Currency';
+COMMENT ON COLUMN limit_usage.last_reset_reason IS 'Reason of the last operational reset';
 COMMENT ON COLUMN limit_usage.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_usage.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_usage.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -163,6 +169,7 @@ CREATE TABLE limit_override (
   max_count                    integer,
   reason                       text NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'EXPIRED', 'REVOKED')),
+  decision_reason              text,
   valid_from                   timestamptz NOT NULL,
   valid_to                     timestamptz NOT NULL,
   requested_by                 varchar(64),
@@ -189,6 +196,7 @@ COMMENT ON COLUMN limit_override.max_amount IS 'Overridden amount';
 COMMENT ON COLUMN limit_override.max_count IS 'Overridden count';
 COMMENT ON COLUMN limit_override.reason IS 'Justification';
 COMMENT ON COLUMN limit_override.status IS 'Status';
+COMMENT ON COLUMN limit_override.decision_reason IS 'Approval comment, rejection or revocation reason';
 COMMENT ON COLUMN limit_override.valid_from IS 'Effective from';
 COMMENT ON COLUMN limit_override.valid_to IS 'Effective to (overrides are always temporary)';
 COMMENT ON COLUMN limit_override.requested_by IS 'Maker';
@@ -213,19 +221,30 @@ CREATE TABLE limit_check (
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
   subject_type                 varchar(32) NOT NULL,
   subject_id                   uuid NOT NULL,
   customer_id                  uuid,
+  kyc_tier                     varchar(32),
+  customer_segment             varchar(64),
+  product_id                   uuid,
   transaction_type             varchar(40) NOT NULL,
   channel                      varchar(40) CHECK (channel IN ('MOBILE_APP', 'WEB', 'API', 'USSD', 'AGENT', 'BRANCH', 'POS', 'ATM', 'ECOMMERCE', 'CONTACTLESS', 'OPEN_BANKING')),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
+  current_balance              numeric(28,8),
   allowed                      boolean NOT NULL,
-  status                       varchar(40) NOT NULL CHECK (status IN ('RESERVED', 'COMMITTED', 'RELEASED', 'REJECTED', 'DRY_RUN')),
+  status                       varchar(40) NOT NULL CHECK (status IN ('RESERVED', 'COMMITTED', 'RELEASED', 'REJECTED', 'DRY_RUN', 'EXPIRED')),
   action                       varchar(40) CHECK (action IN ('REJECT', 'REVIEW', 'STEP_UP', 'ALLOW_AND_ALERT')),
   evaluated_rule_ids           jsonb NOT NULL,
   breached_rule_ids            jsonb,
   remaining                    jsonb,
+  reservations                 jsonb,
+  committed_amount             numeric(28,8),
+  settled_at                   timestamptz,
+  release_reason               varchar(255),
   idempotency_key              varchar(128) NOT NULL,
   correlation_id               varchar(128),
   expires_at                   timestamptz,
@@ -242,22 +261,33 @@ COMMENT ON COLUMN limit_check.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN limit_check.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN limit_check.created_at IS 'Creation time';
 COMMENT ON COLUMN limit_check.created_by IS 'Principal that created the row';
-COMMENT ON COLUMN limit_check.subject_type IS 'Primary subject type';
+COMMENT ON COLUMN limit_check.updated_at IS 'Last update time';
+COMMENT ON COLUMN limit_check.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN limit_check.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN limit_check.subject_type IS 'Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT';
 COMMENT ON COLUMN limit_check.subject_id IS 'Primary subject';
-COMMENT ON COLUMN limit_check.customer_id IS 'Customer';
+COMMENT ON COLUMN limit_check.customer_id IS 'Customer (customer-level limits are counted per customer)';
+COMMENT ON COLUMN limit_check.kyc_tier IS 'Customer KYC tier code (matches KYC_TIER limits)';
+COMMENT ON COLUMN limit_check.customer_segment IS 'Customer segment (matches CUSTOMER_SEGMENT limits)';
+COMMENT ON COLUMN limit_check.product_id IS 'Product (matches PRODUCT limits)';
 COMMENT ON COLUMN limit_check.transaction_type IS 'Transaction type';
 COMMENT ON COLUMN limit_check.channel IS 'Channel';
 COMMENT ON COLUMN limit_check.amount IS 'Amount';
 COMMENT ON COLUMN limit_check.currency IS 'Currency';
+COMMENT ON COLUMN limit_check.current_balance IS 'Balance before the transaction (BALANCE limits)';
 COMMENT ON COLUMN limit_check.allowed IS 'Whether the transaction is within limits';
-COMMENT ON COLUMN limit_check.status IS 'Reservation status at creation';
-COMMENT ON COLUMN limit_check.action IS 'Action when a limit was breached';
+COMMENT ON COLUMN limit_check.status IS 'Reservation status (RESERVED until committed, released or expired)';
+COMMENT ON COLUMN limit_check.action IS 'Strictest action of the breached limits';
 COMMENT ON COLUMN limit_check.evaluated_rule_ids IS 'Rules evaluated';
 COMMENT ON COLUMN limit_check.breached_rule_ids IS 'Rules breached';
-COMMENT ON COLUMN limit_check.remaining IS 'Remaining amount/count per rule and period';
+COMMENT ON COLUMN limit_check.remaining IS 'Per rule: limit, used, reserved, remaining amount / count for the period';
+COMMENT ON COLUMN limit_check.reservations IS 'Usage counters reserved: limit_usage_id, amount, count';
+COMMENT ON COLUMN limit_check.committed_amount IS 'Amount committed';
+COMMENT ON COLUMN limit_check.settled_at IS 'Commit / release time';
+COMMENT ON COLUMN limit_check.release_reason IS 'Why the reservation was released';
 COMMENT ON COLUMN limit_check.idempotency_key IS 'Client key';
 COMMENT ON COLUMN limit_check.correlation_id IS 'Business transaction / saga id';
-COMMENT ON COLUMN limit_check.expires_at IS 'Reservation expiry (auto-release)';
+COMMENT ON COLUMN limit_check.expires_at IS 'Reservation expiry (default 15 minutes; released by /expire-reservations)';
 COMMENT ON COLUMN limit_check.latency_ms IS 'Evaluation time';
 COMMENT ON COLUMN limit_check.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN limit_check.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -267,10 +297,11 @@ COMMENT ON COLUMN limit_check.custom_field_5 IS 'Tenant-defined custom field 5; 
 CREATE INDEX ix_limit_check_tenant ON limit_check (tenant_id, created_at);
 CREATE INDEX ix_limit_check_subject_id ON limit_check (subject_id);
 CREATE INDEX ix_limit_check_customer_id ON limit_check (customer_id);
+CREATE INDEX ix_limit_check_product_id ON limit_check (product_id);
 CREATE INDEX ix_limit_check_correlation_id ON limit_check (correlation_id);
 ALTER TABLE limit_check ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON limit_check USING (tenant_id = current_setting('app.tenant_id')::uuid);
-CREATE TRIGGER trg_limit_check_append_only BEFORE UPDATE OR DELETE ON limit_check FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+CREATE TRIGGER trg_limit_check_touch BEFORE UPDATE ON limit_check FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- risk_appetite_metric: Board-approved risk appetite metric with amber/red thresholds and its latest value
 CREATE TABLE risk_appetite_metric (
@@ -326,6 +357,44 @@ CREATE INDEX ix_risk_appetite_metric_legal_entity_id ON risk_appetite_metric (le
 ALTER TABLE risk_appetite_metric ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON risk_appetite_metric USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_risk_appetite_metric_touch BEFORE UPDATE ON risk_appetite_metric FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- risk_appetite_measurement: One measurement of a risk appetite metric with the status it implied. Append-only.
+CREATE TABLE risk_appetite_measurement (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  risk_appetite_metric_id      uuid NOT NULL REFERENCES risk_appetite_metric(id),
+  value                        numeric(18,10) NOT NULL,
+  status                       varchar(40) NOT NULL CHECK (status IN ('GREEN', 'AMBER', 'RED')),
+  measured_at                  timestamptz NOT NULL,
+  source                       varchar(64),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE risk_appetite_measurement IS 'One measurement of a risk appetite metric with the status it implied. Append-only.';
+COMMENT ON COLUMN risk_appetite_measurement.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN risk_appetite_measurement.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN risk_appetite_measurement.created_at IS 'Creation time';
+COMMENT ON COLUMN risk_appetite_measurement.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN risk_appetite_measurement.risk_appetite_metric_id IS 'Metric';
+COMMENT ON COLUMN risk_appetite_measurement.value IS 'Measured value';
+COMMENT ON COLUMN risk_appetite_measurement.status IS 'Traffic-light status implied by the thresholds at the time';
+COMMENT ON COLUMN risk_appetite_measurement.measured_at IS 'Measurement time';
+COMMENT ON COLUMN risk_appetite_measurement.source IS 'Producer of the measurement';
+COMMENT ON COLUMN risk_appetite_measurement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN risk_appetite_measurement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN risk_appetite_measurement.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN risk_appetite_measurement.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN risk_appetite_measurement.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_risk_appetite_measurement_tenant ON risk_appetite_measurement (tenant_id, created_at);
+CREATE INDEX ix_risk_appetite_measurement_risk_appetite_metric_id ON risk_appetite_measurement (risk_appetite_metric_id);
+ALTER TABLE risk_appetite_measurement ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON risk_appetite_measurement USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_risk_appetite_measurement_append_only BEFORE UPDATE OR DELETE ON risk_appetite_measurement FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

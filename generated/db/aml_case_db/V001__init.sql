@@ -42,6 +42,7 @@ CREATE TABLE aml_case (
   opened_at                    timestamptz NOT NULL DEFAULT now(),
   due_at                       timestamptz,
   escalated_to                 varchar(64),
+  escalation_reason            text,
   closed_at                    timestamptz,
   ai_summary                   text,
   tags                         jsonb,
@@ -62,7 +63,7 @@ COMMENT ON COLUMN aml_case.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN aml_case.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN aml_case.case_number IS 'Human-readable case number';
 COMMENT ON COLUMN aml_case.case_type IS 'Case type';
-COMMENT ON COLUMN aml_case.status IS 'Status';
+COMMENT ON COLUMN aml_case.status IS 'Status (changed only by actions)';
 COMMENT ON COLUMN aml_case.priority IS 'Priority';
 COMMENT ON COLUMN aml_case.customer_id IS 'Primary subject';
 COMMENT ON COLUMN aml_case.title IS 'Short summary';
@@ -74,7 +75,8 @@ COMMENT ON COLUMN aml_case.assigned_to IS 'Investigator';
 COMMENT ON COLUMN aml_case.team IS 'Team / queue';
 COMMENT ON COLUMN aml_case.opened_at IS 'Opened';
 COMMENT ON COLUMN aml_case.due_at IS 'Regulatory / internal deadline';
-COMMENT ON COLUMN aml_case.escalated_to IS 'MLRO or senior reviewer';
+COMMENT ON COLUMN aml_case.escalated_to IS 'MLRO or senior reviewer (use /escalate)';
+COMMENT ON COLUMN aml_case.escalation_reason IS 'Why the case was escalated';
 COMMENT ON COLUMN aml_case.closed_at IS 'Closed';
 COMMENT ON COLUMN aml_case.ai_summary IS 'AI-generated case summary with citations';
 COMMENT ON COLUMN aml_case.tags IS 'Free tags';
@@ -189,6 +191,7 @@ CREATE TABLE aml_case_task (
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'IN_PROGRESS', 'DONE', 'CANCELLED')),
   due_at                       timestamptz,
   completed_at                 timestamptz,
+  completed_by                 varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -207,9 +210,10 @@ COMMENT ON COLUMN aml_case_task.aml_case_id IS 'Case';
 COMMENT ON COLUMN aml_case_task.title IS 'Task';
 COMMENT ON COLUMN aml_case_task.description IS 'Details';
 COMMENT ON COLUMN aml_case_task.assigned_to IS 'Assignee';
-COMMENT ON COLUMN aml_case_task.status IS 'Status';
+COMMENT ON COLUMN aml_case_task.status IS 'Status (OPEN, IN_PROGRESS or CANCELLED via PATCH; DONE only via /complete)';
 COMMENT ON COLUMN aml_case_task.due_at IS 'Due';
 COMMENT ON COLUMN aml_case_task.completed_at IS 'Completed';
+COMMENT ON COLUMN aml_case_task.completed_by IS 'Who completed the task';
 COMMENT ON COLUMN aml_case_task.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN aml_case_task.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN aml_case_task.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -267,12 +271,15 @@ ALTER TABLE aml_case_evidence ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON aml_case_evidence USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_aml_case_evidence_touch BEFORE UPDATE ON aml_case_evidence FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- aml_case_disposition: Final decision on a case with rationale and approval. Append-only.
+-- aml_case_disposition: Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
 CREATE TABLE aml_case_disposition (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
   aml_case_id                  uuid NOT NULL REFERENCES aml_case(id),
   disposition                  varchar(40) NOT NULL CHECK (disposition IN ('NO_SUSPICION', 'SAR_FILED', 'EXIT_RELATIONSHIP', 'ENHANCED_MONITORING', 'ACCOUNT_RESTRICTED', 'REFERRED_TO_LAW_ENFORCEMENT')),
   rationale                    text NOT NULL,
@@ -280,17 +287,23 @@ CREATE TABLE aml_case_disposition (
   approved_by                  varchar(64),
   decided_at                   timestamptz NOT NULL,
   actions_taken                jsonb,
+  approval_status              varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (approval_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')),
+  approval_comment             text,
+  approved_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE aml_case_disposition IS 'Final decision on a case with rationale and approval. Append-only.';
+COMMENT ON TABLE aml_case_disposition IS 'Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)';
 COMMENT ON COLUMN aml_case_disposition.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN aml_case_disposition.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN aml_case_disposition.created_at IS 'Creation time';
 COMMENT ON COLUMN aml_case_disposition.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN aml_case_disposition.updated_at IS 'Last update time';
+COMMENT ON COLUMN aml_case_disposition.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN aml_case_disposition.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN aml_case_disposition.aml_case_id IS 'Case';
 COMMENT ON COLUMN aml_case_disposition.disposition IS 'Decision';
 COMMENT ON COLUMN aml_case_disposition.rationale IS 'Rationale';
@@ -298,6 +311,9 @@ COMMENT ON COLUMN aml_case_disposition.decided_by IS 'Investigator (maker)';
 COMMENT ON COLUMN aml_case_disposition.approved_by IS 'MLRO (checker)';
 COMMENT ON COLUMN aml_case_disposition.decided_at IS 'Decision time';
 COMMENT ON COLUMN aml_case_disposition.actions_taken IS 'Restrictions applied, relationship exit, monitoring changes';
+COMMENT ON COLUMN aml_case_disposition.approval_status IS 'Maker-checker status';
+COMMENT ON COLUMN aml_case_disposition.approval_comment IS 'Checker comment or rejection reason';
+COMMENT ON COLUMN aml_case_disposition.approved_at IS 'Approval / rejection time';
 COMMENT ON COLUMN aml_case_disposition.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN aml_case_disposition.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN aml_case_disposition.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -307,7 +323,7 @@ CREATE INDEX ix_aml_case_disposition_tenant ON aml_case_disposition (tenant_id, 
 CREATE INDEX ix_aml_case_disposition_aml_case_id ON aml_case_disposition (aml_case_id);
 ALTER TABLE aml_case_disposition ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON aml_case_disposition USING (tenant_id = current_setting('app.tenant_id')::uuid);
-CREATE TRIGGER trg_aml_case_disposition_append_only BEFORE UPDATE OR DELETE ON aml_case_disposition FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+CREATE TRIGGER trg_aml_case_disposition_touch BEFORE UPDATE ON aml_case_disposition FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- sar_report: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
 CREATE TABLE sar_report (
@@ -332,12 +348,13 @@ CREATE TABLE sar_report (
   subjects                     jsonb,
   transactions                 jsonb,
   filing_deadline              date,
+  filing_channel               varchar(16),
   export_document_id           uuid,
-  regulator_reference          varchar(128),
   prepared_by                  varchar(64),
   approved_by                  varchar(64),
   submitted_at                 timestamptz,
   acknowledged_at              timestamptz,
+  regulator_reference          varchar(128),
   rejection_reason             text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -357,22 +374,23 @@ COMMENT ON COLUMN sar_report.aml_case_id IS 'Case (empty for threshold reports s
 COMMENT ON COLUMN sar_report.report_type IS 'Report type';
 COMMENT ON COLUMN sar_report.jurisdiction IS 'Filing jurisdiction';
 COMMENT ON COLUMN sar_report.regulator IS 'FIU, e.g. FinCEN, NCA, FIC';
-COMMENT ON COLUMN sar_report.status IS 'Status';
+COMMENT ON COLUMN sar_report.status IS 'Status (changed only by actions)';
 COMMENT ON COLUMN sar_report.narrative IS 'Final narrative';
 COMMENT ON COLUMN sar_report.ai_draft_narrative IS 'AI-drafted narrative for the investigator to edit';
 COMMENT ON COLUMN sar_report.suspicious_amount IS 'Amount involved';
 COMMENT ON COLUMN sar_report.currency IS 'Currency';
 COMMENT ON COLUMN sar_report.activity_start IS 'Suspicious activity start';
 COMMENT ON COLUMN sar_report.activity_end IS 'Suspicious activity end';
-COMMENT ON COLUMN sar_report.subjects IS 'Persons and entities reported';
-COMMENT ON COLUMN sar_report.transactions IS 'Transactions reported';
+COMMENT ON COLUMN sar_report.subjects IS 'Persons and entities reported ({name, type, id_number, country, role})';
+COMMENT ON COLUMN sar_report.transactions IS 'Transactions reported ({transaction_id, date, amount, currency, from, to, description})';
 COMMENT ON COLUMN sar_report.filing_deadline IS 'Regulatory deadline';
+COMMENT ON COLUMN sar_report.filing_channel IS 'API, EXPORT or PORTAL';
 COMMENT ON COLUMN sar_report.export_document_id IS 'goAML XML / FinCEN BSA XML file';
-COMMENT ON COLUMN sar_report.regulator_reference IS 'FIU reference number';
-COMMENT ON COLUMN sar_report.prepared_by IS 'Preparer';
+COMMENT ON COLUMN sar_report.prepared_by IS 'Preparer (submitter for approval)';
 COMMENT ON COLUMN sar_report.approved_by IS 'MLRO approval';
 COMMENT ON COLUMN sar_report.submitted_at IS 'Submission time';
 COMMENT ON COLUMN sar_report.acknowledged_at IS 'FIU acknowledgement time';
+COMMENT ON COLUMN sar_report.regulator_reference IS 'FIU reference number';
 COMMENT ON COLUMN sar_report.rejection_reason IS 'FIU rejection reason';
 COMMENT ON COLUMN sar_report.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN sar_report.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

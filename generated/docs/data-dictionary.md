@@ -12336,10 +12336,13 @@ API: /v1/risk/fraud/scores · Requirements: FRM-01, FRM-05
 | model_version | varchar(32) | yes |  | model_version | Model version used |
 | decision | varchar(40) (FraudDecision) | no |  | decision | Decision returned to the caller |
 | reason_codes | jsonb | no |  | reason_codes | Ordered reason codes explaining the decision |
-| features | jsonb | yes |  | features | Feature values used (for audit and explainability) |
+| features | jsonb | yes |  | features | Feature values used (for audit, explainability and rule backtesting) |
 | shadow_decision | varchar(40) (FraudDecision) | yes |  | shadow_decision | Decision of the shadow / challenger model |
 | latency_ms | integer | no |  | latency_ms | Evaluation time in milliseconds |
 | correlation_id | varchar(128) | yes |  | correlation_id | Trace / saga correlation id |
+| session_id | varchar(128) | yes |  | session_id | App session (links behavioural signals) |
+| fraud_alert_id | uuid | yes |  | fraud_alert_id (read-only) | Alert raised for REVIEW / BLOCK decisions |
+| idempotency_key | varchar(128) | yes |  | idempotency_key (read-only) | Client key; a replay returns the original evaluation |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12369,13 +12372,14 @@ API: /v1/risk/fraud/rules · Requirements: FRM-01
 | action | varchar(40) (FraudRuleAction) | no |  | action | Action when the rule fires |
 | score_adjustment | integer | no |  | score_adjustment | Points added to the score when it fires |
 | priority | integer | no |  | priority | Lower runs first; BLOCK rules short-circuit |
-| status | varchar(40) (FraudRuleStatus) | no |  | status | Lifecycle; SHADOW logs hits without acting |
+| status | varchar(40) (FraudRuleStatus) | no |  | status (read-only) | Lifecycle (changed only by activate/deactivate); SHADOW logs hits without acting |
 | rule_version | integer | no |  | rule_version (read-only) | Incremented on every change |
 | tags | jsonb | yes |  | tags | Free tags, e.g. typology |
 | valid_from | timestamptz | yes |  | valid_from | Effective from |
 | valid_to | timestamptz | yes |  | valid_to | Effective to |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| deactivation_reason | varchar(255) | yes |  | deactivation_reason (read-only) | Why the rule was disabled |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12400,7 +12404,7 @@ API: internal only · Requirements: FRM-01
 | action | varchar(40) (FraudRuleAction) | no |  | action | Action taken |
 | score_adjustment | integer | no |  | score_adjustment | Points applied |
 | shadow | boolean | no |  | shadow | Rule was in shadow mode |
-| matched_values | jsonb | yes |  | matched_values | Values that made the expression true |
+| matched_values | jsonb | yes |  | matched_values | Values of the identifiers the expression referenced |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12457,16 +12461,19 @@ API: /v1/risk/fraud/alerts · Requirements: FRM-01, FRM-02
 | subject_type | varchar(40) (FraudSubjectType) | no |  | subject_type | Event type |
 | subject_id | uuid | no |  | subject_id | Event id |
 | severity | varchar(40) (RiskAlertSeverity) | no |  | severity | Severity |
-| status | varchar(40) (FraudAlertStatus) | no |  | status | Status |
+| status | varchar(40) (FraudAlertStatus) | no |  | status (read-only) | Status (changed only by actions) |
+| reason_codes | jsonb | yes |  | reason_codes | Reason codes of the evaluation that raised the alert |
 | typology | varchar(40) (FraudTypology) | yes |  | typology | Suspected or confirmed typology |
 | amount | numeric(28,8) | yes |  | amount | Amount at risk |
 | currency | char(3) | yes |  | currency | Currency |
 | assigned_to | varchar(64) | yes |  | assigned_to | Analyst |
 | sla_due_at | timestamptz | yes |  | sla_due_at | Review deadline |
-| customer_contacted | boolean | no |  | customer_contacted | Customer confirmation obtained |
+| customer_contacted | boolean | no |  | customer_contacted (read-only) | Customer confirm-or-deny message sent |
+| notification_id | uuid | yes | ref → notification | notification_id (read-only) | Confirm-or-deny notification |
 | resolution | text | yes |  | resolution | Resolution notes |
+| resolved_by | varchar(64) | yes |  | resolved_by (read-only) | Analyst who resolved |
 | resolved_at | timestamptz | yes |  | resolved_at (read-only) | Resolution time |
-| aml_case_id | uuid | yes | ref → aml_case | aml_case_id | Case opened from this alert |
+| aml_case_id | uuid | yes | ref → aml_case | aml_case_id (read-only) | Case opened from this alert |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12502,8 +12509,9 @@ API: /v1/risk/fraud/devices · Requirements: FRM-05
 | last_country | char(2) | yes |  | last_country | Last seen country (IP geolocation) |
 | customers_seen | integer | no |  | customers_seen (read-only) | Distinct customers seen on this device |
 | risk_score | integer | no |  | risk_score (read-only) | Device reputation 0-1000 |
-| trusted | boolean | no |  | trusted | Marked trusted after strong authentication |
-| blocked | boolean | no |  | blocked | Blocked device |
+| trusted | boolean | no |  | trusted (read-only) | Marked trusted after strong authentication (use /trust) |
+| blocked | boolean | no |  | blocked (read-only) | Blocked device (use /block and /unblock) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason for the last trust / block / unblock |
 | first_seen_at | timestamptz | no |  | first_seen_at (read-only) | First seen |
 | last_seen_at | timestamptz | no |  | last_seen_at (read-only) | Last seen |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12644,11 +12652,12 @@ API: /v1/risk/monitoring/scenarios · Requirements: FRM-02
 | name | varchar(160) | no |  | name | Scenario name |
 | scenario_type | varchar(40) (TmScenarioType) | no |  | scenario_type | Typology |
 | description | text | yes |  | description | Logic description for auditors |
-| status | varchar(40) (TmScenarioStatus) | no |  | status | Lifecycle |
+| status | varchar(40) (TmScenarioStatus) | no |  | status (read-only) | Lifecycle (changed only by activate / retire) |
 | customer_segment | varchar(64) | yes |  | customer_segment | Segment it applies to (empty = all) |
-| run_mode | varchar(40) (TmRunMode) | no |  | run_mode | Streaming or batch |
+| run_mode | varchar(40) (TmRunMode) | no |  | run_mode | Streaming (evaluated on ingest) or batch (evaluated by runs) |
 | active_version | integer | yes |  | active_version (read-only) | Version currently in force |
 | owner | varchar(64) | yes |  | owner | Accountable owner (MLRO team) |
+| retired_reason | text | yes |  | retired_reason (read-only) | Why the scenario was retired |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12677,8 +12686,8 @@ API: /v1/risk/monitoring/scenario-versions · Requirements: FRM-02
 | min_amount | numeric(28,8) | yes |  | min_amount | Minimum aggregate amount |
 | min_count | integer | yes |  | min_count | Minimum transaction count |
 | risk_weight | numeric(18,10) | no |  | risk_weight | Weight in alert scoring |
-| status | varchar(40) (TmScenarioStatus) | no |  | status | Lifecycle |
-| effective_from | timestamptz | yes |  | effective_from | Effective from |
+| status | varchar(40) (TmScenarioStatus) | no |  | status (read-only) | Lifecycle |
+| effective_from | timestamptz | yes |  | effective_from (read-only) | Effective from (set on activation) |
 | tuning_rationale | text | yes |  | tuning_rationale | Why thresholds were set or changed (below/above-the-line testing) |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
@@ -12705,6 +12714,9 @@ API: /v1/risk/monitoring/runs · Requirements: FRM-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | mode | varchar(40) (TmRunMode) | no |  | mode | Batch, backtest or streaming window |
 | tm_scenario_version_id | uuid | yes | FK → tm_scenario_version | tm_scenario_version_id | Single scenario version (empty = all active) |
+| customers_evaluated | integer | yes |  | customers_evaluated (read-only) | Customers evaluated |
+| results | jsonb | yes |  | results (read-only) | Per-scenario figures (alerts, would-be alerts for backtests) |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Why the run was cancelled |
 | from_ts | timestamptz | no |  | from_ts | Window start |
 | to_ts | timestamptz | no |  | to_ts | Window end |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
@@ -12741,7 +12753,8 @@ API: /v1/risk/monitoring/alerts · Requirements: FRM-02
 | account_id | uuid | yes | ref → ledger_account | account_id | Account |
 | score | integer | no |  | score | Alert risk score 0-1000 |
 | severity | varchar(40) (RiskAlertSeverity) | no |  | severity | Severity |
-| status | varchar(40) (TmAlertStatus) | no |  | status | Status |
+| status | varchar(40) (TmAlertStatus) | no |  | status (read-only) | Status (changed only by actions) |
+| reason | jsonb | yes |  | reason | Scenario figures that triggered the alert (thresholds vs observed) |
 | total_amount | numeric(28,8) | no |  | total_amount | Aggregate amount of contributing transactions |
 | currency | char(3) | no |  | currency | Currency |
 | transaction_count | integer | no |  | transaction_count | Number of contributing transactions |
@@ -12749,8 +12762,8 @@ API: /v1/risk/monitoring/alerts · Requirements: FRM-02
 | period_end | timestamptz | no |  | period_end | Activity window end |
 | assigned_to | varchar(64) | yes |  | assigned_to | Analyst |
 | triage_note | text | yes |  | triage_note | Level-1 triage note |
-| aml_case_id | uuid | yes | ref → aml_case | aml_case_id | Case opened from the alert |
-| closed_reason | varchar(255) | yes |  | closed_reason | Reason when closed without a case |
+| aml_case_id | uuid | yes | ref → aml_case | aml_case_id (read-only) | Case opened from the alert |
+| closed_reason | varchar(255) | yes |  | closed_reason (read-only) | Reason when closed without a case |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Close time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -12787,6 +12800,38 @@ API: internal only · Requirements: FRM-02
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `tm_transaction` (append-only)
+
+Monitored transaction feed (one row per customer leg), ingested from payments, cards, wallets and the ledger. Append-only.
+
+API: /v1/risk/monitoring/transactions · Requirements: FRM-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| transaction_id | uuid | no |  | transaction_id | Business transaction id |
+| transaction_type | varchar(40) | no |  | transaction_type | PAYMENT, CARD, WALLET, CASH, TRANSFER |
+| customer_id | uuid | no | ref → customer | customer_id | Customer the leg belongs to |
+| account_id | uuid | yes | ref → ledger_account | account_id | Customer account |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
+| direction | varchar(40) (EntryDirection) | no |  | direction | DEBIT = money out of the customer, CREDIT = money in |
+| amount | numeric(28,8) | no |  | amount | Amount (positive) |
+| currency | char(3) | no |  | currency | Currency |
+| is_cash | boolean | no |  | is_cash | Cash deposit / withdrawal |
+| channel | varchar(40) (RiskChannel) | yes |  | channel | Channel |
+| counterparty_name | varchar(255) | yes |  | counterparty_name | Counterparty |
+| counterparty_account | varchar(64) | yes |  | counterparty_account | Counterparty account / IBAN / wallet reference |
+| counterparty_country | char(2) | yes |  | counterparty_country | Counterparty country |
+| occurred_at | timestamptz | no |  | occurred_at | Transaction time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 #### `customer_risk_rating`
 
 Customer AML risk rating (CRR) with contributing factors and next review date
@@ -12803,13 +12848,17 @@ API: /v1/risk/monitoring/customer-risk-ratings · Requirements: FRM-02, CIF-03
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| rating | varchar(40) (AmlRiskLevel) | no |  | rating | AML risk level |
-| score | integer | no |  | score | Risk score 0-1000 |
-| factors | jsonb | no |  | factors | Weighted factors: geography, product, channel, occupation, PEP, behaviour |
+| rating | varchar(40) (AmlRiskLevel) | no |  | rating (read-only) | AML risk level (calculated) |
+| score | integer | no |  | score (read-only) | Risk score 0-1000 (calculated) |
+| factors | jsonb | no |  | factors | Factor inputs (country_risk, product_risk, channel_risk, occupation_risk, pep, adverse_media); the calculation adds weights, contributions and behaviour |
 | model_version | varchar(32) | yes |  | model_version | Rating model version |
-| next_review_date | date | no |  | next_review_date | Periodic review due date (EDD for high risk) |
-| override_rating | varchar(40) (AmlRiskLevel) | yes |  | override_rating | Manual override |
-| override_reason | text | yes |  | override_reason | Override justification |
+| next_review_date | date | no |  | next_review_date (read-only) | Periodic review due date (EDD for high risk) |
+| override_rating | varchar(40) (AmlRiskLevel) | yes |  | override_rating (read-only) | Manual override (in force once approved) |
+| override_reason | text | yes |  | override_reason (read-only) | Override justification |
+| override_status | varchar(40) (RatingOverrideStatus) | yes |  | override_status (read-only) | Maker-checker status of the latest override |
+| override_requested_by | varchar(64) | yes |  | override_requested_by (read-only) | Maker of the override |
+| override_approved_by | varchar(64) | yes |  | override_approved_by (read-only) | Checker of the override |
+| effective_rating | varchar(40) (AmlRiskLevel) | yes |  | effective_rating (read-only) | Rating in force: approved override, else the calculated rating |
 | rated_at | timestamptz | no |  | rated_at (read-only) | Last rating time |
 | rated_by | varchar(64) | yes |  | rated_by | SYSTEM or analyst |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12894,7 +12943,7 @@ API: /v1/risk/sanctions/lists · Requirements: FRM-03, ONB-03
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| owner_tenant_id | uuid | yes |  | owner_tenant_id | Tenant for INTERNAL lists; empty for global lists |
+| owner_tenant_id | uuid | yes |  | owner_tenant_id (read-only) | Owning tenant (lists created through the API); empty for platform-managed global lists |
 | source | varchar(40) (SanctionsListSource) | no |  | source | Publisher |
 | code | varchar(64) | no |  | code | List code, e.g. OFAC_SDN |
 | name | varchar(160) | no |  | name | List name |
@@ -12902,6 +12951,7 @@ API: /v1/risk/sanctions/lists · Requirements: FRM-03, ONB-03
 | published_at | timestamptz | yes |  | published_at | Publication time |
 | loaded_at | timestamptz | yes |  | loaded_at (read-only) | Time loaded into Meridian |
 | entry_count | integer | yes |  | entry_count (read-only) | Active entries |
+| content_sha256 | varchar(64) | yes |  | content_sha256 (read-only) | Hash of the last loaded file (unchanged files are skipped) |
 | source_url | varchar(500) | yes |  | source_url | Download location |
 | is_active | boolean | no |  | is_active | Used for screening |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12932,13 +12982,44 @@ API: /v1/risk/sanctions/list-entries · Requirements: FRM-03, ONB-03
 | date_of_birth | varchar(32) | yes |  | date_of_birth | Date of birth (may be partial, e.g. 1970 or 1970-05) |
 | place_of_birth | varchar(255) | yes |  | place_of_birth | Place of birth |
 | nationality | char(2) | yes |  | nationality | Nationality |
-| countries | jsonb | yes |  | countries | Associated countries |
-| identifiers | jsonb | yes |  | identifiers | Passports, national ids, IMO numbers, registration numbers |
+| countries | jsonb | yes |  | countries | Associated countries (ISO 3166-1 alpha-2) |
+| identifiers | jsonb | yes |  | identifiers | Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings) |
 | programs | jsonb | yes |  | programs | Sanctions programmes, e.g. SDGT, UKRAINE-EO13662 |
 | pep_level | varchar(16) | yes |  | pep_level | PEP class for PEP lists |
 | remarks | text | yes |  | remarks | Publisher remarks |
 | listed_on | date | yes |  | listed_on | Date listed |
 | delisted_on | date | yes |  | delisted_on | Date removed |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `screening_batch`
+
+Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+
+API: /v1/risk/sanctions/batches · Requirements: FRM-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| trigger | varchar(40) (ScreeningTrigger) | no |  | trigger | Why the batch ran |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
+| total | integer | no |  | total (read-only) | Subjects submitted |
+| processed | integer | no |  | processed (read-only) | Subjects screened |
+| potential_matches | integer | no |  | potential_matches (read-only) | Subjects with potential matches |
+| errors | integer | no |  | errors (read-only) | Subjects that failed |
+| subjects | jsonb | yes |  | — | Submitted subjects (processed asynchronously) |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| error | text | yes |  | error (read-only) | Error details |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12969,10 +13050,13 @@ API: /v1/risk/sanctions/screenings · Requirements: FRM-03, ONB-03
 | nationality | char(2) | yes |  | nationality | Nationality |
 | identifiers | jsonb | yes |  | identifiers | Identity document numbers PII |
 | payload | jsonb | yes |  | payload | Payment fields screened (parties, agents, free text) |
-| list_codes | jsonb | yes |  | list_codes | Lists to screen against (empty = tenant default) |
+| list_codes | jsonb | yes |  | list_codes | Lists to screen against (empty = all active lists visible to the tenant) |
 | threshold | numeric(18,10) | no |  | threshold | Minimum match score that raises a hit |
 | requested_by_service | varchar(64) | no |  | requested_by_service | Calling service |
 | correlation_id | varchar(128) | yes |  | correlation_id | Trace / saga correlation id |
+| screening_batch_id | uuid | yes | FK → screening_batch | screening_batch_id | Batch the request belongs to |
+| status | varchar(40) (SanctionsScreeningStatus) | yes |  | status (read-only) | Outcome of the screening |
+| screening_result_id | uuid | yes |  | screening_result_id (read-only) | Result produced by the screening |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12997,15 +13081,16 @@ API: /v1/risk/sanctions/results · Requirements: FRM-03, ONB-03
 | screening_request_id | uuid | no | FK → screening_request | screening_request_id | Request |
 | subject_type | varchar(40) (ScreeningSubjectType) | no |  | subject_type | What was screened |
 | subject_id | uuid | no |  | subject_id | Business id of the subject |
-| status | varchar(40) (SanctionsScreeningStatus) | no |  | status | Outcome |
+| status | varchar(40) (SanctionsScreeningStatus) | no |  | status (read-only) | Outcome (changed only by /review) |
 | highest_score | numeric(18,10) | no |  | highest_score (read-only) | Best match score 0..1 |
 | match_count | integer | no |  | match_count (read-only) | Number of hits |
 | is_pep | boolean | no |  | is_pep (read-only) | PEP hit confirmed |
 | has_adverse_media | boolean | no |  | has_adverse_media (read-only) | Adverse media found |
-| reviewed_by | varchar(64) | yes |  | reviewed_by | Compliance reviewer |
-| reviewed_at | timestamptz | yes |  | reviewed_at | Review time |
-| decision_reason | text | yes |  | decision_reason | Reviewer rationale |
-| aml_case_id | uuid | yes | ref → aml_case | aml_case_id | Case opened for a confirmed match |
+| suppressed_count | integer | no |  | suppressed_count (read-only) | Candidate matches suppressed by the good-guy whitelist |
+| reviewed_by | varchar(64) | yes |  | reviewed_by (read-only) | Compliance reviewer |
+| reviewed_at | timestamptz | yes |  | reviewed_at (read-only) | Review time |
+| decision_reason | text | yes |  | decision_reason (read-only) | Reviewer rationale |
+| aml_case_id | uuid | yes | ref → aml_case | aml_case_id (read-only) | Case opened for a confirmed match |
 | rescreen_due_at | timestamptz | yes |  | rescreen_due_at | Next periodic rescreen |
 | latency_ms | integer | yes |  | latency_ms (read-only) | Screening time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -13035,8 +13120,9 @@ API: /v1/risk/sanctions/matches · Requirements: FRM-03
 | match_score | numeric(18,10) | no |  | match_score | Match score 0..1 |
 | match_algorithm | varchar(40) | no |  | match_algorithm | JARO_WINKLER, PHONETIC, TOKEN_SET, TRANSLITERATION, EXACT_ID |
 | matched_fields | jsonb | yes |  | matched_fields | Fields compared and their individual scores |
-| disposition | varchar(40) (ScreeningMatchDisposition) | no |  | disposition | Reviewer decision |
+| disposition | varchar(40) (ScreeningMatchDisposition) | no |  | disposition | Reviewer decision (clearing a TRUE_MATCH needs a second reviewer) |
 | disposition_reason | text | yes |  | disposition_reason | Rationale |
+| dispositioned_by | varchar(64) | yes |  | dispositioned_by (read-only) | Reviewer who set the disposition |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13062,7 +13148,7 @@ API: /v1/risk/sanctions/whitelist · Requirements: FRM-03
 | subject_id | uuid | no |  | subject_id | Subject |
 | sanctions_list_entry_id | uuid | no | FK → sanctions_list_entry | sanctions_list_entry_id | Entry that is suppressed |
 | reason | text | no |  | reason | Why this is a false positive |
-| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
 | expires_at | timestamptz | yes |  | expires_at | Review / expiry date |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -13092,7 +13178,7 @@ API: /v1/risk/cases · Requirements: FRM-02, FRM-04
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | case_number | varchar(32) | no | UQ | case_number (read-only) | Human-readable case number |
 | case_type | varchar(40) (AmlCaseType) | no |  | case_type | Case type |
-| status | varchar(40) (AmlCaseStatus) | no |  | status | Status |
+| status | varchar(40) (AmlCaseStatus) | no |  | status (read-only) | Status (changed only by actions) |
 | priority | varchar(40) (RiskAlertSeverity) | no |  | priority | Priority |
 | customer_id | uuid | yes | ref → customer | customer_id | Primary subject |
 | title | varchar(255) | no |  | title | Short summary |
@@ -13104,7 +13190,8 @@ API: /v1/risk/cases · Requirements: FRM-02, FRM-04
 | team | varchar(64) | yes |  | team | Team / queue |
 | opened_at | timestamptz | no |  | opened_at (read-only) | Opened |
 | due_at | timestamptz | yes |  | due_at | Regulatory / internal deadline |
-| escalated_to | varchar(64) | yes |  | escalated_to | MLRO or senior reviewer |
+| escalated_to | varchar(64) | yes |  | escalated_to (read-only) | MLRO or senior reviewer (use /escalate) |
+| escalation_reason | text | yes |  | escalation_reason (read-only) | Why the case was escalated |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Closed |
 | ai_summary | text | yes |  | ai_summary (read-only) | AI-generated case summary with citations |
 | tags | jsonb | yes |  | tags | Free tags |
@@ -13182,9 +13269,10 @@ API: /v1/risk/case-tasks · Requirements: FRM-02
 | title | varchar(255) | no |  | title | Task |
 | description | text | yes |  | description | Details |
 | assigned_to | varchar(64) | yes |  | assigned_to | Assignee |
-| status | varchar(40) (AmlCaseTaskStatus) | no |  | status | Status |
+| status | varchar(40) (AmlCaseTaskStatus) | no |  | status | Status (OPEN, IN_PROGRESS or CANCELLED via PATCH; DONE only via /complete) |
 | due_at | timestamptz | yes |  | due_at | Due |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completed |
+| completed_by | varchar(64) | yes |  | completed_by (read-only) | Who completed the task |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13217,9 +13305,9 @@ API: /v1/risk/case-evidence · Requirements: FRM-02, FRM-04
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
-#### `aml_case_disposition` (append-only)
+#### `aml_case_disposition`
 
-Final decision on a case with rationale and approval. Append-only.
+Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
 
 API: /v1/risk/case-dispositions · Requirements: FRM-02, FRM-04
 
@@ -13229,13 +13317,19 @@ API: /v1/risk/case-dispositions · Requirements: FRM-02, FRM-04
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | aml_case_id | uuid | no | FK → aml_case | aml_case_id | Case |
 | disposition | varchar(40) (CaseDispositionType) | no |  | disposition | Decision |
 | rationale | text | no |  | rationale | Rationale |
-| decided_by | varchar(64) | no |  | decided_by | Investigator (maker) |
-| approved_by | varchar(64) | yes |  | approved_by | MLRO (checker) |
-| decided_at | timestamptz | no |  | decided_at | Decision time |
+| decided_by | varchar(64) | no |  | decided_by (read-only) | Investigator (maker) |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | MLRO (checker) |
+| decided_at | timestamptz | no |  | decided_at (read-only) | Decision time |
 | actions_taken | jsonb | yes |  | actions_taken | Restrictions applied, relationship exit, monitoring changes |
+| approval_status | varchar(40) (DispositionApprovalStatus) | no |  | approval_status (read-only) | Maker-checker status |
+| approval_comment | text | yes |  | approval_comment (read-only) | Checker comment or rejection reason |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval / rejection time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13261,23 +13355,24 @@ API: /v1/risk/sar-reports · Requirements: FRM-04
 | report_type | varchar(40) (SarReportType) | no |  | report_type | Report type |
 | jurisdiction | char(2) | no |  | jurisdiction | Filing jurisdiction |
 | regulator | varchar(64) | no |  | regulator | FIU, e.g. FinCEN, NCA, FIC |
-| status | varchar(40) (SarStatus) | no |  | status | Status |
+| status | varchar(40) (SarStatus) | no |  | status (read-only) | Status (changed only by actions) |
 | narrative | text | yes |  | narrative | Final narrative |
 | ai_draft_narrative | text | yes |  | ai_draft_narrative (read-only) | AI-drafted narrative for the investigator to edit |
 | suspicious_amount | numeric(28,8) | yes |  | suspicious_amount | Amount involved |
 | currency | char(3) | yes |  | currency | Currency |
 | activity_start | date | yes |  | activity_start | Suspicious activity start |
 | activity_end | date | yes |  | activity_end | Suspicious activity end |
-| subjects | jsonb | yes |  | subjects | Persons and entities reported |
-| transactions | jsonb | yes |  | transactions | Transactions reported |
+| subjects | jsonb | yes |  | subjects | Persons and entities reported ({name, type, id_number, country, role}) |
+| transactions | jsonb | yes |  | transactions | Transactions reported ({transaction_id, date, amount, currency, from, to, description}) |
 | filing_deadline | date | yes |  | filing_deadline | Regulatory deadline |
+| filing_channel | varchar(16) | yes |  | filing_channel (read-only) | API, EXPORT or PORTAL |
 | export_document_id | uuid | yes | ref → document | export_document_id (read-only) | goAML XML / FinCEN BSA XML file |
-| regulator_reference | varchar(128) | yes |  | regulator_reference | FIU reference number |
-| prepared_by | varchar(64) | yes |  | prepared_by | Preparer |
-| approved_by | varchar(64) | yes |  | approved_by | MLRO approval |
+| prepared_by | varchar(64) | yes |  | prepared_by (read-only) | Preparer (submitter for approval) |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | MLRO approval |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | acknowledged_at | timestamptz | yes |  | acknowledged_at (read-only) | FIU acknowledgement time |
-| rejection_reason | text | yes |  | rejection_reason | FIU rejection reason |
+| regulator_reference | varchar(128) | yes |  | regulator_reference (read-only) | FIU reference number |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | FIU rejection reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13317,11 +13412,13 @@ API: /v1/risk/limits/rules · Requirements: LIM-01, CIF-03
 | max_count | integer | yes |  | max_count | Maximum transactions per period |
 | breach_action | varchar(40) (LimitBreachAction) | no |  | breach_action | Action on breach |
 | priority | integer | no |  | priority | Tie-breaker between equally specific rules |
-| status | varchar(40) (RiskLimitStatus) | no |  | status | Status |
-| is_regulatory | boolean | no |  | is_regulatory | Regulatory limit (cannot be overridden) |
+| status | varchar(40) (RiskLimitStatus) | no |  | status (read-only) | Status (changed only by activate / deactivate) |
+| is_regulatory | boolean | no |  | is_regulatory | Regulatory limit (cannot be overridden or superseded) |
 | valid_from | timestamptz | yes |  | valid_from | Effective from |
 | valid_to | timestamptz | yes |  | valid_to | Effective to |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who activated the rule |
+| deactivation_reason | text | yes |  | deactivation_reason (read-only) | Why the rule was deactivated |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13353,6 +13450,7 @@ API: /v1/risk/limits/usages · Requirements: LIM-01
 | reserved_amount | numeric(28,8) | no |  | reserved_amount (read-only) | Reserved, not yet committed |
 | reserved_count | integer | no |  | reserved_count (read-only) | Reserved count |
 | currency | char(3) | yes |  | currency | Currency |
+| last_reset_reason | text | yes |  | last_reset_reason (read-only) | Reason of the last operational reset |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13381,6 +13479,7 @@ API: /v1/risk/limits/overrides · Requirements: LIM-01, LIM-02
 | max_count | integer | yes |  | max_count | Overridden count |
 | reason | text | no |  | reason | Justification |
 | status | varchar(40) (LimitOverrideStatus) | no |  | status (read-only) | Status |
+| decision_reason | text | yes |  | decision_reason (read-only) | Approval comment, rejection or revocation reason |
 | valid_from | timestamptz | no |  | valid_from | Effective from |
 | valid_to | timestamptz | no |  | valid_to | Effective to (overrides are always temporary) |
 | requested_by | varchar(64) | yes |  | requested_by (read-only) | Maker |
@@ -13392,7 +13491,7 @@ API: /v1/risk/limits/overrides · Requirements: LIM-01, LIM-02
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
-#### `limit_check` (append-only)
+#### `limit_check`
 
 Result of a limit check; a reservation is committed or released when the transaction completes
 
@@ -13404,23 +13503,34 @@ API: /v1/risk/limits/checks · Requirements: LIM-01
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
-| subject_type | varchar(32) | no |  | subject_type | Primary subject type |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| subject_type | varchar(32) | no |  | subject_type | Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT |
 | subject_id | uuid | no |  | subject_id | Primary subject |
-| customer_id | uuid | yes | ref → customer | customer_id | Customer |
+| customer_id | uuid | yes | ref → customer | customer_id | Customer (customer-level limits are counted per customer) |
+| kyc_tier | varchar(32) | yes |  | kyc_tier | Customer KYC tier code (matches KYC_TIER limits) |
+| customer_segment | varchar(64) | yes |  | customer_segment | Customer segment (matches CUSTOMER_SEGMENT limits) |
+| product_id | uuid | yes | ref → product | product_id | Product (matches PRODUCT limits) |
 | transaction_type | varchar(40) | no |  | transaction_type | Transaction type |
 | channel | varchar(40) (RiskChannel) | yes |  | channel | Channel |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
-| allowed | boolean | no |  | allowed | Whether the transaction is within limits |
-| status | varchar(40) (LimitCheckStatus) | no |  | status | Reservation status at creation |
-| action | varchar(40) (LimitBreachAction) | yes |  | action | Action when a limit was breached |
-| evaluated_rule_ids | jsonb | no |  | evaluated_rule_ids | Rules evaluated |
-| breached_rule_ids | jsonb | yes |  | breached_rule_ids | Rules breached |
-| remaining | jsonb | yes |  | remaining | Remaining amount/count per rule and period |
+| current_balance | numeric(28,8) | yes |  | current_balance | Balance before the transaction (BALANCE limits) |
+| allowed | boolean | no |  | allowed (read-only) | Whether the transaction is within limits |
+| status | varchar(40) (LimitCheckStatus) | no |  | status (read-only) | Reservation status (RESERVED until committed, released or expired) |
+| action | varchar(40) (LimitBreachAction) | yes |  | action (read-only) | Strictest action of the breached limits |
+| evaluated_rule_ids | jsonb | no |  | evaluated_rule_ids (read-only) | Rules evaluated |
+| breached_rule_ids | jsonb | yes |  | breached_rule_ids (read-only) | Rules breached |
+| remaining | jsonb | yes |  | remaining (read-only) | Per rule: limit, used, reserved, remaining amount / count for the period |
+| reservations | jsonb | yes |  | — | Usage counters reserved: limit_usage_id, amount, count |
+| committed_amount | numeric(28,8) | yes |  | committed_amount (read-only) | Amount committed |
+| settled_at | timestamptz | yes |  | settled_at (read-only) | Commit / release time |
+| release_reason | varchar(255) | yes |  | release_reason (read-only) | Why the reservation was released |
 | idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | correlation_id | varchar(128) | yes |  | correlation_id | Business transaction / saga id |
-| expires_at | timestamptz | yes |  | expires_at | Reservation expiry (auto-release) |
-| latency_ms | integer | yes |  | latency_ms | Evaluation time |
+| expires_at | timestamptz | yes |  | expires_at | Reservation expiry (default 15 minutes; released by /expire-reservations) |
+| latency_ms | integer | yes |  | latency_ms (read-only) | Evaluation time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -13452,6 +13562,29 @@ API: /v1/risk/appetite-metrics · Requirements: LIM-01
 | status | varchar(40) (RiskAppetiteStatus) | no |  | status (read-only) | Traffic-light status |
 | measured_at | timestamptz | yes |  | measured_at (read-only) | Time of latest measurement |
 | owner | varchar(64) | yes |  | owner | Accountable owner |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `risk_appetite_measurement` (append-only)
+
+One measurement of a risk appetite metric with the status it implied. Append-only.
+
+API: internal only · Requirements: LIM-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| risk_appetite_metric_id | uuid | no | FK → risk_appetite_metric | risk_appetite_metric_id | Metric |
+| value | numeric(18,10) | no |  | value | Measured value |
+| status | varchar(40) (RiskAppetiteStatus) | no |  | status | Traffic-light status implied by the thresholds at the time |
+| measured_at | timestamptz | no |  | measured_at | Measurement time |
+| source | varchar(64) | yes |  | source | Producer of the measurement |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

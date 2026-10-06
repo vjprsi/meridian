@@ -373,7 +373,7 @@ paths:
   /v1/risk/limits/rules/simulate:
     post:
       operationId: limitRulesSimulate
-      summary: Show which limits would apply to a subject and transaction
+      summary: Show which limits would apply to a subject and transaction (including superseded rules)
       tags:
       - Limit Rules
       security:
@@ -382,8 +382,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -517,7 +523,7 @@ paths:
   /v1/risk/limits/usages/{id}/reset:
     post:
       operationId: limitUsagesReset
-      summary: Reset a counter (operations correction, audited)
+      summary: Reset the committed usage of a counter (operations correction, audited)
       tags:
       - Limit Usages
       security:
@@ -899,6 +905,7 @@ paths:
           - RELEASED
           - REJECTED
           - DRY_RUN
+          - EXPIRED
       - name: correlation_id
         in: query
         schema:
@@ -1024,7 +1031,7 @@ paths:
   /v1/risk/limits/checks/{id}/commit:
     post:
       operationId: limitChecksCommit
-      summary: Commit the reserved usage after the transaction succeeds
+      summary: Commit the reserved usage after the transaction succeeds (amount at most the reserved amount; the rest is released)
       tags:
       - Limit Checks
       security:
@@ -1114,7 +1121,7 @@ paths:
   /v1/risk/limits/checks/evaluate:
     post:
       operationId: limitChecksEvaluate
-      summary: Dry-run evaluation without reservation
+      summary: Dry-run evaluation without reservation or persistence
       tags:
       - Limit Checks
       security:
@@ -1128,7 +1135,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LimitCheck'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1145,6 +1154,47 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/LimitChecksEvaluateRequest'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-table: limit_check
+  /v1/risk/limits/checks/expire-reservations:
+    post:
+      operationId: limitChecksExpireReservations
+      summary: Release reservations past expires_at (called by the scheduler)
+      tags:
+      - Limit Checks
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LimitChecksExpireReservationsRequest'
       x-requirements:
       - LIM-01
       x-service: limits-service
@@ -1386,6 +1436,41 @@ paths:
       x-service: limits-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
       x-table: risk_appetite_metric
+    get:
+      operationId: riskAppetiteMetricsGetMeasurements
+      summary: Measurement history
+      tags:
+      - Risk Appetite Metrics
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskAppetiteMeasurementPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - LIM-01
+      x-service: limits-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: risk_appetite_metric
 components:
   schemas:
     Problem:
@@ -1463,6 +1548,18 @@ components:
         subject_id:
           type: string
           format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        kyc_tier:
+          type: string
+          maxLength: 32
+        customer_segment:
+          type: string
+          maxLength: 64
+        product_id:
+          type: string
+          format: uuid
         transaction_type:
           type: string
           maxLength: 40
@@ -1489,6 +1586,11 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subject_type
       - subject_id
@@ -1598,6 +1700,18 @@ components:
         subject_id:
           type: string
           format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        kyc_tier:
+          type: string
+          maxLength: 32
+        customer_segment:
+          type: string
+          maxLength: 64
+        product_id:
+          type: string
+          format: uuid
         transaction_type:
           type: string
           maxLength: 40
@@ -1624,12 +1738,23 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        current_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subject_type
       - subject_id
       - transaction_type
       - amount
       - currency
+    LimitChecksExpireReservationsRequest:
+      type: object
+      properties:
+        max_checks:
+          type: integer
+          format: int32
     RiskAppetiteMetricPage:
       type: object
       description: One page of RiskAppetiteMetric results (newest first)
@@ -1659,9 +1784,30 @@ components:
         measured_at:
           type: string
           format: date-time
+        source:
+          type: string
+          maxLength: 64
       required:
       - current_value
       - measured_at
+    RiskAppetiteMeasurementPage:
+      type: object
+      description: One page of RiskAppetiteMeasurement results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskAppetiteMeasurement'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     LimitCheck:
       type: object
       description: Result of a limit check; a reservation is committed or released when the transaction completes
@@ -1683,10 +1829,27 @@ components:
           maxLength: 64
           description: Principal that created the row
           readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
         subject_type:
           type: string
           maxLength: 32
-          description: Primary subject type
+          description: 'Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT'
         subject_id:
           type: string
           format: uuid
@@ -1696,7 +1859,25 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Customer
+          description: Customer (customer-level limits are counted per customer)
+        kyc_tier:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Customer KYC tier code (matches KYC_TIER limits)
+        customer_segment:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Customer segment (matches CUSTOMER_SEGMENT limits)
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product (matches PRODUCT limits)
         transaction_type:
           type: string
           maxLength: 40
@@ -1728,9 +1909,18 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        current_balance:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance before the transaction (BALANCE limits)
         allowed:
           type: boolean
           description: Whether the transaction is within limits
+          readOnly: true
         status:
           type: string
           enum:
@@ -1739,7 +1929,9 @@ components:
           - RELEASED
           - REJECTED
           - DRY_RUN
-          description: Reservation status at creation
+          - EXPIRED
+          description: Reservation status (RESERVED until committed, released or expired)
+          readOnly: true
         action:
           type:
           - string
@@ -1749,23 +1941,50 @@ components:
           - REVIEW
           - STEP_UP
           - ALLOW_AND_ALERT
-          description: Action when a limit was breached
+          description: Strictest action of the breached limits
+          readOnly: true
         evaluated_rule_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Rules evaluated
+          readOnly: true
         breached_rule_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Rules breached
+          readOnly: true
         remaining:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
+          items: {}
+          description: 'Per rule: limit, used, reserved, remaining amount / count for the period'
+          readOnly: true
+        committed_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount committed
+          readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Commit / release time
+          readOnly: true
+        release_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the reservation was released
+          readOnly: true
         idempotency_key:
           type: string
           maxLength: 128
@@ -1782,13 +2001,14 @@ components:
           - string
           - 'null'
           format: date-time
-          description: Reservation expiry (auto-release)
+          description: Reservation expiry (default 15 minutes; released by /expire-reservations)
         latency_ms:
           type:
           - integer
           - 'null'
           format: int32
           description: Evaluation time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -1822,6 +2042,8 @@ components:
       required:
       - id
       - created_at
+      - updated_at
+      - row_version
       - subject_type
       - subject_id
       - transaction_type
@@ -1837,7 +2059,7 @@ components:
         subject_type:
           type: string
           maxLength: 32
-          description: Primary subject type
+          description: 'Primary subject type: CUSTOMER, ACCOUNT, CARD, WALLET, AGENT, MERCHANT'
         subject_id:
           type: string
           format: uuid
@@ -1845,7 +2067,19 @@ components:
         customer_id:
           type: string
           format: uuid
-          description: Customer
+          description: Customer (customer-level limits are counted per customer)
+        kyc_tier:
+          type: string
+          maxLength: 32
+          description: Customer KYC tier code (matches KYC_TIER limits)
+        customer_segment:
+          type: string
+          maxLength: 64
+          description: Customer segment (matches CUSTOMER_SEGMENT limits)
+        product_id:
+          type: string
+          format: uuid
+          description: Product (matches PRODUCT limits)
         transaction_type:
           type: string
           maxLength: 40
@@ -1875,38 +2109,12 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
-        allowed:
-          type: boolean
-          description: Whether the transaction is within limits
-        status:
+        current_balance:
           type: string
-          enum:
-          - RESERVED
-          - COMMITTED
-          - RELEASED
-          - REJECTED
-          - DRY_RUN
-          description: Reservation status at creation
-        action:
-          type: string
-          enum:
-          - REJECT
-          - REVIEW
-          - STEP_UP
-          - ALLOW_AND_ALERT
-          description: Action when a limit was breached
-        evaluated_rule_ids:
-          type: object
-          additionalProperties: true
-          description: Rules evaluated
-        breached_rule_ids:
-          type: object
-          additionalProperties: true
-          description: Rules breached
-        remaining:
-          type: object
-          additionalProperties: true
-          description: Remaining amount/count per rule and period
+          format: decimal
+          examples:
+          - '125.50'
+          description: Balance before the transaction (BALANCE limits)
         correlation_id:
           type: string
           maxLength: 128
@@ -1914,11 +2122,7 @@ components:
         expires_at:
           type: string
           format: date-time
-          description: Reservation expiry (auto-release)
-        latency_ms:
-          type: integer
-          format: int32
-          description: Evaluation time
+          description: Reservation expiry (default 15 minutes; released by /expire-reservations)
         custom_field_1:
           type: string
           maxLength: 500
@@ -1945,9 +2149,6 @@ components:
       - transaction_type
       - amount
       - currency
-      - allowed
-      - status
-      - evaluated_rule_ids
     LimitOverride:
       type: object
       description: Temporary limit increase or decrease for one subject, approved by a checker
@@ -2024,6 +2225,12 @@ components:
           - EXPIRED
           - REVOKED
           description: Status
+          readOnly: true
+        decision_reason:
+          type:
+          - string
+          - 'null'
+          description: Approval comment, rejection or revocation reason
           readOnly: true
         valid_from:
           type: string
@@ -2310,10 +2517,11 @@ components:
           - DRAFT
           - ACTIVE
           - INACTIVE
-          description: Status
+          description: Status (changed only by activate / deactivate)
+          readOnly: true
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type:
           - string
@@ -2332,6 +2540,19 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who activated the rule
+          readOnly: true
+        deactivation_reason:
+          type:
+          - string
+          - 'null'
+          description: Why the rule was deactivated
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2471,16 +2692,9 @@ components:
           type: integer
           format: int32
           description: Tie-breaker between equally specific rules
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          description: Status
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type: string
           format: date-time
@@ -2614,16 +2828,9 @@ components:
           type: integer
           format: int32
           description: Tie-breaker between equally specific rules
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          description: Status
         is_regulatory:
           type: boolean
-          description: Regulatory limit (cannot be overridden)
+          description: Regulatory limit (cannot be overridden or superseded)
         valid_from:
           type: string
           format: date-time
@@ -2744,6 +2951,12 @@ components:
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        last_reset_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of the last operational reset
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2788,6 +3001,91 @@ components:
       - used_count
       - reserved_amount
       - reserved_count
+    RiskAppetiteMeasurement:
+      type: object
+      description: One measurement of a risk appetite metric with the status it implied. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        risk_appetite_metric_id:
+          type: string
+          format: uuid
+          description: Metric
+        value:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Measured value
+        status:
+          type: string
+          enum:
+          - GREEN
+          - AMBER
+          - RED
+          description: Traffic-light status implied by the thresholds at the time
+        measured_at:
+          type: string
+          format: date-time
+          description: Measurement time
+        source:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Producer of the measurement
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - risk_appetite_metric_id
+      - value
+      - status
+      - measured_at
     RiskAppetiteMetric:
       type: object
       description: Board-approved risk appetite metric with amber/red thresholds and its latest value

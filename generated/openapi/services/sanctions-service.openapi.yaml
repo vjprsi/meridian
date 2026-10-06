@@ -30,6 +30,8 @@ tags:
   description: A candidate list entry matched for a screening result, with its disposition
 - name: Screening Whitelist
   description: Good-guy list suppressing a known false positive for one subject and list entry
+- name: Screening Batches
+  description: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
 paths:
   /v1/risk/sanctions/lists:
     get:
@@ -238,7 +240,8 @@ paths:
   /v1/risk/sanctions/lists/{id}/sync:
     post:
       operationId: sanctionsListsSync
-      summary: Download and load the latest list version
+      summary: Download (source_url) or load the given content as the latest list version; entries missing from the file are
+        delisted
       tags:
       - Sanctions Lists
       security:
@@ -269,6 +272,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionsListsSyncRequest'
       x-requirements:
       - FRM-03
       - ONB-03
@@ -315,7 +324,7 @@ paths:
   /v1/risk/sanctions/lists/{id}/import:
     post:
       operationId: sanctionsListsImport
-      summary: Import an internal list file
+      summary: Import an internal list file (CSV or JSON) from document-service or inline content, adding / updating entries
       tags:
       - Sanctions Lists
       security:
@@ -330,8 +339,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -726,7 +741,7 @@ paths:
   /v1/risk/sanctions/screenings/screen-payment:
     post:
       operationId: screeningRequestsScreenPayment
-      summary: Synchronously screen an ISO 20022 payment's parties and free text
+      summary: Synchronously screen an ISO 20022 payment's parties (debtor, creditor, agents) and free text
       tags:
       - Screening Requests
       security:
@@ -775,8 +790,12 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningBatch'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -971,7 +990,8 @@ paths:
   /v1/risk/sanctions/results/{id}/review:
     post:
       operationId: screeningResultsReview
-      summary: Record the compliance decision
+      summary: Record the compliance decision (CONFIRMED_MATCH or FALSE_POSITIVE; four-eyes against the match reviewer for
+        confirmations)
       tags:
       - Screening Results
       security:
@@ -1385,6 +1405,121 @@ paths:
       x-table: screening_whitelist
       x-crud: true
       x-crud-delete: true
+  /v1/risk/sanctions/batches:
+    get:
+      operationId: screeningBatchesList
+      summary: List screening batches
+      tags:
+      - Screening Batches
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningBatchPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: screening_batch
+      x-crud: true
+      x-crud-list: true
+  /v1/risk/sanctions/batches/{id}:
+    get:
+      operationId: screeningBatchesGet
+      summary: Retrieve screening batche
+      tags:
+      - Screening Batches
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreeningBatch'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-03
+      x-service: sanctions-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-table: screening_batch
+      x-crud: true
+      x-crud-get: true
 components:
   schemas:
     Problem:
@@ -1441,6 +1576,20 @@ components:
       required:
       - data
       - has_more
+    SanctionsListsSyncRequest:
+      type: object
+      properties:
+        content:
+          type: string
+        format:
+          type: string
+          maxLength: 8
+        list_version:
+          type: string
+          maxLength: 64
+        published_at:
+          type: string
+          format: date-time
     SanctionsListEntryPage:
       type: object
       description: One page of SanctionsListEntry results (newest first)
@@ -1465,8 +1614,11 @@ components:
         document_id:
           type: string
           format: uuid
-      required:
-      - document_id
+        content:
+          type: string
+        format:
+          type: string
+          maxLength: 8
     ScreeningRequestPage:
       type: object
       description: One page of ScreeningRequest results (newest first)
@@ -1494,6 +1646,14 @@ components:
         payload:
           type: object
           additionalProperties: true
+        threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        correlation_id:
+          type: string
+          maxLength: 128
       required:
       - payment_id
       - payload
@@ -1501,8 +1661,8 @@ components:
       type: object
       properties:
         subjects:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
         trigger:
           type: string
           enum:
@@ -1512,6 +1672,11 @@ components:
           - LIST_UPDATE
           - PAYMENT
           - MANUAL
+        threshold:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - subjects
       - trigger
@@ -1565,6 +1730,8 @@ components:
           - ERROR
         decision_reason:
           type: string
+        whitelist_false_positives:
+          type: boolean
       required:
       - status
       - decision_reason
@@ -1576,6 +1743,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScreeningWhitelist'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ScreeningBatchPage:
+      type: object
+      description: One page of ScreeningBatch results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScreeningBatch'
         next_cursor:
           type:
           - string
@@ -1629,7 +1814,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
+          description: Owning tenant (lists created through the API); empty for platform-managed global lists
+          readOnly: true
         source:
           type: string
           enum:
@@ -1676,6 +1862,13 @@ components:
           - 'null'
           format: int32
           description: Active entries
+          readOnly: true
+        content_sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Hash of the last loaded file (unchanged files are skipped)
           readOnly: true
         source_url:
           type:
@@ -1728,10 +1921,6 @@ components:
     SanctionsListCreate:
       type: object
       properties:
-        owner_tenant_id:
-          type: string
-          format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
         source:
           type: string
           enum:
@@ -1795,10 +1984,6 @@ components:
     SanctionsListUpdate:
       type: object
       properties:
-        owner_tenant_id:
-          type: string
-          format: uuid
-          description: Tenant for INTERNAL lists; empty for global lists
         source:
           type: string
           enum:
@@ -1916,9 +2101,9 @@ components:
           description: Primary name
         aliases:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Aliases, AKAs and transliterations
         date_of_birth:
           type:
@@ -1940,21 +2125,21 @@ components:
           description: Nationality (ISO 3166-1 alpha-2)
         countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Associated countries
+          items: {}
+          description: Associated countries (ISO 3166-1 alpha-2)
         identifiers:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
+          items: {}
+          description: Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)
         programs:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
         pep_level:
           type:
@@ -2043,8 +2228,8 @@ components:
           maxLength: 500
           description: Primary name
         aliases:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Aliases, AKAs and transliterations
         date_of_birth:
           type: string
@@ -2059,16 +2244,16 @@ components:
           pattern: ^[A-Z]{2}$
           description: Nationality (ISO 3166-1 alpha-2)
         countries:
-          type: object
-          additionalProperties: true
-          description: Associated countries
+          type: array
+          items: {}
+          description: Associated countries (ISO 3166-1 alpha-2)
         identifiers:
-          type: object
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
+          type: array
+          items: {}
+          description: Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)
         programs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
         pep_level:
           type: string
@@ -2135,8 +2320,8 @@ components:
           maxLength: 500
           description: Primary name
         aliases:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Aliases, AKAs and transliterations
         date_of_birth:
           type: string
@@ -2151,16 +2336,16 @@ components:
           pattern: ^[A-Z]{2}$
           description: Nationality (ISO 3166-1 alpha-2)
         countries:
-          type: object
-          additionalProperties: true
-          description: Associated countries
+          type: array
+          items: {}
+          description: Associated countries (ISO 3166-1 alpha-2)
         identifiers:
-          type: object
-          additionalProperties: true
-          description: Passports, national ids, IMO numbers, registration numbers
+          type: array
+          items: {}
+          description: Passports, national ids, IMO numbers, registration numbers ({type, value} or plain strings)
         programs:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Sanctions programmes, e.g. SDGT, UKRAINE-EO13662
         pep_level:
           type: string
@@ -2197,6 +2382,146 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ScreeningBatch:
+      type: object
+      description: Asynchronous bulk screening of up to 10,000 subjects (periodic rescreen, list update)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        trigger:
+          type: string
+          enum:
+          - ONBOARDING
+          - CUSTOMER_CHANGE
+          - PERIODIC_RESCREEN
+          - LIST_UPDATE
+          - PAYMENT
+          - MANUAL
+          description: Why the batch ran
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - CANCELLED
+          - PARTIALLY_SUCCEEDED
+          description: Status
+          readOnly: true
+        total:
+          type: integer
+          format: int32
+          description: Subjects submitted
+          readOnly: true
+        processed:
+          type: integer
+          format: int32
+          description: Subjects screened
+          readOnly: true
+        potential_matches:
+          type: integer
+          format: int32
+          description: Subjects with potential matches
+          readOnly: true
+        errors:
+          type: integer
+          format: int32
+          description: Subjects that failed
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        error:
+          type:
+          - string
+          - 'null'
+          description: Error details
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - trigger
+      - status
+      - total
+      - processed
+      - potential_matches
+      - errors
     ScreeningMatch:
       type: object
       description: A candidate list entry matched for a screening result, with its disposition
@@ -2269,12 +2594,19 @@ components:
           - PENDING
           - TRUE_MATCH
           - FALSE_POSITIVE
-          description: Reviewer decision
+          description: Reviewer decision (clearing a TRUE_MATCH needs a second reviewer)
         disposition_reason:
           type:
           - string
           - 'null'
           description: Rationale
+        dispositioned_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Reviewer who set the disposition
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2351,7 +2683,7 @@ components:
           - PENDING
           - TRUE_MATCH
           - FALSE_POSITIVE
-          description: Reviewer decision
+          description: Reviewer decision (clearing a TRUE_MATCH needs a second reviewer)
         disposition_reason:
           type: string
           description: Rationale
@@ -2462,9 +2794,9 @@ components:
           description: Nationality (ISO 3166-1 alpha-2)
         identifiers:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Identity document numbers
         payload:
           type:
@@ -2474,10 +2806,10 @@ components:
           description: Payment fields screened (parties, agents, free text)
         list_codes:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Lists to screen against (empty = tenant default)
+          items: {}
+          description: Lists to screen against (empty = all active lists visible to the tenant)
         threshold:
           type: string
           format: decimal
@@ -2494,6 +2826,32 @@ components:
           - 'null'
           maxLength: 128
           description: Trace / saga correlation id
+        screening_batch_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Batch the request belongs to
+        status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PENDING
+          - CLEAR
+          - POTENTIAL_MATCH
+          - CONFIRMED_MATCH
+          - FALSE_POSITIVE
+          - ERROR
+          description: Outcome of the screening
+          readOnly: true
+        screening_result_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Result produced by the screening
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2580,17 +2938,17 @@ components:
           pattern: ^[A-Z]{2}$
           description: Nationality (ISO 3166-1 alpha-2)
         identifiers:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Identity document numbers
         payload:
           type: object
           additionalProperties: true
           description: Payment fields screened (parties, agents, free text)
         list_codes:
-          type: object
-          additionalProperties: true
-          description: Lists to screen against (empty = tenant default)
+          type: array
+          items: {}
+          description: Lists to screen against (empty = all active lists visible to the tenant)
         threshold:
           type: string
           format: decimal
@@ -2605,6 +2963,10 @@ components:
           type: string
           maxLength: 128
           description: Trace / saga correlation id
+        screening_batch_id:
+          type: string
+          format: uuid
+          description: Batch the request belongs to
         custom_field_1:
           type: string
           maxLength: 500
@@ -2697,7 +3059,8 @@ components:
           - CONFIRMED_MATCH
           - FALSE_POSITIVE
           - ERROR
-          description: Outcome
+          description: Outcome (changed only by /review)
+          readOnly: true
         highest_score:
           type: string
           format: decimal
@@ -2718,29 +3081,38 @@ components:
           type: boolean
           description: Adverse media found
           readOnly: true
+        suppressed_count:
+          type: integer
+          format: int32
+          description: Candidate matches suppressed by the good-guy whitelist
+          readOnly: true
         reviewed_by:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Compliance reviewer
+          readOnly: true
         reviewed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Review time
+          readOnly: true
         decision_reason:
           type:
           - string
           - 'null'
           description: Reviewer rationale
+          readOnly: true
         aml_case_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Case opened for a confirmed match
+          readOnly: true
         rescreen_due_at:
           type:
           - string
@@ -2797,6 +3169,7 @@ components:
       - match_count
       - is_pep
       - has_adverse_media
+      - suppressed_count
     ScreeningWhitelist:
       type: object
       description: Good-guy list suppressing a known false positive for one subject and list entry
@@ -2863,6 +3236,7 @@ components:
           - 'null'
           maxLength: 64
           description: Approver
+          readOnly: true
         expires_at:
           type:
           - string
@@ -2933,10 +3307,6 @@ components:
         reason:
           type: string
           description: Why this is a false positive
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Approver
         expires_at:
           type: string
           format: date-time
