@@ -12206,7 +12206,7 @@ Country-pack regulatory reporting (definitions, runs, validation, submission, CR
 
 ### Service `regulatory-reporting-service` — database `regreport_db`
 
-Catalogue of regulatory reports per country pack with versioned templates and data mappings; runs reports reproducibly from lakehouse snapshots, validates them, tracks manual adjustments and submits to regulators with acknowledgements. Also builds CRS and FATCA records.
+Catalogue of regulatory reports per country pack with versioned templates and data mappings; runs reports reproducibly from source snapshots, validates them, tracks manual adjustments and submits to regulators with acknowledgements. Also builds CRS and FATCA records.
 
 
 #### `report_definition`
@@ -12231,10 +12231,12 @@ API: /v1/reporting/definitions · Requirements: REG-01
 | regulator | varchar(64) | no |  | regulator | Regulator / authority |
 | report_family | varchar(40) | no |  | report_family | BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER |
 | frequency | varchar(40) (ReportFrequency) | no |  | frequency | Frequency |
-| format | varchar(40) (ReportFormat) | no |  | format | Submission format |
-| deadline_rule | varchar(64) | yes |  | deadline_rule | Deadline expression, e.g. T+15BD or MONTH_END+10D |
-| status | varchar(40) (ReportDefinitionStatus) | no |  | status | Status |
+| format | varchar(40) (ReportFormat) | no |  | format | Submission format (XBRL, XML, CSV and JSON are rendered by the service) |
+| deadline_rule | varchar(64) | yes |  | deadline_rule | Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days); default per frequency |
+| filing_offset_days | integer | no |  | filing_offset_days | Jurisdiction-specific extension in calendar days added to the deadline |
+| status | varchar(40) (ReportDefinitionStatus) | no |  | status (read-only) | Status (ACTIVE on first publication, DEPRECATED by deprecate) |
 | active_version | integer | yes |  | active_version (read-only) | Version currently in force |
+| status_reason | text | yes |  | status_reason (read-only) | Reason of the last status change (deprecation) |
 | description | text | yes |  | description | Purpose and scope |
 | owner | varchar(64) | yes |  | owner | Accountable owner (finance / compliance) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12259,16 +12261,18 @@ API: /v1/reporting/definition-versions · Requirements: REG-01, REG-02, REG-03
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | report_definition_id | uuid | no | FK → report_definition | report_definition_id | Report definition |
-| definition_version | integer | no |  | definition_version | Version number |
+| definition_version | integer | no |  | definition_version (read-only) | Version number (server-assigned, 1, 2, ...) |
 | template_document_id | uuid | yes | ref → document | template_document_id | Template file (XBRL taxonomy entry point, XLSX, XSD) |
-| mapping | jsonb | no |  | mapping | Cell/element to dataset mapping (SQL or dbt model references) |
-| validation_rules | jsonb | yes |  | validation_rules | Validation rules (cross-checks, totals, regulator formulas) |
+| data_sources | jsonb | no |  | data_sources | Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end} {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)} |
+| field_mappings | jsonb | no |  | field_mappings | Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter (row condition), expression (over other cells), scale, type NUMBER|TEXT} |
+| validation_rules | jsonb | yes |  | validation_rules | Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance, debit, credit, cell, min, max, expression, message} |
 | xbrl_taxonomy | varchar(255) | yes |  | xbrl_taxonomy | XBRL taxonomy and entry point, when XBRL |
 | effective_from | date | no |  | effective_from | First reporting date this version applies to |
 | effective_to | date | yes |  | effective_to | Last reporting date |
-| status | varchar(40) (ReportDefinitionStatus) | no |  | status | Status |
+| status | varchar(40) (ReportVersionStatus) | no |  | status (read-only) | Status |
 | change_note | text | yes |  | change_note | What changed |
-| approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who published the version |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Publication time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12292,12 +12296,15 @@ API: /v1/reporting/schedules · Requirements: REG-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | report_definition_id | uuid | no | FK → report_definition | report_definition_id | Report definition |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
-| cron | varchar(64) | no |  | cron | Cron expression |
+| cron | varchar(64) | no |  | cron | Spring cron expression (second minute hour day month weekday) evaluated in the time zone |
 | timezone | varchar(64) | no |  | timezone | IANA time zone |
 | next_run_at | timestamptz | yes |  | next_run_at (read-only) | Next scheduled run |
+| parameters | jsonb | yes |  | parameters | Run parameters passed to every scheduled run |
 | notify | jsonb | yes |  | notify | Recipients notified on completion or failure |
 | auto_submit | boolean | no |  | auto_submit | Submit automatically after validation and approval |
 | is_active | boolean | no |  | is_active | Active |
+| last_run_date | date | yes |  | last_run_date (read-only) | Business date of the last scheduled run |
+| last_run_id | uuid | yes |  | last_run_id (read-only) | Last run created by the schedule |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12320,22 +12327,56 @@ API: /v1/reporting/runs · Requirements: REG-01, REG-02
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | report_definition_id | uuid | no | FK → report_definition | report_definition_id | Report definition |
-| report_definition_version_id | uuid | no | FK → report_definition_version | report_definition_version_id | Version used |
+| report_definition_version_id | uuid | no | FK → report_definition_version | report_definition_version_id (read-only) | Version used (effective at as_of_date) |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
 | as_of_date | date | no |  | as_of_date | Reporting date |
-| period_start | date | yes |  | period_start | Period start |
-| period_end | date | yes |  | period_end | Period end |
-| parameters | jsonb | yes |  | parameters | Run parameters |
+| period_start | date | yes |  | period_start | Period start (default: start of the frequency period ending at as_of_date) |
+| period_end | date | yes |  | period_end | Period end (default: as_of_date) |
+| parameters | jsonb | yes |  | parameters | Run parameters (available as {param.x} and param_x in expressions) |
 | trigger | varchar(40) (ReportTrigger) | no |  | trigger | What started the run |
-| status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
-| data_snapshot_id | varchar(128) | yes |  | data_snapshot_id (read-only) | Lakehouse (Iceberg) snapshot id for reproducibility |
+| status | varchar(40) (RunStatus) | no |  | status (read-only) | Status (PARTIALLY_SUCCEEDED = produced with validation errors) |
+| data_snapshot_id | varchar(128) | yes |  | data_snapshot_id (read-only) | Fingerprint (sha256) of the source data collected, for reproducibility |
 | row_count | integer | yes |  | row_count (read-only) | Rows / facts produced |
 | error_count | integer | yes |  | error_count (read-only) | Validation errors |
 | warning_count | integer | yes |  | warning_count (read-only) | Validation warnings |
-| supersedes_run_id | uuid | yes | FK → report_run | supersedes_run_id | Run this one corrects (resubmission) |
+| revision | integer | no |  | revision (read-only) | Output revision (approved adjustments produce a new revision) |
+| supersedes_run_id | uuid | yes | FK → report_run | supersedes_run_id (read-only) | Run this one corrects (rerun / resubmission) |
+| superseded_by_run_id | uuid | yes |  | superseded_by_run_id (read-only) | Run that corrects this one |
+| report_schedule_id | uuid | yes | FK → report_schedule | report_schedule_id (read-only) | Schedule that created the run |
 | started_at | timestamptz | yes |  | started_at (read-only) | Start |
 | finished_at | timestamptz | yes |  | finished_at (read-only) | End |
-| error | text | yes |  | error (read-only) | Failure details |
+| error | text | yes |  | error (read-only) | Failure or cancellation details |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `report_cell`
+
+A computed cell / fact of a report run with its lineage to source records
+
+API: internal only · Requirements: REG-02, REG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| report_run_id | uuid | no | FK → report_run | report_run_id | Run |
+| cell_ref | varchar(128) | no |  | cell_ref | Cell / XBRL element reference |
+| label | varchar(255) | yes |  | label | Label |
+| data_type | varchar(16) | no |  | data_type | NUMBER or TEXT |
+| value | varchar(255) | yes |  | value | Reported value (after approved adjustments) |
+| computed_value | varchar(255) | yes |  | computed_value | Value produced by the mapping |
+| is_adjusted | boolean | no |  | is_adjusted | An approved adjustment overrides the computed value |
+| source_name | varchar(64) | yes |  | source_name | Data source the cell aggregates |
+| source_count | integer | no |  | source_count | Source records contributing |
+| source_records | jsonb | yes |  | source_records | Contributing source records (id and value; first 500) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12356,11 +12397,14 @@ API: /v1/reporting/outputs · Requirements: REG-02, REG-03
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | report_run_id | uuid | no | FK → report_run | report_run_id | Run |
 | format | varchar(40) (ReportFormat) | no |  | format | Format |
-| document_id | uuid | no | ref → document | document_id | Stored file |
+| revision | integer | no |  | revision | Run revision the file renders |
+| document_id | uuid | yes | ref → document | document_id | Stored file in document-service, when archived |
 | file_name | varchar(255) | no |  | file_name | File name |
+| content_type | varchar(64) | no |  | content_type | MIME type |
 | size_bytes | bigint | no |  | size_bytes | Size |
 | sha256 | varchar(64) | no |  | sha256 | Checksum |
 | record_count | integer | yes |  | record_count | Rows / facts in the file |
+| content | text | no |  | — | File content (served by the format endpoints) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12380,6 +12424,7 @@ API: internal only · Requirements: REG-02
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | report_run_id | uuid | no | FK → report_run | report_run_id | Run |
+| revision | integer | no |  | revision | Run revision validated |
 | rule_code | varchar(64) | no |  | rule_code | Rule code |
 | severity | varchar(40) (ReportValidationSeverity) | no |  | severity | Severity |
 | message | varchar(1000) | no |  | message | Message |
@@ -12394,7 +12439,7 @@ API: internal only · Requirements: REG-02
 
 #### `report_adjustment`
 
-Manual adjustment (overlay) to a reported value, with justification and approval
+Manual adjustment (overlay) to a reported value, with justification and four-eyes approval
 
 API: /v1/reporting/adjustments · Requirements: REG-02
 
@@ -12409,12 +12454,14 @@ API: /v1/reporting/adjustments · Requirements: REG-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | report_run_id | uuid | no | FK → report_run | report_run_id | Run |
 | cell_ref | varchar(128) | no |  | cell_ref | Cell / XBRL element adjusted |
-| original_value | varchar(255) | yes |  | original_value | Value produced by the mapping |
+| original_value | varchar(255) | yes |  | original_value (read-only) | Value produced by the mapping |
 | adjusted_value | varchar(255) | no |  | adjusted_value | Value reported |
 | reason | text | no |  | reason | Justification |
 | status | varchar(40) (ReportAdjustmentStatus) | no |  | status (read-only) | Status |
 | adjusted_by | varchar(64) | yes |  | adjusted_by (read-only) | Maker |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| decision_comment | text | yes |  | decision_comment (read-only) | Checker comment or rejection reason |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12439,16 +12486,19 @@ API: /v1/reporting/submissions · Requirements: REG-02
 | report_run_id | uuid | no | FK → report_run | report_run_id | Run |
 | report_output_id | uuid | no | FK → report_output | report_output_id | File submitted |
 | channel | varchar(40) (ReportSubmissionChannel) | no |  | channel | Submission channel |
-| status | varchar(40) (ReportSubmissionStatus) | no |  | status | Status |
+| status | varchar(40) (ReportSubmissionStatus) | no |  | status (read-only) | Status |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Sign-off workflow |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Sign-off |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Sign-off time |
 | submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Submitter |
-| regulator_reference | varchar(128) | yes |  | regulator_reference | Regulator receipt / reference |
-| acknowledgement_document_id | uuid | yes | ref → document | acknowledgement_document_id | Acknowledgement file |
+| regulator_reference | varchar(128) | yes |  | regulator_reference (read-only) | Regulator receipt / reference |
+| gateway_message | text | yes |  | gateway_message (read-only) | Message returned by the regulator gateway |
+| acknowledgement_document_id | uuid | yes | ref → document | acknowledgement_document_id (read-only) | Acknowledgement file |
 | acknowledged_at | timestamptz | yes |  | acknowledged_at (read-only) | Acknowledgement time |
-| rejection_reason | text | yes |  | rejection_reason | Regulator rejection reason |
-| deadline_at | timestamptz | yes |  | deadline_at | Submission deadline |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Regulator rejection reason |
+| deadline_at | timestamptz | yes |  | deadline_at | Submission deadline (default: due date of the reporting period) |
+| deadline_alerted_on | date | yes |  | deadline_alerted_on (read-only) | Business date a deadline alert was last raised |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12495,14 +12545,42 @@ API: /v1/reporting/crs-fatca-records · Requirements: REG-01
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `report_job_run`
+
+One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+
+API: /v1/reporting/job-runs · Requirements: REG-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (ReportJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (ScheduledJobStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `analytics-service` — database `analytics_db`
 
-Self-service analytics over the Iceberg lakehouse via Trino: KPI catalogue, dashboards and widgets embedded in the console, saved parameterised queries, exports and scheduled data shares to the tenant's warehouse or bucket.
+Self-service analytics over whitelisted datasets: governed KPI catalogue with SQL-free metric specs, dashboards and widgets embedded in the console, saved queries in a safe query DSL, exports and scheduled data shares to the tenant's warehouse or bucket.
 
 
 #### `analytics_kpi`
 
-Governed KPI definition (formula, unit, dataset, owner)
+Governed KPI definition (metric spec, unit, dataset, owner)
 
 API: /v1/analytics/kpis
 
@@ -12518,11 +12596,15 @@ API: /v1/analytics/kpis
 | code | varchar(64) | no | UQ | code | KPI code, e.g. ACTIVE_ACCOUNTS_30D |
 | name | varchar(160) | no |  | name | KPI name |
 | description | text | yes |  | description | Business definition |
-| formula | text | no |  | formula | SQL expression over the canonical model |
-| dataset | varchar(128) | no |  | dataset | Source dataset / dbt model |
+| formula | text | yes |  | formula | Human-readable formula (documentation only; never executed) |
+| metric | jsonb | no |  | metric | Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row condition), numerator, denominator (metric specs for RATIO), scale} |
+| dataset | varchar(128) | no |  | dataset | Whitelisted source dataset |
+| time_field | varchar(64) | yes |  | time_field | Dataset field used for time series (default: the dataset's time field) |
 | unit | varchar(16) | no |  | unit | COUNT, AMOUNT, PERCENT, BPS, DAYS |
 | owner | varchar(64) | yes |  | owner | Data owner |
-| is_certified | boolean | no |  | is_certified | Certified by data governance |
+| is_certified | boolean | no |  | is_certified (read-only) | Certified by data governance (cleared when the metric changes) |
+| certified_by | varchar(64) | yes |  | certified_by (read-only) | Certifier |
+| certified_at | timestamptz | yes |  | certified_at (read-only) | Certification time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12531,7 +12613,7 @@ API: /v1/analytics/kpis
 
 #### `analytics_saved_query`
 
-Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)
+Saved, parameterised query in the Meridian query DSL over a whitelisted dataset (read-only, tenant-scoped)
 
 API: /v1/analytics/saved-queries
 
@@ -12546,12 +12628,13 @@ API: /v1/analytics/saved-queries
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | name | varchar(160) | no |  | name | Query name |
 | description | text | yes |  | description | Description |
-| sql | text | no |  | sql | Trino SQL (read-only, row-level security applied) |
-| dataset | varchar(128) | yes |  | dataset | Primary dataset |
-| parameters | jsonb | yes |  | parameters | Parameter definitions |
-| owner | varchar(64) | no |  | owner | Owner |
-| visibility | varchar(40) (AnalyticsVisibility) | no |  | visibility | Sharing |
+| query | text | no |  | query | SELECT <items> FROM <dataset> [WHERE <condition>] [GROUP BY <fields>] [ORDER BY <item> [ASC|DESC]] [LIMIT <n>]; parameters as :name; parsed and interpreted, never executed as SQL |
+| dataset | varchar(128) | yes |  | dataset (read-only) | Dataset the query reads (from the query) |
+| parameters | jsonb | yes |  | parameters | Parameter definitions {name, type STRING|NUMBER|DATE|BOOL, required, default} |
+| owner | varchar(64) | yes |  | owner (read-only) | Owner (the creator) |
+| visibility | varchar(40) (AnalyticsVisibility) | no |  | visibility | Sharing (PRIVATE queries are visible to their owner only) |
 | last_run_at | timestamptz | yes |  | last_run_at (read-only) | Last run |
+| last_row_count | integer | yes |  | last_row_count (read-only) | Rows returned by the last run |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12575,11 +12658,11 @@ API: /v1/analytics/dashboards
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | name | varchar(160) | no |  | name | Dashboard name |
 | description | text | yes |  | description | Description |
-| owner | varchar(64) | no |  | owner | Owner |
+| owner | varchar(64) | yes |  | owner (read-only) | Owner (the creator) |
 | visibility | varchar(40) (AnalyticsVisibility) | no |  | visibility | Sharing |
-| is_system | boolean | no |  | is_system | Shipped with the platform |
+| is_system | boolean | no |  | is_system (read-only) | Shipped with the platform |
 | layout | jsonb | yes |  | layout | Grid layout |
-| filters | jsonb | yes |  | filters | Global filters |
+| filters | jsonb | yes |  | filters | Global filters {field, op =|!=|>|>=|<|<=|IN, value} applied to every widget whose dataset has the field |
 | refresh_seconds | integer | no |  | refresh_seconds | Auto-refresh interval |
 | tags | jsonb | yes |  | tags | Tags |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12608,8 +12691,8 @@ API: /v1/analytics/widgets
 | widget_type | varchar(40) (AnalyticsWidgetType) | no |  | widget_type | Widget type |
 | analytics_saved_query_id | uuid | yes | FK → analytics_saved_query | analytics_saved_query_id | Query feeding the widget |
 | analytics_kpi_id | uuid | yes | FK → analytics_kpi | analytics_kpi_id | KPI feeding the widget |
-| config | jsonb | yes |  | config | Visual configuration (axes, series, thresholds) |
-| position | jsonb | no |  | position | Position and size on the grid |
+| config | jsonb | yes |  | config | Visual configuration {x, y[], series, parameters, granularity, from, to, text} |
+| position | jsonb | no |  | position | Position and size on the grid {x, y, w, h} |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12618,7 +12701,7 @@ API: /v1/analytics/widgets
 
 #### `analytics_export_job`
 
-Export of a saved query's results to a file
+Asynchronous export of a saved query's results to a file
 
 API: /v1/analytics/exports
 
@@ -12632,16 +12715,19 @@ API: /v1/analytics/exports
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | analytics_saved_query_id | uuid | no | FK → analytics_saved_query | analytics_saved_query_id | Query |
-| format | varchar(40) (DataExportFormat) | no |  | format | Format |
+| format | varchar(40) (DataExportFormat) | no |  | format | Format (CSV and JSON are produced; PARQUET and XLSX are rejected) |
 | parameters | jsonb | yes |  | parameters | Parameter values |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
 | row_count | bigint | yes |  | row_count (read-only) | Rows exported |
-| document_id | uuid | yes | ref → document | document_id (read-only) | Result file |
+| size_bytes | bigint | yes |  | size_bytes (read-only) | File size |
+| sha256 | varchar(64) | yes |  | sha256 (read-only) | File checksum |
+| document_id | uuid | yes | ref → document | document_id (read-only) | Archived file in document-service |
 | requested_by | varchar(64) | yes |  | requested_by (read-only) | Requester |
 | expires_at | timestamptz | yes |  | expires_at (read-only) | Download expiry |
 | started_at | timestamptz | yes |  | started_at (read-only) | Start |
 | finished_at | timestamptz | yes |  | finished_at (read-only) | End |
-| error | text | yes |  | error (read-only) | Error |
+| error | text | yes |  | error (read-only) | Error or cancellation reason |
+| content | text | yes |  | — | File content (served by the download endpoints until expiry) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12665,12 +12751,43 @@ API: /v1/analytics/data-shares
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | name | varchar(160) | no |  | name | Share name |
 | target | varchar(40) (DataShareTarget) | no |  | target | Destination type |
-| target_config | jsonb | no |  | — | Destination connection details (stored encrypted) secret |
-| datasets | jsonb | no |  | datasets | Datasets / tables shared |
-| schedule_cron | varchar(64) | yes |  | schedule_cron | Delivery schedule (empty = continuous) |
-| status | varchar(40) (DataShareStatus) | no |  | status | Status |
+| target_config | jsonb | no |  | — | Destination connection details (stored encrypted, never returned) secret |
+| target_summary | varchar(255) | yes |  | target_summary (read-only) | Non-secret summary of the destination (e.g. bucket / host) |
+| datasets | jsonb | no |  | datasets | Whitelisted datasets shared |
+| schedule_cron | varchar(64) | yes |  | schedule_cron | Delivery schedule (empty = every business day) |
+| status | varchar(40) (DataShareStatus) | no |  | status (read-only) | Status |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last pause / failure |
 | last_delivery_at | timestamptz | yes |  | last_delivery_at (read-only) | Last successful delivery |
+| last_delivery_rows | bigint | yes |  | last_delivery_rows (read-only) | Rows delivered last time |
 | last_error | text | yes |  | last_error (read-only) | Last error |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `analytics_job_run`
+
+One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+
+API: /v1/analytics/job-runs
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (AnalyticsJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (ScheduledJobStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12705,8 +12822,8 @@ API: /v1/ai/models · Requirements: AI-02
 | risk_tier | varchar(40) (ModelRiskTier) | no |  | risk_tier | Model risk tier |
 | owner_team | varchar(64) | no |  | owner_team | Owning team |
 | validator | varchar(64) | yes |  | validator | Independent model validator |
-| status | varchar(40) (MlModelStatus) | no |  | status | Status |
-| champion_version_id | uuid | yes |  | champion_version_id (read-only) | Version currently serving as champion |
+| status | varchar(40) (MlModelStatus) | no |  | status | Status (UNDER_REVIEW when the periodic review is due) |
+| champion_version_id | uuid | yes |  | champion_version_id (read-only) | Version currently serving as production champion |
 | next_review_date | date | yes |  | next_review_date | Periodic model review date |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -12731,22 +12848,27 @@ API: /v1/ai/model-versions · Requirements: AI-02, LND-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | ml_model_id | uuid | no | FK → ml_model | ml_model_id | Model |
 | model_version | varchar(32) | no |  | model_version | Version label |
-| status | varchar(40) (MlModelVersionStatus) | no |  | status | Status |
+| status | varchar(40) (MlModelVersionStatus) | no |  | status (read-only) | Status |
 | framework | varchar(32) | yes |  | framework | XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM |
 | artifact_uri | varchar(500) | no |  | artifact_uri | Model artifact location (MLflow) |
-| artifact_sha256 | varchar(64) | no |  | artifact_sha256 | Artifact checksum |
+| artifact_sha256 | varchar(64) | no |  | artifact_sha256 | Artifact checksum (64 hex) |
 | training_dataset_ref | varchar(255) | yes |  | training_dataset_ref | Training data snapshot reference |
 | training_from | date | yes |  | training_from | Training window start |
 | training_to | date | yes |  | training_to | Training window end |
-| features | jsonb | yes |  | features | Feature list |
+| features | jsonb | yes |  | features | Feature names |
 | hyperparameters | jsonb | yes |  | hyperparameters | Hyperparameters |
-| metrics | jsonb | yes |  | metrics | Offline metrics (AUC, KS, Gini, precision at k, calibration) |
-| bias_test_results | jsonb | yes |  | bias_test_results | Fairness tests across protected attributes |
+| metrics | jsonb | yes |  | metrics | Offline metrics {AUC, KS, GINI, PRECISION_AT_K, ...} (numbers) |
+| bias_test_results | jsonb | yes |  | bias_test_results | Fairness tests {attribute, metric, value, threshold, passed} |
+| explainability_notes | text | yes |  | explainability_notes | Explainability summary (top drivers, reason codes) |
 | explainability_document_id | uuid | yes | ref → document | explainability_document_id | Explainability report (SHAP) |
 | validation_document_id | uuid | yes | ref → document | validation_document_id | Independent validation report |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval workflow |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Submitter for approval |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejection_reason | text | yes |  | rejection_reason (read-only) | Reason of rejection |
+| decision_comment | text | yes |  | decision_comment (read-only) | Committee comment |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12768,12 +12890,17 @@ API: /v1/ai/deployments · Requirements: AI-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| ml_model_version_id | uuid | no | FK → ml_model_version | ml_model_version_id | Version deployed |
-| environment | varchar(32) | no |  | environment | SANDBOX, STAGING, PRODUCTION |
-| mode | varchar(40) (ModelDeploymentMode) | no |  | mode | Serving mode |
-| traffic_percent | integer | no |  | traffic_percent | Share of traffic served (canary / challenger) |
+| ml_model_version_id | uuid | no | FK → ml_model_version | ml_model_version_id (read-only) | Version deployed |
+| ml_model_id | uuid | no | FK → ml_model | ml_model_id (read-only) | Model |
+| environment | varchar(32) | no |  | environment (read-only) | SANDBOX, STAGING, PRODUCTION |
+| mode | varchar(40) (ModelDeploymentMode) | no |  | mode (read-only) | Serving mode (changed by promote) |
+| traffic_percent | integer | no |  | traffic_percent (read-only) | Share of traffic served (changed by promote) |
 | status | varchar(40) (ModelDeploymentStatus) | no |  | status (read-only) | Status |
 | endpoint | varchar(255) | yes |  | endpoint (read-only) | Serving endpoint (KServe) |
+| thresholds | jsonb | yes |  | thresholds | Alert thresholds per metric name, e.g. {"PSI": 0.25, "AUC": 0.70} |
+| auto_rollback | boolean | no |  | auto_rollback | Scheduled monitoring rolls back a breaching canary / challenger |
+| previous_deployment_id | uuid | yes | FK → model_deployment | previous_deployment_id (read-only) | Champion replaced by this deployment (restored on rollback) |
+| status_reason | text | yes |  | status_reason (read-only) | Reason of the last status change |
 | deployed_by | varchar(64) | yes |  | deployed_by (read-only) | Deployer |
 | deployed_at | timestamptz | yes |  | deployed_at (read-only) | Deployment time |
 | retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
@@ -12797,9 +12924,10 @@ API: /v1/ai/model-metrics · Requirements: AI-02
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | model_deployment_id | uuid | no | FK → model_deployment | model_deployment_id | Deployment |
 | metric_name | varchar(40) | no |  | metric_name | PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE |
+| feature | varchar(128) | yes |  | feature | Feature measured (drift metrics) |
 | metric_value | numeric(18,10) | no |  | metric_value | Value |
-| threshold | numeric(18,10) | yes |  | threshold | Alert threshold |
-| breached | boolean | no |  | breached | Threshold breached |
+| threshold | numeric(18,10) | yes |  | threshold | Alert threshold (default: deployment threshold, else the platform default) |
+| breached | boolean | no |  | breached (read-only) | Threshold breached (higher-is-worse for PSI/CSI/latency/error rate, lower-is-worse otherwise) |
 | window_start | timestamptz | no |  | window_start | Window start |
 | window_end | timestamptz | no |  | window_end | Window end |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12859,11 +12987,11 @@ API: /v1/ai/copilots · Requirements: AI-01, SRV-02
 | description | text | yes |  | description | Description |
 | system_prompt_ref | varchar(255) | no |  | system_prompt_ref | Versioned prompt reference |
 | model_alias | varchar(64) | no |  | model_alias | Model alias resolved by the LLM gateway |
-| allowed_tools | jsonb | no |  | allowed_tools | Read / write tools the copilot may call |
-| data_scopes | jsonb | yes |  | data_scopes | Data the copilot may read |
+| allowed_tools | jsonb | no |  | allowed_tools | Tools {name, mode READ|WRITE, keywords[]}; WRITE tools are only ever proposed |
+| data_scopes | jsonb | yes |  | data_scopes | Context source types the copilot may read (empty = all) |
 | requires_human_approval | boolean | no |  | requires_human_approval | Any write action needs a human approval |
 | llm_gateway_policy_id | uuid | yes | FK → llm_gateway_policy | llm_gateway_policy_id | Gateway policy applied |
-| status | varchar(40) (CopilotStatus) | no |  | status | Status |
+| status | varchar(40) (CopilotStatus) | no |  | status (read-only) | Status |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12883,6 +13011,7 @@ API: /v1/ai/copilot-interactions · Requirements: AI-01, SRV-02
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | copilot_definition_id | uuid | no | FK → copilot_definition | copilot_definition_id | Copilot |
+| parent_interaction_id | uuid | yes | FK → copilot_interaction | parent_interaction_id | Turn decided by this record (approval / rejection of a proposed action) |
 | user_id | uuid | yes | ref → app_user | user_id | Staff user (empty for customer assistant) |
 | customer_id | uuid | yes | ref → customer | customer_id | Customer, for the customer assistant or a customer context |
 | session_id | varchar(64) | no |  | session_id | Conversation session |
@@ -12897,10 +13026,12 @@ API: /v1/ai/copilot-interactions · Requirements: AI-01, SRV-02
 | input_tokens | integer | yes |  | input_tokens | Input tokens |
 | output_tokens | integer | yes |  | output_tokens | Output tokens |
 | latency_ms | integer | yes |  | latency_ms | End-to-end latency |
-| tool_calls | jsonb | yes |  | tool_calls | Tools called with arguments and results summary |
-| citations | jsonb | yes |  | citations | Sources cited (records, documents, events) |
+| tool_calls | jsonb | yes |  | tool_calls | Tools called or proposed {tool, mode, arguments, status} |
+| citations | jsonb | yes |  | citations | Sources cited {index, source_id, source_type, title, score} |
+| redactions | jsonb | yes |  | redactions | Redaction counts per entity |
 | outcome | varchar(40) (CopilotOutcome) | no |  | outcome | Outcome |
-| approved_by | varchar(64) | yes |  | approved_by | Human who approved a proposed action |
+| approved_by | varchar(64) | yes |  | approved_by | Human who approved or rejected a proposed action |
+| decision_comment | text | yes |  | decision_comment | Approval comment or rejection reason |
 | cost | numeric(28,8) | yes |  | cost | Cost of the call |
 | cost_currency | char(3) | yes |  | cost_currency | Cost currency |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -12924,7 +13055,7 @@ API: /v1/ai/copilot-feedback · Requirements: AI-01
 | copilot_interaction_id | uuid | no | FK → copilot_interaction | copilot_interaction_id | Interaction |
 | rating | integer | no |  | rating | 1-5 |
 | comment | text | yes |  | comment | Comment |
-| given_by | varchar(64) | no |  | given_by | User |
+| given_by | varchar(64) | no |  | given_by (read-only) | User |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -12948,16 +13079,47 @@ API: /v1/ai/llm-policies · Requirements: AI-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | name | varchar(160) | no |  | name | Policy name |
 | tenant_opt_in | boolean | no |  | tenant_opt_in | Tenant has opted in to LLM features |
-| allowed_models | jsonb | no |  | allowed_models | Models / providers allowed |
+| allowed_models | jsonb | no |  | allowed_models | Model aliases allowed |
 | self_hosted_only | boolean | no |  | self_hosted_only | Only self-hosted models (data cannot leave region) |
 | data_residency_region | varchar(32) | yes |  | data_residency_region | Region requests must stay in |
 | pii_redaction | boolean | no |  | pii_redaction | Redact PII before sending |
-| redaction_entities | jsonb | yes |  | redaction_entities | Entity types redacted (names, account numbers, PAN, national ids) |
+| redaction_entities | jsonb | yes |  | redaction_entities | Entity types redacted (default: all) |
+| redaction_patterns | jsonb | yes |  | redaction_patterns | Additional patterns {name, pattern} (Java regex, max 200 chars) |
 | max_tokens_per_request | integer | no |  | max_tokens_per_request | Per-request token cap |
 | monthly_token_budget | bigint | yes |  | monthly_token_budget | Monthly token budget |
+| cost_per_1k_tokens | numeric(28,8) | yes |  | cost_per_1k_tokens | Blended price per 1,000 tokens |
+| cost_currency | char(3) | yes |  | cost_currency | Price currency |
 | log_prompts | boolean | no |  | log_prompts | Store redacted prompts in the audit log |
 | retention_days | integer | no |  | retention_days | Interaction retention |
 | is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `ai_job_run`
+
+One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+
+API: /v1/ai/job-runs · Requirements: AI-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (AiJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (ScheduledJobStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

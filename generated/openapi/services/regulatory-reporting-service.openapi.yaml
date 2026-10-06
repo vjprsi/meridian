@@ -29,11 +29,13 @@ tags:
 - name: Report Outputs
   description: A file produced by a report run. Append-only.
 - name: Report Adjustments
-  description: Manual adjustment (overlay) to a reported value, with justification and approval
+  description: Manual adjustment (overlay) to a reported value, with justification and four-eyes approval
 - name: Report Submissions
   description: Submission of a report output to the regulator, with acknowledgement tracking
 - name: Crs Fatca Records
   description: Reportable account record for CRS or FATCA for one account holder and year
+- name: Report Job Runs
+  description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
 paths:
   /v1/reporting/definitions:
     get:
@@ -90,6 +92,11 @@ paths:
           - DRAFT
           - ACTIVE
           - DEPRECATED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -296,7 +303,7 @@ paths:
       x-table: report_definition
     post:
       operationId: reportDefinitionsAddVersions
-      summary: Create a new version
+      summary: Create a new DRAFT version (maker)
       tags:
       - Report Definitions
       security:
@@ -342,7 +349,7 @@ paths:
   /v1/reporting/definitions/{id}/publish:
     post:
       operationId: reportDefinitionsPublish
-      summary: Make a version active (maker-checker)
+      summary: 'Make a version active (checker: must not be the version''s author); the previous active version is superseded'
       tags:
       - Report Definitions
       security:
@@ -362,7 +369,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportDefinition'
+                $ref: '#/components/schemas/ReportDefinitionVersion'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -434,7 +441,8 @@ paths:
   /v1/reporting/definitions/{id}/calendar:
     get:
       operationId: reportDefinitionsCalendar
-      summary: Upcoming due dates per legal entity
+      summary: 'Filing calendar: reporting periods whose due date (frequency + deadline rule + jurisdiction offset) falls
+        in [from, to] (default today..+90 days) per legal entity with run / submission status'
       tags:
       - Report Definitions
       security:
@@ -447,9 +455,33 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -488,6 +520,7 @@ paths:
           enum:
           - DRAFT
           - ACTIVE
+          - SUPERSEDED
           - DEPRECATED
       - name: custom_field_1
         in: query
@@ -791,6 +824,49 @@ paths:
       x-table: report_schedule
       x-crud: true
       x-crud-delete: true
+  /v1/reporting/schedules/run-due:
+    post:
+      operationId: reportSchedulesRunDue
+      summary: Scheduled (per tenant) - create and execute a run for every active schedule whose cron fires on business_date
+        in its time zone (idempotent per business date)
+      tags:
+      - Report Schedules
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - REG-02
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: report_schedule
   /v1/reporting/runs:
     get:
       operationId: reportRunsList
@@ -840,6 +916,11 @@ paths:
           - MANUAL
           - API
           - RESUBMISSION
+      - name: supersedes_run_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -1001,6 +1082,44 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
       x-required-scope: reporting:read
       x-table: report_run
+  /v1/reporting/runs/{id}/cells:
+    get:
+      operationId: reportRunsCells
+      summary: Computed cells with lineage counts
+      tags:
+      - Report Runs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCellPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REG-01
+      - REG-02
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: report_run
   /v1/reporting/runs/{id}/validation-results:
     get:
       operationId: reportRunsValidationResults
@@ -1079,7 +1198,7 @@ paths:
       x-table: report_run
     post:
       operationId: reportRunsAddAdjustments
-      summary: Record a manual adjustment
+      summary: Record a manual adjustment (maker)
       tags:
       - Report Runs
       security:
@@ -1116,6 +1235,47 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ReportRunsAdjustmentsRequest'
+      x-requirements:
+      - REG-01
+      - REG-02
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: report_run
+  /v1/reporting/runs/{id}/execute:
+    post:
+      operationId: reportRunsExecute
+      summary: 'Execute a QUEUED run: collect, transform, validate, render'
+      tags:
+      - Report Runs
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - REG-01
       - REG-02
@@ -1220,7 +1380,7 @@ paths:
   /v1/reporting/runs/{id}/drilldown:
     get:
       operationId: reportRunsDrilldown
-      summary: Source records behind a reported cell (?cell_ref=)
+      summary: Source records behind a reported cell (value, mapping, adjustments, contributing records)
       tags:
       - Report Runs
       security:
@@ -1233,9 +1393,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: cell_ref
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 128
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1280,6 +1452,11 @@ paths:
           - JSON
           - PDF
           - FIXED_WIDTH
+      - name: revision
+        in: query
+        schema:
+          type: integer
+          format: int32
       - name: custom_field_1
         in: query
         schema:
@@ -1363,10 +1540,10 @@ paths:
       x-table: report_output
       x-crud: true
       x-crud-get: true
-  /v1/reporting/outputs/{id}/download:
+  /v1/reporting/outputs/{id}/xml:
     get:
-      operationId: reportOutputsDownload
-      summary: Signed URL to download the file
+      operationId: reportOutputsXml
+      summary: Content of an XML / XBRL output
       tags:
       - Report Outputs
       security:
@@ -1380,8 +1557,84 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REG-02
+      - REG-03
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: report_output
+  /v1/reporting/outputs/{id}/csv:
+    get:
+      operationId: reportOutputsCsv
+      summary: Content of a CSV output
+      tags:
+      - Report Outputs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REG-02
+      - REG-03
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: report_output
+  /v1/reporting/outputs/{id}/json:
+    get:
+      operationId: reportOutputsJson
+      summary: Content of a JSON output
+      tags:
+      - Report Outputs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1506,7 +1759,7 @@ paths:
   /v1/reporting/adjustments/{id}/approve:
     post:
       operationId: reportAdjustmentsApprove
-      summary: Approve the adjustment (checker)
+      summary: Approve the adjustment (checker); the run is re-validated and re-rendered as a new revision
       tags:
       - Report Adjustments
       security:
@@ -1552,7 +1805,7 @@ paths:
   /v1/reporting/adjustments/{id}/reject:
     post:
       operationId: reportAdjustmentsReject
-      summary: Reject the adjustment
+      summary: Reject the adjustment (checker)
       tags:
       - Report Adjustments
       security:
@@ -1759,7 +2012,7 @@ paths:
   /v1/reporting/submissions/{id}/approve:
     post:
       operationId: reportSubmissionsApprove
-      summary: Sign off the submission
+      summary: 'Sign off the submission (checker: not the preparer)'
       tags:
       - Report Submissions
       security:
@@ -1805,7 +2058,7 @@ paths:
   /v1/reporting/submissions/{id}/submit:
     post:
       operationId: reportSubmissionsSubmit
-      summary: Submit to the regulator
+      summary: Submit to the regulator through the gateway adapter
       tags:
       - Report Submissions
       security:
@@ -1928,6 +2181,55 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ReportSubmissionsRecordRejectionRequest'
+      x-requirements:
+      - REG-02
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: report_submission
+  /v1/reporting/submissions/deadline-alerts:
+    post:
+      operationId: reportSubmissionsDeadlineAlerts
+      summary: Scheduled (per tenant) - raise deadline_approaching for open submissions due within days (default 3) of business_date
+        (idempotent per business date)
+      tags:
+      - Report Submissions
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - REG-02
       x-service: regulatory-reporting-service
@@ -2106,7 +2408,7 @@ paths:
   /v1/reporting/crs-fatca-records/generate:
     post:
       operationId: crsFatcaRecordsGenerate
-      summary: Build reportable records for a year
+      summary: Build reportable records for a year from customer tax residency and deposit balances (upsert per account)
       tags:
       - Crs Fatca Records
       security:
@@ -2120,7 +2422,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportRun'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2143,6 +2447,176 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
       x-required-scope: reporting:write
       x-table: crs_fatca_record
+  /v1/reporting/crs-fatca-records/oecd-xml:
+    get:
+      operationId: crsFatcaRecordsOecdXml
+      summary: OECD CRS / FATCA XML message of the records of a year
+      tags:
+      - Crs Fatca Records
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: regime
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - CRS
+          - FATCA
+      - name: reporting_year
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: legal_entity_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: transmitting_country
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      responses:
+        '200':
+          description: OK
+          content:
+            application/xml:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REG-01
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: crs_fatca_record
+  /v1/reporting/job-runs:
+    get:
+      operationId: reportJobRunsList
+      summary: List report job runs
+      tags:
+      - Report Job Runs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - SCHEDULED_RUNS
+          - DEADLINE_ALERTS
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportJobRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REG-02
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: report_job_run
+      x-crud: true
+      x-crud-list: true
+  /v1/reporting/job-runs/{id}:
+    get:
+      operationId: reportJobRunsGet
+      summary: Retrieve report job run
+      tags:
+      - Report Job Runs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REG-02
+      x-service: regulatory-reporting-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: report_job_run
+      x-crud: true
+      x-crud-get: true
 components:
   schemas:
     Problem:
@@ -2223,22 +2697,29 @@ components:
         template_document_id:
           type: string
           format: uuid
-        mapping:
-          type: object
-          additionalProperties: true
+        data_sources:
+          type: array
+          items: {}
+        field_mappings:
+          type: array
+          items: {}
         validation_rules:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
         xbrl_taxonomy:
           type: string
           maxLength: 255
         effective_from:
           type: string
           format: date
+        effective_to:
+          type: string
+          format: date
         change_note:
           type: string
       required:
-      - mapping
+      - data_sources
+      - field_mappings
       - effective_from
     ReportDefinitionsPublishRequest:
       type: object
@@ -2246,6 +2727,8 @@ components:
         definition_version:
           type: integer
           format: int32
+        comment:
+          type: string
       required:
       - definition_version
     ReportDefinitionsDeprecateRequest:
@@ -2299,6 +2782,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReportOutput'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReportCellPage:
+      type: object
+      description: One page of ReportCell results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportCell'
         next_cursor:
           type:
           - string
@@ -2366,6 +2867,9 @@ components:
         parameters:
           type: object
           additionalProperties: true
+        reason:
+          type: string
+          maxLength: 255
     ReportRunsCancelRequest:
       type: object
       properties:
@@ -2457,10 +2961,33 @@ components:
         legal_entity_id:
           type: string
           format: uuid
+        reporting_jurisdiction:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
       required:
       - regime
       - reporting_year
       - legal_entity_id
+      - reporting_jurisdiction
+    ReportJobRunPage:
+      type: object
+      description: One page of ReportJobRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportJobRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CrsFatcaRecord:
       type: object
       description: Reportable account record for CRS or FATCA for one account holder and year
@@ -2757,7 +3284,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     ReportAdjustment:
       type: object
-      description: Manual adjustment (overlay) to a reported value, with justification and approval
+      description: Manual adjustment (overlay) to a reported value, with justification and four-eyes approval
       properties:
         id:
           type: string
@@ -2807,6 +3334,7 @@ components:
           - 'null'
           maxLength: 255
           description: Value produced by the mapping
+          readOnly: true
         adjusted_value:
           type: string
           maxLength: 255
@@ -2835,6 +3363,19 @@ components:
           - 'null'
           maxLength: 64
           description: Checker
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          description: Checker comment or rejection reason
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
           readOnly: true
         custom_field_1:
           type:
@@ -2876,6 +3417,133 @@ components:
       - adjusted_value
       - reason
       - status
+    ReportCell:
+      type: object
+      description: A computed cell / fact of a report run with its lineage to source records
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        report_run_id:
+          type: string
+          format: uuid
+          description: Run
+        cell_ref:
+          type: string
+          maxLength: 128
+          description: Cell / XBRL element reference
+        label:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Label
+        data_type:
+          type: string
+          maxLength: 16
+          description: NUMBER or TEXT
+        value:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reported value (after approved adjustments)
+        computed_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Value produced by the mapping
+        is_adjusted:
+          type: boolean
+          description: An approved adjustment overrides the computed value
+        source_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Data source the cell aggregates
+        source_count:
+          type: integer
+          format: int32
+          description: Source records contributing
+        source_records:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Contributing source records (id and value; first 500)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - report_run_id
+      - cell_ref
+      - data_type
+      - is_adjusted
+      - source_count
     ReportDefinition:
       type: object
       description: A regulatory or statutory report in a country pack (e.g. central-bank balance sheet, liquidity, CRS)
@@ -2961,26 +3629,38 @@ components:
           - JSON
           - PDF
           - FIXED_WIDTH
-          description: Submission format
+          description: Submission format (XBRL, XML, CSV and JSON are rendered by the service)
         deadline_rule:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Deadline expression, e.g. T+15BD or MONTH_END+10D
+          description: 'Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days);
+            default per frequency'
+        filing_offset_days:
+          type: integer
+          format: int32
+          description: Jurisdiction-specific extension in calendar days added to the deadline
         status:
           type: string
           enum:
           - DRAFT
           - ACTIVE
           - DEPRECATED
-          description: Status
+          description: Status (ACTIVE on first publication, DEPRECATED by deprecate)
+          readOnly: true
         active_version:
           type:
           - integer
           - 'null'
           format: int32
           description: Version currently in force
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of the last status change (deprecation)
           readOnly: true
         description:
           type:
@@ -3036,6 +3716,7 @@ components:
       - report_family
       - frequency
       - format
+      - filing_offset_days
       - status
     ReportDefinitionCreate:
       type: object
@@ -3087,18 +3768,16 @@ components:
           - JSON
           - PDF
           - FIXED_WIDTH
-          description: Submission format
+          description: Submission format (XBRL, XML, CSV and JSON are rendered by the service)
         deadline_rule:
           type: string
           maxLength: 64
-          description: Deadline expression, e.g. T+15BD or MONTH_END+10D
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - DEPRECATED
-          description: Status
+          description: 'Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days);
+            default per frequency'
+        filing_offset_days:
+          type: integer
+          format: int32
+          description: Jurisdiction-specific extension in calendar days added to the deadline
         description:
           type: string
           description: Purpose and scope
@@ -3185,18 +3864,16 @@ components:
           - JSON
           - PDF
           - FIXED_WIDTH
-          description: Submission format
+          description: Submission format (XBRL, XML, CSV and JSON are rendered by the service)
         deadline_rule:
           type: string
           maxLength: 64
-          description: Deadline expression, e.g. T+15BD or MONTH_END+10D
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - DEPRECATED
-          description: Status
+          description: 'Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days);
+            default per frequency'
+        filing_offset_days:
+          type: integer
+          format: int32
+          description: Jurisdiction-specific extension in calendar days added to the deadline
         description:
           type: string
           description: Purpose and scope
@@ -3269,23 +3946,31 @@ components:
         definition_version:
           type: integer
           format: int32
-          description: Version number
+          description: Version number (server-assigned, 1, 2, ...)
+          readOnly: true
         template_document_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Template file (XBRL taxonomy entry point, XLSX, XSD)
-        mapping:
-          type: object
-          additionalProperties: true
-          description: Cell/element to dataset mapping (SQL or dbt model references)
+        data_sources:
+          type: array
+          items: {}
+          description: Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end}
+            {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}
+        field_mappings:
+          type: array
+          items: {}
+          description: Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter
+            (row condition), expression (over other cells), scale, type NUMBER|TEXT}
         validation_rules:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Validation rules (cross-checks, totals, regulator formulas)
+          items: {}
+          description: Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance,
+            debit, credit, cell, min, max, expression, message}
         xbrl_taxonomy:
           type:
           - string
@@ -3307,8 +3992,10 @@ components:
           enum:
           - DRAFT
           - ACTIVE
+          - SUPERSEDED
           - DEPRECATED
           description: Status
+          readOnly: true
         change_note:
           type:
           - string
@@ -3319,7 +4006,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Approver
+          description: Checker who published the version
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
           readOnly: true
         custom_field_1:
           type:
@@ -3358,9 +4052,130 @@ components:
       - row_version
       - report_definition_id
       - definition_version
-      - mapping
+      - data_sources
+      - field_mappings
       - effective_from
       - status
+    ReportJobRun:
+      type: object
+      description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - SCHEDULED_RUNS
+          - DEADLINE_ALERTS
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     ReportOutput:
       type: object
       description: A file produced by a report run. Append-only.
@@ -3397,14 +4212,24 @@ components:
           - PDF
           - FIXED_WIDTH
           description: Format
+        revision:
+          type: integer
+          format: int32
+          description: Run revision the file renders
         document_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Stored file
+          description: Stored file in document-service, when archived
         file_name:
           type: string
           maxLength: 255
           description: File name
+        content_type:
+          type: string
+          maxLength: 64
+          description: MIME type
         size_bytes:
           type: integer
           format: int64
@@ -3454,8 +4279,9 @@ components:
       - created_at
       - report_run_id
       - format
-      - document_id
+      - revision
       - file_name
+      - content_type
       - size_bytes
       - sha256
     ReportRun:
@@ -3503,7 +4329,8 @@ components:
         report_definition_version_id:
           type: string
           format: uuid
-          description: Version used
+          description: Version used (effective at as_of_date)
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
@@ -3517,19 +4344,19 @@ components:
           - string
           - 'null'
           format: date
-          description: Period start
+          description: 'Period start (default: start of the frequency period ending at as_of_date)'
         period_end:
           type:
           - string
           - 'null'
           format: date
-          description: Period end
+          description: 'Period end (default: as_of_date)'
         parameters:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Run parameters
+          description: Run parameters (available as {param.x} and param_x in expressions)
         trigger:
           type: string
           enum:
@@ -3547,14 +4374,14 @@ components:
           - FAILED
           - CANCELLED
           - PARTIALLY_SUCCEEDED
-          description: Status
+          description: Status (PARTIALLY_SUCCEEDED = produced with validation errors)
           readOnly: true
         data_snapshot_id:
           type:
           - string
           - 'null'
           maxLength: 128
-          description: Lakehouse (Iceberg) snapshot id for reproducibility
+          description: Fingerprint (sha256) of the source data collected, for reproducibility
           readOnly: true
         row_count:
           type:
@@ -3577,12 +4404,32 @@ components:
           format: int32
           description: Validation warnings
           readOnly: true
+        revision:
+          type: integer
+          format: int32
+          description: Output revision (approved adjustments produce a new revision)
+          readOnly: true
         supersedes_run_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Run this one corrects (resubmission)
+          description: Run this one corrects (rerun / resubmission)
+          readOnly: true
+        superseded_by_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run that corrects this one
+          readOnly: true
+        report_schedule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Schedule that created the run
+          readOnly: true
         started_at:
           type:
           - string
@@ -3601,7 +4448,7 @@ components:
           type:
           - string
           - 'null'
-          description: Failure details
+          description: Failure or cancellation details
           readOnly: true
         custom_field_1:
           type:
@@ -3644,6 +4491,7 @@ components:
       - as_of_date
       - trigger
       - status
+      - revision
     ReportRunCreate:
       type: object
       properties:
@@ -3651,10 +4499,6 @@ components:
           type: string
           format: uuid
           description: Report definition
-        report_definition_version_id:
-          type: string
-          format: uuid
-          description: Version used
         legal_entity_id:
           type: string
           format: uuid
@@ -3666,15 +4510,15 @@ components:
         period_start:
           type: string
           format: date
-          description: Period start
+          description: 'Period start (default: start of the frequency period ending at as_of_date)'
         period_end:
           type: string
           format: date
-          description: Period end
+          description: 'Period end (default: as_of_date)'
         parameters:
           type: object
           additionalProperties: true
-          description: Run parameters
+          description: Run parameters (available as {param.x} and param_x in expressions)
         trigger:
           type: string
           enum:
@@ -3683,10 +4527,6 @@ components:
           - API
           - RESUBMISSION
           description: What started the run
-        supersedes_run_id:
-          type: string
-          format: uuid
-          description: Run this one corrects (resubmission)
         custom_field_1:
           type: string
           maxLength: 500
@@ -3707,9 +4547,13 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        execute:
+          type: boolean
+          description: Execute immediately (default true); false leaves the run QUEUED for /execute (write-only; not stored
+            as a column)
+          writeOnly: true
       required:
       - report_definition_id
-      - report_definition_version_id
       - legal_entity_id
       - as_of_date
     ReportSchedule:
@@ -3761,7 +4605,7 @@ components:
         cron:
           type: string
           maxLength: 64
-          description: Cron expression
+          description: Spring cron expression (second minute hour day month weekday) evaluated in the time zone
         timezone:
           type: string
           maxLength: 64
@@ -3773,11 +4617,17 @@ components:
           format: date-time
           description: Next scheduled run
           readOnly: true
-        notify:
+        parameters:
           type:
           - object
           - 'null'
           additionalProperties: true
+          description: Run parameters passed to every scheduled run
+        notify:
+          type:
+          - array
+          - 'null'
+          items: {}
           description: Recipients notified on completion or failure
         auto_submit:
           type: boolean
@@ -3785,6 +4635,20 @@ components:
         is_active:
           type: boolean
           description: Active
+        last_run_date:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date of the last scheduled run
+          readOnly: true
+        last_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Last run created by the schedule
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3840,14 +4704,18 @@ components:
         cron:
           type: string
           maxLength: 64
-          description: Cron expression
+          description: Spring cron expression (second minute hour day month weekday) evaluated in the time zone
         timezone:
           type: string
           maxLength: 64
           description: IANA time zone
-        notify:
+        parameters:
           type: object
           additionalProperties: true
+          description: Run parameters passed to every scheduled run
+        notify:
+          type: array
+          items: {}
           description: Recipients notified on completion or failure
         auto_submit:
           type: boolean
@@ -3894,14 +4762,18 @@ components:
         cron:
           type: string
           maxLength: 64
-          description: Cron expression
+          description: Spring cron expression (second minute hour day month weekday) evaluated in the time zone
         timezone:
           type: string
           maxLength: 64
           description: IANA time zone
-        notify:
+        parameters:
           type: object
           additionalProperties: true
+          description: Run parameters passed to every scheduled run
+        notify:
+          type: array
+          items: {}
           description: Recipients notified on completion or failure
         auto_submit:
           type: boolean
@@ -3995,6 +4867,7 @@ components:
           - REJECTED
           - RESUBMISSION_REQUIRED
           description: Status
+          readOnly: true
         approval_request_id:
           type:
           - string
@@ -4007,6 +4880,13 @@ components:
           - 'null'
           maxLength: 64
           description: Sign-off
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Sign-off time
           readOnly: true
         submitted_at:
           type:
@@ -4028,12 +4908,20 @@ components:
           - 'null'
           maxLength: 128
           description: Regulator receipt / reference
+          readOnly: true
+        gateway_message:
+          type:
+          - string
+          - 'null'
+          description: Message returned by the regulator gateway
+          readOnly: true
         acknowledgement_document_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Acknowledgement file
+          readOnly: true
         acknowledged_at:
           type:
           - string
@@ -4046,12 +4934,20 @@ components:
           - string
           - 'null'
           description: Regulator rejection reason
+          readOnly: true
         deadline_at:
           type:
           - string
           - 'null'
           format: date-time
-          description: Submission deadline
+          description: 'Submission deadline (default: due date of the reporting period)'
+        deadline_alerted_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date a deadline alert was last raised
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -4111,36 +5007,14 @@ components:
           - EMAIL
           - MANUAL
           description: Submission channel
-        status:
-          type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - SUBMITTED
-          - ACKNOWLEDGED
-          - ACCEPTED
-          - REJECTED
-          - RESUBMISSION_REQUIRED
-          description: Status
         approval_request_id:
           type: string
           format: uuid
           description: Sign-off workflow
-        regulator_reference:
-          type: string
-          maxLength: 128
-          description: Regulator receipt / reference
-        acknowledgement_document_id:
-          type: string
-          format: uuid
-          description: Acknowledgement file
-        rejection_reason:
-          type: string
-          description: Regulator rejection reason
         deadline_at:
           type: string
           format: date-time
-          description: Submission deadline
+          description: 'Submission deadline (default: due date of the reporting period)'
         custom_field_1:
           type: string
           maxLength: 500
@@ -4190,6 +5064,10 @@ components:
           type: string
           format: uuid
           description: Run
+        revision:
+          type: integer
+          format: int32
+          description: Run revision validated
         rule_code:
           type: string
           maxLength: 64
@@ -4257,6 +5135,7 @@ components:
       - id
       - created_at
       - report_run_id
+      - revision
       - rule_code
       - severity
       - message

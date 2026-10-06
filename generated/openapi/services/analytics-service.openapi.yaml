@@ -19,17 +19,19 @@ security:
 - oauth2: []
 tags:
 - name: Analytics Kpis
-  description: Governed KPI definition (formula, unit, dataset, owner)
+  description: Governed KPI definition (metric spec, unit, dataset, owner)
 - name: Analytics Saved Queries
-  description: Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)
+  description: Saved, parameterised query in the Meridian query DSL over a whitelisted dataset (read-only, tenant-scoped)
 - name: Analytics Dashboards
   description: Dashboard shown in the console (portfolio, liquidity, delinquency, agents, fraud, ...)
 - name: Analytics Widgets
   description: A chart, table or KPI tile on a dashboard
 - name: Analytics Exports
-  description: Export of a saved query's results to a file
+  description: Asynchronous export of a saved query's results to a file
 - name: Analytics Data Shares
   description: Scheduled delivery of datasets to the tenant's warehouse, bucket or Iceberg catalog
+- name: Analytics Job Runs
+  description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
 paths:
   /v1/analytics/kpis:
     get:
@@ -221,7 +223,7 @@ paths:
   /v1/analytics/kpis/{id}/values:
     get:
       operationId: analyticsKpisValues
-      summary: KPI values over time (?from=&to=&granularity=)
+      summary: KPI series over the dataset's time field, granularity DAY, WEEK or MONTH (default DAY)
       tags:
       - Analytics Kpis
       security:
@@ -234,9 +236,33 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: granularity
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 8
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -247,10 +273,56 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
       x-required-scope: reporting:read
       x-table: analytics_kpi
+  /v1/analytics/kpis/{id}/evaluate:
+    post:
+      operationId: analyticsKpisEvaluate
+      summary: Evaluate the KPI over provided rows (or its dataset when rows are omitted)
+      tags:
+      - Analytics Kpis
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsKpisEvaluateRequest'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: analytics_kpi
   /v1/analytics/kpis/{id}/certify:
     post:
       operationId: analyticsKpisCertify
-      summary: Certify the KPI definition
+      summary: Certify the KPI definition (data governance; not the author)
       tags:
       - Analytics Kpis
       security:
@@ -505,7 +577,7 @@ paths:
   /v1/analytics/saved-queries/{id}/run:
     post:
       operationId: analyticsSavedQueriesRun
-      summary: Run the query and return rows (?limit=)
+      summary: Run the query and return {columns, rows, row_count, truncated} (limit 1-1000, default 100)
       tags:
       - Analytics Saved Queries
       security:
@@ -518,10 +590,22 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -545,7 +629,7 @@ paths:
   /v1/analytics/saved-queries/{id}/export:
     post:
       operationId: analyticsSavedQueriesExport
-      summary: Export results to a file
+      summary: Export results to a file (asynchronous job)
       tags:
       - Analytics Saved Queries
       security:
@@ -589,7 +673,7 @@ paths:
   /v1/analytics/saved-queries/validate:
     post:
       operationId: analyticsSavedQueriesValidate
-      summary: Validate SQL without running it
+      summary: 'Validate a query without running it: {valid, dataset, columns, parameters, errors}'
       tags:
       - Analytics Saved Queries
       security:
@@ -598,8 +682,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -619,6 +709,35 @@ paths:
       x-service: analytics-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
       x-required-scope: reporting:write
+      x-table: analytics_saved_query
+  /v1/analytics/saved-queries/datasets:
+    get:
+      operationId: analyticsSavedQueriesDatasets
+      summary: Whitelisted datasets with their fields and time field
+      tags:
+      - Analytics Saved Queries
+      security:
+      - oauth2:
+        - reporting:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
       x-table: analytics_saved_query
   /v1/analytics/dashboards:
     get:
@@ -868,7 +987,7 @@ paths:
   /v1/analytics/dashboards/{id}/duplicate:
     post:
       operationId: analyticsDashboardsDuplicate
-      summary: Copy a dashboard
+      summary: Copy a dashboard with its widgets
       tags:
       - Analytics Dashboards
       security:
@@ -912,7 +1031,7 @@ paths:
   /v1/analytics/dashboards/{id}/embed-token:
     get:
       operationId: analyticsDashboardsEmbedToken
-      summary: Short-lived token to embed the dashboard
+      summary: Signed short-lived token to embed the dashboard {token, expires_at} (ttl 60-3600, default 900)
       tags:
       - Analytics Dashboards
       security:
@@ -925,9 +1044,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: ttl_seconds
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -937,6 +1068,46 @@ paths:
       x-service: analytics-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
       x-required-scope: reporting:read
+      x-table: analytics_dashboard
+  /v1/analytics/dashboards/embed-tokens/verify:
+    post:
+      operationId: analyticsDashboardsEmbedTokensVerify
+      summary: Verify an embed token {valid, dashboard_id, expires_at, reason}
+      tags:
+      - Analytics Dashboards
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsDashboardsEmbedTokensVerifyRequest'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
       x-table: analytics_dashboard
   /v1/analytics/widgets:
     get:
@@ -1154,7 +1325,7 @@ paths:
   /v1/analytics/widgets/{id}/data:
     get:
       operationId: analyticsWidgetsData
-      summary: Data for the widget with dashboard filters applied
+      summary: Data for the widget with dashboard filters applied {columns, rows, series[{name, points[{x, y}]}]}
       tags:
       - Analytics Widgets
       security:
@@ -1168,8 +1339,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1329,10 +1506,10 @@ paths:
       x-table: analytics_export_job
       x-crud: true
       x-crud-get: true
-  /v1/analytics/exports/{id}/download:
+  /v1/analytics/exports/{id}/csv:
     get:
-      operationId: analyticsExportsDownload
-      summary: Signed URL to download
+      operationId: analyticsExportsCsv
+      summary: Download a finished CSV export
       tags:
       - Analytics Exports
       security:
@@ -1346,8 +1523,45 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: analytics_export_job
+  /v1/analytics/exports/{id}/json:
+    get:
+      operationId: analyticsExportsJson
+      summary: Download a finished JSON export
+      tags:
+      - Analytics Exports
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: string
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1361,7 +1575,7 @@ paths:
   /v1/analytics/exports/{id}/cancel:
     post:
       operationId: analyticsExportsCancel
-      summary: Cancel the export
+      summary: Cancel a queued or running export
       tags:
       - Analytics Exports
       security:
@@ -1398,6 +1612,40 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AnalyticsExportsCancelRequest'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: analytics_export_job
+  /v1/analytics/exports/process-queued:
+    post:
+      operationId: analyticsExportsProcessQueued
+      summary: Worker (per tenant) - process QUEUED exports now (normally done asynchronously)
+      tags:
+      - Analytics Exports
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-service: analytics-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
       x-required-scope: reporting:write
@@ -1702,7 +1950,7 @@ paths:
   /v1/analytics/data-shares/{id}/test:
     post:
       operationId: analyticsDataSharesTest
-      summary: Test connectivity and permissions
+      summary: Test connectivity and permissions {ok, checks[{name, ok, message}]}
       tags:
       - Analytics Data Shares
       security:
@@ -1717,8 +1965,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1733,6 +1987,200 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
       x-required-scope: reporting:write
       x-table: analytics_data_share
+  /v1/analytics/data-shares/{id}/target-config:
+    post:
+      operationId: analyticsDataSharesTargetConfig
+      summary: Replace the destination connection details
+      tags:
+      - Analytics Data Shares
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsDataShare'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsDataSharesTargetConfigRequest'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: analytics_data_share
+  /v1/analytics/data-shares/deliver:
+    post:
+      operationId: analyticsDataSharesDeliver
+      summary: Scheduled (per tenant) - deliver every ACTIVE share due on business_date (idempotent per business date)
+      tags:
+      - Analytics Data Shares
+      security:
+      - oauth2:
+        - reporting:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:write")'
+      x-required-scope: reporting:write
+      x-table: analytics_data_share
+  /v1/analytics/job-runs:
+    get:
+      operationId: analyticsJobRunsList
+      summary: List analytics job runs
+      tags:
+      - Analytics Job Runs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - DATA_SHARE_DELIVERY
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsJobRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: analytics_job_run
+      x-crud: true
+      x-crud-list: true
+  /v1/analytics/job-runs/{id}:
+    get:
+      operationId: analyticsJobRunsGet
+      summary: Retrieve analytics job run
+      tags:
+      - Analytics Job Runs
+      security:
+      - oauth2:
+        - reporting:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: analytics-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("reporting:read")'
+      x-required-scope: reporting:read
+      x-table: analytics_job_run
+      x-crud: true
+      x-crud-get: true
 components:
   schemas:
     Problem:
@@ -1789,6 +2237,15 @@ components:
       required:
       - data
       - has_more
+    AnalyticsKpisEvaluateRequest:
+      type: object
+      properties:
+        rows:
+          type: array
+          items: {}
+        filters:
+          type: array
+          items: {}
     AnalyticsKpisCertifyRequest:
       type: object
       properties:
@@ -1836,10 +2293,10 @@ components:
     AnalyticsSavedQueriesValidateRequest:
       type: object
       properties:
-        sql:
+        query:
           type: string
       required:
-      - sql
+      - query
     AnalyticsDashboardPage:
       type: object
       description: One page of AnalyticsDashboard results (newest first)
@@ -1884,6 +2341,13 @@ components:
           maxLength: 160
       required:
       - name
+    AnalyticsDashboardsEmbedTokensVerifyRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+      - token
     AnalyticsExportJobPage:
       type: object
       description: One page of AnalyticsExportJob results (newest first)
@@ -1932,6 +2396,32 @@ components:
         reason:
           type: string
           maxLength: 255
+    AnalyticsDataSharesTargetConfigRequest:
+      type: object
+      properties:
+        target_config:
+          type: object
+          additionalProperties: true
+      required:
+      - target_config
+    AnalyticsJobRunPage:
+      type: object
+      description: One page of AnalyticsJobRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyticsJobRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     AnalyticsDashboard:
       type: object
       description: Dashboard shown in the console (portfolio, liquidity, delinquency, agents, fraud, ...)
@@ -1980,9 +2470,12 @@ components:
           - 'null'
           description: Description
         owner:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Owner
+          description: Owner (the creator)
+          readOnly: true
         visibility:
           type: string
           enum:
@@ -1993,6 +2486,7 @@ components:
         is_system:
           type: boolean
           description: Shipped with the platform
+          readOnly: true
         layout:
           type:
           - object
@@ -2001,19 +2495,21 @@ components:
           description: Grid layout
         filters:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Global filters
+          items: {}
+          description: Global filters {field, op =|!=|>|>=|<|<=|IN, value} applied to every widget whose dataset has the field
         refresh_seconds:
           type: integer
           format: int32
           description: Auto-refresh interval
         tags:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            maxLength: 40
           description: Tags
         custom_field_1:
           type:
@@ -2051,7 +2547,6 @@ components:
       - updated_at
       - row_version
       - name
-      - owner
       - visibility
       - is_system
       - refresh_seconds
@@ -2065,10 +2560,6 @@ components:
         description:
           type: string
           description: Description
-        owner:
-          type: string
-          maxLength: 64
-          description: Owner
         visibility:
           type: string
           enum:
@@ -2076,24 +2567,23 @@ components:
           - TEAM
           - TENANT
           description: Sharing
-        is_system:
-          type: boolean
-          description: Shipped with the platform
         layout:
           type: object
           additionalProperties: true
           description: Grid layout
         filters:
-          type: object
-          additionalProperties: true
-          description: Global filters
+          type: array
+          items: {}
+          description: Global filters {field, op =|!=|>|>=|<|<=|IN, value} applied to every widget whose dataset has the field
         refresh_seconds:
           type: integer
           format: int32
           description: Auto-refresh interval
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 40
           description: Tags
         custom_field_1:
           type: string
@@ -2117,7 +2607,6 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - name
-      - owner
     AnalyticsDashboardUpdate:
       type: object
       properties:
@@ -2128,10 +2617,6 @@ components:
         description:
           type: string
           description: Description
-        owner:
-          type: string
-          maxLength: 64
-          description: Owner
         visibility:
           type: string
           enum:
@@ -2139,24 +2624,23 @@ components:
           - TEAM
           - TENANT
           description: Sharing
-        is_system:
-          type: boolean
-          description: Shipped with the platform
         layout:
           type: object
           additionalProperties: true
           description: Grid layout
         filters:
-          type: object
-          additionalProperties: true
-          description: Global filters
+          type: array
+          items: {}
+          description: Global filters {field, op =|!=|>|>=|<|<=|IN, value} applied to every widget whose dataset has the field
         refresh_seconds:
           type: integer
           format: int32
           description: Auto-refresh interval
         tags:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 40
           description: Tags
         custom_field_1:
           type: string
@@ -2232,16 +2716,25 @@ components:
           - SFTP
           - ICEBERG_REST
           description: Destination type
+        target_summary:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Non-secret summary of the destination (e.g. bucket / host)
+          readOnly: true
         datasets:
-          type: object
-          additionalProperties: true
-          description: Datasets / tables shared
+          type: array
+          items:
+            type: string
+            maxLength: 128
+          description: Whitelisted datasets shared
         schedule_cron:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Delivery schedule (empty = continuous)
+          description: Delivery schedule (empty = every business day)
         status:
           type: string
           enum:
@@ -2250,12 +2743,27 @@ components:
           - FAILED
           - REVOKED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last pause / failure
+          readOnly: true
         last_delivery_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Last successful delivery
+          readOnly: true
+        last_delivery_rows:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Rows delivered last time
           readOnly: true
         last_error:
           type:
@@ -2322,21 +2830,15 @@ components:
           - ICEBERG_REST
           description: Destination type
         datasets:
-          type: object
-          additionalProperties: true
-          description: Datasets / tables shared
+          type: array
+          items:
+            type: string
+            maxLength: 128
+          description: Whitelisted datasets shared
         schedule_cron:
           type: string
           maxLength: 64
-          description: Delivery schedule (empty = continuous)
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - PAUSED
-          - FAILED
-          - REVOKED
-          description: Status
+          description: Delivery schedule (empty = every business day)
         custom_field_1:
           type: string
           maxLength: 500
@@ -2357,10 +2859,16 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        target_config:
+          type: object
+          additionalProperties: true
+          description: Destination connection details (secret; validated per target type) (write-only; not stored as a column)
+          writeOnly: true
       required:
       - name
       - target
       - datasets
+      - target_config
     AnalyticsDataShareUpdate:
       type: object
       properties:
@@ -2381,21 +2889,15 @@ components:
           - ICEBERG_REST
           description: Destination type
         datasets:
-          type: object
-          additionalProperties: true
-          description: Datasets / tables shared
+          type: array
+          items:
+            type: string
+            maxLength: 128
+          description: Whitelisted datasets shared
         schedule_cron:
           type: string
           maxLength: 64
-          description: Delivery schedule (empty = continuous)
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - PAUSED
-          - FAILED
-          - REVOKED
-          description: Status
+          description: Delivery schedule (empty = every business day)
         custom_field_1:
           type: string
           maxLength: 500
@@ -2418,7 +2920,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     AnalyticsExportJob:
       type: object
-      description: Export of a saved query's results to a file
+      description: Asynchronous export of a saved query's results to a file
       properties:
         id:
           type: string
@@ -2465,7 +2967,7 @@ components:
           - PARQUET
           - JSON
           - XLSX
-          description: Format
+          description: Format (CSV and JSON are produced; PARQUET and XLSX are rejected)
         parameters:
           type:
           - object
@@ -2490,12 +2992,26 @@ components:
           format: int64
           description: Rows exported
           readOnly: true
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: File size
+          readOnly: true
+        sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: File checksum
+          readOnly: true
         document_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Result file
+          description: Archived file in document-service
           readOnly: true
         requested_by:
           type:
@@ -2529,7 +3045,7 @@ components:
           type:
           - string
           - 'null'
-          description: Error
+          description: Error or cancellation reason
           readOnly: true
         custom_field_1:
           type:
@@ -2583,7 +3099,7 @@ components:
           - PARQUET
           - JSON
           - XLSX
-          description: Format
+          description: Format (CSV and JSON are produced; PARQUET and XLSX are rejected)
         parameters:
           type: object
           additionalProperties: true
@@ -2611,9 +3127,128 @@ components:
       required:
       - analytics_saved_query_id
       - format
+    AnalyticsJobRun:
+      type: object
+      description: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - DATA_SHARE_DELIVERY
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     AnalyticsKpi:
       type: object
-      description: Governed KPI definition (formula, unit, dataset, owner)
+      description: Governed KPI definition (metric spec, unit, dataset, owner)
       properties:
         id:
           type: string
@@ -2663,12 +3298,25 @@ components:
           - 'null'
           description: Business definition
         formula:
-          type: string
-          description: SQL expression over the canonical model
+          type:
+          - string
+          - 'null'
+          description: Human-readable formula (documentation only; never executed)
+        metric:
+          type: object
+          additionalProperties: true
+          description: Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row
+            condition), numerator, denominator (metric specs for RATIO), scale}
         dataset:
           type: string
           maxLength: 128
-          description: Source dataset / dbt model
+          description: Whitelisted source dataset
+        time_field:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Dataset field used for time series (default: the dataset''s time field)'
         unit:
           type: string
           maxLength: 16
@@ -2681,7 +3329,22 @@ components:
           description: Data owner
         is_certified:
           type: boolean
-          description: Certified by data governance
+          description: Certified by data governance (cleared when the metric changes)
+          readOnly: true
+        certified_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Certifier
+          readOnly: true
+        certified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Certification time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2719,7 +3382,7 @@ components:
       - row_version
       - code
       - name
-      - formula
+      - metric
       - dataset
       - unit
       - is_certified
@@ -2739,11 +3402,20 @@ components:
           description: Business definition
         formula:
           type: string
-          description: SQL expression over the canonical model
+          description: Human-readable formula (documentation only; never executed)
+        metric:
+          type: object
+          additionalProperties: true
+          description: Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row
+            condition), numerator, denominator (metric specs for RATIO), scale}
         dataset:
           type: string
           maxLength: 128
-          description: Source dataset / dbt model
+          description: Whitelisted source dataset
+        time_field:
+          type: string
+          maxLength: 64
+          description: 'Dataset field used for time series (default: the dataset''s time field)'
         unit:
           type: string
           maxLength: 16
@@ -2752,9 +3424,6 @@ components:
           type: string
           maxLength: 64
           description: Data owner
-        is_certified:
-          type: boolean
-          description: Certified by data governance
         custom_field_1:
           type: string
           maxLength: 500
@@ -2778,7 +3447,7 @@ components:
       required:
       - code
       - name
-      - formula
+      - metric
       - dataset
       - unit
     AnalyticsKpiUpdate:
@@ -2797,11 +3466,20 @@ components:
           description: Business definition
         formula:
           type: string
-          description: SQL expression over the canonical model
+          description: Human-readable formula (documentation only; never executed)
+        metric:
+          type: object
+          additionalProperties: true
+          description: Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row
+            condition), numerator, denominator (metric specs for RATIO), scale}
         dataset:
           type: string
           maxLength: 128
-          description: Source dataset / dbt model
+          description: Whitelisted source dataset
+        time_field:
+          type: string
+          maxLength: 64
+          description: 'Dataset field used for time series (default: the dataset''s time field)'
         unit:
           type: string
           maxLength: 16
@@ -2810,9 +3488,6 @@ components:
           type: string
           maxLength: 64
           description: Data owner
-        is_certified:
-          type: boolean
-          description: Certified by data governance
         custom_field_1:
           type: string
           maxLength: 500
@@ -2835,7 +3510,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     AnalyticsSavedQuery:
       type: object
-      description: Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)
+      description: Saved, parameterised query in the Meridian query DSL over a whitelisted dataset (read-only, tenant-scoped)
       properties:
         id:
           type: string
@@ -2880,38 +3555,50 @@ components:
           - string
           - 'null'
           description: Description
-        sql:
+        query:
           type: string
-          description: Trino SQL (read-only, row-level security applied)
+          description: SELECT <items> FROM <dataset> [WHERE <condition>] [GROUP BY <fields>] [ORDER BY <item> [ASC|DESC]]
+            [LIMIT <n>]; parameters as :name; parsed and interpreted, never executed as SQL
         dataset:
           type:
           - string
           - 'null'
           maxLength: 128
-          description: Primary dataset
+          description: Dataset the query reads (from the query)
+          readOnly: true
         parameters:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Parameter definitions
+          items: {}
+          description: Parameter definitions {name, type STRING|NUMBER|DATE|BOOL, required, default}
         owner:
-          type: string
+          type:
+          - string
+          - 'null'
           maxLength: 64
-          description: Owner
+          description: Owner (the creator)
+          readOnly: true
         visibility:
           type: string
           enum:
           - PRIVATE
           - TEAM
           - TENANT
-          description: Sharing
+          description: Sharing (PRIVATE queries are visible to their owner only)
         last_run_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Last run
+          readOnly: true
+        last_row_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Rows returned by the last run
           readOnly: true
         custom_field_1:
           type:
@@ -2949,8 +3636,7 @@ components:
       - updated_at
       - row_version
       - name
-      - sql
-      - owner
+      - query
       - visibility
     AnalyticsSavedQueryCreate:
       type: object
@@ -2962,28 +3648,21 @@ components:
         description:
           type: string
           description: Description
-        sql:
+        query:
           type: string
-          description: Trino SQL (read-only, row-level security applied)
-        dataset:
-          type: string
-          maxLength: 128
-          description: Primary dataset
+          description: SELECT <items> FROM <dataset> [WHERE <condition>] [GROUP BY <fields>] [ORDER BY <item> [ASC|DESC]]
+            [LIMIT <n>]; parameters as :name; parsed and interpreted, never executed as SQL
         parameters:
-          type: object
-          additionalProperties: true
-          description: Parameter definitions
-        owner:
-          type: string
-          maxLength: 64
-          description: Owner
+          type: array
+          items: {}
+          description: Parameter definitions {name, type STRING|NUMBER|DATE|BOOL, required, default}
         visibility:
           type: string
           enum:
           - PRIVATE
           - TEAM
           - TENANT
-          description: Sharing
+          description: Sharing (PRIVATE queries are visible to their owner only)
         custom_field_1:
           type: string
           maxLength: 500
@@ -3006,8 +3685,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - name
-      - sql
-      - owner
+      - query
     AnalyticsSavedQueryUpdate:
       type: object
       properties:
@@ -3018,28 +3696,21 @@ components:
         description:
           type: string
           description: Description
-        sql:
+        query:
           type: string
-          description: Trino SQL (read-only, row-level security applied)
-        dataset:
-          type: string
-          maxLength: 128
-          description: Primary dataset
+          description: SELECT <items> FROM <dataset> [WHERE <condition>] [GROUP BY <fields>] [ORDER BY <item> [ASC|DESC]]
+            [LIMIT <n>]; parameters as :name; parsed and interpreted, never executed as SQL
         parameters:
-          type: object
-          additionalProperties: true
-          description: Parameter definitions
-        owner:
-          type: string
-          maxLength: 64
-          description: Owner
+          type: array
+          items: {}
+          description: Parameter definitions {name, type STRING|NUMBER|DATE|BOOL, required, default}
         visibility:
           type: string
           enum:
           - PRIVATE
           - TEAM
           - TENANT
-          description: Sharing
+          description: Sharing (PRIVATE queries are visible to their owner only)
         custom_field_1:
           type: string
           maxLength: 500
@@ -3137,11 +3808,11 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Visual configuration (axes, series, thresholds)
+          description: Visual configuration {x, y[], series, parameters, granularity, from, to, text}
         position:
           type: object
           additionalProperties: true
-          description: Position and size on the grid
+          description: Position and size on the grid {x, y, w, h}
         custom_field_1:
           type:
           - string
@@ -3217,11 +3888,11 @@ components:
         config:
           type: object
           additionalProperties: true
-          description: Visual configuration (axes, series, thresholds)
+          description: Visual configuration {x, y[], series, parameters, granularity, from, to, text}
         position:
           type: object
           additionalProperties: true
-          description: Position and size on the grid
+          description: Position and size on the grid {x, y, w, h}
         custom_field_1:
           type: string
           maxLength: 500
@@ -3283,11 +3954,11 @@ components:
         config:
           type: object
           additionalProperties: true
-          description: Visual configuration (axes, series, thresholds)
+          description: Visual configuration {x, y[], series, parameters, granularity, from, to, text}
         position:
           type: object
           additionalProperties: true
-          description: Position and size on the grid
+          description: Position and size on the grid {x, y, w, h}
         custom_field_1:
           type: string
           maxLength: 500

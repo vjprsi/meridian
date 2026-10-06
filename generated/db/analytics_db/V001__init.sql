@@ -18,7 +18,7 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- analytics_kpi: Governed KPI definition (formula, unit, dataset, owner)
+-- analytics_kpi: Governed KPI definition (metric spec, unit, dataset, owner)
 CREATE TABLE analytics_kpi (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -30,11 +30,15 @@ CREATE TABLE analytics_kpi (
   code                         varchar(64) NOT NULL,
   name                         varchar(160) NOT NULL,
   description                  text,
-  formula                      text NOT NULL,
+  formula                      text,
+  metric                       jsonb NOT NULL,
   dataset                      varchar(128) NOT NULL,
+  time_field                   varchar(64),
   unit                         varchar(16) NOT NULL,
   owner                        varchar(64),
   is_certified                 boolean NOT NULL DEFAULT false,
+  certified_by                 varchar(64),
+  certified_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -42,7 +46,7 @@ CREATE TABLE analytics_kpi (
   custom_field_5               varchar(500),
   CONSTRAINT uq_analytics_kpi_code UNIQUE (tenant_id, code)
 );
-COMMENT ON TABLE analytics_kpi IS 'Governed KPI definition (formula, unit, dataset, owner)';
+COMMENT ON TABLE analytics_kpi IS 'Governed KPI definition (metric spec, unit, dataset, owner)';
 COMMENT ON COLUMN analytics_kpi.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN analytics_kpi.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN analytics_kpi.created_at IS 'Creation time';
@@ -53,11 +57,15 @@ COMMENT ON COLUMN analytics_kpi.row_version IS 'Optimistic lock version; send as
 COMMENT ON COLUMN analytics_kpi.code IS 'KPI code, e.g. ACTIVE_ACCOUNTS_30D';
 COMMENT ON COLUMN analytics_kpi.name IS 'KPI name';
 COMMENT ON COLUMN analytics_kpi.description IS 'Business definition';
-COMMENT ON COLUMN analytics_kpi.formula IS 'SQL expression over the canonical model';
-COMMENT ON COLUMN analytics_kpi.dataset IS 'Source dataset / dbt model';
+COMMENT ON COLUMN analytics_kpi.formula IS 'Human-readable formula (documentation only; never executed)';
+COMMENT ON COLUMN analytics_kpi.metric IS 'Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row condition), numerator, denominator (metric specs for RATIO), scale}';
+COMMENT ON COLUMN analytics_kpi.dataset IS 'Whitelisted source dataset';
+COMMENT ON COLUMN analytics_kpi.time_field IS 'Dataset field used for time series (default: the dataset''s time field)';
 COMMENT ON COLUMN analytics_kpi.unit IS 'COUNT, AMOUNT, PERCENT, BPS, DAYS';
 COMMENT ON COLUMN analytics_kpi.owner IS 'Data owner';
-COMMENT ON COLUMN analytics_kpi.is_certified IS 'Certified by data governance';
+COMMENT ON COLUMN analytics_kpi.is_certified IS 'Certified by data governance (cleared when the metric changes)';
+COMMENT ON COLUMN analytics_kpi.certified_by IS 'Certifier';
+COMMENT ON COLUMN analytics_kpi.certified_at IS 'Certification time';
 COMMENT ON COLUMN analytics_kpi.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_kpi.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_kpi.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -68,7 +76,7 @@ ALTER TABLE analytics_kpi ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON analytics_kpi USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_analytics_kpi_touch BEFORE UPDATE ON analytics_kpi FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- analytics_saved_query: Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)
+-- analytics_saved_query: Saved, parameterised query in the Meridian query DSL over a whitelisted dataset (read-only, tenant-scoped)
 CREATE TABLE analytics_saved_query (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -79,19 +87,20 @@ CREATE TABLE analytics_saved_query (
   row_version                  integer NOT NULL DEFAULT 1,
   name                         varchar(160) NOT NULL,
   description                  text,
-  sql                          text NOT NULL,
+  query                        text NOT NULL,
   dataset                      varchar(128),
   parameters                   jsonb,
-  owner                        varchar(64) NOT NULL,
+  owner                        varchar(64),
   visibility                   varchar(40) NOT NULL DEFAULT 'PRIVATE' CHECK (visibility IN ('PRIVATE', 'TEAM', 'TENANT')),
   last_run_at                  timestamptz,
+  last_row_count               integer,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE analytics_saved_query IS 'Saved, parameterised SQL query over the lakehouse (read-only, tenant-scoped)';
+COMMENT ON TABLE analytics_saved_query IS 'Saved, parameterised query in the Meridian query DSL over a whitelisted dataset (read-only, tenant-scoped)';
 COMMENT ON COLUMN analytics_saved_query.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN analytics_saved_query.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN analytics_saved_query.created_at IS 'Creation time';
@@ -101,12 +110,13 @@ COMMENT ON COLUMN analytics_saved_query.updated_by IS 'Principal that last updat
 COMMENT ON COLUMN analytics_saved_query.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN analytics_saved_query.name IS 'Query name';
 COMMENT ON COLUMN analytics_saved_query.description IS 'Description';
-COMMENT ON COLUMN analytics_saved_query.sql IS 'Trino SQL (read-only, row-level security applied)';
-COMMENT ON COLUMN analytics_saved_query.dataset IS 'Primary dataset';
-COMMENT ON COLUMN analytics_saved_query.parameters IS 'Parameter definitions';
-COMMENT ON COLUMN analytics_saved_query.owner IS 'Owner';
-COMMENT ON COLUMN analytics_saved_query.visibility IS 'Sharing';
+COMMENT ON COLUMN analytics_saved_query.query IS 'SELECT <items> FROM <dataset> [WHERE <condition>] [GROUP BY <fields>] [ORDER BY <item> [ASC|DESC]] [LIMIT <n>]; parameters as :name; parsed and interpreted, never executed as SQL';
+COMMENT ON COLUMN analytics_saved_query.dataset IS 'Dataset the query reads (from the query)';
+COMMENT ON COLUMN analytics_saved_query.parameters IS 'Parameter definitions {name, type STRING|NUMBER|DATE|BOOL, required, default}';
+COMMENT ON COLUMN analytics_saved_query.owner IS 'Owner (the creator)';
+COMMENT ON COLUMN analytics_saved_query.visibility IS 'Sharing (PRIVATE queries are visible to their owner only)';
 COMMENT ON COLUMN analytics_saved_query.last_run_at IS 'Last run';
+COMMENT ON COLUMN analytics_saved_query.last_row_count IS 'Rows returned by the last run';
 COMMENT ON COLUMN analytics_saved_query.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_saved_query.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_saved_query.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -128,7 +138,7 @@ CREATE TABLE analytics_dashboard (
   row_version                  integer NOT NULL DEFAULT 1,
   name                         varchar(160) NOT NULL,
   description                  text,
-  owner                        varchar(64) NOT NULL,
+  owner                        varchar(64),
   visibility                   varchar(40) NOT NULL DEFAULT 'PRIVATE' CHECK (visibility IN ('PRIVATE', 'TEAM', 'TENANT')),
   is_system                    boolean NOT NULL DEFAULT false,
   layout                       jsonb,
@@ -151,11 +161,11 @@ COMMENT ON COLUMN analytics_dashboard.updated_by IS 'Principal that last updated
 COMMENT ON COLUMN analytics_dashboard.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN analytics_dashboard.name IS 'Dashboard name';
 COMMENT ON COLUMN analytics_dashboard.description IS 'Description';
-COMMENT ON COLUMN analytics_dashboard.owner IS 'Owner';
+COMMENT ON COLUMN analytics_dashboard.owner IS 'Owner (the creator)';
 COMMENT ON COLUMN analytics_dashboard.visibility IS 'Sharing';
 COMMENT ON COLUMN analytics_dashboard.is_system IS 'Shipped with the platform';
 COMMENT ON COLUMN analytics_dashboard.layout IS 'Grid layout';
-COMMENT ON COLUMN analytics_dashboard.filters IS 'Global filters';
+COMMENT ON COLUMN analytics_dashboard.filters IS 'Global filters {field, op =|!=|>|>=|<|<=|IN, value} applied to every widget whose dataset has the field';
 COMMENT ON COLUMN analytics_dashboard.refresh_seconds IS 'Auto-refresh interval';
 COMMENT ON COLUMN analytics_dashboard.tags IS 'Tags';
 COMMENT ON COLUMN analytics_dashboard.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -203,8 +213,8 @@ COMMENT ON COLUMN analytics_widget.title IS 'Title';
 COMMENT ON COLUMN analytics_widget.widget_type IS 'Widget type';
 COMMENT ON COLUMN analytics_widget.analytics_saved_query_id IS 'Query feeding the widget';
 COMMENT ON COLUMN analytics_widget.analytics_kpi_id IS 'KPI feeding the widget';
-COMMENT ON COLUMN analytics_widget.config IS 'Visual configuration (axes, series, thresholds)';
-COMMENT ON COLUMN analytics_widget.position IS 'Position and size on the grid';
+COMMENT ON COLUMN analytics_widget.config IS 'Visual configuration {x, y[], series, parameters, granularity, from, to, text}';
+COMMENT ON COLUMN analytics_widget.position IS 'Position and size on the grid {x, y, w, h}';
 COMMENT ON COLUMN analytics_widget.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_widget.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_widget.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -218,7 +228,7 @@ ALTER TABLE analytics_widget ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON analytics_widget USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_analytics_widget_touch BEFORE UPDATE ON analytics_widget FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- analytics_export_job: Export of a saved query's results to a file
+-- analytics_export_job: Asynchronous export of a saved query's results to a file
 CREATE TABLE analytics_export_job (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -232,19 +242,22 @@ CREATE TABLE analytics_export_job (
   parameters                   jsonb,
   status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
   row_count                    bigint,
+  size_bytes                   bigint,
+  sha256                       varchar(64),
   document_id                  uuid,
   requested_by                 varchar(64),
   expires_at                   timestamptz,
   started_at                   timestamptz,
   finished_at                  timestamptz,
   error                        text,
+  content                      text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE analytics_export_job IS 'Export of a saved query''s results to a file';
+COMMENT ON TABLE analytics_export_job IS 'Asynchronous export of a saved query''s results to a file';
 COMMENT ON COLUMN analytics_export_job.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN analytics_export_job.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN analytics_export_job.created_at IS 'Creation time';
@@ -253,16 +266,19 @@ COMMENT ON COLUMN analytics_export_job.updated_at IS 'Last update time';
 COMMENT ON COLUMN analytics_export_job.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN analytics_export_job.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN analytics_export_job.analytics_saved_query_id IS 'Query';
-COMMENT ON COLUMN analytics_export_job.format IS 'Format';
+COMMENT ON COLUMN analytics_export_job.format IS 'Format (CSV and JSON are produced; PARQUET and XLSX are rejected)';
 COMMENT ON COLUMN analytics_export_job.parameters IS 'Parameter values';
 COMMENT ON COLUMN analytics_export_job.status IS 'Status';
 COMMENT ON COLUMN analytics_export_job.row_count IS 'Rows exported';
-COMMENT ON COLUMN analytics_export_job.document_id IS 'Result file';
+COMMENT ON COLUMN analytics_export_job.size_bytes IS 'File size';
+COMMENT ON COLUMN analytics_export_job.sha256 IS 'File checksum';
+COMMENT ON COLUMN analytics_export_job.document_id IS 'Archived file in document-service';
 COMMENT ON COLUMN analytics_export_job.requested_by IS 'Requester';
 COMMENT ON COLUMN analytics_export_job.expires_at IS 'Download expiry';
 COMMENT ON COLUMN analytics_export_job.started_at IS 'Start';
 COMMENT ON COLUMN analytics_export_job.finished_at IS 'End';
-COMMENT ON COLUMN analytics_export_job.error IS 'Error';
+COMMENT ON COLUMN analytics_export_job.error IS 'Error or cancellation reason';
+COMMENT ON COLUMN analytics_export_job.content IS 'File content (served by the download endpoints until expiry)';
 COMMENT ON COLUMN analytics_export_job.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_export_job.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_export_job.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -287,10 +303,13 @@ CREATE TABLE analytics_data_share (
   name                         varchar(160) NOT NULL,
   target                       varchar(40) NOT NULL CHECK (target IN ('S3', 'GCS', 'AZURE_BLOB', 'SNOWFLAKE', 'BIGQUERY', 'DATABRICKS', 'SFTP', 'ICEBERG_REST')),
   target_config                jsonb NOT NULL,
+  target_summary               varchar(255),
   datasets                     jsonb NOT NULL,
   schedule_cron                varchar(64),
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED', 'FAILED', 'REVOKED')),
+  status_reason                varchar(255),
   last_delivery_at             timestamptz,
+  last_delivery_rows           bigint,
   last_error                   text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -308,11 +327,14 @@ COMMENT ON COLUMN analytics_data_share.updated_by IS 'Principal that last update
 COMMENT ON COLUMN analytics_data_share.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN analytics_data_share.name IS 'Share name';
 COMMENT ON COLUMN analytics_data_share.target IS 'Destination type';
-COMMENT ON COLUMN analytics_data_share.target_config IS 'Destination connection details (stored encrypted) [SECRET]';
-COMMENT ON COLUMN analytics_data_share.datasets IS 'Datasets / tables shared';
-COMMENT ON COLUMN analytics_data_share.schedule_cron IS 'Delivery schedule (empty = continuous)';
+COMMENT ON COLUMN analytics_data_share.target_config IS 'Destination connection details (stored encrypted, never returned) [SECRET]';
+COMMENT ON COLUMN analytics_data_share.target_summary IS 'Non-secret summary of the destination (e.g. bucket / host)';
+COMMENT ON COLUMN analytics_data_share.datasets IS 'Whitelisted datasets shared';
+COMMENT ON COLUMN analytics_data_share.schedule_cron IS 'Delivery schedule (empty = every business day)';
 COMMENT ON COLUMN analytics_data_share.status IS 'Status';
+COMMENT ON COLUMN analytics_data_share.status_reason IS 'Reason of the last pause / failure';
 COMMENT ON COLUMN analytics_data_share.last_delivery_at IS 'Last successful delivery';
+COMMENT ON COLUMN analytics_data_share.last_delivery_rows IS 'Rows delivered last time';
 COMMENT ON COLUMN analytics_data_share.last_error IS 'Last error';
 COMMENT ON COLUMN analytics_data_share.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN analytics_data_share.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -323,6 +345,54 @@ CREATE INDEX ix_analytics_data_share_tenant ON analytics_data_share (tenant_id, 
 ALTER TABLE analytics_data_share ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON analytics_data_share USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_analytics_data_share_touch BEFORE UPDATE ON analytics_data_share FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- analytics_job_run: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+CREATE TABLE analytics_job_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('DATA_SHARE_DELIVERY')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_analytics_job_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE analytics_job_run IS 'One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)';
+COMMENT ON COLUMN analytics_job_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN analytics_job_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN analytics_job_run.created_at IS 'Creation time';
+COMMENT ON COLUMN analytics_job_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN analytics_job_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN analytics_job_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN analytics_job_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN analytics_job_run.job IS 'Job';
+COMMENT ON COLUMN analytics_job_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN analytics_job_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN analytics_job_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN analytics_job_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN analytics_job_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN analytics_job_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN analytics_job_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN analytics_job_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN analytics_job_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN analytics_job_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN analytics_job_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_analytics_job_run_tenant ON analytics_job_run (tenant_id, created_at);
+ALTER TABLE analytics_job_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON analytics_job_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_analytics_job_run_touch BEFORE UPDATE ON analytics_job_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

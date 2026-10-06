@@ -36,8 +36,10 @@ CREATE TABLE report_definition (
   frequency                    varchar(40) NOT NULL CHECK (frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUAL', 'ANNUAL', 'AD_HOC', 'EVENT_DRIVEN')),
   format                       varchar(40) NOT NULL CHECK (format IN ('XBRL', 'XML', 'CSV', 'XLSX', 'JSON', 'PDF', 'FIXED_WIDTH')),
   deadline_rule                varchar(64),
+  filing_offset_days           integer NOT NULL DEFAULT 0,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'DEPRECATED')),
   active_version               integer,
+  status_reason                text,
   description                  text,
   owner                        varchar(64),
   custom_field_1               varchar(500),
@@ -62,10 +64,12 @@ COMMENT ON COLUMN report_definition.jurisdiction IS 'Jurisdiction';
 COMMENT ON COLUMN report_definition.regulator IS 'Regulator / authority';
 COMMENT ON COLUMN report_definition.report_family IS 'BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE, OTHER';
 COMMENT ON COLUMN report_definition.frequency IS 'Frequency';
-COMMENT ON COLUMN report_definition.format IS 'Submission format';
-COMMENT ON COLUMN report_definition.deadline_rule IS 'Deadline expression, e.g. T+15BD or MONTH_END+10D';
-COMMENT ON COLUMN report_definition.status IS 'Status';
+COMMENT ON COLUMN report_definition.format IS 'Submission format (XBRL, XML, CSV and JSON are rendered by the service)';
+COMMENT ON COLUMN report_definition.deadline_rule IS 'Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days); default per frequency';
+COMMENT ON COLUMN report_definition.filing_offset_days IS 'Jurisdiction-specific extension in calendar days added to the deadline';
+COMMENT ON COLUMN report_definition.status IS 'Status (ACTIVE on first publication, DEPRECATED by deprecate)';
 COMMENT ON COLUMN report_definition.active_version IS 'Version currently in force';
+COMMENT ON COLUMN report_definition.status_reason IS 'Reason of the last status change (deprecation)';
 COMMENT ON COLUMN report_definition.description IS 'Purpose and scope';
 COMMENT ON COLUMN report_definition.owner IS 'Accountable owner (finance / compliance)';
 COMMENT ON COLUMN report_definition.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -91,14 +95,16 @@ CREATE TABLE report_definition_version (
   report_definition_id         uuid NOT NULL REFERENCES report_definition(id),
   definition_version           integer NOT NULL,
   template_document_id         uuid,
-  mapping                      jsonb NOT NULL,
+  data_sources                 jsonb NOT NULL,
+  field_mappings               jsonb NOT NULL,
   validation_rules             jsonb,
   xbrl_taxonomy                varchar(255),
   effective_from               date NOT NULL,
   effective_to                 date,
-  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'DEPRECATED')),
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'SUPERSEDED', 'DEPRECATED')),
   change_note                  text,
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -115,16 +121,18 @@ COMMENT ON COLUMN report_definition_version.updated_at IS 'Last update time';
 COMMENT ON COLUMN report_definition_version.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN report_definition_version.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN report_definition_version.report_definition_id IS 'Report definition';
-COMMENT ON COLUMN report_definition_version.definition_version IS 'Version number';
+COMMENT ON COLUMN report_definition_version.definition_version IS 'Version number (server-assigned, 1, 2, ...)';
 COMMENT ON COLUMN report_definition_version.template_document_id IS 'Template file (XBRL taxonomy entry point, XLSX, XSD)';
-COMMENT ON COLUMN report_definition_version.mapping IS 'Cell/element to dataset mapping (SQL or dbt model references)';
-COMMENT ON COLUMN report_definition_version.validation_rules IS 'Validation rules (cross-checks, totals, regulator formulas)';
+COMMENT ON COLUMN report_definition_version.data_sources IS 'Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end} {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}';
+COMMENT ON COLUMN report_definition_version.field_mappings IS 'Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter (row condition), expression (over other cells), scale, type NUMBER|TEXT}';
+COMMENT ON COLUMN report_definition_version.validation_rules IS 'Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance, debit, credit, cell, min, max, expression, message}';
 COMMENT ON COLUMN report_definition_version.xbrl_taxonomy IS 'XBRL taxonomy and entry point, when XBRL';
 COMMENT ON COLUMN report_definition_version.effective_from IS 'First reporting date this version applies to';
 COMMENT ON COLUMN report_definition_version.effective_to IS 'Last reporting date';
 COMMENT ON COLUMN report_definition_version.status IS 'Status';
 COMMENT ON COLUMN report_definition_version.change_note IS 'What changed';
-COMMENT ON COLUMN report_definition_version.approved_by IS 'Approver';
+COMMENT ON COLUMN report_definition_version.approved_by IS 'Checker who published the version';
+COMMENT ON COLUMN report_definition_version.approved_at IS 'Publication time';
 COMMENT ON COLUMN report_definition_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_definition_version.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -151,9 +159,12 @@ CREATE TABLE report_schedule (
   cron                         varchar(64) NOT NULL,
   timezone                     varchar(64) NOT NULL,
   next_run_at                  timestamptz,
+  parameters                   jsonb,
   notify                       jsonb,
   auto_submit                  boolean NOT NULL DEFAULT false,
   is_active                    boolean NOT NULL DEFAULT true,
+  last_run_date                date,
+  last_run_id                  uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -170,12 +181,15 @@ COMMENT ON COLUMN report_schedule.updated_by IS 'Principal that last updated the
 COMMENT ON COLUMN report_schedule.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN report_schedule.report_definition_id IS 'Report definition';
 COMMENT ON COLUMN report_schedule.legal_entity_id IS 'Legal entity';
-COMMENT ON COLUMN report_schedule.cron IS 'Cron expression';
+COMMENT ON COLUMN report_schedule.cron IS 'Spring cron expression (second minute hour day month weekday) evaluated in the time zone';
 COMMENT ON COLUMN report_schedule.timezone IS 'IANA time zone';
 COMMENT ON COLUMN report_schedule.next_run_at IS 'Next scheduled run';
+COMMENT ON COLUMN report_schedule.parameters IS 'Run parameters passed to every scheduled run';
 COMMENT ON COLUMN report_schedule.notify IS 'Recipients notified on completion or failure';
 COMMENT ON COLUMN report_schedule.auto_submit IS 'Submit automatically after validation and approval';
 COMMENT ON COLUMN report_schedule.is_active IS 'Active';
+COMMENT ON COLUMN report_schedule.last_run_date IS 'Business date of the last scheduled run';
+COMMENT ON COLUMN report_schedule.last_run_id IS 'Last run created by the schedule';
 COMMENT ON COLUMN report_schedule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_schedule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_schedule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -210,7 +224,10 @@ CREATE TABLE report_run (
   row_count                    integer,
   error_count                  integer,
   warning_count                integer,
+  revision                     integer NOT NULL DEFAULT 1,
   supersedes_run_id            uuid REFERENCES report_run(id),
+  superseded_by_run_id         uuid,
+  report_schedule_id           uuid REFERENCES report_schedule(id),
   started_at                   timestamptz,
   finished_at                  timestamptz,
   error                        text,
@@ -229,22 +246,25 @@ COMMENT ON COLUMN report_run.updated_at IS 'Last update time';
 COMMENT ON COLUMN report_run.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN report_run.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN report_run.report_definition_id IS 'Report definition';
-COMMENT ON COLUMN report_run.report_definition_version_id IS 'Version used';
+COMMENT ON COLUMN report_run.report_definition_version_id IS 'Version used (effective at as_of_date)';
 COMMENT ON COLUMN report_run.legal_entity_id IS 'Legal entity';
 COMMENT ON COLUMN report_run.as_of_date IS 'Reporting date';
-COMMENT ON COLUMN report_run.period_start IS 'Period start';
-COMMENT ON COLUMN report_run.period_end IS 'Period end';
-COMMENT ON COLUMN report_run.parameters IS 'Run parameters';
+COMMENT ON COLUMN report_run.period_start IS 'Period start (default: start of the frequency period ending at as_of_date)';
+COMMENT ON COLUMN report_run.period_end IS 'Period end (default: as_of_date)';
+COMMENT ON COLUMN report_run.parameters IS 'Run parameters (available as {param.x} and param_x in expressions)';
 COMMENT ON COLUMN report_run.trigger IS 'What started the run';
-COMMENT ON COLUMN report_run.status IS 'Status';
-COMMENT ON COLUMN report_run.data_snapshot_id IS 'Lakehouse (Iceberg) snapshot id for reproducibility';
+COMMENT ON COLUMN report_run.status IS 'Status (PARTIALLY_SUCCEEDED = produced with validation errors)';
+COMMENT ON COLUMN report_run.data_snapshot_id IS 'Fingerprint (sha256) of the source data collected, for reproducibility';
 COMMENT ON COLUMN report_run.row_count IS 'Rows / facts produced';
 COMMENT ON COLUMN report_run.error_count IS 'Validation errors';
 COMMENT ON COLUMN report_run.warning_count IS 'Validation warnings';
-COMMENT ON COLUMN report_run.supersedes_run_id IS 'Run this one corrects (resubmission)';
+COMMENT ON COLUMN report_run.revision IS 'Output revision (approved adjustments produce a new revision)';
+COMMENT ON COLUMN report_run.supersedes_run_id IS 'Run this one corrects (rerun / resubmission)';
+COMMENT ON COLUMN report_run.superseded_by_run_id IS 'Run that corrects this one';
+COMMENT ON COLUMN report_run.report_schedule_id IS 'Schedule that created the run';
 COMMENT ON COLUMN report_run.started_at IS 'Start';
 COMMENT ON COLUMN report_run.finished_at IS 'End';
-COMMENT ON COLUMN report_run.error IS 'Failure details';
+COMMENT ON COLUMN report_run.error IS 'Failure or cancellation details';
 COMMENT ON COLUMN report_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -255,10 +275,66 @@ CREATE INDEX ix_report_run_report_definition_id ON report_run (report_definition
 CREATE INDEX ix_report_run_report_definition_version_id ON report_run (report_definition_version_id);
 CREATE INDEX ix_report_run_legal_entity_id ON report_run (legal_entity_id);
 CREATE INDEX ix_report_run_supersedes_run_id ON report_run (supersedes_run_id);
+CREATE INDEX ix_report_run_report_schedule_id ON report_run (report_schedule_id);
 CREATE INDEX ix_report_run_c1 ON report_run (report_definition_id, legal_entity_id, as_of_date);
 ALTER TABLE report_run ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON report_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_report_run_touch BEFORE UPDATE ON report_run FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- report_cell: A computed cell / fact of a report run with its lineage to source records
+CREATE TABLE report_cell (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  report_run_id                uuid NOT NULL REFERENCES report_run(id),
+  cell_ref                     varchar(128) NOT NULL,
+  label                        varchar(255),
+  data_type                    varchar(16) NOT NULL,
+  value                        varchar(255),
+  computed_value               varchar(255),
+  is_adjusted                  boolean NOT NULL DEFAULT false,
+  source_name                  varchar(64),
+  source_count                 integer NOT NULL DEFAULT 0,
+  source_records               jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_report_cell_1 UNIQUE (report_run_id, cell_ref)
+);
+COMMENT ON TABLE report_cell IS 'A computed cell / fact of a report run with its lineage to source records';
+COMMENT ON COLUMN report_cell.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN report_cell.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN report_cell.created_at IS 'Creation time';
+COMMENT ON COLUMN report_cell.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN report_cell.updated_at IS 'Last update time';
+COMMENT ON COLUMN report_cell.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN report_cell.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN report_cell.report_run_id IS 'Run';
+COMMENT ON COLUMN report_cell.cell_ref IS 'Cell / XBRL element reference';
+COMMENT ON COLUMN report_cell.label IS 'Label';
+COMMENT ON COLUMN report_cell.data_type IS 'NUMBER or TEXT';
+COMMENT ON COLUMN report_cell.value IS 'Reported value (after approved adjustments)';
+COMMENT ON COLUMN report_cell.computed_value IS 'Value produced by the mapping';
+COMMENT ON COLUMN report_cell.is_adjusted IS 'An approved adjustment overrides the computed value';
+COMMENT ON COLUMN report_cell.source_name IS 'Data source the cell aggregates';
+COMMENT ON COLUMN report_cell.source_count IS 'Source records contributing';
+COMMENT ON COLUMN report_cell.source_records IS 'Contributing source records (id and value; first 500)';
+COMMENT ON COLUMN report_cell.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_cell.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_cell.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_cell.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_cell.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_report_cell_tenant ON report_cell (tenant_id, created_at);
+CREATE INDEX ix_report_cell_report_run_id ON report_cell (report_run_id);
+ALTER TABLE report_cell ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON report_cell USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_report_cell_touch BEFORE UPDATE ON report_cell FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- report_output: A file produced by a report run. Append-only.
 CREATE TABLE report_output (
@@ -268,11 +344,14 @@ CREATE TABLE report_output (
   created_by                   varchar(64),
   report_run_id                uuid NOT NULL REFERENCES report_run(id),
   format                       varchar(40) NOT NULL CHECK (format IN ('XBRL', 'XML', 'CSV', 'XLSX', 'JSON', 'PDF', 'FIXED_WIDTH')),
-  document_id                  uuid NOT NULL,
+  revision                     integer NOT NULL DEFAULT 1,
+  document_id                  uuid,
   file_name                    varchar(255) NOT NULL,
+  content_type                 varchar(64) NOT NULL,
   size_bytes                   bigint NOT NULL,
   sha256                       varchar(64) NOT NULL,
   record_count                 integer,
+  content                      text NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -286,11 +365,14 @@ COMMENT ON COLUMN report_output.created_at IS 'Creation time';
 COMMENT ON COLUMN report_output.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN report_output.report_run_id IS 'Run';
 COMMENT ON COLUMN report_output.format IS 'Format';
-COMMENT ON COLUMN report_output.document_id IS 'Stored file';
+COMMENT ON COLUMN report_output.revision IS 'Run revision the file renders';
+COMMENT ON COLUMN report_output.document_id IS 'Stored file in document-service, when archived';
 COMMENT ON COLUMN report_output.file_name IS 'File name';
+COMMENT ON COLUMN report_output.content_type IS 'MIME type';
 COMMENT ON COLUMN report_output.size_bytes IS 'Size';
 COMMENT ON COLUMN report_output.sha256 IS 'Checksum';
 COMMENT ON COLUMN report_output.record_count IS 'Rows / facts in the file';
+COMMENT ON COLUMN report_output.content IS 'File content (served by the format endpoints)';
 COMMENT ON COLUMN report_output.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_output.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_output.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -310,6 +392,7 @@ CREATE TABLE report_validation_result (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   report_run_id                uuid NOT NULL REFERENCES report_run(id),
+  revision                     integer NOT NULL DEFAULT 1,
   rule_code                    varchar(64) NOT NULL,
   severity                     varchar(40) NOT NULL CHECK (severity IN ('INFO', 'WARNING', 'ERROR')),
   message                      varchar(1000) NOT NULL,
@@ -328,6 +411,7 @@ COMMENT ON COLUMN report_validation_result.tenant_id IS 'Owning tenant; enforced
 COMMENT ON COLUMN report_validation_result.created_at IS 'Creation time';
 COMMENT ON COLUMN report_validation_result.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN report_validation_result.report_run_id IS 'Run';
+COMMENT ON COLUMN report_validation_result.revision IS 'Run revision validated';
 COMMENT ON COLUMN report_validation_result.rule_code IS 'Rule code';
 COMMENT ON COLUMN report_validation_result.severity IS 'Severity';
 COMMENT ON COLUMN report_validation_result.message IS 'Message';
@@ -345,7 +429,7 @@ ALTER TABLE report_validation_result ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON report_validation_result USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_report_validation_result_append_only BEFORE UPDATE OR DELETE ON report_validation_result FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
--- report_adjustment: Manual adjustment (overlay) to a reported value, with justification and approval
+-- report_adjustment: Manual adjustment (overlay) to a reported value, with justification and four-eyes approval
 CREATE TABLE report_adjustment (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -362,13 +446,15 @@ CREATE TABLE report_adjustment (
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')),
   adjusted_by                  varchar(64),
   approved_by                  varchar(64),
+  decision_comment             text,
+  decided_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE report_adjustment IS 'Manual adjustment (overlay) to a reported value, with justification and approval';
+COMMENT ON TABLE report_adjustment IS 'Manual adjustment (overlay) to a reported value, with justification and four-eyes approval';
 COMMENT ON COLUMN report_adjustment.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN report_adjustment.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN report_adjustment.created_at IS 'Creation time';
@@ -384,6 +470,8 @@ COMMENT ON COLUMN report_adjustment.reason IS 'Justification';
 COMMENT ON COLUMN report_adjustment.status IS 'Status';
 COMMENT ON COLUMN report_adjustment.adjusted_by IS 'Maker';
 COMMENT ON COLUMN report_adjustment.approved_by IS 'Checker';
+COMMENT ON COLUMN report_adjustment.decision_comment IS 'Checker comment or rejection reason';
+COMMENT ON COLUMN report_adjustment.decided_at IS 'Decision time';
 COMMENT ON COLUMN report_adjustment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_adjustment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_adjustment.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -410,13 +498,16 @@ CREATE TABLE report_submission (
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACKNOWLEDGED', 'ACCEPTED', 'REJECTED', 'RESUBMISSION_REQUIRED')),
   approval_request_id          uuid,
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
   submitted_at                 timestamptz,
   submitted_by                 varchar(64),
   regulator_reference          varchar(128),
+  gateway_message              text,
   acknowledgement_document_id  uuid,
   acknowledged_at              timestamptz,
   rejection_reason             text,
   deadline_at                  timestamptz,
+  deadline_alerted_on          date,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -437,13 +528,16 @@ COMMENT ON COLUMN report_submission.channel IS 'Submission channel';
 COMMENT ON COLUMN report_submission.status IS 'Status';
 COMMENT ON COLUMN report_submission.approval_request_id IS 'Sign-off workflow';
 COMMENT ON COLUMN report_submission.approved_by IS 'Sign-off';
+COMMENT ON COLUMN report_submission.approved_at IS 'Sign-off time';
 COMMENT ON COLUMN report_submission.submitted_at IS 'Submission time';
 COMMENT ON COLUMN report_submission.submitted_by IS 'Submitter';
 COMMENT ON COLUMN report_submission.regulator_reference IS 'Regulator receipt / reference';
+COMMENT ON COLUMN report_submission.gateway_message IS 'Message returned by the regulator gateway';
 COMMENT ON COLUMN report_submission.acknowledgement_document_id IS 'Acknowledgement file';
 COMMENT ON COLUMN report_submission.acknowledged_at IS 'Acknowledgement time';
 COMMENT ON COLUMN report_submission.rejection_reason IS 'Regulator rejection reason';
-COMMENT ON COLUMN report_submission.deadline_at IS 'Submission deadline';
+COMMENT ON COLUMN report_submission.deadline_at IS 'Submission deadline (default: due date of the reporting period)';
+COMMENT ON COLUMN report_submission.deadline_alerted_on IS 'Business date a deadline alert was last raised';
 COMMENT ON COLUMN report_submission.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_submission.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN report_submission.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -532,6 +626,54 @@ CREATE INDEX ix_crs_fatca_record_report_run_id ON crs_fatca_record (report_run_i
 ALTER TABLE crs_fatca_record ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON crs_fatca_record USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_crs_fatca_record_touch BEFORE UPDATE ON crs_fatca_record FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- report_job_run: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+CREATE TABLE report_job_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('SCHEDULED_RUNS', 'DEADLINE_ALERTS')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_report_job_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE report_job_run IS 'One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)';
+COMMENT ON COLUMN report_job_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN report_job_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN report_job_run.created_at IS 'Creation time';
+COMMENT ON COLUMN report_job_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN report_job_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN report_job_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN report_job_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN report_job_run.job IS 'Job';
+COMMENT ON COLUMN report_job_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN report_job_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN report_job_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN report_job_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN report_job_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN report_job_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN report_job_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_job_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_job_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_job_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN report_job_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_report_job_run_tenant ON report_job_run (tenant_id, created_at);
+ALTER TABLE report_job_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON report_job_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_report_job_run_touch BEFORE UPDATE ON report_job_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

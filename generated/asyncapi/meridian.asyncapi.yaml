@@ -1139,12 +1139,22 @@ channels:
     messages:
       ReportingReportDefinitionPublished:
         $ref: '#/components/messages/ReportingReportDefinitionPublished'
+      ReportingReportDefinitionDeprecated:
+        $ref: '#/components/messages/ReportingReportDefinitionDeprecated'
       ReportingReportRunCompleted:
         $ref: '#/components/messages/ReportingReportRunCompleted'
       ReportingReportRunFailed:
         $ref: '#/components/messages/ReportingReportRunFailed'
       ReportingReportRunValidationFailed:
         $ref: '#/components/messages/ReportingReportRunValidationFailed'
+      ReportingReportRunCancelled:
+        $ref: '#/components/messages/ReportingReportRunCancelled'
+      ReportingReportAdjustmentApproved:
+        $ref: '#/components/messages/ReportingReportAdjustmentApproved'
+      ReportingReportAdjustmentRejected:
+        $ref: '#/components/messages/ReportingReportAdjustmentRejected'
+      ReportingReportSubmissionApproved:
+        $ref: '#/components/messages/ReportingReportSubmissionApproved'
       ReportingReportSubmissionSubmitted:
         $ref: '#/components/messages/ReportingReportSubmissionSubmitted'
       ReportingReportSubmissionAcknowledged:
@@ -1155,24 +1165,44 @@ channels:
         $ref: '#/components/messages/ReportingReportSubmissionDeadlineApproaching'
       ReportingAnalyticsExportCompleted:
         $ref: '#/components/messages/ReportingAnalyticsExportCompleted'
+      ReportingAnalyticsExportFailed:
+        $ref: '#/components/messages/ReportingAnalyticsExportFailed'
+      ReportingDataShareDelivered:
+        $ref: '#/components/messages/ReportingDataShareDelivered'
       ReportingDataShareFailed:
         $ref: '#/components/messages/ReportingDataShareFailed'
+      ReportingDataSharePaused:
+        $ref: '#/components/messages/ReportingDataSharePaused'
+      ReportingDataShareResumed:
+        $ref: '#/components/messages/ReportingDataShareResumed'
       ReportingAnalyticsKpiCertified:
         $ref: '#/components/messages/ReportingAnalyticsKpiCertified'
+      ReportingMlModelVersionSubmitted:
+        $ref: '#/components/messages/ReportingMlModelVersionSubmitted'
       ReportingMlModelVersionApproved:
         $ref: '#/components/messages/ReportingMlModelVersionApproved'
       ReportingMlModelVersionRejected:
         $ref: '#/components/messages/ReportingMlModelVersionRejected'
       ReportingModelDeploymentActivated:
         $ref: '#/components/messages/ReportingModelDeploymentActivated'
+      ReportingModelDeploymentPromoted:
+        $ref: '#/components/messages/ReportingModelDeploymentPromoted'
       ReportingModelDeploymentRolledBack:
         $ref: '#/components/messages/ReportingModelDeploymentRolledBack'
+      ReportingModelDeploymentRetired:
+        $ref: '#/components/messages/ReportingModelDeploymentRetired'
       ReportingModelMetricBreached:
         $ref: '#/components/messages/ReportingModelMetricBreached'
+      ReportingCopilotActivated:
+        $ref: '#/components/messages/ReportingCopilotActivated'
+      ReportingCopilotDisabled:
+        $ref: '#/components/messages/ReportingCopilotDisabled'
       ReportingCopilotInteractionRecorded:
         $ref: '#/components/messages/ReportingCopilotInteractionRecorded'
       ReportingCopilotActionApproved:
         $ref: '#/components/messages/ReportingCopilotActionApproved'
+      ReportingCopilotActionRejected:
+        $ref: '#/components/messages/ReportingCopilotActionRejected'
       ReportingLlmBudgetExceeded:
         $ref: '#/components/messages/ReportingLlmBudgetExceeded'
   risk:
@@ -13590,6 +13620,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ReportDefinitionVersion'
+    ReportingReportDefinitionDeprecated:
+      name: reporting.report_definition.deprecated
+      title: A report definition was deprecated
+      summary: A report definition was deprecated
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.report_definition.deprecated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReportDefinition'
     ReportingReportRunCompleted:
       name: reporting.report_run.completed
       title: A report run finished
@@ -13656,6 +13708,94 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ReportRun'
+    ReportingReportRunCancelled:
+      name: reporting.report_run.cancelled
+      title: A report run was cancelled
+      summary: A report run was cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.report_run.cancelled
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReportRun'
+    ReportingReportAdjustmentApproved:
+      name: reporting.report_adjustment.approved
+      title: A manual adjustment was approved
+      summary: A manual adjustment was approved
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.report_adjustment.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReportAdjustment'
+    ReportingReportAdjustmentRejected:
+      name: reporting.report_adjustment.rejected
+      title: A manual adjustment was rejected
+      summary: A manual adjustment was rejected
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.report_adjustment.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReportAdjustment'
+    ReportingReportSubmissionApproved:
+      name: reporting.report_submission.approved
+      title: A submission was signed off
+      summary: A submission was signed off
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.report_submission.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReportSubmission'
     ReportingReportSubmissionSubmitted:
       name: reporting.report_submission.submitted
       title: A report was submitted to the regulator
@@ -13766,6 +13906,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AnalyticsExportJob'
+    ReportingAnalyticsExportFailed:
+      name: reporting.analytics_export.failed
+      title: An analytics export failed
+      summary: An analytics export failed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.analytics_export.failed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AnalyticsExportJob'
+    ReportingDataShareDelivered:
+      name: reporting.data_share.delivered
+      title: A data share delivery succeeded
+      summary: A data share delivery succeeded
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.data_share.delivered
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AnalyticsDataShare'
     ReportingDataShareFailed:
       name: reporting.data_share.failed
       title: A data share delivery failed
@@ -13776,6 +13960,50 @@ components:
           ce_type:
             type: string
             const: reporting.data_share.failed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AnalyticsDataShare'
+    ReportingDataSharePaused:
+      name: reporting.data_share.paused
+      title: A data share was paused
+      summary: A data share was paused
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.data_share.paused
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/AnalyticsDataShare'
+    ReportingDataShareResumed:
+      name: reporting.data_share.resumed
+      title: A data share was resumed
+      summary: A data share was resumed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.data_share.resumed
           ce_source:
             type: string
           ce_id:
@@ -13810,6 +14038,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/AnalyticsKpi'
+    ReportingMlModelVersionSubmitted:
+      name: reporting.ml_model_version.submitted
+      title: A model version was submitted for approval
+      summary: A model version was submitted for approval
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.ml_model_version.submitted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/MlModelVersion'
     ReportingMlModelVersionApproved:
       name: reporting.ml_model_version.approved
       title: A model version was approved
@@ -13876,6 +14126,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ModelDeployment'
+    ReportingModelDeploymentPromoted:
+      name: reporting.model_deployment.promoted
+      title: A model deployment was promoted
+      summary: A model deployment was promoted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.model_deployment.promoted
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ModelDeployment'
     ReportingModelDeploymentRolledBack:
       name: reporting.model_deployment.rolled_back
       title: A model deployment was rolled back
@@ -13886,6 +14158,28 @@ components:
           ce_type:
             type: string
             const: reporting.model_deployment.rolled_back
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ModelDeployment'
+    ReportingModelDeploymentRetired:
+      name: reporting.model_deployment.retired
+      title: A model deployment was retired
+      summary: A model deployment was retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.model_deployment.retired
           ce_source:
             type: string
           ce_id:
@@ -13920,6 +14214,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ModelMonitoringMetric'
+    ReportingCopilotActivated:
+      name: reporting.copilot.activated
+      title: A copilot was activated
+      summary: A copilot was activated
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.copilot.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CopilotDefinition'
+    ReportingCopilotDisabled:
+      name: reporting.copilot.disabled
+      title: A copilot was disabled
+      summary: A copilot was disabled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.copilot.disabled
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CopilotDefinition'
     ReportingCopilotInteractionRecorded:
       name: reporting.copilot_interaction.recorded
       title: A copilot interaction was recorded
@@ -13952,6 +14290,28 @@ components:
           ce_type:
             type: string
             const: reporting.copilot_action.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/CopilotInteraction'
+    ReportingCopilotActionRejected:
+      name: reporting.copilot_action.rejected
+      title: A human rejected a copilot-proposed action
+      summary: A human rejected a copilot-proposed action
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: reporting.copilot_action.rejected
           ce_source:
             type: string
           ce_id:
@@ -57515,23 +57875,31 @@ components:
         definition_version:
           type: integer
           format: int32
-          description: Version number
+          description: Version number (server-assigned, 1, 2, ...)
+          readOnly: true
         template_document_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Template file (XBRL taxonomy entry point, XLSX, XSD)
-        mapping:
-          type: object
-          additionalProperties: true
-          description: Cell/element to dataset mapping (SQL or dbt model references)
+        data_sources:
+          type: array
+          items: {}
+          description: Data sources {name, type SERVICE|INLINE, service, path with {as_of_date} {period_start} {period_end}
+            {legal_entity_id} {param.x} placeholders, rows_pointer (default /data), id_field, rows (INLINE)}
+        field_mappings:
+          type: array
+          items: {}
+          description: Cells {cell_ref, label, source, aggregate SUM|COUNT|AVG|MIN|MAX|FIRST, value (row expression), filter
+            (row condition), expression (over other cells), scale, type NUMBER|TEXT}
         validation_rules:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Validation rules (cross-checks, totals, regulator formulas)
+          items: {}
+          description: Rules {code, type REQUIRED|EQUALS|BALANCE|RANGE|EXPRESSION, severity, cells, left, right, tolerance,
+            debit, credit, cell, min, max, expression, message}
         xbrl_taxonomy:
           type:
           - string
@@ -57553,8 +57921,10 @@ components:
           enum:
           - DRAFT
           - ACTIVE
+          - SUPERSEDED
           - DEPRECATED
           description: Status
+          readOnly: true
         change_note:
           type:
           - string
@@ -57565,7 +57935,14 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Approver
+          description: Checker who published the version
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
           readOnly: true
         custom_field_1:
           type:
@@ -57604,8 +57981,183 @@ components:
       - row_version
       - report_definition_id
       - definition_version
-      - mapping
+      - data_sources
+      - field_mappings
       - effective_from
+      - status
+    ReportDefinition:
+      type: object
+      description: A regulatory or statutory report in a country pack (e.g. central-bank balance sheet, liquidity, CRS)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Report code, e.g. NG-CBN-MBR300
+        name:
+          type: string
+          maxLength: 255
+          description: Report name
+        country_pack:
+          type: string
+          maxLength: 16
+          description: Country pack code, e.g. NG, KE, BR, GB
+        jurisdiction:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Jurisdiction (ISO 3166-1 alpha-2)
+        regulator:
+          type: string
+          maxLength: 64
+          description: Regulator / authority
+        report_family:
+          type: string
+          maxLength: 40
+          description: BALANCE_SHEET, LIQUIDITY, CAPITAL, LARGE_EXPOSURE, AML_CTR, PAYMENTS_STATS, CRS, FATCA, DEPOSIT_INSURANCE,
+            OTHER
+        frequency:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - QUARTERLY
+          - SEMI_ANNUAL
+          - ANNUAL
+          - AD_HOC
+          - EVENT_DRIVEN
+          description: Frequency
+        format:
+          type: string
+          enum:
+          - XBRL
+          - XML
+          - CSV
+          - XLSX
+          - JSON
+          - PDF
+          - FIXED_WIDTH
+          description: Submission format (XBRL, XML, CSV and JSON are rendered by the service)
+        deadline_rule:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Deadline after the period end: PERIOD_END+<n>D (calendar days) or PERIOD_END+<n>BD (business days);
+            default per frequency'
+        filing_offset_days:
+          type: integer
+          format: int32
+          description: Jurisdiction-specific extension in calendar days added to the deadline
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - DEPRECATED
+          description: Status (ACTIVE on first publication, DEPRECATED by deprecate)
+          readOnly: true
+        active_version:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Version currently in force
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of the last status change (deprecation)
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          description: Purpose and scope
+        owner:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Accountable owner (finance / compliance)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - country_pack
+      - jurisdiction
+      - regulator
+      - report_family
+      - frequency
+      - format
+      - filing_offset_days
       - status
     ReportRun:
       type: object
@@ -57652,7 +58204,8 @@ components:
         report_definition_version_id:
           type: string
           format: uuid
-          description: Version used
+          description: Version used (effective at as_of_date)
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
@@ -57666,19 +58219,19 @@ components:
           - string
           - 'null'
           format: date
-          description: Period start
+          description: 'Period start (default: start of the frequency period ending at as_of_date)'
         period_end:
           type:
           - string
           - 'null'
           format: date
-          description: Period end
+          description: 'Period end (default: as_of_date)'
         parameters:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Run parameters
+          description: Run parameters (available as {param.x} and param_x in expressions)
         trigger:
           type: string
           enum:
@@ -57696,14 +58249,14 @@ components:
           - FAILED
           - CANCELLED
           - PARTIALLY_SUCCEEDED
-          description: Status
+          description: Status (PARTIALLY_SUCCEEDED = produced with validation errors)
           readOnly: true
         data_snapshot_id:
           type:
           - string
           - 'null'
           maxLength: 128
-          description: Lakehouse (Iceberg) snapshot id for reproducibility
+          description: Fingerprint (sha256) of the source data collected, for reproducibility
           readOnly: true
         row_count:
           type:
@@ -57726,12 +58279,32 @@ components:
           format: int32
           description: Validation warnings
           readOnly: true
+        revision:
+          type: integer
+          format: int32
+          description: Output revision (approved adjustments produce a new revision)
+          readOnly: true
         supersedes_run_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Run this one corrects (resubmission)
+          description: Run this one corrects (rerun / resubmission)
+          readOnly: true
+        superseded_by_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Run that corrects this one
+          readOnly: true
+        report_schedule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Schedule that created the run
+          readOnly: true
         started_at:
           type:
           - string
@@ -57750,7 +58323,7 @@ components:
           type:
           - string
           - 'null'
-          description: Failure details
+          description: Failure or cancellation details
           readOnly: true
         custom_field_1:
           type:
@@ -57792,6 +58365,142 @@ components:
       - legal_entity_id
       - as_of_date
       - trigger
+      - status
+      - revision
+    ReportAdjustment:
+      type: object
+      description: Manual adjustment (overlay) to a reported value, with justification and four-eyes approval
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        report_run_id:
+          type: string
+          format: uuid
+          description: Run
+        cell_ref:
+          type: string
+          maxLength: 128
+          description: Cell / XBRL element adjusted
+        original_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Value produced by the mapping
+          readOnly: true
+        adjusted_value:
+          type: string
+          maxLength: 255
+          description: Value reported
+        reason:
+          type: string
+          description: Justification
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          description: Status
+          readOnly: true
+        adjusted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          description: Checker comment or rejection reason
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - report_run_id
+      - cell_ref
+      - adjusted_value
+      - reason
       - status
     ReportSubmission:
       type: object
@@ -57859,6 +58568,7 @@ components:
           - REJECTED
           - RESUBMISSION_REQUIRED
           description: Status
+          readOnly: true
         approval_request_id:
           type:
           - string
@@ -57871,6 +58581,13 @@ components:
           - 'null'
           maxLength: 64
           description: Sign-off
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Sign-off time
           readOnly: true
         submitted_at:
           type:
@@ -57892,12 +58609,20 @@ components:
           - 'null'
           maxLength: 128
           description: Regulator receipt / reference
+          readOnly: true
+        gateway_message:
+          type:
+          - string
+          - 'null'
+          description: Message returned by the regulator gateway
+          readOnly: true
         acknowledgement_document_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Acknowledgement file
+          readOnly: true
         acknowledged_at:
           type:
           - string
@@ -57910,12 +58635,20 @@ components:
           - string
           - 'null'
           description: Regulator rejection reason
+          readOnly: true
         deadline_at:
           type:
           - string
           - 'null'
           format: date-time
-          description: Submission deadline
+          description: 'Submission deadline (default: due date of the reporting period)'
+        deadline_alerted_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Business date a deadline alert was last raised
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -57957,7 +58690,7 @@ components:
       - status
     AnalyticsExportJob:
       type: object
-      description: Export of a saved query's results to a file
+      description: Asynchronous export of a saved query's results to a file
       properties:
         id:
           type: string
@@ -58004,7 +58737,7 @@ components:
           - PARQUET
           - JSON
           - XLSX
-          description: Format
+          description: Format (CSV and JSON are produced; PARQUET and XLSX are rejected)
         parameters:
           type:
           - object
@@ -58029,12 +58762,26 @@ components:
           format: int64
           description: Rows exported
           readOnly: true
+        size_bytes:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: File size
+          readOnly: true
+        sha256:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: File checksum
+          readOnly: true
         document_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Result file
+          description: Archived file in document-service
           readOnly: true
         requested_by:
           type:
@@ -58068,7 +58815,7 @@ components:
           type:
           - string
           - 'null'
-          description: Error
+          description: Error or cancellation reason
           readOnly: true
         custom_field_1:
           type:
@@ -58162,16 +58909,25 @@ components:
           - SFTP
           - ICEBERG_REST
           description: Destination type
+        target_summary:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Non-secret summary of the destination (e.g. bucket / host)
+          readOnly: true
         datasets:
-          type: object
-          additionalProperties: true
-          description: Datasets / tables shared
+          type: array
+          items:
+            type: string
+            maxLength: 128
+          description: Whitelisted datasets shared
         schedule_cron:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Delivery schedule (empty = continuous)
+          description: Delivery schedule (empty = every business day)
         status:
           type: string
           enum:
@@ -58180,12 +58936,27 @@ components:
           - FAILED
           - REVOKED
           description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last pause / failure
+          readOnly: true
         last_delivery_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Last successful delivery
+          readOnly: true
+        last_delivery_rows:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Rows delivered last time
           readOnly: true
         last_error:
           type:
@@ -58234,7 +59005,7 @@ components:
       - status
     AnalyticsKpi:
       type: object
-      description: Governed KPI definition (formula, unit, dataset, owner)
+      description: Governed KPI definition (metric spec, unit, dataset, owner)
       properties:
         id:
           type: string
@@ -58284,12 +59055,25 @@ components:
           - 'null'
           description: Business definition
         formula:
-          type: string
-          description: SQL expression over the canonical model
+          type:
+          - string
+          - 'null'
+          description: Human-readable formula (documentation only; never executed)
+        metric:
+          type: object
+          additionalProperties: true
+          description: Metric spec {aggregate COUNT|SUM|AVG|MIN|MAX|COUNT_DISTINCT|RATIO, value (row expression), filter (row
+            condition), numerator, denominator (metric specs for RATIO), scale}
         dataset:
           type: string
           maxLength: 128
-          description: Source dataset / dbt model
+          description: Whitelisted source dataset
+        time_field:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: 'Dataset field used for time series (default: the dataset''s time field)'
         unit:
           type: string
           maxLength: 16
@@ -58302,7 +59086,22 @@ components:
           description: Data owner
         is_certified:
           type: boolean
-          description: Certified by data governance
+          description: Certified by data governance (cleared when the metric changes)
+          readOnly: true
+        certified_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Certifier
+          readOnly: true
+        certified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Certification time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -58340,7 +59139,7 @@ components:
       - row_version
       - code
       - name
-      - formula
+      - metric
       - dataset
       - unit
       - is_certified
@@ -58401,6 +59200,7 @@ components:
           - DEPLOYED
           - RETIRED
           description: Status
+          readOnly: true
         framework:
           type:
           - string
@@ -58414,7 +59214,7 @@ components:
         artifact_sha256:
           type: string
           maxLength: 64
-          description: Artifact checksum
+          description: Artifact checksum (64 hex)
         training_dataset_ref:
           type:
           - string
@@ -58435,10 +59235,12 @@ components:
           description: Training window end
         features:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Feature list
+          items:
+            type: string
+            maxLength: 128
+          description: Feature names
         hyperparameters:
           type:
           - object
@@ -58450,13 +59252,18 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Offline metrics (AUC, KS, Gini, precision at k, calibration)
+          description: Offline metrics {AUC, KS, GINI, PRECISION_AT_K, ...} (numbers)
         bias_test_results:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Fairness tests across protected attributes
+          items: {}
+          description: Fairness tests {attribute, metric, value, threshold, passed}
+        explainability_notes:
+          type:
+          - string
+          - 'null'
+          description: Explainability summary (top drivers, reason codes)
         explainability_document_id:
           type:
           - string
@@ -58475,6 +59282,20 @@ components:
           - 'null'
           format: uuid
           description: Approval workflow
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Submitter for approval
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
@@ -58488,6 +59309,18 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of rejection
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          description: Committee comment
           readOnly: true
         custom_field_1:
           type:
@@ -58571,10 +59404,17 @@ components:
           type: string
           format: uuid
           description: Version deployed
+          readOnly: true
+        ml_model_id:
+          type: string
+          format: uuid
+          description: Model
+          readOnly: true
         environment:
           type: string
           maxLength: 32
           description: SANDBOX, STAGING, PRODUCTION
+          readOnly: true
         mode:
           type: string
           enum:
@@ -58582,11 +59422,13 @@ components:
           - CANARY
           - CHAMPION
           - CHALLENGER
-          description: Serving mode
+          description: Serving mode (changed by promote)
+          readOnly: true
         traffic_percent:
           type: integer
           format: int32
-          description: Share of traffic served (canary / challenger)
+          description: Share of traffic served (changed by promote)
+          readOnly: true
         status:
           type: string
           enum:
@@ -58602,6 +59444,28 @@ components:
           - 'null'
           maxLength: 255
           description: Serving endpoint (KServe)
+          readOnly: true
+        thresholds:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: 'Alert thresholds per metric name, e.g. {"PSI": 0.25, "AUC": 0.70}'
+        auto_rollback:
+          type: boolean
+          description: Scheduled monitoring rolls back a breaching canary / challenger
+        previous_deployment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Champion replaced by this deployment (restored on rollback)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          description: Reason of the last status change
           readOnly: true
         deployed_by:
           type:
@@ -58660,10 +59524,12 @@ components:
       - updated_at
       - row_version
       - ml_model_version_id
+      - ml_model_id
       - environment
       - mode
       - traffic_percent
       - status
+      - auto_rollback
     ModelMonitoringMetric:
       type: object
       description: Monitoring measurement of a deployed model (drift, stability, performance, latency). Append-only.
@@ -58693,6 +59559,12 @@ components:
           type: string
           maxLength: 40
           description: PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE
+        feature:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Feature measured (drift metrics)
         metric_value:
           type: string
           format: decimal
@@ -58706,10 +59578,11 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Alert threshold
+          description: 'Alert threshold (default: deployment threshold, else the platform default)'
         breached:
           type: boolean
-          description: Threshold breached
+          description: Threshold breached (higher-is-worse for PSI/CSI/latency/error rate, lower-is-worse otherwise)
+          readOnly: true
         window_start:
           type: string
           format: date-time
@@ -58757,6 +59630,150 @@ components:
       - breached
       - window_start
       - window_end
+    CopilotDefinition:
+      type: object
+      description: A copilot configuration (purpose, tools, model, guardrails, human-approval rules)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 64
+          description: Copilot code
+        name:
+          type: string
+          maxLength: 160
+          description: Name
+        copilot_type:
+          type: string
+          enum:
+          - OPERATIONS
+          - DISPUTES
+          - AML_INVESTIGATION
+          - COLLECTIONS
+          - RECONCILIATION
+          - PRODUCT_STUDIO
+          - CUSTOMER_ASSISTANT
+          - DEVELOPER
+          - SERVICING
+          description: Use case
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        system_prompt_ref:
+          type: string
+          maxLength: 255
+          description: Versioned prompt reference
+        model_alias:
+          type: string
+          maxLength: 64
+          description: Model alias resolved by the LLM gateway
+        allowed_tools:
+          type: array
+          items: {}
+          description: Tools {name, mode READ|WRITE, keywords[]}; WRITE tools are only ever proposed
+        data_scopes:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            maxLength: 64
+          description: Context source types the copilot may read (empty = all)
+        requires_human_approval:
+          type: boolean
+          description: Any write action needs a human approval
+        llm_gateway_policy_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Gateway policy applied
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - ACTIVE
+          - DISABLED
+          description: Status
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - copilot_type
+      - system_prompt_ref
+      - model_alias
+      - allowed_tools
+      - requires_human_approval
+      - status
     CopilotInteraction:
       type: object
       description: Immutable audit of one copilot turn (redacted prompt/response, hashes, tool calls, citations, outcome)
@@ -58782,6 +59799,12 @@ components:
           type: string
           format: uuid
           description: Copilot
+        parent_interaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Turn decided by this record (approval / rejection of a proposed action)
         user_id:
           type:
           - string
@@ -58858,16 +59881,22 @@ components:
           description: End-to-end latency
         tool_calls:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Tools called with arguments and results summary
+          items: {}
+          description: Tools called or proposed {tool, mode, arguments, status}
         citations:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Sources cited {index, source_id, source_type, title, score}
+        redactions:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Sources cited (records, documents, events)
+          description: Redaction counts per entity
         outcome:
           type: string
           enum:
@@ -58884,7 +59913,12 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Human who approved a proposed action
+          description: Human who approved or rejected a proposed action
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          description: Approval comment or rejection reason
         cost:
           type:
           - string
@@ -58984,9 +60018,11 @@ components:
           type: boolean
           description: Tenant has opted in to LLM features
         allowed_models:
-          type: object
-          additionalProperties: true
-          description: Models / providers allowed
+          type: array
+          items:
+            type: string
+            maxLength: 64
+          description: Model aliases allowed
         self_hosted_only:
           type: boolean
           description: Only self-hosted models (data cannot leave region)
@@ -59001,10 +60037,25 @@ components:
           description: Redact PII before sending
         redaction_entities:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Entity types redacted (names, account numbers, PAN, national ids)
+          items:
+            type: string
+            enum:
+            - EMAIL
+            - PHONE
+            - PAN
+            - IBAN
+            - NATIONAL_ID
+            - ACCOUNT_NUMBER
+            - IP_ADDRESS
+          description: 'Entity types redacted (default: all)'
+        redaction_patterns:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Additional patterns {name, pattern} (Java regex, max 200 chars)
         max_tokens_per_request:
           type: integer
           format: int32
@@ -59015,6 +60066,20 @@ components:
           - 'null'
           format: int64
           description: Monthly token budget
+        cost_per_1k_tokens:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Blended price per 1,000 tokens
+        cost_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Price currency (ISO 4217)
         log_prompts:
           type: boolean
           description: Store redacted prompts in the audit log

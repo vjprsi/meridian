@@ -61,8 +61,8 @@ COMMENT ON COLUMN ml_model.intended_use IS 'Intended use and limitations';
 COMMENT ON COLUMN ml_model.risk_tier IS 'Model risk tier';
 COMMENT ON COLUMN ml_model.owner_team IS 'Owning team';
 COMMENT ON COLUMN ml_model.validator IS 'Independent model validator';
-COMMENT ON COLUMN ml_model.status IS 'Status';
-COMMENT ON COLUMN ml_model.champion_version_id IS 'Version currently serving as champion';
+COMMENT ON COLUMN ml_model.status IS 'Status (UNDER_REVIEW when the periodic review is due)';
+COMMENT ON COLUMN ml_model.champion_version_id IS 'Version currently serving as production champion';
 COMMENT ON COLUMN ml_model.next_review_date IS 'Periodic model review date';
 COMMENT ON COLUMN ml_model.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_model.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -96,11 +96,16 @@ CREATE TABLE ml_model_version (
   hyperparameters              jsonb,
   metrics                      jsonb,
   bias_test_results            jsonb,
+  explainability_notes         text,
   explainability_document_id   uuid,
   validation_document_id       uuid,
   approval_request_id          uuid,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  rejection_reason             text,
+  decision_comment             text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -121,19 +126,24 @@ COMMENT ON COLUMN ml_model_version.model_version IS 'Version label';
 COMMENT ON COLUMN ml_model_version.status IS 'Status';
 COMMENT ON COLUMN ml_model_version.framework IS 'XGBOOST, LIGHTGBM, PYTORCH, SKLEARN, ONNX, LLM';
 COMMENT ON COLUMN ml_model_version.artifact_uri IS 'Model artifact location (MLflow)';
-COMMENT ON COLUMN ml_model_version.artifact_sha256 IS 'Artifact checksum';
+COMMENT ON COLUMN ml_model_version.artifact_sha256 IS 'Artifact checksum (64 hex)';
 COMMENT ON COLUMN ml_model_version.training_dataset_ref IS 'Training data snapshot reference';
 COMMENT ON COLUMN ml_model_version.training_from IS 'Training window start';
 COMMENT ON COLUMN ml_model_version.training_to IS 'Training window end';
-COMMENT ON COLUMN ml_model_version.features IS 'Feature list';
+COMMENT ON COLUMN ml_model_version.features IS 'Feature names';
 COMMENT ON COLUMN ml_model_version.hyperparameters IS 'Hyperparameters';
-COMMENT ON COLUMN ml_model_version.metrics IS 'Offline metrics (AUC, KS, Gini, precision at k, calibration)';
-COMMENT ON COLUMN ml_model_version.bias_test_results IS 'Fairness tests across protected attributes';
+COMMENT ON COLUMN ml_model_version.metrics IS 'Offline metrics {AUC, KS, GINI, PRECISION_AT_K, ...} (numbers)';
+COMMENT ON COLUMN ml_model_version.bias_test_results IS 'Fairness tests {attribute, metric, value, threshold, passed}';
+COMMENT ON COLUMN ml_model_version.explainability_notes IS 'Explainability summary (top drivers, reason codes)';
 COMMENT ON COLUMN ml_model_version.explainability_document_id IS 'Explainability report (SHAP)';
 COMMENT ON COLUMN ml_model_version.validation_document_id IS 'Independent validation report';
 COMMENT ON COLUMN ml_model_version.approval_request_id IS 'Approval workflow';
+COMMENT ON COLUMN ml_model_version.submitted_by IS 'Submitter for approval';
+COMMENT ON COLUMN ml_model_version.submitted_at IS 'Submission time';
 COMMENT ON COLUMN ml_model_version.approved_by IS 'Approver';
 COMMENT ON COLUMN ml_model_version.approved_at IS 'Approval time';
+COMMENT ON COLUMN ml_model_version.rejection_reason IS 'Reason of rejection';
+COMMENT ON COLUMN ml_model_version.decision_comment IS 'Committee comment';
 COMMENT ON COLUMN ml_model_version.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_model_version.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ml_model_version.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -158,11 +168,16 @@ CREATE TABLE model_deployment (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   ml_model_version_id          uuid NOT NULL REFERENCES ml_model_version(id),
+  ml_model_id                  uuid NOT NULL REFERENCES ml_model(id),
   environment                  varchar(32) NOT NULL,
   mode                         varchar(40) NOT NULL CHECK (mode IN ('SHADOW', 'CANARY', 'CHAMPION', 'CHALLENGER')),
   traffic_percent              integer NOT NULL DEFAULT 0,
   status                       varchar(40) NOT NULL DEFAULT 'DEPLOYING' CHECK (status IN ('DEPLOYING', 'ACTIVE', 'ROLLED_BACK', 'RETIRED')),
   endpoint                     varchar(255),
+  thresholds                   jsonb,
+  auto_rollback                boolean NOT NULL DEFAULT false,
+  previous_deployment_id       uuid REFERENCES model_deployment(id),
+  status_reason                text,
   deployed_by                  varchar(64),
   deployed_at                  timestamptz,
   retired_at                   timestamptz,
@@ -181,11 +196,16 @@ COMMENT ON COLUMN model_deployment.updated_at IS 'Last update time';
 COMMENT ON COLUMN model_deployment.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN model_deployment.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN model_deployment.ml_model_version_id IS 'Version deployed';
+COMMENT ON COLUMN model_deployment.ml_model_id IS 'Model';
 COMMENT ON COLUMN model_deployment.environment IS 'SANDBOX, STAGING, PRODUCTION';
-COMMENT ON COLUMN model_deployment.mode IS 'Serving mode';
-COMMENT ON COLUMN model_deployment.traffic_percent IS 'Share of traffic served (canary / challenger)';
+COMMENT ON COLUMN model_deployment.mode IS 'Serving mode (changed by promote)';
+COMMENT ON COLUMN model_deployment.traffic_percent IS 'Share of traffic served (changed by promote)';
 COMMENT ON COLUMN model_deployment.status IS 'Status';
 COMMENT ON COLUMN model_deployment.endpoint IS 'Serving endpoint (KServe)';
+COMMENT ON COLUMN model_deployment.thresholds IS 'Alert thresholds per metric name, e.g. {"PSI": 0.25, "AUC": 0.70}';
+COMMENT ON COLUMN model_deployment.auto_rollback IS 'Scheduled monitoring rolls back a breaching canary / challenger';
+COMMENT ON COLUMN model_deployment.previous_deployment_id IS 'Champion replaced by this deployment (restored on rollback)';
+COMMENT ON COLUMN model_deployment.status_reason IS 'Reason of the last status change';
 COMMENT ON COLUMN model_deployment.deployed_by IS 'Deployer';
 COMMENT ON COLUMN model_deployment.deployed_at IS 'Deployment time';
 COMMENT ON COLUMN model_deployment.retired_at IS 'Retirement time';
@@ -196,6 +216,8 @@ COMMENT ON COLUMN model_deployment.custom_field_4 IS 'Tenant-defined custom fiel
 COMMENT ON COLUMN model_deployment.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_model_deployment_tenant ON model_deployment (tenant_id, created_at);
 CREATE INDEX ix_model_deployment_ml_model_version_id ON model_deployment (ml_model_version_id);
+CREATE INDEX ix_model_deployment_ml_model_id ON model_deployment (ml_model_id);
+CREATE INDEX ix_model_deployment_previous_deployment_id ON model_deployment (previous_deployment_id);
 ALTER TABLE model_deployment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON model_deployment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_model_deployment_touch BEFORE UPDATE ON model_deployment FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -208,6 +230,7 @@ CREATE TABLE model_monitoring_metric (
   created_by                   varchar(64),
   model_deployment_id          uuid NOT NULL REFERENCES model_deployment(id),
   metric_name                  varchar(40) NOT NULL,
+  feature                      varchar(128),
   metric_value                 numeric(18,10) NOT NULL,
   threshold                    numeric(18,10),
   breached                     boolean NOT NULL DEFAULT false,
@@ -226,9 +249,10 @@ COMMENT ON COLUMN model_monitoring_metric.created_at IS 'Creation time';
 COMMENT ON COLUMN model_monitoring_metric.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN model_monitoring_metric.model_deployment_id IS 'Deployment';
 COMMENT ON COLUMN model_monitoring_metric.metric_name IS 'PSI, CSI, AUC, KS, PRECISION, RECALL, LATENCY_P99, ERROR_RATE';
+COMMENT ON COLUMN model_monitoring_metric.feature IS 'Feature measured (drift metrics)';
 COMMENT ON COLUMN model_monitoring_metric.metric_value IS 'Value';
-COMMENT ON COLUMN model_monitoring_metric.threshold IS 'Alert threshold';
-COMMENT ON COLUMN model_monitoring_metric.breached IS 'Threshold breached';
+COMMENT ON COLUMN model_monitoring_metric.threshold IS 'Alert threshold (default: deployment threshold, else the platform default)';
+COMMENT ON COLUMN model_monitoring_metric.breached IS 'Threshold breached (higher-is-worse for PSI/CSI/latency/error rate, lower-is-worse otherwise)';
 COMMENT ON COLUMN model_monitoring_metric.window_start IS 'Window start';
 COMMENT ON COLUMN model_monitoring_metric.window_end IS 'Window end';
 COMMENT ON COLUMN model_monitoring_metric.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -310,8 +334,11 @@ CREATE TABLE llm_gateway_policy (
   data_residency_region        varchar(32),
   pii_redaction                boolean NOT NULL DEFAULT true,
   redaction_entities           jsonb,
+  redaction_patterns           jsonb,
   max_tokens_per_request       integer NOT NULL DEFAULT 8000,
   monthly_token_budget         bigint,
+  cost_per_1k_tokens           numeric(28,8),
+  cost_currency                char(3),
   log_prompts                  boolean NOT NULL DEFAULT true,
   retention_days               integer NOT NULL DEFAULT 365,
   is_active                    boolean NOT NULL DEFAULT true,
@@ -331,13 +358,16 @@ COMMENT ON COLUMN llm_gateway_policy.updated_by IS 'Principal that last updated 
 COMMENT ON COLUMN llm_gateway_policy.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN llm_gateway_policy.name IS 'Policy name';
 COMMENT ON COLUMN llm_gateway_policy.tenant_opt_in IS 'Tenant has opted in to LLM features';
-COMMENT ON COLUMN llm_gateway_policy.allowed_models IS 'Models / providers allowed';
+COMMENT ON COLUMN llm_gateway_policy.allowed_models IS 'Model aliases allowed';
 COMMENT ON COLUMN llm_gateway_policy.self_hosted_only IS 'Only self-hosted models (data cannot leave region)';
 COMMENT ON COLUMN llm_gateway_policy.data_residency_region IS 'Region requests must stay in';
 COMMENT ON COLUMN llm_gateway_policy.pii_redaction IS 'Redact PII before sending';
-COMMENT ON COLUMN llm_gateway_policy.redaction_entities IS 'Entity types redacted (names, account numbers, PAN, national ids)';
+COMMENT ON COLUMN llm_gateway_policy.redaction_entities IS 'Entity types redacted (default: all)';
+COMMENT ON COLUMN llm_gateway_policy.redaction_patterns IS 'Additional patterns {name, pattern} (Java regex, max 200 chars)';
 COMMENT ON COLUMN llm_gateway_policy.max_tokens_per_request IS 'Per-request token cap';
 COMMENT ON COLUMN llm_gateway_policy.monthly_token_budget IS 'Monthly token budget';
+COMMENT ON COLUMN llm_gateway_policy.cost_per_1k_tokens IS 'Blended price per 1,000 tokens';
+COMMENT ON COLUMN llm_gateway_policy.cost_currency IS 'Price currency';
 COMMENT ON COLUMN llm_gateway_policy.log_prompts IS 'Store redacted prompts in the audit log';
 COMMENT ON COLUMN llm_gateway_policy.retention_days IS 'Interaction retention';
 COMMENT ON COLUMN llm_gateway_policy.is_active IS 'Active';
@@ -350,6 +380,54 @@ CREATE INDEX ix_llm_gateway_policy_tenant ON llm_gateway_policy (tenant_id, crea
 ALTER TABLE llm_gateway_policy ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON llm_gateway_policy USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_llm_gateway_policy_touch BEFORE UPDATE ON llm_gateway_policy FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- ai_job_run: One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)
+CREATE TABLE ai_job_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('MODEL_MONITORING')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_ai_job_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE ai_job_run IS 'One scheduled job execution per tenant, job and business date (makes the scheduled actions idempotent)';
+COMMENT ON COLUMN ai_job_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN ai_job_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN ai_job_run.created_at IS 'Creation time';
+COMMENT ON COLUMN ai_job_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN ai_job_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN ai_job_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN ai_job_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN ai_job_run.job IS 'Job';
+COMMENT ON COLUMN ai_job_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN ai_job_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN ai_job_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN ai_job_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN ai_job_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN ai_job_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN ai_job_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ai_job_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ai_job_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ai_job_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN ai_job_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_ai_job_run_tenant ON ai_job_run (tenant_id, created_at);
+ALTER TABLE ai_job_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON ai_job_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_ai_job_run_touch BEFORE UPDATE ON ai_job_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- copilot_definition: A copilot configuration (purpose, tools, model, guardrails, human-approval rules)
 CREATE TABLE copilot_definition (
@@ -392,8 +470,8 @@ COMMENT ON COLUMN copilot_definition.copilot_type IS 'Use case';
 COMMENT ON COLUMN copilot_definition.description IS 'Description';
 COMMENT ON COLUMN copilot_definition.system_prompt_ref IS 'Versioned prompt reference';
 COMMENT ON COLUMN copilot_definition.model_alias IS 'Model alias resolved by the LLM gateway';
-COMMENT ON COLUMN copilot_definition.allowed_tools IS 'Read / write tools the copilot may call';
-COMMENT ON COLUMN copilot_definition.data_scopes IS 'Data the copilot may read';
+COMMENT ON COLUMN copilot_definition.allowed_tools IS 'Tools {name, mode READ|WRITE, keywords[]}; WRITE tools are only ever proposed';
+COMMENT ON COLUMN copilot_definition.data_scopes IS 'Context source types the copilot may read (empty = all)';
 COMMENT ON COLUMN copilot_definition.requires_human_approval IS 'Any write action needs a human approval';
 COMMENT ON COLUMN copilot_definition.llm_gateway_policy_id IS 'Gateway policy applied';
 COMMENT ON COLUMN copilot_definition.status IS 'Status';
@@ -415,6 +493,7 @@ CREATE TABLE copilot_interaction (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   copilot_definition_id        uuid NOT NULL REFERENCES copilot_definition(id),
+  parent_interaction_id        uuid REFERENCES copilot_interaction(id),
   user_id                      uuid,
   customer_id                  uuid,
   session_id                   varchar(64) NOT NULL,
@@ -431,15 +510,18 @@ CREATE TABLE copilot_interaction (
   latency_ms                   integer,
   tool_calls                   jsonb,
   citations                    jsonb,
+  redactions                   jsonb,
   outcome                      varchar(40) NOT NULL CHECK (outcome IN ('ANSWERED', 'ACTION_PROPOSED', 'ACTION_APPROVED', 'ACTION_REJECTED', 'REFUSED', 'HANDED_OFF', 'ERROR')),
   approved_by                  varchar(64),
+  decision_comment             text,
   cost                         numeric(28,8),
   cost_currency                char(3),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_copilot_interaction_1 UNIQUE (parent_interaction_id)
 );
 COMMENT ON TABLE copilot_interaction IS 'Immutable audit of one copilot turn (redacted prompt/response, hashes, tool calls, citations, outcome)';
 COMMENT ON COLUMN copilot_interaction.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -447,6 +529,7 @@ COMMENT ON COLUMN copilot_interaction.tenant_id IS 'Owning tenant; enforced by r
 COMMENT ON COLUMN copilot_interaction.created_at IS 'Creation time';
 COMMENT ON COLUMN copilot_interaction.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN copilot_interaction.copilot_definition_id IS 'Copilot';
+COMMENT ON COLUMN copilot_interaction.parent_interaction_id IS 'Turn decided by this record (approval / rejection of a proposed action)';
 COMMENT ON COLUMN copilot_interaction.user_id IS 'Staff user (empty for customer assistant)';
 COMMENT ON COLUMN copilot_interaction.customer_id IS 'Customer, for the customer assistant or a customer context';
 COMMENT ON COLUMN copilot_interaction.session_id IS 'Conversation session';
@@ -461,10 +544,12 @@ COMMENT ON COLUMN copilot_interaction.model_version IS 'Model version';
 COMMENT ON COLUMN copilot_interaction.input_tokens IS 'Input tokens';
 COMMENT ON COLUMN copilot_interaction.output_tokens IS 'Output tokens';
 COMMENT ON COLUMN copilot_interaction.latency_ms IS 'End-to-end latency';
-COMMENT ON COLUMN copilot_interaction.tool_calls IS 'Tools called with arguments and results summary';
-COMMENT ON COLUMN copilot_interaction.citations IS 'Sources cited (records, documents, events)';
+COMMENT ON COLUMN copilot_interaction.tool_calls IS 'Tools called or proposed {tool, mode, arguments, status}';
+COMMENT ON COLUMN copilot_interaction.citations IS 'Sources cited {index, source_id, source_type, title, score}';
+COMMENT ON COLUMN copilot_interaction.redactions IS 'Redaction counts per entity';
 COMMENT ON COLUMN copilot_interaction.outcome IS 'Outcome';
-COMMENT ON COLUMN copilot_interaction.approved_by IS 'Human who approved a proposed action';
+COMMENT ON COLUMN copilot_interaction.approved_by IS 'Human who approved or rejected a proposed action';
+COMMENT ON COLUMN copilot_interaction.decision_comment IS 'Approval comment or rejection reason';
 COMMENT ON COLUMN copilot_interaction.cost IS 'Cost of the call';
 COMMENT ON COLUMN copilot_interaction.cost_currency IS 'Cost currency';
 COMMENT ON COLUMN copilot_interaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -474,6 +559,7 @@ COMMENT ON COLUMN copilot_interaction.custom_field_4 IS 'Tenant-defined custom f
 COMMENT ON COLUMN copilot_interaction.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_copilot_interaction_tenant ON copilot_interaction (tenant_id, created_at);
 CREATE INDEX ix_copilot_interaction_copilot_definition_id ON copilot_interaction (copilot_definition_id);
+CREATE INDEX ix_copilot_interaction_parent_interaction_id ON copilot_interaction (parent_interaction_id);
 CREATE INDEX ix_copilot_interaction_user_id ON copilot_interaction (user_id);
 CREATE INDEX ix_copilot_interaction_customer_id ON copilot_interaction (customer_id);
 CREATE INDEX ix_copilot_interaction_session_id ON copilot_interaction (session_id);
@@ -495,7 +581,8 @@ CREATE TABLE ai_copilot_feedback (
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_ai_copilot_feedback_1 UNIQUE (copilot_interaction_id, given_by)
 );
 COMMENT ON TABLE ai_copilot_feedback IS 'User rating and comment on a copilot interaction. Append-only.';
 COMMENT ON COLUMN ai_copilot_feedback.id IS 'Unique id (UUIDv7, time-ordered)';

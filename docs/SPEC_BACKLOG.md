@@ -33,6 +33,26 @@ Domain hardening status: product ✔, ledger/gl/recon ✔ (merged); platform, pa
 - FX conversion for limits/velocity/approval thresholds (amounts compared in transaction currency today).
 - Kafka feed to transaction monitoring needs customer/counterparty on posting events.
 
+## Wave B results and open items
+
+All 63 services implemented (no 501s). Generator: nested-path parent ids are no longer required in create bodies;
+duplicate resource names and ambiguous paths are now hard validation errors; writes to global tables need
+`meridian:admin`; all persisted timestamps use `Clocks.now()` (PostgreSQL microsecond precision).
+
+| Area | Open item |
+|---|---|
+| Cross-cutting | Four-eyes is checked locally by principal everywhere; move to workflow-service approvals (G11). |
+| Cross-cutting | EOD / scan / expiry endpoints exist per tenant but nothing schedules them yet: business-day-service must drive them with S2S tokens (G8). |
+| Cross-cutting | Simulated adapters only: credit bureau, e-signature, billers, interop switch, regulator gateway, data-share transport, HSM. |
+| Cross-cutting | Large jobs (disbursement batches, commission payouts, exports) run synchronously or in-memory; move to Temporal workflows. |
+| Cross-cutting | Report/export outputs stored inline; archive via document-service. Shared helpers duplicated in reporting services: move to libs. |
+| Cards | Limit counters read without lock (brief overshoot under concurrent auths); vault void endpoint for failed issue; real HSM adapter + ZPK grace period; multi-presentment clearing; 3DS OTP sent inside DB transaction; ATTEMPTED result path; rename `card_control.values`. |
+| Lending | `loan_financial_item` lacks `loan_application_id`; credit lines expose no overdue amount / late fee; collections fees not charged and contacts not sent through notification-service; bulk repayments endpoint for collections EOD. |
+| Wallets | PENDING_PROVIDER bill payments vs 10-minute hold window; `commission_amount` not written back; agent `onboarding_count`; micro-deposit delivery adapter; deposit account holder name for name enquiry. |
+| Treasury | Revaluation / fair-value changes not posted to ledger; holiday calendars not applied to value dates; settled-flows feed for liquidity EOD; ALM multi-currency and NII floor; FX list omits legs. |
+| Engagement | customer-service segment member listing; points-earn liability accrual not posted; card-service handling of MERCHANT_DENY `merchant_ids` shape; `CAMPAIGN_MESSAGE` default template; card/wallet enrichment consumers. |
+| Reporting/AI | Export 10k-row cap; LLM usage attribution follows current policy; visibility filtering only on saved queries and dashboards. |
+
 ## Per-domain notes
 
 - platform: `ssoProviderCreate` lacks `client_secret`; `config_entry` lacks submitter; `audit_event` lacks consumed-event id;
