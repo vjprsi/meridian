@@ -1,5 +1,7 @@
 package io.meridian.pricingrules.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.events.OutboxWriter;
@@ -39,8 +41,14 @@ public class DecisionTableService {
     private final CrudEngine crud;
     private final OutboxWriter outbox;
     private final JsonMapper json;
+    private final Approvals approvals;
 
-    public DecisionTableService(PricingStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json) {
+    /** Approval resource type for decision table versions in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "decision_table_version";
+
+    public DecisionTableService(PricingStore store, CrudEngine crud, OutboxWriter outbox, JsonMapper json,
+                                Approvals approvals) {
+        this.approvals = approvals;
         this.store = store;
         this.crud = crud;
         this.outbox = outbox;
@@ -141,6 +149,15 @@ public class DecisionTableService {
         if (VersionLifecycle.DRAFT.equals(table.get("status").asString())) {
             store.update(TABLE, tableId, json.createObjectNode().put("status", VersionLifecycle.PENDING_APPROVAL));
         }
+        // Central maker-checker: the checker decides in the workflow inbox; ApprovalHandler applies the decision.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("decision_table_id", tableId.toString());
+        payload.put("version_no", v.path("version_no").asInt());
+        payload.put("checksum", values.get("checksum").asString());
+        payload.put("comment", comment);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                "Decision table " + text(table, "code") + " v" + v.path("version_no").asInt(), payload),
+                "submit:" + id + ":" + values.get("checksum").asString());
         return row.toString();
     }
 
@@ -171,11 +188,23 @@ public class DecisionTableService {
         }
         JsonNode row = store.update(VERSION, id, values);
         if (!effectiveFrom(row).isAfter(now)) {
-            return publish(tableId, row, now).toString();
+            JsonNode published = publish(tableId, row, now);
+            approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
+            return published.toString();
         }
         settleTableStatus(tableId);
         outbox.publish("product.decision_table_version.approved", VERSION, id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return row.toString();
+    }
+
+    /** True while the version is PENDING_APPROVAL with the submitted content (checksum) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String checksum) {
+        return store.find(VERSION, id)
+                .filter(v -> VersionLifecycle.PENDING_APPROVAL.equals(v.path("status").asString()))
+                .filter(v -> checksum == null || checksum.equals(v.path("checksum").asString(null)))
+                .isPresent();
     }
 
     @Transactional
@@ -193,6 +222,7 @@ public class DecisionTableService {
         JsonNode row = store.update(VERSION, id, values);
         settleTableStatus(UUID.fromString(v.get("decision_table_id").asString()));
         outbox.publish("product.decision_table_version.rejected", VERSION, id, row);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return row.toString();
     }
 

@@ -49,6 +49,25 @@ coupling to generated getter names. Responses: `crud.read(rowJson, Model.class)`
 - Every state change publishes its domain event via the outbox in the same transaction.
 - Money movements never update balances directly: they post to `ledger-service` (journal entries / holds).
 
+## Maker-checker (central approvals, `libs/meridian-approvals`)
+
+Every four-eyes decision is also routed through workflow-service so checkers work from one inbox with policies,
+levels, thresholds and SLAs. Keep the service's own `submit` / `approve` / `reject` endpoints and lifecycle rules;
+add the central path on top (reference: pricing-rules `DecisionTableService` + `DecisionTableApprovalHandler`):
+
+1. On submit, call `approvals.request(ApprovalSpec.of(RESOURCE, id, action, title, payload), key)` inside the
+   transaction. Put in `payload` what approvers need and a content fingerprint (checksum / row_version) so stale
+   decisions can be detected. Use `.withAmount(amount, ccy)` when policies route by amount. Deterministic `key`.
+2. Implement `ApprovalOutcomeHandler` for `RESOURCE`: if the resource is no longer waiting for this submission
+   (status or fingerprint changed), return; APPROVED calls the same `approve` method as the endpoint (the principal
+   is the deciding approver, so the four-eyes check still applies); REJECTED / CHANGES_REQUESTED call `reject`;
+   EXPIRED / CANCELLED leave it pending. Must be idempotent (at-least-once delivery).
+3. After a direct decision on the service's own endpoint, call `approvals.cancelOpen(RESOURCE, id, null, reason)`;
+   inside a transaction it runs after commit.
+4. Mode: `meridian.approvals.mode=workflow` (set by `tools/dev.py`) or `local` (default; existing tests unchanged).
+   Add one `*WorkflowApprovalIT` with `meridian.approvals.mode=workflow`, a mocked `ServiceClient`, and decisions fed
+   through `ApprovalEventsDispatcher.dispatch(...)`.
+
 ## Service identity (JWT mode)
 
 - A call made while handling a user request forwards the user's token (the user's permissions apply).

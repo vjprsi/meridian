@@ -125,7 +125,9 @@ def up(names: list[str], reset: bool = False) -> None:
         log = open(RUN / "logs" / f"{t['name']}.log", "w", encoding="utf-8")
         flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         proc = subprocess.Popen([JAVA, "-XX:+UseZGC", "-Xms128m", "-Xmx512m", "-jar", str(jar)],
-                                cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
+                                cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, creationflags=flags,
+                                # central maker-checker through workflow-service (tests default to local mode)
+                                env={**os.environ, "MERIDIAN_APPROVALS_MODE": os.environ.get("MERIDIAN_APPROVALS_MODE", "workflow")})
         pid_file(t["name"]).write_text(str(proc.pid))
         print(f"  started {t['name']} (pid {proc.pid}, port {t['port']})")
     deadline = time.time() + 180

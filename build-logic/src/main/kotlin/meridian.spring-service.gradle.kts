@@ -15,6 +15,7 @@ dependencies {
     "implementation"(project(":libs:meridian-common"))
     "implementation"(project(":libs:meridian-web"))
     "implementation"(project(":libs:meridian-events"))
+    "implementation"(project(":libs:meridian-approvals"))
     "implementation"("org.springframework.boot:spring-boot-starter-webmvc")
     "implementation"("org.springframework.boot:spring-boot-starter-validation")
     "implementation"("org.springframework.boot:spring-boot-starter-actuator")

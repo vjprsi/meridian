@@ -7,6 +7,7 @@ dependencyResolutionManagement {
     repositories { mavenCentral() }
 }
 
+include(":libs:meridian-approvals")
 include(":libs:meridian-common")
 include(":libs:meridian-events")
 include(":libs:meridian-test")

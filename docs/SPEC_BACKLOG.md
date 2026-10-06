@@ -18,7 +18,7 @@ first, then per-domain items in `spec/domains/*.yaml`, then remove the service-s
 | G8 | Scheduled jobs cannot enumerate tenants under RLS (workaround: tenants seen in idempotency_key) | Business-day-service drives per-tenant jobs; services expose job endpoints; or a tenant registry fed by `platform.tenant.*` events | Open |
 | G9 | Callbacks from external providers require `Idempotency-Key` and tenant headers they cannot send | Mark provider callback actions as `public` with signature auth; tenant resolved from the referenced entity | Done ([public]) |
 | G10 | Unsupported HTTP method returned 500 | Fixed in libs ProblemHandler (405/415) | Done |
-| G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | Open |
+| G11 | Maker-checker pending changes have no home (stored in `metadata._pending_*`) | Standardise: every maker-checker action creates a workflow-service approval_request; services apply on `platform.approval_request.approved` | In progress: `libs/meridian-approvals` + guide pattern; reference pricing-rules; per-domain rollout running |
 | G12 | Read-style operations declared 204 (view, ownership-tree, exposure, evaluate, simulate, test-connection, registration-options) | Same as G2: response schemas | Done (same as G2) |
 | G13 | Search endpoints lack `q` parameter | Add `?q:string!` to search actions | Open |
 
