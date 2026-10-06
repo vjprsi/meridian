@@ -252,6 +252,13 @@ components:
           type:
           - string
           - 'null'
+        source_event_id:
+          description: CloudEvents id of the consumed domain event (de-duplication)
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         trace_id:
           description: Trace id
           maxLength: 32
@@ -528,6 +535,7 @@ components:
         approval_request_id:
           description: Approval (four-eyes)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -589,6 +597,7 @@ components:
         expires_at:
           description: Download link expiry
           format: date-time
+          readOnly: true
           type:
           - string
           - 'null'
@@ -686,10 +695,6 @@ components:
       type: object
     DataExportRequestCreate:
       properties:
-        approval_request_id:
-          description: Approval (four-eyes)
-          format: uuid
-          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -713,10 +718,6 @@ components:
         due_date:
           description: Legal deadline (e.g. 30 days for DSAR)
           format: date
-          type: string
-        expires_at:
-          description: Download link expiry
-          format: date-time
           type: string
         export_type:
           description: Kind of export
@@ -1005,8 +1006,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1420,7 +1427,7 @@ paths:
   /v1/data-exports/{id}/download-url:
     get:
       operationId: dataExportsDownloadUrl
-      summary: Signed download URL once approved and complete
+      summary: Signed download URL once approved and complete (url, expires_at)
       tags:
       - Data Exports
       security:
@@ -1434,8 +1441,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

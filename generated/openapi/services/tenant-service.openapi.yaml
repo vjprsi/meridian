@@ -105,11 +105,25 @@ components:
           type:
           - string
           - 'null'
+        approval_route:
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         approvals_received:
           description: Approvals received
           format: int32
           readOnly: true
           type: integer
+        cancel_reason:
+          description: Reason given by the maker when cancelling
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -245,6 +259,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -319,9 +334,17 @@ components:
           type:
           - string
           - 'null'
+        close_reason:
+          description: Reason given on /close
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         closed_on:
-          description: Closing date
+          description: Closing date (set by /close)
           format: date
+          readOnly: true
           type:
           - string
           - 'null'
@@ -525,10 +548,6 @@ components:
           description: City
           maxLength: 120
           type: string
-        closed_on:
-          description: Closing date
-          format: date
-          type: string
         code:
           description: Branch code
           maxLength: 32
@@ -672,10 +691,6 @@ components:
         city:
           description: City
           maxLength: 120
-          type: string
-        closed_on:
-          description: Closing date
-          format: date
           type: string
         code:
           description: Branch code
@@ -844,6 +859,20 @@ components:
         custom_field_5:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
+          type:
+          - string
+          - 'null'
+        drain_reason:
+          description: Why the cell is draining
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        drain_requested_at:
+          description: When draining started
+          format: date-time
+          readOnly: true
           type:
           - string
           - 'null'
@@ -1198,10 +1227,10 @@ components:
           readOnly: true
           type: integer
         targeting_rules:
-          additionalProperties: true
-          description: Rules by legal entity, segment, user, app version
+          description: Ordered targeting rules {attribute, operator, value|values, serve, variant}
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         updated_at:
           description: Last update time
@@ -1276,9 +1305,9 @@ components:
           format: int32
           type: integer
         targeting_rules:
-          additionalProperties: true
-          description: Rules by legal entity, segment, user, app version
-          type: object
+          description: Ordered targeting rules {attribute, operator, value|values, serve, variant}
+          items: {}
+          type: array
         variants:
           additionalProperties: true
           description: Multivariate values
@@ -1350,9 +1379,9 @@ components:
           format: int32
           type: integer
         targeting_rules:
-          additionalProperties: true
-          description: Rules by legal entity, segment, user, app version
-          type: object
+          description: Ordered targeting rules {attribute, operator, value|values, serve, variant}
+          items: {}
+          type: array
         variants:
           additionalProperties: true
           description: Multivariate values
@@ -1975,19 +2004,34 @@ components:
           format: email
           maxLength: 320
           type: string
+        reinstated_at:
+          description: Last reinstatement time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        reinstatement_reason:
+          description: Reason given on the last /reinstate
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
         status:
-          description: Lifecycle status
+          description: Lifecycle status (changed by lifecycle actions)
           enum:
           - PROVISIONING
           - ACTIVE
           - SUSPENDED
           - OFFBOARDING
           - TERMINATED
+          readOnly: true
           type: string
         suspended_at:
           description: Suspension time
@@ -1999,6 +2043,13 @@ components:
         suspension_reason:
           description: Reason for suspension
           maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        template_code:
+          description: Template the tenant was provisioned from
+          maxLength: 64
           readOnly: true
           type:
           - string
@@ -2207,10 +2258,10 @@ components:
           - string
           - 'null'
         supported_locales:
-          additionalProperties: true
-          description: Enabled locales
+          description: Enabled locales (BCP 47 tags)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         terms_url:
           description: Terms and conditions URL
@@ -2346,9 +2397,9 @@ components:
           pattern: ^\+[1-9]\d{6,14}$
           type: string
         supported_locales:
-          additionalProperties: true
-          description: Enabled locales
-          type: object
+          description: Enabled locales (BCP 47 tags)
+          items: {}
+          type: array
         terms_url:
           description: Terms and conditions URL
           maxLength: 500
@@ -2479,9 +2530,9 @@ components:
           pattern: ^\+[1-9]\d{6,14}$
           type: string
         supported_locales:
-          additionalProperties: true
-          description: Enabled locales
-          type: object
+          description: Enabled locales (BCP 47 tags)
+          items: {}
+          type: array
         terms_url:
           description: Terms and conditions URL
           maxLength: 500
@@ -2576,15 +2627,6 @@ components:
           format: email
           maxLength: 320
           type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - PROVISIONING
-          - ACTIVE
-          - SUSPENDED
-          - OFFBOARDING
-          - TERMINATED
-          type: string
         tenant_type:
           description: Kind of organisation
           enum:
@@ -2612,6 +2654,13 @@ components:
     TenantModule:
       description: Platform modules enabled for the tenant and their module-level configuration
       properties:
+        approval_request_id:
+          description: Approval request that applied the last enable/disable
+          format: uuid
+          readOnly: true
+          type:
+          - string
+          - 'null'
         config:
           additionalProperties: true
           description: Module-level configuration
@@ -2673,10 +2722,11 @@ components:
           readOnly: true
           type: string
         is_enabled:
-          description: Whether the module is enabled
+          description: Whether the module is enabled (changed via /enable, /disable)
+          readOnly: true
           type: boolean
         module:
-          description: Module
+          description: Module (seeded at provisioning)
           enum:
           - LEDGER
           - DEPOSITS
@@ -2689,6 +2739,7 @@ components:
           - OPEN_BANKING
           - AI
           - ANALYTICS
+          readOnly: true
           type: string
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -2758,24 +2809,6 @@ components:
         custom_field_5:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
-          type: string
-        is_enabled:
-          description: Whether the module is enabled
-          type: boolean
-        module:
-          description: Module
-          enum:
-          - LEDGER
-          - DEPOSITS
-          - PAYMENTS
-          - WALLETS
-          - CARDS
-          - LENDING
-          - RISK
-          - REPORTING
-          - OPEN_BANKING
-          - AI
-          - ANALYTICS
           type: string
       type: object
     TenantPage:
@@ -2852,6 +2885,12 @@ components:
         effective_to:
           description: End of placement
           format: date-time
+          type:
+          - string
+          - 'null'
+        from_cell_id:
+          description: Previous cell (migrations)
+          format: uuid
           type:
           - string
           - 'null'
@@ -3243,15 +3282,6 @@ components:
           description: Primary contact
           format: email
           maxLength: 320
-          type: string
-        status:
-          description: Lifecycle status
-          enum:
-          - PROVISIONING
-          - ACTIVE
-          - SUSPENDED
-          - OFFBOARDING
-          - TERMINATED
           type: string
         tenant_type:
           description: Kind of organisation
@@ -5211,8 +5241,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5441,8 +5477,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

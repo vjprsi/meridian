@@ -1988,8 +1988,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2218,8 +2224,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2722,8 +2734,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3781,8 +3799,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4036,8 +4060,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4445,7 +4475,7 @@ paths:
   /v1/sessions/revoke-all:
     post:
       operationId: sessionsRevokeAll
-      summary: Revoke all sessions of a user
+      summary: Revoke all sessions of a user (returns revoked_count)
       tags:
       - Sessions
       security:
@@ -4454,8 +4484,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4698,8 +4734,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -4805,7 +4845,7 @@ paths:
   /v1/api-clients/{id}/usage:
     get:
       operationId: apiClientsUsage
-      summary: Request counts, error rates and latency for a period (?from=&to=)
+      summary: 'Request counts, error rates and latency for a period (default: last 30 days)'
       tags:
       - Api Clients
       security:
@@ -4818,9 +4858,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5754,8 +5812,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6112,8 +6176,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6148,8 +6218,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6175,16 +6251,40 @@ paths:
   /v1/config/entries/resolve:
     get:
       operationId: configEntriesResolve
-      summary: Effective configuration for a namespace (?namespace=)
+      summary: Effective configuration for a namespace
       tags:
       - Config Entries
       security:
       - oauth2:
         - platform:read
-      parameters: []
+      parameters:
+      - name: namespace
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: country
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6230,7 +6330,11 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - CREATED
+          - ACTIVATED
+          - ROLLED_BACK
+          - PROMOTED
       - name: custom_field_1
         in: query
         schema:
@@ -6948,8 +7052,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7700,7 +7810,7 @@ paths:
   /v1/reference/holiday-calendars/{id}/is-business-day:
     get:
       operationId: holidayCalendarsIsBusinessDay
-      summary: Whether a date is a business day (?date=)
+      summary: Whether a date is a business day
       tags:
       - Holiday Calendars
       security:
@@ -7713,9 +7823,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7731,7 +7853,7 @@ paths:
   /v1/reference/holiday-calendars/{id}/next-business-day:
     get:
       operationId: holidayCalendarsNextBusinessDay
-      summary: Next business day after a date, with offset (?date=&days=)
+      summary: Business day at an offset of days (default 1) from a date
       tags:
       - Holiday Calendars
       security:
@@ -7744,9 +7866,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -7777,8 +7917,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8376,13 +8522,37 @@ paths:
   /v1/reference/fx-rates/latest:
     get:
       operationId: fxRatesLatest
-      summary: Latest rate for a pair and type (?base=&quote=&type=)
+      summary: Latest rate for a pair and type (default MID)
       tags:
       - Fx Rates
       security:
       - oauth2:
         - platform:read
-      parameters: []
+      parameters:
+      - name: base
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: quote
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
       responses:
         '200':
           description: OK
@@ -8415,8 +8585,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8443,7 +8619,7 @@ paths:
   /v1/reference/fx-rates/bulk:
     post:
       operationId: fxRatesBulk
-      summary: Load a batch of rates
+      summary: Load a batch of rates (defaults apply to every item)
       tags:
       - Fx Rates
       security:
@@ -8452,8 +8628,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -8604,8 +8786,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9097,7 +9285,7 @@ paths:
   /v1/documents/{id}/upload-url:
     post:
       operationId: documentsUploadUrl
-      summary: Pre-signed URL to upload the file content
+      summary: Pre-signed URL to upload the file content (method, url, headers, expires_at)
       tags:
       - Documents
       security:
@@ -9112,8 +9300,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9131,10 +9325,57 @@ paths:
       x-service: document-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-table: document
+  /v1/documents/{id}/complete-upload:
+    post:
+      operationId: documentsCompleteUpload
+      summary: Confirm the content upload; records size and checksum and starts virus scanning
+      tags:
+      - Documents
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentsCompleteUploadRequest'
+      x-requirements:
+      - ADM-03
+      - DEP-06
+      - ONB-02
+      x-service: document-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: document
   /v1/documents/{id}/download-url:
     get:
       operationId: documentsDownloadUrl
-      summary: Short-lived pre-signed URL to download the file
+      summary: Short-lived pre-signed URL to download the file (method, url, expires_at)
       tags:
       - Documents
       security:
@@ -9148,8 +9389,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9467,7 +9714,7 @@ paths:
   /v1/document-templates/{id}/preview:
     post:
       operationId: documentTemplatesPreview
-      summary: Render the template with sample data
+      summary: Render the template with sample data (rendered, content_type, missing_variables)
       tags:
       - Document Templates
       security:
@@ -9482,8 +9729,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -9784,7 +10037,10 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - DOCUSIGN
+          - ADOBE_SIGN
+          - NATIVE_OTP
       - name: custom_field_1
         in: query
         schema:
@@ -10034,22 +10290,25 @@ paths:
   /v1/esign-requests/callbacks/{provider}/events:
     post:
       operationId: esignRequestsCallbacksEvents
-      summary: Provider status callback (signed)
+      summary: Provider status callback, HMAC-signed over the raw body; tenant resolved from the envelope
       tags:
       - Esign Requests
-      security:
-      - oauth2:
-        - platform:write
+      security: []
       parameters:
       - name: provider
         in: path
         required: true
         schema:
           type: string
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -10070,7 +10329,9 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: esign_request
   /v1/approval-policies:
     get:
@@ -10316,6 +10577,7 @@ paths:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -11381,6 +11643,46 @@ paths:
       x-table: work_task
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: tasksCreate
+      summary: Create task
+      tags:
+      - Tasks
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkTask'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkTaskCreate'
+      x-requirements:
+      - COL-02
+      - ONB-05
+      - SRV-01
+      x-service: workflow-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: work_task
+      x-crud: true
+      x-crud-create: true
   /v1/tasks/{id}:
     get:
       operationId: tasksGet
@@ -11751,6 +12053,7 @@ paths:
           - FAILED
           - SUPPRESSED
           - EXPIRED
+          - CANCELLED
       - name: source_event_id
         in: query
         schema:
@@ -12076,22 +12379,32 @@ paths:
   /v1/notifications/provider-callbacks/{provider}/events:
     post:
       operationId: notificationsProviderCallbacksEvents
-      summary: Delivery receipt webhook from a provider
+      summary: Delivery receipt webhook from a provider (HMAC-signed; tenant_id is part of the callback URL registered with
+        the provider)
       tags:
       - Notifications
-      security:
-      - oauth2:
-        - platform:write
+      security: []
       parameters:
       - name: provider
         in: path
         required: true
         schema:
           type: string
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12112,7 +12425,9 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: notification
   /v1/notification-templates:
     get:
@@ -12347,8 +12662,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12412,7 +12733,7 @@ paths:
   /v1/notification-templates/{id}/test-send:
     post:
       operationId: notificationTemplatesTestSend
-      summary: Send a test to the caller
+      summary: Send a test to the given destination
       tags:
       - Notification Templates
       security:
@@ -12427,8 +12748,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -12687,8 +13012,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13360,7 +13691,7 @@ paths:
   /v1/webhook-endpoints/{id}/rotate-secret:
     post:
       operationId: webhookEndpointsRotateSecret
-      summary: Rotate the signing secret (old secret valid 24h)
+      summary: Rotate the signing secret (old secret valid 24h; new secret returned once)
       tags:
       - Webhook Endpoints
       security:
@@ -13375,8 +13706,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -13772,6 +14107,11 @@ paths:
           - SUCCEEDED
           - FAILED
           - ABANDONED
+      - name: replay_job_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -14267,8 +14607,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14682,7 +15028,7 @@ paths:
   /v1/data-exports/{id}/download-url:
     get:
       operationId: dataExportsDownloadUrl
-      summary: Signed download URL once approved and complete
+      summary: Signed download URL once approved and complete (url, expires_at)
       tags:
       - Data Exports
       security:
@@ -14696,8 +15042,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -14950,6 +15302,90 @@ paths:
       x-table: price_plan
       x-crud: true
       x-crud-update: true
+  /v1/billing/price-plans/{id}/publish:
+    post:
+      operationId: pricePlansPublish
+      summary: Make a draft plan available for subscriptions
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: price_plan
+  /v1/billing/price-plans/{id}/retire:
+    post:
+      operationId: pricePlansRetire
+      summary: Withdraw a plan from new subscriptions
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricePlansRetireRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: price_plan
   /v1/billing/subscriptions:
     get:
       operationId: subscriptionsList
@@ -15389,16 +15825,40 @@ paths:
   /v1/billing/usage/summary:
     get:
       operationId: usageSummary
-      summary: Usage totals per metric for a period (?from=&to=)
+      summary: Usage totals per metric for a period
       tags:
       - Usage
       security:
       - oauth2:
         - platform:read
-      parameters: []
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: service_name
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -15689,10 +16149,46 @@ paths:
       x-service: billing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
       x-table: tenant_invoice
+  /v1/billing/invoices/{id}/payments:
+    get:
+      operationId: invoicesPayments
+      summary: Payments recorded against the invoice
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoicePaymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-table: tenant_invoice
   /v1/billing/invoices/generate:
     post:
       operationId: invoicesGenerate
-      summary: Generate draft invoices for a period
+      summary: 'Generate draft invoices for a period ({data: invoices, skipped_subscription_ids})'
       tags:
       - Invoices
       security:
@@ -15701,8 +16197,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -16253,8 +16755,8 @@ components:
       type: object
       properties:
         permission_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
         conditions:
           type: object
           additionalProperties: true
@@ -16605,8 +17107,11 @@ components:
       type: object
       properties:
         namespaces:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
+        environment:
+          type: string
+          maxLength: 32
     ConfigEntriesImportRequest:
       type: object
       properties:
@@ -16718,6 +17223,9 @@ components:
         customer_segment:
           type: string
           maxLength: 64
+        legal_entity_id:
+          type: string
+          format: uuid
       required:
       - country
       - applies_to
@@ -16893,8 +17401,29 @@ components:
       type: object
       properties:
         rates:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
+        fx_rate_source_id:
+          type: string
+          format: uuid
+        rate_type:
+          type: string
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
+        as_of_date:
+          type: string
+          format: date
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
       required:
       - rates
     BankDirectoryPage:
@@ -16985,6 +17514,18 @@ components:
       required:
       - data
       - has_more
+    DocumentsCompleteUploadRequest:
+      type: object
+      properties:
+        size_bytes:
+          type: integer
+          format: int64
+        checksum:
+          type: string
+          maxLength: 64
+      required:
+      - size_bytes
+      - checksum
     DocumentsLegalHoldRequest:
       type: object
       properties:
@@ -17069,11 +17610,25 @@ components:
     EsignRequestsCallbacksEventsRequest:
       type: object
       properties:
-        payload:
-          type: object
-          additionalProperties: true
+        envelope_id:
+          type: string
+          maxLength: 128
+        event:
+          type: string
+          maxLength: 32
+        signer_email:
+          type: string
+          format: email
+          maxLength: 320
+        signed_document_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 500
       required:
-      - payload
+      - envelope_id
+      - event
     ApprovalPolicyPage:
       type: object
       description: One page of ApprovalPolicy results (newest first)
@@ -17319,6 +17874,37 @@ components:
           - IN_APP
           - USSD
           - VOICE
+        destination:
+          type: string
+          maxLength: 512
+        locale:
+          type: string
+          maxLength: 10
+        category:
+          type: string
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+        scheduled_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: true
         variables:
           type: object
           additionalProperties: true
@@ -17634,6 +18220,14 @@ components:
       required:
       - data
       - has_more
+    PricePlansRetireRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     TenantSubscriptionPage:
       type: object
       description: One page of TenantSubscription results (newest first)
@@ -17751,6 +18345,24 @@ components:
       required:
       - data
       - has_more
+    TenantInvoicePaymentPage:
+      type: object
+      description: One page of TenantInvoicePayment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantInvoicePayment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     InvoicesGenerateRequest:
       type: object
       properties:
@@ -17826,8 +18438,8 @@ components:
           maxLength: 255
           description: Resource pattern, e.g. payments.payment.*
         actions:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Actions covered
         condition_expression:
           type: string
@@ -17903,8 +18515,8 @@ components:
           maxLength: 255
           description: Resource pattern, e.g. payments.payment.*
         actions:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Actions covered
         condition_expression:
           type: string
@@ -17964,8 +18576,8 @@ components:
           maxLength: 255
           description: Resource pattern, e.g. payments.payment.*
         actions:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Actions covered
         condition_expression:
           type: string
@@ -18078,19 +18690,19 @@ components:
           description: Bound certificate (RFC 8705)
         redirect_uris:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Allowed redirect URIs
         allowed_scopes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Scopes this client may request
         allowed_ip_ranges:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: CIDR allow-list
         rate_limit_policy_id:
           type:
@@ -18110,7 +18722,8 @@ components:
           - ACTIVE
           - SUSPENDED
           - REVOKED
-          description: Status
+          description: Status (changed by /suspend, /reactivate)
+          readOnly: true
         owner_email:
           type:
           - string
@@ -18170,6 +18783,12 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        client_secret:
+          type: string
+          maxLength: 128
+          description: Plaintext client secret for CLIENT_SECRET_* clients (on create and rotate-secret) (returned once; never
+            stored)
+          readOnly: true
       required:
       - id
       - created_at
@@ -18221,16 +18840,16 @@ components:
           maxLength: 128
           description: Bound certificate (RFC 8705)
         redirect_uris:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allowed redirect URIs
         allowed_scopes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Scopes this client may request
         allowed_ip_ranges:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: CIDR allow-list
         rate_limit_policy_id:
           type: string
@@ -18242,13 +18861,6 @@ components:
           - SANDBOX
           - PRODUCTION
           description: Sandbox or production
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - REVOKED
-          description: Status
         owner_email:
           type: string
           format: email
@@ -18327,16 +18939,16 @@ components:
           maxLength: 128
           description: Bound certificate (RFC 8705)
         redirect_uris:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allowed redirect URIs
         allowed_scopes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Scopes this client may request
         allowed_ip_ranges:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: CIDR allow-list
         rate_limit_policy_id:
           type: string
@@ -18348,13 +18960,6 @@ components:
           - SANDBOX
           - PRODUCTION
           description: Sandbox or production
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - REVOKED
-          description: Status
         owner_email:
           type: string
           format: email
@@ -18444,9 +19049,9 @@ components:
           readOnly: true
         scopes:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Scopes (subset of the client's)
         status:
           type: string
@@ -18456,12 +19061,14 @@ components:
           - REVOKED
           - EXPIRED
           description: Status
+          readOnly: true
         rotated_from_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Key this one replaced
+          readOnly: true
         expires_at:
           type:
           - string
@@ -18518,6 +19125,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        api_key:
+          type: string
+          maxLength: 128
+          description: Plaintext key (on create and rotate) (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at
@@ -18539,21 +19151,9 @@ components:
           maxLength: 120
           description: Key label
         scopes:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Scopes (subset of the client's)
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - ROTATING
-          - REVOKED
-          - EXPIRED
-          description: Status
-        rotated_from_id:
-          type: string
-          format: uuid
-          description: Key this one replaced
         expires_at:
           type: string
           format: date-time
@@ -18803,7 +19403,8 @@ components:
           - LOCKED
           - SUSPENDED
           - DEACTIVATED
-          description: Status
+          description: Status (changed by lifecycle actions)
+          readOnly: true
         sso_provider_id:
           type:
           - string
@@ -18980,15 +19581,6 @@ components:
           - AUDITOR
           - SERVICE_ACCOUNT
           description: Kind of user
-        status:
-          type: string
-          enum:
-          - INVITED
-          - ACTIVE
-          - LOCKED
-          - SUSPENDED
-          - DEACTIVATED
-          description: Status
         sso_provider_id:
           type: string
           format: uuid
@@ -19087,15 +19679,6 @@ components:
           - AUDITOR
           - SERVICE_ACCOUNT
           description: Kind of user
-        status:
-          type: string
-          enum:
-          - INVITED
-          - ACTIVE
-          - LOCKED
-          - SUSPENDED
-          - DEACTIVATED
-          description: Status
         sso_provider_id:
           type: string
           format: uuid
@@ -19298,9 +19881,9 @@ components:
           format: int32
           description: Approvals needed at each level
         approval_levels:
-          type: object
-          additionalProperties: true
-          description: Levels with approver roles and amount thresholds
+          type: array
+          items: {}
+          description: 'Levels in order: {level, approver_roles, min_amount, required_approvals}'
         allow_self_approval:
           type: boolean
           description: Maker may approve (never for money movement)
@@ -19383,9 +19966,9 @@ components:
           format: int32
           description: Approvals needed at each level
         approval_levels:
-          type: object
-          additionalProperties: true
-          description: Levels with approver roles and amount thresholds
+          type: array
+          items: {}
+          description: 'Levels in order: {level, approver_roles, min_amount, required_approvals}'
         allow_self_approval:
           type: boolean
           description: Maker may approve (never for money movement)
@@ -19449,9 +20032,9 @@ components:
           format: int32
           description: Approvals needed at each level
         approval_levels:
-          type: object
-          additionalProperties: true
-          description: Levels with approver roles and amount thresholds
+          type: array
+          items: {}
+          description: 'Levels in order: {level, approver_roles, min_amount, required_approvals}'
         allow_self_approval:
           type: boolean
           description: Maker may approve (never for money movement)
@@ -19590,6 +20173,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -19643,6 +20227,20 @@ components:
           - 'null'
           additionalProperties: true
           description: Result or error from executing the operation
+          readOnly: true
+        approval_route:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given by the maker when cancelling
           readOnly: true
         custom_field_1:
           type:
@@ -19907,6 +20505,13 @@ components:
           type: string
           maxLength: 64
           description: Service that emitted the event
+        source_event_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: CloudEvents id of the consumed domain event (de-duplication)
+          readOnly: true
         hash:
           type: string
           maxLength: 64
@@ -20232,9 +20837,9 @@ components:
           description: Address
         rail_participation:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Rails the bank participates in (SEPA_INST, FEDNOW, PIX ...)
         is_active:
           type: boolean
@@ -20460,7 +21065,15 @@ components:
           - string
           - 'null'
           format: date
-          description: Closing date
+          description: Closing date (set by /close)
+          readOnly: true
+        close_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /close
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -20603,10 +21216,6 @@ components:
           type: string
           format: date
           description: Opening date
-        closed_on:
-          type: string
-          format: date
-          description: Closing date
         custom_field_1:
           type: string
           maxLength: 500
@@ -20733,10 +21342,6 @@ components:
           type: string
           format: date
           description: Opening date
-        closed_on:
-          type: string
-          format: date
-          description: Closing date
         custom_field_1:
           type: string
           maxLength: 500
@@ -20856,6 +21461,20 @@ components:
           - 'null'
           maxLength: 32
           description: Paired region for failover
+        drain_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the cell is draining
+          readOnly: true
+        drain_requested_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When draining started
+          readOnly: true
         metadata:
           type:
           - object
@@ -21103,14 +21722,18 @@ components:
           description: New version
         change_type:
           type: string
-          maxLength: 32
-          description: CREATED, ACTIVATED, ROLLED_BACK, PROMOTED
+          enum:
+          - CREATED
+          - ACTIVATED
+          - ROLLED_BACK
+          - PROMOTED
+          description: Kind of change
         diff:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: JSON patch from the previous version
+          items: {}
+          description: JSON Patch operations from the previous version
         approved_by:
           type:
           - string
@@ -21224,7 +21847,8 @@ components:
           - ACTIVE
           - SUPERSEDED
           - ROLLED_BACK
-          description: Status
+          description: Status (changed by lifecycle actions)
+          readOnly: true
         effective_from:
           type:
           - string
@@ -21243,12 +21867,28 @@ components:
           - 'null'
           format: uuid
           description: Maker-checker approval
+          readOnly: true
         promoted_from_environment:
           type:
           - string
           - 'null'
           maxLength: 32
           description: Source environment when promoted
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the version for approval
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the version was submitted
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -21308,15 +21948,6 @@ components:
           type: object
           additionalProperties: true
           description: JSON Schema the value must satisfy
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - SUPERSEDED
-          - ROLLED_BACK
-          description: Status
         effective_from:
           type: string
           format: date-time
@@ -21325,14 +21956,6 @@ components:
           type: string
           maxLength: 500
           description: Why it changed
-        approval_request_id:
-          type: string
-          format: uuid
-          description: Maker-checker approval
-        promoted_from_environment:
-          type: string
-          maxLength: 32
-          description: Source environment when promoted
         custom_field_1:
           type: string
           maxLength: 500
@@ -21464,10 +22087,10 @@ components:
           description: FATF list status
         address_format:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Address fields and order
+          items: {}
+          description: Address fields in display order
         postal_code_regex:
           type:
           - string
@@ -21572,9 +22195,9 @@ components:
           - CALL_FOR_ACTION
           description: FATF list status
         address_format:
-          type: object
-          additionalProperties: true
-          description: Address fields and order
+          type: array
+          items: {}
+          description: Address fields in display order
         postal_code_regex:
           type: string
           maxLength: 255
@@ -22050,9 +22673,9 @@ components:
           description: Optional pattern the value must match
         allowed_values:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Allowed values when data_type is ENUM
         min_value:
           type:
@@ -22186,8 +22809,8 @@ components:
           maxLength: 500
           description: Optional pattern the value must match
         allowed_values:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allowed values when data_type is ENUM
         min_value:
           type: string
@@ -22292,8 +22915,8 @@ components:
           maxLength: 500
           description: Optional pattern the value must match
         allowed_values:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Allowed values when data_type is ENUM
         min_value:
           type: string
@@ -22428,6 +23051,7 @@ components:
           - 'null'
           format: uuid
           description: Approval (four-eyes)
+          readOnly: true
         status:
           type: string
           enum:
@@ -22459,6 +23083,7 @@ components:
           - 'null'
           format: date-time
           description: Download link expiry
+          readOnly: true
         due_date:
           type:
           - string
@@ -22539,14 +23164,6 @@ components:
           type: object
           additionalProperties: true
           description: Additional filters
-        approval_request_id:
-          type: string
-          format: uuid
-          description: Approval (four-eyes)
-        expires_at:
-          type: string
-          format: date-time
-          description: Download link expiry
         due_date:
           type: string
           format: date
@@ -22719,13 +23336,49 @@ components:
           description: Earliest deletion date
         legal_hold:
           type: boolean
-          description: Deletion blocked by legal hold
+          description: Deletion blocked by legal hold (set via /legal-hold)
+          readOnly: true
+        legal_hold_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current legal hold
+          readOnly: true
+        legal_hold_changed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the hold was last placed or lifted
+          readOnly: true
+        legal_hold_changed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who last placed or lifted the hold
+          readOnly: true
         uploaded_via:
           type:
           - string
           - 'null'
           maxLength: 32
           description: API, CONSOLE, MOBILE_APP, AGENT_APP, SYSTEM
+        archived_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the document moved to archive storage
+          readOnly: true
+        storage_class:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Object storage class, e.g. STANDARD, GLACIER_IR
+          readOnly: true
         metadata:
           type:
           - object
@@ -22847,9 +23500,6 @@ components:
           type: string
           format: date
           description: Earliest deletion date
-        legal_hold:
-          type: boolean
-          description: Deletion blocked by legal hold
         uploaded_via:
           type: string
           maxLength: 32
@@ -22954,9 +23604,6 @@ components:
           type: string
           format: date
           description: Earliest deletion date
-        legal_hold:
-          type: boolean
-          description: Deletion blocked by legal hold
         uploaded_via:
           type: string
           maxLength: 32
@@ -23091,7 +23738,8 @@ components:
           - PENDING_APPROVAL
           - ACTIVE
           - RETIRED
-          description: Status
+          description: Status (changes via /publish, /retire and approval)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -23185,14 +23833,6 @@ components:
           type: string
           format: uuid
           description: Legal entity (empty = all)
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -23268,14 +23908,6 @@ components:
           type: string
           format: uuid
           description: Legal entity (empty = all)
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -23348,8 +23980,11 @@ components:
           description: Owning object id
         provider:
           type: string
-          maxLength: 32
-          description: DOCUSIGN, ADOBE_SIGN, NATIVE_OTP
+          enum:
+          - DOCUSIGN
+          - ADOBE_SIGN
+          - NATIVE_OTP
+          description: E-signature provider
         provider_envelope_id:
           type:
           - string
@@ -23358,9 +23993,9 @@ components:
           description: Provider envelope id
           readOnly: true
         signers:
-          type: object
-          additionalProperties: true
-          description: 'Signers: name, email/phone, order, auth method'
+          type: array
+          items: {}
+          description: 'Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service'
         status:
           type: string
           enum:
@@ -23401,6 +24036,39 @@ components:
           - 'null'
           format: date-time
           description: Expiry
+        reminder_count:
+          type: integer
+          format: int32
+          description: Reminders sent
+          readOnly: true
+        last_reminded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last reminder time
+          readOnly: true
+        cancellation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the envelope was cancelled
+          readOnly: true
+        cancelled_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who cancelled it
+          readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reason given by the declining signer
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -23442,6 +24110,7 @@ components:
       - provider
       - signers
       - status
+      - reminder_count
     EsignRequestCreate:
       type: object
       properties:
@@ -23459,12 +24128,15 @@ components:
           description: Owning object id
         provider:
           type: string
-          maxLength: 32
-          description: DOCUSIGN, ADOBE_SIGN, NATIVE_OTP
+          enum:
+          - DOCUSIGN
+          - ADOBE_SIGN
+          - NATIVE_OTP
+          description: E-signature provider
         signers:
-          type: object
-          additionalProperties: true
-          description: 'Signers: name, email/phone, order, auth method'
+          type: array
+          items: {}
+          description: 'Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service'
         expires_at:
           type: string
           format: date-time
@@ -23552,10 +24224,10 @@ components:
           description: Percent of subjects that see the feature (0-100)
         targeting_rules:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Rules by legal entity, segment, user, app version
+          items: {}
+          description: Ordered targeting rules {attribute, operator, value|values, serve, variant}
         variants:
           type:
           - object
@@ -23631,9 +24303,9 @@ components:
           format: int32
           description: Percent of subjects that see the feature (0-100)
         targeting_rules:
-          type: object
-          additionalProperties: true
-          description: Rules by legal entity, segment, user, app version
+          type: array
+          items: {}
+          description: Ordered targeting rules {attribute, operator, value|values, serve, variant}
         variants:
           type: object
           additionalProperties: true
@@ -23687,9 +24359,9 @@ components:
           format: int32
           description: Percent of subjects that see the feature (0-100)
         targeting_rules:
-          type: object
-          additionalProperties: true
-          description: Rules by legal entity, segment, user, app version
+          type: array
+          items: {}
+          description: Ordered targeting rules {attribute, operator, value|values, serve, variant}
         variants:
           type: object
           additionalProperties: true
@@ -23776,7 +24448,8 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Units of base per 1 quote
+          description: Units of base per 1 quote (computed as 1 / rate)
+          readOnly: true
         as_of_date:
           type: string
           format: date
@@ -23863,12 +24536,6 @@ components:
           examples:
           - '125.50'
           description: Units of quote per 1 base
-        inverse_rate:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Units of base per 1 quote
         as_of_date:
           type: string
           format: date
@@ -23905,11 +24572,8 @@ components:
       - fx_rate_source_id
       - base_currency
       - quote_currency
-      - rate_type
       - rate
-      - inverse_rate
       - as_of_date
-      - valid_from
     FxRateSource:
       type: object
       description: A provider of FX rates (market data feed, central bank, treasury desk)
@@ -24144,6 +24808,7 @@ components:
           - 'null'
           format: uuid
           description: Resulting document
+          readOnly: true
         owner_type:
           type: string
           maxLength: 40
@@ -24152,6 +24817,12 @@ components:
           type: string
           format: uuid
           description: Owning object id
+        data:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Template input data (variables); input_hash is its hash
         input_hash:
           type: string
           maxLength: 64
@@ -24228,10 +24899,6 @@ components:
           type: string
           format: uuid
           description: Template version used
-        document_id:
-          type: string
-          format: uuid
-          description: Resulting document
         owner_type:
           type: string
           maxLength: 40
@@ -24240,6 +24907,10 @@ components:
           type: string
           format: uuid
           description: Owning object id
+        data:
+          type: object
+          additionalProperties: true
+          description: Template input data (variables); input_hash is its hash
         custom_field_1:
           type: string
           maxLength: 500
@@ -24537,8 +25208,8 @@ components:
           maxLength: 64
           description: IANA timezone
         weekend_days:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
         description:
           type:
@@ -24620,8 +25291,8 @@ components:
           maxLength: 64
           description: IANA timezone
         weekend_days:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
         description:
           type: string
@@ -24687,8 +25358,8 @@ components:
           maxLength: 64
           description: IANA timezone
         weekend_days:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
         description:
           type: string
@@ -25471,13 +26142,15 @@ components:
         is_primary:
           type: boolean
           description: Default factor
+          readOnly: true
         status:
           type: string
           enum:
           - PENDING_VERIFICATION
           - ACTIVE
           - DISABLED
-          description: Status
+          description: Status (changed by /verify)
+          readOnly: true
         last_used_at:
           type:
           - string
@@ -25515,6 +26188,16 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        totp_secret:
+          type: string
+          maxLength: 64
+          description: Base32 TOTP seed (TOTP enrolment only) (returned once; never stored)
+          readOnly: true
+        otpauth_uri:
+          type: string
+          maxLength: 500
+          description: otpauth:// provisioning URI for authenticator apps (TOTP enrolment only) (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at
@@ -25552,16 +26235,6 @@ components:
           type: string
           maxLength: 320
           description: Phone or email for OTP factors
-        is_primary:
-          type: boolean
-          description: Default factor
-        status:
-          type: string
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - DISABLED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -25719,6 +26392,7 @@ components:
           - FAILED
           - SUPPRESSED
           - EXPIRED
+          - CANCELLED
           description: Status
           readOnly: true
         scheduled_at:
@@ -25992,6 +26666,10 @@ components:
           - 'null'
           format: int32
           description: Provider latency
+        cycle:
+          type: integer
+          format: int32
+          description: Send cycle (a resend starts a new one)
         custom_field_1:
           type:
           - string
@@ -26029,6 +26707,7 @@ components:
       - notification_provider_id
       - attempt_no
       - status
+      - cycle
     NotificationPreference:
       type: object
       description: A recipient's channel preferences and quiet hours per category
@@ -26382,6 +27061,12 @@ components:
           type: integer
           format: int32
           description: Lower is tried first
+        credentials_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
         sender_id:
           type:
           - string
@@ -26390,10 +27075,10 @@ components:
           description: Sender id / from address
         country_scope:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Countries routed to this provider
+          items: {}
+          description: ISO country codes routed to this provider
         config:
           type:
           - object
@@ -26469,14 +27154,18 @@ components:
           type: integer
           format: int32
           description: Lower is tried first
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
         sender_id:
           type: string
           maxLength: 64
           description: Sender id / from address
         country_scope:
-          type: object
-          additionalProperties: true
-          description: Countries routed to this provider
+          type: array
+          items: {}
+          description: ISO country codes routed to this provider
         config:
           type: object
           additionalProperties: true
@@ -26534,14 +27223,18 @@ components:
           type: integer
           format: int32
           description: Lower is tried first
+        credentials_ref:
+          type: string
+          maxLength: 255
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
         sender_id:
           type: string
           maxLength: 64
           description: Sender id / from address
         country_scope:
-          type: object
-          additionalProperties: true
-          description: Countries routed to this provider
+          type: array
+          items: {}
+          description: ISO country codes routed to this provider
         config:
           type: object
           additionalProperties: true
@@ -26621,8 +27314,8 @@ components:
           maxLength: 64
           description: Template to use
         channels:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Channels in preference order
         recipient_expression:
           type: string
@@ -26699,8 +27392,8 @@ components:
           maxLength: 64
           description: Template to use
         channels:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Channels in preference order
         recipient_expression:
           type: string
@@ -26760,8 +27453,8 @@ components:
           maxLength: 64
           description: Template to use
         channels:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Channels in preference order
         recipient_expression:
           type: string
@@ -26897,7 +27590,8 @@ components:
           - PENDING_APPROVAL
           - ACTIVE
           - RETIRED
-          description: Status
+          description: Status (changes via /publish and approval)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -26983,14 +27677,6 @@ components:
           type: object
           additionalProperties: true
           description: Expected variables
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -27059,14 +27745,6 @@ components:
           type: object
           additionalProperties: true
           description: Expected variables
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -27373,7 +28051,8 @@ components:
           - DRAFT
           - ACTIVE
           - RETIRED
-          description: Status
+          description: Status (changed by /publish, /retire)
+          readOnly: true
         valid_from:
           type: string
           format: date
@@ -27384,6 +28063,20 @@ components:
           - 'null'
           format: date
           description: Available to
+        retire_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /retire
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -27471,13 +28164,6 @@ components:
           type: object
           additionalProperties: true
           description: Tiered prices per usage metric
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          description: Status
         valid_from:
           type: string
           format: date
@@ -27554,13 +28240,6 @@ components:
           type: object
           additionalProperties: true
           description: Tiered prices per usage metric
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          description: Status
         valid_from:
           type: string
           format: date
@@ -27971,6 +28650,7 @@ components:
           - SYSTEM
           - CUSTOM
           description: System roles cannot be edited
+          readOnly: true
         is_privileged:
           type: boolean
           description: Privileged roles need just-in-time elevation and approval
@@ -27983,10 +28663,10 @@ components:
           description: Session lifetime
         incompatible_role_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Segregation-of-duties conflicts
+          items: {}
+          description: Segregation-of-duties conflicts (role ids)
         custom_field_1:
           type:
           - string
@@ -28043,12 +28723,6 @@ components:
           type: string
           maxLength: 500
           description: Purpose of the role
-        role_type:
-          type: string
-          enum:
-          - SYSTEM
-          - CUSTOM
-          description: System roles cannot be edited
         is_privileged:
           type: boolean
           description: Privileged roles need just-in-time elevation and approval
@@ -28060,9 +28734,9 @@ components:
           format: int32
           description: Session lifetime
         incompatible_role_ids:
-          type: object
-          additionalProperties: true
-          description: Segregation-of-duties conflicts
+          type: array
+          items: {}
+          description: Segregation-of-duties conflicts (role ids)
         custom_field_1:
           type: string
           maxLength: 500
@@ -28101,12 +28775,6 @@ components:
           type: string
           maxLength: 500
           description: Purpose of the role
-        role_type:
-          type: string
-          enum:
-          - SYSTEM
-          - CUSTOM
-          description: System roles cannot be edited
         is_privileged:
           type: boolean
           description: Privileged roles need just-in-time elevation and approval
@@ -28118,9 +28786,9 @@ components:
           format: int32
           description: Session lifetime
         incompatible_role_ids:
-          type: object
-          additionalProperties: true
-          description: Segregation-of-duties conflicts
+          type: array
+          items: {}
+          description: Segregation-of-duties conflicts (role ids)
         custom_field_1:
           type: string
           maxLength: 500
@@ -28294,6 +28962,12 @@ components:
           - 'null'
           maxLength: 255
           description: OIDC client id
+        client_secret_ref:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Vault path of the OIDC client secret (a reference, never the secret itself)
         signing_certificate:
           type:
           - string
@@ -28307,9 +28981,9 @@ components:
           description: Maps IdP claims to user fields and roles
         email_domains:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Email domains that must use this provider
         jit_provisioning:
           type: boolean
@@ -28393,6 +29067,10 @@ components:
           type: string
           maxLength: 255
           description: OIDC client id
+        client_secret_ref:
+          type: string
+          maxLength: 500
+          description: Vault path of the OIDC client secret (a reference, never the secret itself)
         signing_certificate:
           type: string
           description: SAML IdP signing certificate (PEM)
@@ -28401,8 +29079,8 @@ components:
           additionalProperties: true
           description: Maps IdP claims to user fields and roles
         email_domains:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Email domains that must use this provider
         jit_provisioning:
           type: boolean
@@ -28468,6 +29146,10 @@ components:
           type: string
           maxLength: 255
           description: OIDC client id
+        client_secret_ref:
+          type: string
+          maxLength: 500
+          description: Vault path of the OIDC client secret (a reference, never the secret itself)
         signing_certificate:
           type: string
           description: SAML IdP signing certificate (PEM)
@@ -28476,8 +29158,8 @@ components:
           additionalProperties: true
           description: Maps IdP claims to user fields and roles
         email_domains:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Email domains that must use this provider
         jit_provisioning:
           type: boolean
@@ -28917,7 +29599,8 @@ components:
           - SUSPENDED
           - OFFBOARDING
           - TERMINATED
-          description: Lifecycle status
+          description: Lifecycle status (changed by lifecycle actions)
+          readOnly: true
         deployment_model:
           type: string
           enum:
@@ -28995,6 +29678,27 @@ components:
           - 'null'
           maxLength: 255
           description: Reason for suspension
+          readOnly: true
+        reinstatement_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on the last /reinstate
+          readOnly: true
+        reinstated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last reinstatement time
+          readOnly: true
+        template_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Template the tenant was provisioned from
           readOnly: true
         metadata:
           type:
@@ -29075,15 +29779,6 @@ components:
           - CENTRAL_BANK
           - PLATFORM_OPERATOR
           description: Kind of organisation
-        status:
-          type: string
-          enum:
-          - PROVISIONING
-          - ACTIVE
-          - SUSPENDED
-          - OFFBOARDING
-          - TERMINATED
-          description: Lifecycle status
         deployment_model:
           type: string
           enum:
@@ -29193,15 +29888,6 @@ components:
           - CENTRAL_BANK
           - PLATFORM_OPERATOR
           description: Kind of organisation
-        status:
-          type: string
-          enum:
-          - PROVISIONING
-          - ACTIVE
-          - SUSPENDED
-          - OFFBOARDING
-          - TERMINATED
-          description: Lifecycle status
         deployment_model:
           type: string
           enum:
@@ -29382,10 +30068,10 @@ components:
           description: Default locale
         supported_locales:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Enabled locales
+          items: {}
+          description: Enabled locales (BCP 47 tags)
         custom_domain:
           type:
           - string
@@ -29530,9 +30216,9 @@ components:
           maxLength: 10
           description: Default locale
         supported_locales:
-          type: object
-          additionalProperties: true
-          description: Enabled locales
+          type: array
+          items: {}
+          description: Enabled locales (BCP 47 tags)
         custom_domain:
           type: string
           maxLength: 255
@@ -29645,9 +30331,9 @@ components:
           maxLength: 10
           description: Default locale
         supported_locales:
-          type: object
-          additionalProperties: true
-          description: Enabled locales
+          type: array
+          items: {}
+          description: Enabled locales (BCP 47 tags)
         custom_domain:
           type: string
           maxLength: 255
@@ -29743,11 +30429,13 @@ components:
         country_pack_id:
           type: string
           format: uuid
-          description: Installed pack version
+          description: Installed pack version (changed by /upgrade)
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
           description: Legal entity
+          readOnly: true
         status:
           type: string
           enum:
@@ -29812,14 +30500,6 @@ components:
     TenantCountryPackUpdate:
       type: object
       properties:
-        country_pack_id:
-          type: string
-          format: uuid
-          description: Installed pack version
-        legal_entity_id:
-          type: string
-          format: uuid
-          description: Legal entity
         overrides:
           type: object
           additionalProperties: true
@@ -29960,6 +30640,20 @@ components:
           - 'null'
           format: date-time
           description: Fully paid time
+          readOnly: true
+        void_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /void
+          readOnly: true
+        voided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Void time
           readOnly: true
         document_id:
           type:
@@ -30125,6 +30819,88 @@ components:
       - quantity
       - unit_price
       - amount
+    TenantInvoicePayment:
+      type: object
+      description: A payment recorded against a tenant invoice. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        tenant_invoice_id:
+          type: string
+          format: uuid
+          description: Invoice
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount paid
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        paid_at:
+          type: string
+          format: date-time
+          description: When the payment was made
+        reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Payment reference (e.g. wire id)
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - tenant_invoice_id
+      - amount
+      - currency
+      - paid_at
     TenantModule:
       type: object
       description: Platform modules enabled for the tenant and their module-level configuration
@@ -30177,10 +30953,12 @@ components:
           - OPEN_BANKING
           - AI
           - ANALYTICS
-          description: Module
+          description: Module (seeded at provisioning)
+          readOnly: true
         is_enabled:
           type: boolean
-          description: Whether the module is enabled
+          description: Whether the module is enabled (changed via /enable, /disable)
+          readOnly: true
         enabled_at:
           type:
           - string
@@ -30194,6 +30972,13 @@ components:
           - 'null'
           additionalProperties: true
           description: Module-level configuration
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Approval request that applied the last enable/disable
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -30234,24 +31019,6 @@ components:
     TenantModuleUpdate:
       type: object
       properties:
-        module:
-          type: string
-          enum:
-          - LEDGER
-          - DEPOSITS
-          - PAYMENTS
-          - WALLETS
-          - CARDS
-          - LENDING
-          - RISK
-          - REPORTING
-          - OPEN_BANKING
-          - AI
-          - ANALYTICS
-          description: Module
-        is_enabled:
-          type: boolean
-          description: Whether the module is enabled
         config:
           type: object
           additionalProperties: true
@@ -30346,6 +31113,12 @@ components:
           - 'null'
           maxLength: 255
           description: Reason, e.g. initial placement, rebalancing, dedicated upgrade
+        from_cell_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Previous cell (migrations)
         custom_field_1:
           type:
           - string
@@ -30703,6 +31476,28 @@ components:
           - 'null'
           maxLength: 64
           description: Customer id in the finance system
+        proration_adjustments:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id,
+            amount, description'
+          readOnly: true
+        cancellation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on /cancel
+          readOnly: true
+        cancelled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the cancellation was requested
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -31144,6 +31939,7 @@ components:
           - 'null'
           format: uuid
           description: Approval for privileged roles
+          readOnly: true
         justification:
           type:
           - string
@@ -31219,10 +32015,6 @@ components:
           type: string
           format: date-time
           description: End (just-in-time elevation)
-        approval_request_id:
-          type: string
-          format: uuid
-          description: Approval for privileged roles
         justification:
           type: string
           maxLength: 500
@@ -31501,6 +32293,7 @@ components:
           - 'null'
           format: uuid
           description: Replay job that produced it
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -31705,13 +32498,21 @@ components:
           format: int32
           description: Secret version (rotation)
           readOnly: true
+        previous_secret_expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the 24 h rotation grace period
+          readOnly: true
         status:
           type: string
           enum:
           - ACTIVE
           - DISABLED
           - FAILING
-          description: Status
+          description: Status (changed by /enable, /disable and delivery health)
+          readOnly: true
         max_requests_per_second:
           type: integer
           format: int32
@@ -31781,6 +32582,11 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        signing_secret:
+          type: string
+          maxLength: 255
+          description: Plaintext signing secret; returned only by create and rotate-secret (returned once; never stored)
+          readOnly: true
       required:
       - id
       - created_at
@@ -31819,13 +32625,6 @@ components:
           type: string
           maxLength: 16
           description: Payload version
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - DISABLED
-          - FAILING
-          description: Status
         max_requests_per_second:
           type: integer
           format: int32
@@ -31884,13 +32683,6 @@ components:
           type: string
           maxLength: 16
           description: Payload version
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - DISABLED
-          - FAILING
-          description: Status
         max_requests_per_second:
           type: integer
           format: int32
@@ -31966,10 +32758,10 @@ components:
           description: Endpoint
         event_types:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Event types to replay (empty = subscribed types)
+          items: {}
+          description: Event types or wildcards to replay (empty = subscribed types)
         from_time:
           type: string
           format: date-time
@@ -32050,9 +32842,9 @@ components:
           format: uuid
           description: Endpoint
         event_types:
-          type: object
-          additionalProperties: true
-          description: Event types to replay (empty = subscribed types)
+          type: array
+          items: {}
+          description: Event types or wildcards to replay (empty = subscribed types)
         from_time:
           type: string
           format: date-time
@@ -32297,7 +33089,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Owning workflow
+          description: Owning workflow (set by the engine)
+          readOnly: true
         task_type:
           type: string
           maxLength: 64
@@ -32335,9 +33128,9 @@ components:
           description: Assigned user
         candidate_roles:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items: {}
           description: Roles that may claim the task
         priority:
           type: string
@@ -32356,7 +33149,8 @@ components:
           - COMPLETED
           - CANCELLED
           - ESCALATED
-          description: Status
+          description: Status (changed by task actions)
+          readOnly: true
         due_at:
           type:
           - string
@@ -32378,13 +33172,21 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Completion outcome
+          description: Completion outcome (set by /complete)
+          readOnly: true
         completed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Completion time
+          readOnly: true
+        escalation_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last escalation
           readOnly: true
         custom_field_1:
           type:
@@ -32427,13 +33229,9 @@ components:
       - priority
       - status
       - sla_breached
-    WorkTaskUpdate:
+    WorkTaskCreate:
       type: object
       properties:
-        workflow_instance_id:
-          type: string
-          format: uuid
-          description: Owning workflow
         task_type:
           type: string
           maxLength: 64
@@ -32462,8 +33260,8 @@ components:
           maxLength: 64
           description: Assigned user
         candidate_roles:
-          type: object
-          additionalProperties: true
+          type: array
+          items: {}
           description: Roles that may claim the task
         priority:
           type: string
@@ -32473,16 +33271,6 @@ components:
           - HIGH
           - URGENT
           description: Priority
-        status:
-          type: string
-          enum:
-          - OPEN
-          - CLAIMED
-          - IN_PROGRESS
-          - COMPLETED
-          - CANCELLED
-          - ESCALATED
-          description: Status
         due_at:
           type: string
           format: date-time
@@ -32491,10 +33279,80 @@ components:
           type: object
           additionalProperties: true
           description: Data captured by the task form
-        outcome:
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - task_type
+      - title
+      - queue
+    WorkTaskUpdate:
+      type: object
+      properties:
+        task_type:
           type: string
           maxLength: 64
-          description: Completion outcome
+          description: Task type, e.g. KYC_REVIEW, PAYMENT_REPAIR
+        title:
+          type: string
+          maxLength: 255
+          description: Title
+        description:
+          type: string
+          description: Instructions
+        subject_type:
+          type: string
+          maxLength: 40
+          description: Subject type
+        subject_id:
+          type: string
+          format: uuid
+          description: Subject id
+        queue:
+          type: string
+          maxLength: 64
+          description: Work queue
+        assignee:
+          type: string
+          maxLength: 64
+          description: Assigned user
+        candidate_roles:
+          type: array
+          items: {}
+          description: Roles that may claim the task
+        priority:
+          type: string
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          description: Priority
+        due_at:
+          type: string
+          format: date-time
+          description: SLA due time
+        form_data:
+          type: object
+          additionalProperties: true
+          description: Data captured by the task form
         custom_field_1:
           type: string
           maxLength: 500
@@ -32586,7 +33444,8 @@ components:
           - DRAFT
           - PUBLISHED
           - DEPRECATED
-          description: Status
+          description: Status (changed by /publish, /deprecate)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -32651,13 +33510,6 @@ components:
           type: object
           additionalProperties: true
           description: JSON Schema of the input
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - DEPRECATED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -32705,13 +33557,6 @@ components:
           type: object
           additionalProperties: true
           description: JSON Schema of the input
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - DEPRECATED
-          description: Status
         custom_field_1:
           type: string
           maxLength: 500
@@ -32840,6 +33685,13 @@ components:
           - string
           - 'null'
           description: Failure details
+          readOnly: true
+        outcome:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Outcome of the END step reached, e.g. COMPLETED, DECLINED
           readOnly: true
         custom_field_1:
           type:

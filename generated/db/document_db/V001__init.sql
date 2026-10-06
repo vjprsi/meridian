@@ -45,7 +45,13 @@ CREATE TABLE document (
   expires_on                   date,
   retention_until              date,
   legal_hold                   boolean NOT NULL DEFAULT false,
+  legal_hold_reason            varchar(255),
+  legal_hold_changed_at        timestamptz,
+  legal_hold_changed_by        varchar(64),
   uploaded_via                 varchar(32),
+  archived_at                  timestamptz,
+  storage_class                varchar(32),
+  expiry_notified_on           date,
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -78,8 +84,14 @@ COMMENT ON COLUMN document.document_number IS 'Number printed on the document [P
 COMMENT ON COLUMN document.issued_on IS 'Issue date';
 COMMENT ON COLUMN document.expires_on IS 'Expiry date';
 COMMENT ON COLUMN document.retention_until IS 'Earliest deletion date';
-COMMENT ON COLUMN document.legal_hold IS 'Deletion blocked by legal hold';
+COMMENT ON COLUMN document.legal_hold IS 'Deletion blocked by legal hold (set via /legal-hold)';
+COMMENT ON COLUMN document.legal_hold_reason IS 'Reason for the current legal hold';
+COMMENT ON COLUMN document.legal_hold_changed_at IS 'When the hold was last placed or lifted';
+COMMENT ON COLUMN document.legal_hold_changed_by IS 'Who last placed or lifted the hold';
 COMMENT ON COLUMN document.uploaded_via IS 'API, CONSOLE, MOBILE_APP, AGENT_APP, SYSTEM';
+COMMENT ON COLUMN document.archived_at IS 'When the document moved to archive storage';
+COMMENT ON COLUMN document.storage_class IS 'Object storage class, e.g. STANDARD, GLACIER_IR';
+COMMENT ON COLUMN document.expiry_notified_on IS 'Date the expiring-document event was published (sweep bookkeeping)';
 COMMENT ON COLUMN document.metadata IS 'Extra attributes (OCR fields, page count)';
 COMMENT ON COLUMN document.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN document.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -137,7 +149,7 @@ COMMENT ON COLUMN document_template.body IS 'Template source (Handlebars / HTML)
 COMMENT ON COLUMN document_template.body_document_id IS 'Binary template file (e.g. DOCX)';
 COMMENT ON COLUMN document_template.variables_schema IS 'JSON Schema of the input data';
 COMMENT ON COLUMN document_template.legal_entity_id IS 'Legal entity (empty = all)';
-COMMENT ON COLUMN document_template.status IS 'Status';
+COMMENT ON COLUMN document_template.status IS 'Status (changes via /publish, /retire and approval)';
 COMMENT ON COLUMN document_template.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN document_template.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN document_template.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -163,6 +175,7 @@ CREATE TABLE generated_document (
   document_id                  uuid REFERENCES document(id),
   owner_type                   varchar(40) NOT NULL,
   owner_id                     uuid NOT NULL,
+  data                         jsonb,
   input_hash                   varchar(64) NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
   error                        text,
@@ -185,6 +198,7 @@ COMMENT ON COLUMN generated_document.document_template_id IS 'Template version u
 COMMENT ON COLUMN generated_document.document_id IS 'Resulting document';
 COMMENT ON COLUMN generated_document.owner_type IS 'Owning object type';
 COMMENT ON COLUMN generated_document.owner_id IS 'Owning object id';
+COMMENT ON COLUMN generated_document.data IS 'Template input data (variables); input_hash is its hash [PII]';
 COMMENT ON COLUMN generated_document.input_hash IS 'Hash of input data (reproducibility)';
 COMMENT ON COLUMN generated_document.status IS 'Generation status';
 COMMENT ON COLUMN generated_document.error IS 'Error details';
@@ -213,7 +227,7 @@ CREATE TABLE esign_request (
   document_id                  uuid NOT NULL REFERENCES document(id),
   owner_type                   varchar(40) NOT NULL,
   owner_id                     uuid NOT NULL,
-  provider                     varchar(32) NOT NULL,
+  provider                     varchar(40) NOT NULL CHECK (provider IN ('DOCUSIGN', 'ADOBE_SIGN', 'NATIVE_OTP')),
   provider_envelope_id         varchar(128),
   signers                      jsonb NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SENT', 'VIEWED', 'PARTIALLY_SIGNED', 'SIGNED', 'DECLINED', 'EXPIRED', 'CANCELLED')),
@@ -221,6 +235,11 @@ CREATE TABLE esign_request (
   sent_at                      timestamptz,
   completed_at                 timestamptz,
   expires_at                   timestamptz,
+  reminder_count               integer NOT NULL DEFAULT 0,
+  last_reminded_at             timestamptz,
+  cancellation_reason          varchar(255),
+  cancelled_by                 varchar(64),
+  decline_reason               varchar(500),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -238,14 +257,19 @@ COMMENT ON COLUMN esign_request.row_version IS 'Optimistic lock version; send as
 COMMENT ON COLUMN esign_request.document_id IS 'Document to sign';
 COMMENT ON COLUMN esign_request.owner_type IS 'Owning object type, e.g. LOAN_APPLICATION';
 COMMENT ON COLUMN esign_request.owner_id IS 'Owning object id';
-COMMENT ON COLUMN esign_request.provider IS 'DOCUSIGN, ADOBE_SIGN, NATIVE_OTP';
+COMMENT ON COLUMN esign_request.provider IS 'E-signature provider';
 COMMENT ON COLUMN esign_request.provider_envelope_id IS 'Provider envelope id';
-COMMENT ON COLUMN esign_request.signers IS 'Signers: name, email/phone, order, auth method';
+COMMENT ON COLUMN esign_request.signers IS 'Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service';
 COMMENT ON COLUMN esign_request.status IS 'Status';
 COMMENT ON COLUMN esign_request.signed_document_id IS 'Signed copy with audit certificate';
 COMMENT ON COLUMN esign_request.sent_at IS 'Sent time';
 COMMENT ON COLUMN esign_request.completed_at IS 'Completion time';
 COMMENT ON COLUMN esign_request.expires_at IS 'Expiry';
+COMMENT ON COLUMN esign_request.reminder_count IS 'Reminders sent';
+COMMENT ON COLUMN esign_request.last_reminded_at IS 'Last reminder time';
+COMMENT ON COLUMN esign_request.cancellation_reason IS 'Why the envelope was cancelled';
+COMMENT ON COLUMN esign_request.cancelled_by IS 'Who cancelled it';
+COMMENT ON COLUMN esign_request.decline_reason IS 'Reason given by the declining signer';
 COMMENT ON COLUMN esign_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN esign_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN esign_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -257,6 +281,33 @@ CREATE INDEX ix_esign_request_signed_document_id ON esign_request (signed_docume
 ALTER TABLE esign_request ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON esign_request USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_esign_request_touch BEFORE UPDATE ON esign_request FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- esign_callback_route: Routes provider callbacks (which carry no tenant context) to the owning tenant's envelope
+CREATE TABLE esign_callback_route (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  provider                     varchar(40) NOT NULL CHECK (provider IN ('DOCUSIGN', 'ADOBE_SIGN', 'NATIVE_OTP')),
+  provider_envelope_id         varchar(128) NOT NULL,
+  esign_request_id             uuid NOT NULL,
+  owner_tenant_id              uuid NOT NULL,
+  CONSTRAINT uq_esign_callback_route_1 UNIQUE (provider, provider_envelope_id)
+);
+COMMENT ON TABLE esign_callback_route IS 'Routes provider callbacks (which carry no tenant context) to the owning tenant''s envelope';
+COMMENT ON COLUMN esign_callback_route.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN esign_callback_route.created_at IS 'Creation time';
+COMMENT ON COLUMN esign_callback_route.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN esign_callback_route.updated_at IS 'Last update time';
+COMMENT ON COLUMN esign_callback_route.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN esign_callback_route.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN esign_callback_route.provider IS 'Provider';
+COMMENT ON COLUMN esign_callback_route.provider_envelope_id IS 'Provider envelope id';
+COMMENT ON COLUMN esign_callback_route.esign_request_id IS 'Envelope in the owning tenant';
+COMMENT ON COLUMN esign_callback_route.owner_tenant_id IS 'Tenant owning the envelope';
+CREATE TRIGGER trg_esign_callback_route_touch BEFORE UPDATE ON esign_callback_route FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

@@ -105,11 +105,25 @@ components:
           type:
           - string
           - 'null'
+        approval_route:
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         approvals_received:
           description: Approvals received
           format: int32
           readOnly: true
           type: integer
+        cancel_reason:
+          description: Reason given by the maker when cancelling
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -245,6 +259,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -496,6 +511,7 @@ components:
           - FAILED
           - SUPPRESSED
           - EXPIRED
+          - CANCELLED
           readOnly: true
           type: string
         subject:
@@ -689,6 +705,10 @@ components:
           type:
           - string
           - 'null'
+        cycle:
+          description: Send cycle (a resend starts a new one)
+          format: int32
+          type: integer
         error_code:
           description: Provider error code
           maxLength: 64
@@ -731,6 +751,7 @@ components:
       - notification_provider_id
       - attempt_no
       - status
+      - cycle
       type: object
     NotificationDeliveryAttemptPage:
       description: One page of NotificationDeliveryAttempt results (newest first)
@@ -1103,10 +1124,10 @@ components:
           - object
           - 'null'
         country_scope:
-          additionalProperties: true
-          description: Countries routed to this provider
+          description: ISO country codes routed to this provider
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         created_at:
           description: Creation time
@@ -1117,6 +1138,12 @@ components:
           description: Principal that created the row
           maxLength: 64
           readOnly: true
+          type:
+          - string
+          - 'null'
+        credentials_ref:
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
+          maxLength: 255
           type:
           - string
           - 'null'
@@ -1222,9 +1249,13 @@ components:
           description: Provider options
           type: object
         country_scope:
-          additionalProperties: true
-          description: Countries routed to this provider
-          type: object
+          description: ISO country codes routed to this provider
+          items: {}
+          type: array
+        credentials_ref:
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
+          maxLength: 255
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1305,9 +1336,13 @@ components:
           description: Provider options
           type: object
         country_scope:
-          additionalProperties: true
-          description: Countries routed to this provider
-          type: object
+          description: ISO country codes routed to this provider
+          items: {}
+          type: array
+        credentials_ref:
+          description: Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>
+          maxLength: 255
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1371,9 +1406,9 @@ components:
           - COLLECTIONS
           type: string
         channels:
-          additionalProperties: true
           description: Channels in preference order
-          type: object
+          items: {}
+          type: array
         conditions:
           description: CEL condition on the event payload
           type:
@@ -1483,9 +1518,9 @@ components:
           - COLLECTIONS
           type: string
         channels:
-          additionalProperties: true
           description: Channels in preference order
-          type: object
+          items: {}
+          type: array
         conditions:
           description: CEL condition on the event payload
           type: string
@@ -1562,9 +1597,9 @@ components:
           - COLLECTIONS
           type: string
         channels:
-          additionalProperties: true
           description: Channels in preference order
-          type: object
+          items: {}
+          type: array
         conditions:
           description: CEL condition on the event payload
           type: string
@@ -1692,12 +1727,13 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changes via /publish and approval)
           enum:
           - DRAFT
           - PENDING_APPROVAL
           - ACTIVE
           - RETIRED
+          readOnly: true
           type: string
         subject:
           description: Subject / push title
@@ -1795,14 +1831,6 @@ components:
           description: Locale
           maxLength: 10
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          type: string
         subject:
           description: Subject / push title
           maxLength: 255
@@ -1889,14 +1917,6 @@ components:
           description: Locale
           maxLength: 10
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          type: string
         subject:
           description: Subject / push title
           maxLength: 255
@@ -1932,6 +1952,15 @@ components:
       type: object
     NotificationsSendTemplatedRequest:
       properties:
+        category:
+          enum:
+          - TRANSACTIONAL
+          - SECURITY
+          - SERVICE
+          - MARKETING
+          - REGULATORY
+          - COLLECTIONS
+          type: string
         channel:
           enum:
           - PUSH
@@ -1941,6 +1970,25 @@ components:
           - IN_APP
           - USSD
           - VOICE
+          type: string
+        data:
+          additionalProperties: true
+          type: object
+        destination:
+          maxLength: 512
+          type: string
+        expires_at:
+          format: date-time
+          type: string
+        locale:
+          maxLength: 10
+          type: string
+        priority:
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
           type: string
         recipient_id:
           format: uuid
@@ -1952,6 +2000,9 @@ components:
           - AGENT
           - MERCHANT
           - EXTERNAL
+          type: string
+        scheduled_at:
+          format: date-time
           type: string
         template_code:
           maxLength: 64
@@ -2094,6 +2145,7 @@ paths:
           - FAILED
           - SUPPRESSED
           - EXPIRED
+          - CANCELLED
       - name: source_event_id
         in: query
         schema:
@@ -2423,22 +2475,32 @@ paths:
   /v1/notifications/provider-callbacks/{provider}/events:
     post:
       operationId: notificationsProviderCallbacksEvents
-      summary: Delivery receipt webhook from a provider
+      summary: Delivery receipt webhook from a provider (HMAC-signed; tenant_id is part of the callback URL registered with
+        the provider)
       tags:
       - Notifications
-      security:
-      - oauth2:
-        - platform:write
+      security: []
       parameters:
       - name: provider
         in: path
         required: true
         schema:
           type: string
-      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: tenant_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2459,7 +2521,9 @@ paths:
       - NOT-01
       - NOT-02
       x-service: notification-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: notification
   /v1/notification-templates:
     get:
@@ -2694,8 +2758,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2759,7 +2829,7 @@ paths:
   /v1/notification-templates/{id}/test-send:
     post:
       operationId: notificationTemplatesTestSend
-      summary: Send a test to the caller
+      summary: Send a test to the given destination
       tags:
       - Notification Templates
       security:
@@ -2774,8 +2844,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3034,8 +3108,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

@@ -105,11 +105,25 @@ components:
           type:
           - string
           - 'null'
+        approval_route:
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         approvals_received:
           description: Approvals received
           format: int32
           readOnly: true
           type: integer
+        cancel_reason:
+          description: Reason given by the maker when cancelling
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -245,6 +259,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -298,8 +313,12 @@ components:
           - string
           - 'null'
         change_type:
-          description: CREATED, ACTIVATED, ROLLED_BACK, PROMOTED
-          maxLength: 32
+          description: Kind of change
+          enum:
+          - CREATED
+          - ACTIVATED
+          - ROLLED_BACK
+          - PROMOTED
           type: string
         config_entry_id:
           description: Version created
@@ -352,10 +371,10 @@ components:
           - string
           - 'null'
         diff:
-          additionalProperties: true
-          description: JSON patch from the previous version
+          description: JSON Patch operations from the previous version
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         from_version:
           description: Previous version
@@ -405,9 +424,12 @@ components:
       type: object
     ConfigEntriesExportRequest:
       properties:
+        environment:
+          maxLength: 32
+          type: string
         namespaces:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
       type: object
     ConfigEntriesImportRequest:
       properties:
@@ -439,6 +461,7 @@ components:
         approval_request_id:
           description: Maker-checker approval
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -512,6 +535,7 @@ components:
         promoted_from_environment:
           description: Source environment when promoted
           maxLength: 32
+          readOnly: true
           type:
           - string
           - 'null'
@@ -521,14 +545,29 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changed by lifecycle actions)
           enum:
           - DRAFT
           - PENDING_APPROVAL
           - ACTIVE
           - SUPERSEDED
           - ROLLED_BACK
+          readOnly: true
           type: string
+        submitted_at:
+          description: When the version was submitted
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        submitted_by:
+          description: Maker who submitted the version for approval
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         updated_at:
           description: Last update time
           format: date-time
@@ -569,10 +608,6 @@ components:
       type: object
     ConfigEntryCreate:
       properties:
-        approval_request_id:
-          description: Maker-checker approval
-          format: uuid
-          type: string
         change_reason:
           description: Why it changed
           maxLength: 500
@@ -608,19 +643,6 @@ components:
         namespace:
           description: Owning area, e.g. payments, limits, onboarding
           maxLength: 64
-          type: string
-        promoted_from_environment:
-          description: Source environment when promoted
-          maxLength: 32
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - SUPERSEDED
-          - ROLLED_BACK
           type: string
         value:
           additionalProperties: true
@@ -816,10 +838,10 @@ components:
         UI)
       properties:
         allowed_values:
-          additionalProperties: true
           description: Allowed values when data_type is ENUM
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         created_at:
           description: Creation time
@@ -991,9 +1013,9 @@ components:
     CustomFieldDefinitionCreate:
       properties:
         allowed_values:
-          additionalProperties: true
           description: Allowed values when data_type is ENUM
-          type: object
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1115,9 +1137,9 @@ components:
     CustomFieldDefinitionUpdate:
       properties:
         allowed_values:
-          additionalProperties: true
           description: Allowed values when data_type is ENUM
-          type: object
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1651,6 +1673,9 @@ components:
         customer_segment:
           maxLength: 64
           type: string
+        legal_entity_id:
+          format: uuid
+          type: string
       required:
       - country
       - applies_to
@@ -1661,8 +1686,9 @@ components:
       description: A country pack installed for a tenant's legal entity, with local overrides
       properties:
         country_pack_id:
-          description: Installed pack version
+          description: Installed pack version (changed by /upgrade)
           format: uuid
+          readOnly: true
           type: string
         created_at:
           description: Creation time
@@ -1721,6 +1747,7 @@ components:
         legal_entity_id:
           description: Legal entity
           format: uuid
+          readOnly: true
           type: string
         overrides:
           additionalProperties: true
@@ -1784,10 +1811,6 @@ components:
       type: object
     TenantCountryPackUpdate:
       properties:
-        country_pack_id:
-          description: Installed pack version
-          format: uuid
-          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1807,10 +1830,6 @@ components:
         custom_field_5:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
-          type: string
-        legal_entity_id:
-          description: Legal entity
-          format: uuid
           type: string
         overrides:
           additionalProperties: true
@@ -2079,8 +2098,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2437,8 +2462,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2473,8 +2504,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2500,16 +2537,40 @@ paths:
   /v1/config/entries/resolve:
     get:
       operationId: configEntriesResolve
-      summary: Effective configuration for a namespace (?namespace=)
+      summary: Effective configuration for a namespace
       tags:
       - Config Entries
       security:
       - oauth2:
         - platform:read
-      parameters: []
+      parameters:
+      - name: namespace
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 64
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: country
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2555,7 +2616,11 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - CREATED
+          - ACTIVATED
+          - ROLLED_BACK
+          - PROMOTED
       - name: custom_field_1
         in: query
         schema:
@@ -3273,8 +3338,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

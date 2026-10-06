@@ -166,9 +166,9 @@ class BillingFlowIT {
         assertThat(metric(summary, "ACTIVE_ACCOUNT").get("billable_quantity").asLong()).isEqualTo(150);
         assertThat(metric(summary, "PAYMENT").get("total_quantity").asLong()).isEqualTo(30);
         assertThat(expect(send("GET", "/v1/billing/usage/summary?to=" + p0, null, null, TENANT), 400)
-                .get("code").asString()).isEqualTo("malformed_request");
+                .get("code").asString()).isEqualTo("missing_parameter");
         assertThat(expect(send("GET", "/v1/billing/usage/summary?from=bad&to=" + p0, null, null, TENANT), 400)
-                .get("code").asString()).isEqualTo("malformed_request");
+                .get("code").asString()).isEqualTo("missing_parameter");
         assertThat(events("platform.usage_record.recorded")).isEqualTo(5);
     }
 

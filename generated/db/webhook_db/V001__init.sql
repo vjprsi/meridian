@@ -32,8 +32,10 @@ CREATE TABLE webhook_endpoint (
   api_client_id                uuid,
   environment                  varchar(40) NOT NULL DEFAULT 'SANDBOX' CHECK (environment IN ('SANDBOX', 'PRODUCTION')),
   api_version                  varchar(16) NOT NULL DEFAULT 'v1',
-  signing_secret               varchar(255) NOT NULL,
+  signing_secret_enc           varchar(255) NOT NULL,
   signing_secret_version       integer NOT NULL DEFAULT 1,
+  previous_signing_secret_enc  varchar(255),
+  previous_secret_expires_at   timestamptz,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'DISABLED', 'FAILING')),
   max_requests_per_second      integer NOT NULL DEFAULT 50,
   mtls_enabled                 boolean NOT NULL DEFAULT false,
@@ -61,9 +63,11 @@ COMMENT ON COLUMN webhook_endpoint.description IS 'Description';
 COMMENT ON COLUMN webhook_endpoint.api_client_id IS 'Owning API client';
 COMMENT ON COLUMN webhook_endpoint.environment IS 'Sandbox or production';
 COMMENT ON COLUMN webhook_endpoint.api_version IS 'Payload version';
-COMMENT ON COLUMN webhook_endpoint.signing_secret IS 'HMAC secret (vault reference) [SECRET]';
+COMMENT ON COLUMN webhook_endpoint.signing_secret_enc IS 'Current HMAC signing secret (encrypted at rest) [SECRET]';
 COMMENT ON COLUMN webhook_endpoint.signing_secret_version IS 'Secret version (rotation)';
-COMMENT ON COLUMN webhook_endpoint.status IS 'Status';
+COMMENT ON COLUMN webhook_endpoint.previous_signing_secret_enc IS 'Previous HMAC secret, still used for signing until previous_secret_expires_at (encrypted) [SECRET]';
+COMMENT ON COLUMN webhook_endpoint.previous_secret_expires_at IS 'End of the 24 h rotation grace period';
+COMMENT ON COLUMN webhook_endpoint.status IS 'Status (changed by /enable, /disable and delivery health)';
 COMMENT ON COLUMN webhook_endpoint.max_requests_per_second IS 'Delivery rate cap';
 COMMENT ON COLUMN webhook_endpoint.mtls_enabled IS 'Present a client certificate';
 COMMENT ON COLUMN webhook_endpoint.custom_headers IS 'Extra headers sent with each delivery';
@@ -156,7 +160,7 @@ COMMENT ON COLUMN webhook_replay_job.updated_at IS 'Last update time';
 COMMENT ON COLUMN webhook_replay_job.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN webhook_replay_job.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN webhook_replay_job.webhook_endpoint_id IS 'Endpoint';
-COMMENT ON COLUMN webhook_replay_job.event_types IS 'Event types to replay (empty = subscribed types)';
+COMMENT ON COLUMN webhook_replay_job.event_types IS 'Event types or wildcards to replay (empty = subscribed types)';
 COMMENT ON COLUMN webhook_replay_job.from_time IS 'Range start';
 COMMENT ON COLUMN webhook_replay_job.to_time IS 'Range end';
 COMMENT ON COLUMN webhook_replay_job.status IS 'Status';

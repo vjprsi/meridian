@@ -37,6 +37,8 @@ CREATE TABLE price_plan (
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'ACTIVE', 'RETIRED')),
   valid_from                   date NOT NULL,
   valid_to                     date,
+  retire_reason                varchar(255),
+  retired_at                   timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -59,9 +61,11 @@ COMMENT ON COLUMN price_plan.platform_fee IS 'Fixed fee per period';
 COMMENT ON COLUMN price_plan.included_active_accounts IS 'Active accounts included';
 COMMENT ON COLUMN price_plan.price_per_active_account IS 'Price per extra active account';
 COMMENT ON COLUMN price_plan.metric_prices IS 'Tiered prices per usage metric';
-COMMENT ON COLUMN price_plan.status IS 'Status';
+COMMENT ON COLUMN price_plan.status IS 'Status (changed by /publish, /retire)';
 COMMENT ON COLUMN price_plan.valid_from IS 'Available from';
 COMMENT ON COLUMN price_plan.valid_to IS 'Available to';
+COMMENT ON COLUMN price_plan.retire_reason IS 'Reason given on /retire';
+COMMENT ON COLUMN price_plan.retired_at IS 'Retirement time';
 COMMENT ON COLUMN price_plan.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN price_plan.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN price_plan.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -89,6 +93,9 @@ CREATE TABLE tenant_subscription (
   billing_email                varchar(320) NOT NULL,
   payment_terms_days           integer NOT NULL DEFAULT 30,
   external_customer_ref        varchar(64),
+  proration_adjustments        jsonb,
+  cancellation_reason          varchar(255),
+  cancelled_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -114,6 +121,9 @@ COMMENT ON COLUMN tenant_subscription.custom_prices IS 'Negotiated price overrid
 COMMENT ON COLUMN tenant_subscription.billing_email IS 'Invoice recipient';
 COMMENT ON COLUMN tenant_subscription.payment_terms_days IS 'Payment terms';
 COMMENT ON COLUMN tenant_subscription.external_customer_ref IS 'Customer id in the finance system';
+COMMENT ON COLUMN tenant_subscription.proration_adjustments IS 'Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id, amount, description';
+COMMENT ON COLUMN tenant_subscription.cancellation_reason IS 'Reason given on /cancel';
+COMMENT ON COLUMN tenant_subscription.cancelled_at IS 'When the cancellation was requested';
 COMMENT ON COLUMN tenant_subscription.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_subscription.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_subscription.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -188,6 +198,8 @@ CREATE TABLE tenant_invoice (
   issued_at                    timestamptz,
   due_date                     date,
   paid_at                      timestamptz,
+  void_reason                  varchar(255),
+  voided_at                    timestamptz,
   document_id                  uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -217,6 +229,8 @@ COMMENT ON COLUMN tenant_invoice.status IS 'Status';
 COMMENT ON COLUMN tenant_invoice.issued_at IS 'Issue time';
 COMMENT ON COLUMN tenant_invoice.due_date IS 'Due date';
 COMMENT ON COLUMN tenant_invoice.paid_at IS 'Fully paid time';
+COMMENT ON COLUMN tenant_invoice.void_reason IS 'Reason given on /void';
+COMMENT ON COLUMN tenant_invoice.voided_at IS 'Void time';
 COMMENT ON COLUMN tenant_invoice.document_id IS 'PDF invoice';
 COMMENT ON COLUMN tenant_invoice.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_invoice.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -273,6 +287,44 @@ CREATE INDEX ix_tenant_invoice_line_tenant_invoice_id ON tenant_invoice_line (te
 ALTER TABLE tenant_invoice_line ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON tenant_invoice_line USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_tenant_invoice_line_append_only BEFORE UPDATE OR DELETE ON tenant_invoice_line FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- tenant_invoice_payment: A payment recorded against a tenant invoice. Append-only.
+CREATE TABLE tenant_invoice_payment (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  tenant_invoice_id            uuid NOT NULL REFERENCES tenant_invoice(id),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  paid_at                      timestamptz NOT NULL,
+  reference                    varchar(64),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE tenant_invoice_payment IS 'A payment recorded against a tenant invoice. Append-only.';
+COMMENT ON COLUMN tenant_invoice_payment.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN tenant_invoice_payment.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN tenant_invoice_payment.created_at IS 'Creation time';
+COMMENT ON COLUMN tenant_invoice_payment.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN tenant_invoice_payment.tenant_invoice_id IS 'Invoice';
+COMMENT ON COLUMN tenant_invoice_payment.amount IS 'Amount paid';
+COMMENT ON COLUMN tenant_invoice_payment.currency IS 'Currency';
+COMMENT ON COLUMN tenant_invoice_payment.paid_at IS 'When the payment was made';
+COMMENT ON COLUMN tenant_invoice_payment.reference IS 'Payment reference (e.g. wire id)';
+COMMENT ON COLUMN tenant_invoice_payment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_invoice_payment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_invoice_payment.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_invoice_payment.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN tenant_invoice_payment.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_tenant_invoice_payment_tenant ON tenant_invoice_payment (tenant_id, created_at);
+CREATE INDEX ix_tenant_invoice_payment_tenant_invoice_id ON tenant_invoice_payment (tenant_invoice_id);
+ALTER TABLE tenant_invoice_payment ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON tenant_invoice_payment USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_tenant_invoice_payment_append_only BEFORE UPDATE OR DELETE ON tenant_invoice_payment FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

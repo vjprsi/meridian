@@ -224,6 +224,7 @@ components:
         replay_job_id:
           description: Replay job that produced it
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -511,22 +512,35 @@ components:
         mtls_enabled:
           description: Present a client certificate
           type: boolean
+        previous_secret_expires_at:
+          description: End of the 24 h rotation grace period
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
+        signing_secret:
+          description: Plaintext signing secret; returned only by create and rotate-secret (returned once; never stored)
+          maxLength: 255
+          readOnly: true
+          type: string
         signing_secret_version:
           description: Secret version (rotation)
           format: int32
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changed by /enable, /disable and delivery health)
           enum:
           - ACTIVE
           - DISABLED
           - FAILING
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -609,13 +623,6 @@ components:
         mtls_enabled:
           description: Present a client certificate
           type: boolean
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DISABLED
-          - FAILING
-          type: string
         url:
           description: HTTPS URL
           maxLength: 1000
@@ -692,13 +699,6 @@ components:
         mtls_enabled:
           description: Present a client certificate
           type: boolean
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - DISABLED
-          - FAILING
-          type: string
         url:
           description: HTTPS URL
           maxLength: 1000
@@ -764,10 +764,10 @@ components:
           - string
           - 'null'
         event_types:
-          additionalProperties: true
-          description: Event types to replay (empty = subscribed types)
+          description: Event types or wildcards to replay (empty = subscribed types)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         events_replayed:
           description: Events re-delivered
@@ -861,9 +861,9 @@ components:
           maxLength: 500
           type: string
         event_types:
-          additionalProperties: true
-          description: Event types to replay (empty = subscribed types)
-          type: object
+          description: Event types or wildcards to replay (empty = subscribed types)
+          items: {}
+          type: array
         from_time:
           description: Range start
           format: date-time
@@ -1340,7 +1340,7 @@ paths:
   /v1/webhook-endpoints/{id}/rotate-secret:
     post:
       operationId: webhookEndpointsRotateSecret
-      summary: Rotate the signing secret (old secret valid 24h)
+      summary: Rotate the signing secret (old secret valid 24h; new secret returned once)
       tags:
       - Webhook Endpoints
       security:
@@ -1355,8 +1355,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEndpoint'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1752,6 +1756,11 @@ paths:
           - SUCCEEDED
           - FAILED
           - ABANDONED
+      - name: replay_job_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:

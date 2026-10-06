@@ -210,17 +210,32 @@ components:
           - '125.50'
           format: decimal
           type: string
+        retire_reason:
+          description: Reason given on /retire
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        retired_at:
+          description: Retirement time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changed by /publish, /retire)
           enum:
           - DRAFT
           - ACTIVE
           - RETIRED
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -321,13 +336,6 @@ components:
           - '125.50'
           format: decimal
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          type: string
         valid_from:
           description: Available from
           format: date
@@ -422,13 +430,6 @@ components:
           - '125.50'
           format: decimal
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - ACTIVE
-          - RETIRED
-          type: string
         valid_from:
           description: Available from
           format: date
@@ -437,6 +438,14 @@ components:
           description: Available to
           format: date
           type: string
+      type: object
+    PricePlansRetireRequest:
+      properties:
+        reason:
+          maxLength: 255
+          type: string
+      required:
+      - reason
       type: object
     Problem:
       description: RFC 9457 problem details
@@ -647,6 +656,20 @@ components:
           type:
           - string
           - 'null'
+        void_reason:
+          description: Reason given on /void
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        voided_at:
+          description: Void time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
       required:
       - id
       - created_at
@@ -811,6 +834,106 @@ components:
       - data
       - has_more
       type: object
+    TenantInvoicePayment:
+      description: A payment recorded against a tenant invoice. Append-only.
+      properties:
+        amount:
+          description: Amount paid
+          examples:
+          - '125.50'
+          format: decimal
+          type: string
+        created_at:
+          description: Creation time
+          format: date-time
+          readOnly: true
+          type: string
+        created_by:
+          description: Principal that created the row
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        currency:
+          description: Currency (ISO 4217)
+          pattern: ^[A-Z]{3}$
+          type: string
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type:
+          - string
+          - 'null'
+        id:
+          description: Unique id (UUIDv7, time-ordered)
+          format: uuid
+          readOnly: true
+          type: string
+        paid_at:
+          description: When the payment was made
+          format: date-time
+          type: string
+        reference:
+          description: Payment reference (e.g. wire id)
+          maxLength: 64
+          type:
+          - string
+          - 'null'
+        tenant_invoice_id:
+          description: Invoice
+          format: uuid
+          type: string
+      required:
+      - id
+      - created_at
+      - tenant_invoice_id
+      - amount
+      - currency
+      - paid_at
+      type: object
+    TenantInvoicePaymentPage:
+      description: One page of TenantInvoicePayment results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/TenantInvoicePayment'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
     TenantSubscription:
       description: A tenant's subscription to a price plan
       properties:
@@ -819,6 +942,20 @@ components:
           format: email
           maxLength: 320
           type: string
+        cancellation_reason:
+          description: Reason given on /cancel
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cancelled_at:
+          description: When the cancellation was requested
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         committed_monthly_spend:
           description: Minimum commitment
           examples:
@@ -910,6 +1047,14 @@ components:
           description: Plan
           format: uuid
           type: string
+        proration_adjustments:
+          description: 'Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id,
+            amount, description'
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
@@ -1533,6 +1678,90 @@ paths:
       x-table: price_plan
       x-crud: true
       x-crud-update: true
+  /v1/billing/price-plans/{id}/publish:
+    post:
+      operationId: pricePlansPublish
+      summary: Make a draft plan available for subscriptions
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: price_plan
+  /v1/billing/price-plans/{id}/retire:
+    post:
+      operationId: pricePlansRetire
+      summary: Withdraw a plan from new subscriptions
+      tags:
+      - Price Plans
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricePlan'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricePlansRetireRequest'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: price_plan
   /v1/billing/subscriptions:
     get:
       operationId: subscriptionsList
@@ -1972,16 +2201,40 @@ paths:
   /v1/billing/usage/summary:
     get:
       operationId: usageSummary
-      summary: Usage totals per metric for a period (?from=&to=)
+      summary: Usage totals per metric for a period
       tags:
       - Usage
       security:
       - oauth2:
         - platform:read
-      parameters: []
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: service_name
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 255
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2272,10 +2525,46 @@ paths:
       x-service: billing-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
       x-table: tenant_invoice
+  /v1/billing/invoices/{id}/payments:
+    get:
+      operationId: invoicesPayments
+      summary: Payments recorded against the invoice
+      tags:
+      - Invoices
+      security:
+      - oauth2:
+        - platform:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantInvoicePaymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ADM-05
+      x-service: billing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:read")'
+      x-table: tenant_invoice
   /v1/billing/invoices/generate:
     post:
       operationId: invoicesGenerate
-      summary: Generate draft invoices for a period
+      summary: 'Generate draft invoices for a period ({data: invoices, skipped_subscription_ids})'
       tags:
       - Invoices
       security:
@@ -2284,8 +2573,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

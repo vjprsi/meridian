@@ -57,7 +57,7 @@ COMMENT ON COLUMN role.role_type IS 'System roles cannot be edited';
 COMMENT ON COLUMN role.is_privileged IS 'Privileged roles need just-in-time elevation and approval';
 COMMENT ON COLUMN role.requires_mfa IS 'MFA required for sessions using this role';
 COMMENT ON COLUMN role.max_session_minutes IS 'Session lifetime';
-COMMENT ON COLUMN role.incompatible_role_ids IS 'Segregation-of-duties conflicts';
+COMMENT ON COLUMN role.incompatible_role_ids IS 'Segregation-of-duties conflicts (role ids)';
 COMMENT ON COLUMN role.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN role.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN role.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -307,7 +307,7 @@ COMMENT ON COLUMN api_client.allowed_scopes IS 'Scopes this client may request';
 COMMENT ON COLUMN api_client.allowed_ip_ranges IS 'CIDR allow-list';
 COMMENT ON COLUMN api_client.rate_limit_policy_id IS 'Rate limits';
 COMMENT ON COLUMN api_client.environment IS 'Sandbox or production';
-COMMENT ON COLUMN api_client.status IS 'Status';
+COMMENT ON COLUMN api_client.status IS 'Status (changed by /suspend, /reactivate)';
 COMMENT ON COLUMN api_client.owner_email IS 'Technical owner';
 COMMENT ON COLUMN api_client.tpp_registration_id IS 'Open banking TPP registration / eIDAS id';
 COMMENT ON COLUMN api_client.fapi_profile IS 'Enforce FAPI 2.0 security profile';
@@ -494,7 +494,7 @@ CREATE TABLE sso_provider (
   issuer_url                   varchar(500) NOT NULL,
   metadata_url                 varchar(500),
   client_id                    varchar(255),
-  client_secret                varchar(500),
+  client_secret_ref            varchar(500),
   signing_certificate          text,
   attribute_mapping            jsonb,
   email_domains                jsonb,
@@ -520,7 +520,7 @@ COMMENT ON COLUMN sso_provider.protocol IS 'OIDC or SAML 2.0';
 COMMENT ON COLUMN sso_provider.issuer_url IS 'Issuer / entity id';
 COMMENT ON COLUMN sso_provider.metadata_url IS 'Discovery or SAML metadata URL';
 COMMENT ON COLUMN sso_provider.client_id IS 'OIDC client id';
-COMMENT ON COLUMN sso_provider.client_secret IS 'OIDC client secret (vault reference) [SECRET]';
+COMMENT ON COLUMN sso_provider.client_secret_ref IS 'Vault path of the OIDC client secret (a reference, never the secret itself)';
 COMMENT ON COLUMN sso_provider.signing_certificate IS 'SAML IdP signing certificate (PEM)';
 COMMENT ON COLUMN sso_provider.attribute_mapping IS 'Maps IdP claims to user fields and roles';
 COMMENT ON COLUMN sso_provider.email_domains IS 'Email domains that must use this provider';
@@ -595,7 +595,7 @@ COMMENT ON COLUMN app_user.last_name IS 'Last name [PII]';
 COMMENT ON COLUMN app_user.display_name IS 'Display name';
 COMMENT ON COLUMN app_user.phone IS 'Work phone [PII]';
 COMMENT ON COLUMN app_user.user_type IS 'Kind of user';
-COMMENT ON COLUMN app_user.status IS 'Status';
+COMMENT ON COLUMN app_user.status IS 'Status (changed by lifecycle actions)';
 COMMENT ON COLUMN app_user.sso_provider_id IS 'SSO provider, if federated';
 COMMENT ON COLUMN app_user.external_subject IS 'Subject id at the identity provider';
 COMMENT ON COLUMN app_user.legal_entity_id IS 'Home legal entity';
@@ -696,7 +696,7 @@ CREATE TABLE mfa_factor (
   label                        varchar(120),
   credential_id                varchar(512),
   public_key                   text,
-  totp_secret                  varchar(255),
+  totp_seed_enc                varchar(255),
   destination                  varchar(320),
   is_primary                   boolean NOT NULL DEFAULT false,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_VERIFICATION' CHECK (status IN ('PENDING_VERIFICATION', 'ACTIVE', 'DISABLED')),
@@ -720,10 +720,10 @@ COMMENT ON COLUMN mfa_factor.factor_type IS 'Factor type';
 COMMENT ON COLUMN mfa_factor.label IS 'User-visible label, e.g. YubiKey 5C';
 COMMENT ON COLUMN mfa_factor.credential_id IS 'WebAuthn credential id';
 COMMENT ON COLUMN mfa_factor.public_key IS 'WebAuthn public key [SECRET]';
-COMMENT ON COLUMN mfa_factor.totp_secret IS 'Encrypted TOTP seed [SECRET]';
+COMMENT ON COLUMN mfa_factor.totp_seed_enc IS 'Encrypted TOTP seed [SECRET]';
 COMMENT ON COLUMN mfa_factor.destination IS 'Phone or email for OTP factors [PII]';
 COMMENT ON COLUMN mfa_factor.is_primary IS 'Default factor';
-COMMENT ON COLUMN mfa_factor.status IS 'Status';
+COMMENT ON COLUMN mfa_factor.status IS 'Status (changed by /verify)';
 COMMENT ON COLUMN mfa_factor.last_used_at IS 'Last successful use';
 COMMENT ON COLUMN mfa_factor.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN mfa_factor.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

@@ -58,7 +58,7 @@ COMMENT ON COLUMN approval_policy.name IS 'Name';
 COMMENT ON COLUMN approval_policy.resource_type IS 'Resource, e.g. product, payment, config_entry, user_role';
 COMMENT ON COLUMN approval_policy.action IS 'Action, e.g. publish, release, update';
 COMMENT ON COLUMN approval_policy.required_approvals IS 'Approvals needed at each level';
-COMMENT ON COLUMN approval_policy.approval_levels IS 'Levels with approver roles and amount thresholds';
+COMMENT ON COLUMN approval_policy.approval_levels IS 'Levels in order: {level, approver_roles, min_amount, required_approvals}';
 COMMENT ON COLUMN approval_policy.allow_self_approval IS 'Maker may approve (never for money movement)';
 COMMENT ON COLUMN approval_policy.expires_after_hours IS 'Pending requests expire after this';
 COMMENT ON COLUMN approval_policy.auto_execute IS 'Execute the operation once approved';
@@ -93,7 +93,7 @@ CREATE TABLE approval_request (
   amount                       numeric(28,8),
   currency                     char(3),
   priority                     varchar(40) NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
-  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'EXECUTED', 'EXECUTION_FAILED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED', 'EXPIRED', 'EXECUTED', 'EXECUTION_FAILED')),
   maker                        varchar(64) NOT NULL,
   required_approvals           integer NOT NULL,
   approvals_received           integer NOT NULL DEFAULT 0,
@@ -102,6 +102,8 @@ CREATE TABLE approval_request (
   decided_at                   timestamptz,
   executed_at                  timestamptz,
   execution_result             jsonb,
+  approval_route               jsonb,
+  cancel_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -136,6 +138,8 @@ COMMENT ON COLUMN approval_request.expires_at IS 'Expiry';
 COMMENT ON COLUMN approval_request.decided_at IS 'Final decision time';
 COMMENT ON COLUMN approval_request.executed_at IS 'Execution time';
 COMMENT ON COLUMN approval_request.execution_result IS 'Result or error from executing the operation';
+COMMENT ON COLUMN approval_request.approval_route IS 'Snapshot of the applicable levels taken at creation (policy edits do not affect it)';
+COMMENT ON COLUMN approval_request.cancel_reason IS 'Reason given by the maker when cancelling';
 COMMENT ON COLUMN approval_request.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN approval_request.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN approval_request.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -227,7 +231,7 @@ COMMENT ON COLUMN workflow_definition.version IS 'Version';
 COMMENT ON COLUMN workflow_definition.engine IS 'Engine';
 COMMENT ON COLUMN workflow_definition.definition IS 'Steps, transitions, SLAs, forms';
 COMMENT ON COLUMN workflow_definition.input_schema IS 'JSON Schema of the input';
-COMMENT ON COLUMN workflow_definition.status IS 'Status';
+COMMENT ON COLUMN workflow_definition.status IS 'Status (changed by /publish, /deprecate)';
 COMMENT ON COLUMN workflow_definition.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN workflow_definition.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN workflow_definition.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -258,6 +262,8 @@ CREATE TABLE workflow_instance (
   started_at                   timestamptz NOT NULL DEFAULT now(),
   completed_at                 timestamptz,
   error                        text,
+  outcome                      varchar(64),
+  engine_state                 jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -283,6 +289,8 @@ COMMENT ON COLUMN workflow_instance.variables IS 'Workflow variables';
 COMMENT ON COLUMN workflow_instance.started_at IS 'Start';
 COMMENT ON COLUMN workflow_instance.completed_at IS 'End';
 COMMENT ON COLUMN workflow_instance.error IS 'Failure details';
+COMMENT ON COLUMN workflow_instance.outcome IS 'Outcome of the END step reached, e.g. COMPLETED, DECLINED';
+COMMENT ON COLUMN workflow_instance.engine_state IS 'Engine bookkeeping (step visits, failed step); not exposed';
 COMMENT ON COLUMN workflow_instance.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN workflow_instance.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN workflow_instance.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -321,6 +329,7 @@ CREATE TABLE work_task (
   form_data                    jsonb,
   outcome                      varchar(64),
   completed_at                 timestamptz,
+  escalation_reason            varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -335,7 +344,7 @@ COMMENT ON COLUMN work_task.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN work_task.updated_at IS 'Last update time';
 COMMENT ON COLUMN work_task.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN work_task.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN work_task.workflow_instance_id IS 'Owning workflow';
+COMMENT ON COLUMN work_task.workflow_instance_id IS 'Owning workflow (set by the engine)';
 COMMENT ON COLUMN work_task.task_type IS 'Task type, e.g. KYC_REVIEW, PAYMENT_REPAIR';
 COMMENT ON COLUMN work_task.title IS 'Title';
 COMMENT ON COLUMN work_task.description IS 'Instructions';
@@ -345,12 +354,13 @@ COMMENT ON COLUMN work_task.queue IS 'Work queue';
 COMMENT ON COLUMN work_task.assignee IS 'Assigned user';
 COMMENT ON COLUMN work_task.candidate_roles IS 'Roles that may claim the task';
 COMMENT ON COLUMN work_task.priority IS 'Priority';
-COMMENT ON COLUMN work_task.status IS 'Status';
+COMMENT ON COLUMN work_task.status IS 'Status (changed by task actions)';
 COMMENT ON COLUMN work_task.due_at IS 'SLA due time';
 COMMENT ON COLUMN work_task.sla_breached IS 'SLA breached';
 COMMENT ON COLUMN work_task.form_data IS 'Data captured by the task form';
-COMMENT ON COLUMN work_task.outcome IS 'Completion outcome';
+COMMENT ON COLUMN work_task.outcome IS 'Completion outcome (set by /complete)';
 COMMENT ON COLUMN work_task.completed_at IS 'Completion time';
+COMMENT ON COLUMN work_task.escalation_reason IS 'Reason of the last escalation';
 COMMENT ON COLUMN work_task.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN work_task.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN work_task.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

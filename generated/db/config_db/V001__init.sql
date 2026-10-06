@@ -108,6 +108,8 @@ CREATE TABLE config_entry (
   change_reason                varchar(500),
   approval_request_id          uuid,
   promoted_from_environment    varchar(32),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -128,11 +130,13 @@ COMMENT ON COLUMN config_entry.config_key IS 'Key within the namespace';
 COMMENT ON COLUMN config_entry.version IS 'Version number';
 COMMENT ON COLUMN config_entry.value IS 'Configuration document';
 COMMENT ON COLUMN config_entry.value_schema IS 'JSON Schema the value must satisfy';
-COMMENT ON COLUMN config_entry.status IS 'Status';
+COMMENT ON COLUMN config_entry.status IS 'Status (changed by lifecycle actions)';
 COMMENT ON COLUMN config_entry.effective_from IS 'When the version takes effect';
 COMMENT ON COLUMN config_entry.change_reason IS 'Why it changed';
 COMMENT ON COLUMN config_entry.approval_request_id IS 'Maker-checker approval';
 COMMENT ON COLUMN config_entry.promoted_from_environment IS 'Source environment when promoted';
+COMMENT ON COLUMN config_entry.submitted_by IS 'Maker who submitted the version for approval';
+COMMENT ON COLUMN config_entry.submitted_at IS 'When the version was submitted';
 COMMENT ON COLUMN config_entry.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN config_entry.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN config_entry.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -155,7 +159,7 @@ CREATE TABLE config_change (
   config_key                   varchar(128) NOT NULL,
   from_version                 integer,
   to_version                   integer NOT NULL,
-  change_type                  varchar(32) NOT NULL,
+  change_type                  varchar(40) NOT NULL CHECK (change_type IN ('CREATED', 'ACTIVATED', 'ROLLED_BACK', 'PROMOTED')),
   diff                         jsonb,
   approved_by                  varchar(64),
   custom_field_1               varchar(500),
@@ -174,8 +178,8 @@ COMMENT ON COLUMN config_change.namespace IS 'Namespace';
 COMMENT ON COLUMN config_change.config_key IS 'Key';
 COMMENT ON COLUMN config_change.from_version IS 'Previous version';
 COMMENT ON COLUMN config_change.to_version IS 'New version';
-COMMENT ON COLUMN config_change.change_type IS 'CREATED, ACTIVATED, ROLLED_BACK, PROMOTED';
-COMMENT ON COLUMN config_change.diff IS 'JSON patch from the previous version';
+COMMENT ON COLUMN config_change.change_type IS 'Kind of change';
+COMMENT ON COLUMN config_change.diff IS 'JSON Patch operations from the previous version';
 COMMENT ON COLUMN config_change.approved_by IS 'Checker';
 COMMENT ON COLUMN config_change.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN config_change.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -267,7 +271,7 @@ COMMENT ON COLUMN tenant_country_pack.created_by IS 'Principal that created the 
 COMMENT ON COLUMN tenant_country_pack.updated_at IS 'Last update time';
 COMMENT ON COLUMN tenant_country_pack.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN tenant_country_pack.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN tenant_country_pack.country_pack_id IS 'Installed pack version';
+COMMENT ON COLUMN tenant_country_pack.country_pack_id IS 'Installed pack version (changed by /upgrade)';
 COMMENT ON COLUMN tenant_country_pack.legal_entity_id IS 'Legal entity';
 COMMENT ON COLUMN tenant_country_pack.status IS 'Status';
 COMMENT ON COLUMN tenant_country_pack.installed_at IS 'Install time';

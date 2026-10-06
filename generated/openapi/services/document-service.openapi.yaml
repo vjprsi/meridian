@@ -105,11 +105,25 @@ components:
           type:
           - string
           - 'null'
+        approval_route:
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         approvals_received:
           description: Approvals received
           format: int32
           readOnly: true
           type: integer
+        cancel_reason:
+          description: Reason given by the maker when cancelling
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -245,6 +259,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -291,6 +306,13 @@ components:
     Document:
       description: A stored file (KYC document, statement, contract, report) owned by a business object
       properties:
+        archived_at:
+          description: When the document moved to archive storage
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         checksum:
           description: SHA-256
           maxLength: 64
@@ -407,8 +429,30 @@ components:
           - string
           - 'null'
         legal_hold:
-          description: Deletion blocked by legal hold
+          description: Deletion blocked by legal hold (set via /legal-hold)
+          readOnly: true
           type: boolean
+        legal_hold_changed_at:
+          description: When the hold was last placed or lifted
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        legal_hold_changed_by:
+          description: Who last placed or lifted the hold
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        legal_hold_reason:
+          description: Reason for the current legal hold
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         metadata:
           additionalProperties: true
           description: Extra attributes (OCR fields, page count)
@@ -450,6 +494,13 @@ components:
           - DELETED
           readOnly: true
           type: string
+        storage_class:
+          description: Object storage class, e.g. STANDARD, GLACIER_IR
+          maxLength: 32
+          readOnly: true
+          type:
+          - string
+          - 'null'
         updated_at:
           description: Last update time
           format: date-time
@@ -568,9 +619,6 @@ components:
           description: Issuing country for identity documents (ISO 3166-1 alpha-2)
           pattern: ^[A-Z]{2}$
           type: string
-        legal_hold:
-          description: Deletion blocked by legal hold
-          type: boolean
         metadata:
           additionalProperties: true
           description: Extra attributes (OCR fields, page count)
@@ -722,12 +770,13 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changes via /publish, /retire and approval)
           enum:
           - DRAFT
           - PENDING_APPROVAL
           - ACTIVE
           - RETIRED
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -831,14 +880,6 @@ components:
           - XLSX
           - TEXT
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          type: string
         variables_schema:
           additionalProperties: true
           description: JSON Schema of the input data
@@ -932,14 +973,6 @@ components:
           - XLSX
           - TEXT
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - ACTIVE
-          - RETIRED
-          type: string
         variables_schema:
           additionalProperties: true
           description: JSON Schema of the input data
@@ -1030,9 +1063,6 @@ components:
           description: Issuing country for identity documents (ISO 3166-1 alpha-2)
           pattern: ^[A-Z]{2}$
           type: string
-        legal_hold:
-          description: Deletion blocked by legal hold
-          type: boolean
         metadata:
           additionalProperties: true
           description: Extra attributes (OCR fields, page count)
@@ -1054,6 +1084,18 @@ components:
           maxLength: 32
           type: string
       type: object
+    DocumentsCompleteUploadRequest:
+      properties:
+        checksum:
+          maxLength: 64
+          type: string
+        size_bytes:
+          format: int64
+          type: integer
+      required:
+      - size_bytes
+      - checksum
+      type: object
     DocumentsLegalHoldRequest:
       properties:
         legal_hold:
@@ -1068,6 +1110,20 @@ components:
     EsignRequest:
       description: Electronic signature envelope for one or more signers
       properties:
+        cancellation_reason:
+          description: Why the envelope was cancelled
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
+        cancelled_by:
+          description: Who cancelled it
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         completed_at:
           description: Completion time
           format: date-time
@@ -1117,6 +1173,13 @@ components:
           type:
           - string
           - 'null'
+        decline_reason:
+          description: Reason given by the declining signer
+          maxLength: 500
+          readOnly: true
+          type:
+          - string
+          - 'null'
         document_id:
           description: Document to sign
           format: uuid
@@ -1132,6 +1195,13 @@ components:
           format: uuid
           readOnly: true
           type: string
+        last_reminded_at:
+          description: Last reminder time
+          format: date-time
+          readOnly: true
+          type:
+          - string
+          - 'null'
         owner_id:
           description: Owning object id
           format: uuid
@@ -1141,8 +1211,11 @@ components:
           maxLength: 40
           type: string
         provider:
-          description: DOCUSIGN, ADOBE_SIGN, NATIVE_OTP
-          maxLength: 32
+          description: E-signature provider
+          enum:
+          - DOCUSIGN
+          - ADOBE_SIGN
+          - NATIVE_OTP
           type: string
         provider_envelope_id:
           description: Provider envelope id
@@ -1151,6 +1224,11 @@ components:
           type:
           - string
           - 'null'
+        reminder_count:
+          description: Reminders sent
+          format: int32
+          readOnly: true
+          type: integer
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
@@ -1171,9 +1249,9 @@ components:
           - string
           - 'null'
         signers:
-          additionalProperties: true
-          description: 'Signers: name, email/phone, order, auth method'
-          type: object
+          description: 'Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service'
+          items: {}
+          type: array
         status:
           description: Status
           enum:
@@ -1210,6 +1288,7 @@ components:
       - provider
       - signers
       - status
+      - reminder_count
       type: object
     EsignRequestCreate:
       properties:
@@ -1250,13 +1329,16 @@ components:
           maxLength: 40
           type: string
         provider:
-          description: DOCUSIGN, ADOBE_SIGN, NATIVE_OTP
-          maxLength: 32
+          description: E-signature provider
+          enum:
+          - DOCUSIGN
+          - ADOBE_SIGN
+          - NATIVE_OTP
           type: string
         signers:
-          additionalProperties: true
-          description: 'Signers: name, email/phone, order, auth method'
-          type: object
+          description: 'Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service'
+          items: {}
+          type: array
       required:
       - document_id
       - owner_type
@@ -1284,11 +1366,25 @@ components:
       type: object
     EsignRequestsCallbacksEventsRequest:
       properties:
-        payload:
-          additionalProperties: true
-          type: object
+        envelope_id:
+          maxLength: 128
+          type: string
+        event:
+          maxLength: 32
+          type: string
+        reason:
+          maxLength: 500
+          type: string
+        signed_document_id:
+          format: uuid
+          type: string
+        signer_email:
+          format: email
+          maxLength: 320
+          type: string
       required:
-      - payload
+      - envelope_id
+      - event
       type: object
     EsignRequestsCancelRequest:
       properties:
@@ -1343,9 +1439,16 @@ components:
           type:
           - string
           - 'null'
+        data:
+          additionalProperties: true
+          description: Template input data (variables); input_hash is its hash
+          type:
+          - object
+          - 'null'
         document_id:
           description: Resulting document
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -1445,10 +1548,10 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
           maxLength: 500
           type: string
-        document_id:
-          description: Resulting document
-          format: uuid
-          type: string
+        data:
+          additionalProperties: true
+          description: Template input data (variables); input_hash is its hash
+          type: object
         document_template_id:
           description: Template version used
           format: uuid
@@ -1818,7 +1921,7 @@ paths:
   /v1/documents/{id}/upload-url:
     post:
       operationId: documentsUploadUrl
-      summary: Pre-signed URL to upload the file content
+      summary: Pre-signed URL to upload the file content (method, url, headers, expires_at)
       tags:
       - Documents
       security:
@@ -1833,8 +1936,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1852,10 +1961,57 @@ paths:
       x-service: document-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
       x-table: document
+  /v1/documents/{id}/complete-upload:
+    post:
+      operationId: documentsCompleteUpload
+      summary: Confirm the content upload; records size and checksum and starts virus scanning
+      tags:
+      - Documents
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentsCompleteUploadRequest'
+      x-requirements:
+      - ADM-03
+      - DEP-06
+      - ONB-02
+      x-service: document-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: document
   /v1/documents/{id}/download-url:
     get:
       operationId: documentsDownloadUrl
-      summary: Short-lived pre-signed URL to download the file
+      summary: Short-lived pre-signed URL to download the file (method, url, expires_at)
       tags:
       - Documents
       security:
@@ -1869,8 +2025,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2188,7 +2350,7 @@ paths:
   /v1/document-templates/{id}/preview:
     post:
       operationId: documentTemplatesPreview
-      summary: Render the template with sample data
+      summary: Render the template with sample data (rendered, content_type, missing_variables)
       tags:
       - Document Templates
       security:
@@ -2203,8 +2365,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2505,7 +2673,10 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - DOCUSIGN
+          - ADOBE_SIGN
+          - NATIVE_OTP
       - name: custom_field_1
         in: query
         schema:
@@ -2755,22 +2926,25 @@ paths:
   /v1/esign-requests/callbacks/{provider}/events:
     post:
       operationId: esignRequestsCallbacksEvents
-      summary: Provider status callback (signed)
+      summary: Provider status callback, HMAC-signed over the raw body; tenant resolved from the envelope
       tags:
       - Esign Requests
-      security:
-      - oauth2:
-        - platform:write
+      security: []
       parameters:
       - name: provider
         in: path
         required: true
         schema:
           type: string
-      - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2791,7 +2965,9 @@ paths:
       - DEP-02
       - LND-01
       x-service: document-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-public: true
+      description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
+        signature and resolves the tenant from the referenced entity.'
       x-table: esign_request
 security:
 - oauth2: []

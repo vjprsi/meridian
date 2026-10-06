@@ -59,7 +59,7 @@ COMMENT ON COLUMN notification_template.subject IS 'Subject / push title';
 COMMENT ON COLUMN notification_template.body IS 'Body with placeholders';
 COMMENT ON COLUMN notification_template.variables_schema IS 'Expected variables';
 COMMENT ON COLUMN notification_template.version IS 'Version';
-COMMENT ON COLUMN notification_template.status IS 'Status';
+COMMENT ON COLUMN notification_template.status IS 'Status (changes via /publish and approval)';
 COMMENT ON COLUMN notification_template.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN notification_template.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN notification_template.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -82,7 +82,7 @@ CREATE TABLE notification_provider (
   channel                      varchar(40) NOT NULL CHECK (channel IN ('PUSH', 'SMS', 'EMAIL', 'WHATSAPP', 'IN_APP', 'USSD', 'VOICE')),
   provider_name                varchar(64) NOT NULL,
   priority                     integer NOT NULL DEFAULT 1,
-  credentials_ref              varchar(255) NOT NULL,
+  credentials_ref              varchar(255),
   sender_id                    varchar(64),
   country_scope                jsonb,
   config                       jsonb,
@@ -104,9 +104,9 @@ COMMENT ON COLUMN notification_provider.row_version IS 'Optimistic lock version;
 COMMENT ON COLUMN notification_provider.channel IS 'Channel';
 COMMENT ON COLUMN notification_provider.provider_name IS 'TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP';
 COMMENT ON COLUMN notification_provider.priority IS 'Lower is tried first';
-COMMENT ON COLUMN notification_provider.credentials_ref IS 'Vault path of credentials [SECRET]';
+COMMENT ON COLUMN notification_provider.credentials_ref IS 'Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>';
 COMMENT ON COLUMN notification_provider.sender_id IS 'Sender id / from address';
-COMMENT ON COLUMN notification_provider.country_scope IS 'Countries routed to this provider';
+COMMENT ON COLUMN notification_provider.country_scope IS 'ISO country codes routed to this provider';
 COMMENT ON COLUMN notification_provider.config IS 'Provider options';
 COMMENT ON COLUMN notification_provider.status IS 'Status';
 COMMENT ON COLUMN notification_provider.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -189,7 +189,7 @@ CREATE TABLE notification (
   source_event_type            varchar(128),
   source_event_id              varchar(64),
   priority                     varchar(40) NOT NULL DEFAULT 'NORMAL' CHECK (priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')),
-  status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'SCHEDULED', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'SUPPRESSED', 'EXPIRED')),
+  status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'SCHEDULED', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'SUPPRESSED', 'EXPIRED', 'CANCELLED')),
   scheduled_at                 timestamptz,
   sent_at                      timestamptz,
   delivered_at                 timestamptz,
@@ -263,6 +263,7 @@ CREATE TABLE notification_delivery_attempt (
   provider_response            jsonb,
   error_code                   varchar(64),
   latency_ms                   integer,
+  cycle                        integer NOT NULL DEFAULT 1,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -281,6 +282,7 @@ COMMENT ON COLUMN notification_delivery_attempt.status IS 'ACCEPTED, REJECTED, T
 COMMENT ON COLUMN notification_delivery_attempt.provider_response IS 'Raw provider response';
 COMMENT ON COLUMN notification_delivery_attempt.error_code IS 'Provider error code';
 COMMENT ON COLUMN notification_delivery_attempt.latency_ms IS 'Provider latency';
+COMMENT ON COLUMN notification_delivery_attempt.cycle IS 'Send cycle (a resend starts a new one)';
 COMMENT ON COLUMN notification_delivery_attempt.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN notification_delivery_attempt.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN notification_delivery_attempt.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

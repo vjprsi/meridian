@@ -8345,6 +8345,8 @@ API: /v1/platform/cells · Requirements: ADM-01
 | ledger_db_cluster | varchar(128) | yes |  | ledger_db_cluster | Ledger database cluster |
 | kafka_cluster | varchar(128) | yes |  | kafka_cluster | Event backbone cluster |
 | standby_region | varchar(32) | yes |  | standby_region | Paired region for failover |
+| drain_reason | varchar(255) | yes |  | drain_reason (read-only) | Why the cell is draining |
+| drain_requested_at | timestamptz | yes |  | drain_requested_at (read-only) | When draining started |
 | metadata | jsonb | yes |  | metadata | Operational metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -8370,7 +8372,7 @@ API: /v1/platform/tenants · Requirements: ADM-01
 | name | varchar(160) | no |  | name | Display name |
 | legal_name | varchar(255) | no |  | legal_name | Registered legal name |
 | tenant_type | varchar(40) (TenantType) | no |  | tenant_type | Kind of organisation |
-| status | varchar(40) (TenantStatus) | no |  | status | Lifecycle status |
+| status | varchar(40) (TenantStatus) | no |  | status (read-only) | Lifecycle status (changed by lifecycle actions) |
 | deployment_model | varchar(40) (DeploymentModel) | no |  | deployment_model | How the tenant is deployed |
 | cell_id | uuid | yes | FK → cell | cell_id | Home cell |
 | home_region | varchar(32) | no |  | home_region | Home region for data residency |
@@ -8385,6 +8387,9 @@ API: /v1/platform/tenants · Requirements: ADM-01
 | activated_at | timestamptz | yes |  | activated_at (read-only) | Activation time |
 | suspended_at | timestamptz | yes |  | suspended_at (read-only) | Suspension time |
 | suspension_reason | varchar(255) | yes |  | suspension_reason (read-only) | Reason for suspension |
+| reinstatement_reason | varchar(255) | yes |  | reinstatement_reason (read-only) | Reason given on the last /reinstate |
+| reinstated_at | timestamptz | yes |  | reinstated_at (read-only) | Last reinstatement time |
+| template_code | varchar(64) | yes |  | template_code (read-only) | Template the tenant was provisioned from |
 | metadata | jsonb | yes |  | metadata | Operator metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -8412,6 +8417,7 @@ API: internal only · Requirements: ADM-01
 | effective_from | timestamptz | no |  | effective_from | Start of placement |
 | effective_to | timestamptz | yes |  | effective_to | End of placement |
 | reason | varchar(255) | yes |  | reason | Reason, e.g. initial placement, rebalancing, dedicated upgrade |
+| from_cell_id | uuid | yes | FK → cell | from_cell_id | Previous cell (migrations) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -8433,10 +8439,11 @@ API: /v1/modules · Requirements: ADM-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| module | varchar(40) (PlatformModule) | no | UQ | module | Module |
-| is_enabled | boolean | no |  | is_enabled | Whether the module is enabled |
+| module | varchar(40) (PlatformModule) | no | UQ | module (read-only) | Module (seeded at provisioning) |
+| is_enabled | boolean | no |  | is_enabled (read-only) | Whether the module is enabled (changed via /enable, /disable) |
 | enabled_at | timestamptz | yes |  | enabled_at (read-only) | When it was enabled |
 | config | jsonb | yes |  | config | Module-level configuration |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Approval request that applied the last enable/disable |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -8520,7 +8527,8 @@ API: /v1/branches · Requirements: ADM-01
 | manager_user_id | uuid | yes | ref → app_user | manager_user_id | Branch manager |
 | status | varchar(40) (BranchStatus) | no |  | status | Status |
 | opened_on | date | yes |  | opened_on | Opening date |
-| closed_on | date | yes |  | closed_on | Closing date |
+| closed_on | date | yes |  | closed_on (read-only) | Closing date (set by /close) |
+| close_reason | varchar(255) | yes |  | close_reason (read-only) | Reason given on /close |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -8573,7 +8581,7 @@ API: /v1/feature-flags · Requirements: ADM-01
 | description | varchar(500) | yes |  | description | Purpose |
 | is_enabled | boolean | no |  | is_enabled | Master switch |
 | rollout_percentage | integer | no |  | rollout_percentage | Percent of subjects that see the feature (0-100) |
-| targeting_rules | jsonb | yes |  | targeting_rules | Rules by legal entity, segment, user, app version |
+| targeting_rules | jsonb | yes |  | targeting_rules | Ordered targeting rules {attribute, operator, value|values, serve, variant} |
 | variants | jsonb | yes |  | variants | Multivariate values |
 | owner | varchar(120) | yes |  | owner | Owning team |
 | expires_at | timestamptz | yes |  | expires_at | When the flag should be removed |
@@ -8609,7 +8617,7 @@ API: /v1/branding · Requirements: ADM-01
 | font_family | varchar(80) | yes |  | font_family | Font family |
 | theme_tokens | jsonb | yes |  | theme_tokens | Full design-token overrides (light and dark) |
 | default_locale | varchar(10) | no |  | default_locale | Default locale |
-| supported_locales | jsonb | yes |  | supported_locales | Enabled locales |
+| supported_locales | jsonb | yes |  | supported_locales | Enabled locales (BCP 47 tags) |
 | custom_domain | varchar(255) | yes |  | custom_domain | Custom domain for web apps |
 | support_email | varchar(320) | yes |  | support_email | Support email |
 | support_phone | varchar(20) | yes |  | support_phone | Support phone |
@@ -8649,7 +8657,7 @@ API: /v1/sso-providers · Requirements: ADM-02
 | issuer_url | varchar(500) | no |  | issuer_url | Issuer / entity id |
 | metadata_url | varchar(500) | yes |  | metadata_url | Discovery or SAML metadata URL |
 | client_id | varchar(255) | yes |  | client_id | OIDC client id |
-| client_secret | varchar(500) | yes |  | — | OIDC client secret (vault reference) secret |
+| client_secret_ref | varchar(500) | yes |  | client_secret_ref | Vault path of the OIDC client secret (a reference, never the secret itself) |
 | signing_certificate | text | yes |  | signing_certificate | SAML IdP signing certificate (PEM) |
 | attribute_mapping | jsonb | yes |  | attribute_mapping | Maps IdP claims to user fields and roles |
 | email_domains | jsonb | yes |  | email_domains | Email domains that must use this provider |
@@ -8680,11 +8688,11 @@ API: /v1/roles · Requirements: ADM-02
 | code | varchar(64) | no | UQ | code | Role code, e.g. OPS_PAYMENTS_MAKER |
 | name | varchar(120) | no |  | name | Display name |
 | description | varchar(500) | yes |  | description | Purpose of the role |
-| role_type | varchar(40) (RoleType) | no |  | role_type | System roles cannot be edited |
+| role_type | varchar(40) (RoleType) | no |  | role_type (read-only) | System roles cannot be edited |
 | is_privileged | boolean | no |  | is_privileged | Privileged roles need just-in-time elevation and approval |
 | requires_mfa | boolean | no |  | requires_mfa | MFA required for sessions using this role |
 | max_session_minutes | integer | no |  | max_session_minutes | Session lifetime |
-| incompatible_role_ids | jsonb | yes |  | incompatible_role_ids | Segregation-of-duties conflicts |
+| incompatible_role_ids | jsonb | yes |  | incompatible_role_ids | Segregation-of-duties conflicts (role ids) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -8764,7 +8772,7 @@ API: /v1/users · Requirements: ADM-02
 | display_name | varchar(160) | yes |  | display_name | Display name |
 | phone | varchar(20) | yes |  | phone | Work phone PII |
 | user_type | varchar(40) (StaffUserType) | no |  | user_type | Kind of user |
-| status | varchar(40) (StaffUserStatus) | no |  | status | Status |
+| status | varchar(40) (StaffUserStatus) | no |  | status (read-only) | Status (changed by lifecycle actions) |
 | sso_provider_id | uuid | yes | FK → sso_provider | sso_provider_id | SSO provider, if federated |
 | external_subject | varchar(255) | yes |  | external_subject | Subject id at the identity provider |
 | legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Home legal entity |
@@ -8810,7 +8818,7 @@ API: /v1/user-roles · Requirements: ADM-02, LIM-02
 | valid_from | timestamptz | no |  | valid_from | Start |
 | valid_to | timestamptz | yes |  | valid_to | End (just-in-time elevation) |
 | granted_by | varchar(64) | yes |  | granted_by (read-only) | Who granted it |
-| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval for privileged roles |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Approval for privileged roles |
 | justification | varchar(500) | yes |  | justification | Business justification |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -8867,10 +8875,10 @@ API: /v1/users/{user_id}/mfa-factors · Requirements: ADM-02
 | label | varchar(120) | yes |  | label | User-visible label, e.g. YubiKey 5C |
 | credential_id | varchar(512) | yes |  | credential_id | WebAuthn credential id |
 | public_key | text | yes |  | — | WebAuthn public key secret |
-| totp_secret | varchar(255) | yes |  | — | Encrypted TOTP seed secret |
+| totp_seed_enc | varchar(255) | yes |  | — | Encrypted TOTP seed secret |
 | destination | varchar(320) | yes |  | destination | Phone or email for OTP factors PII |
-| is_primary | boolean | no |  | is_primary | Default factor |
-| status | varchar(40) (MfaFactorStatus) | no |  | status | Status |
+| is_primary | boolean | no |  | is_primary (read-only) | Default factor |
+| status | varchar(40) (MfaFactorStatus) | no |  | status (read-only) | Status (changed by /verify) |
 | last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last successful use |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -8967,7 +8975,7 @@ API: /v1/api-clients · Requirements: API-02, OBK-01
 | allowed_ip_ranges | jsonb | yes |  | allowed_ip_ranges | CIDR allow-list |
 | rate_limit_policy_id | uuid | yes | FK → rate_limit_policy | rate_limit_policy_id | Rate limits |
 | environment | varchar(40) (ApiEnvironment) | no |  | environment | Sandbox or production |
-| status | varchar(40) (ApiClientStatus) | no |  | status | Status |
+| status | varchar(40) (ApiClientStatus) | no |  | status (read-only) | Status (changed by /suspend, /reactivate) |
 | owner_email | varchar(320) | yes |  | owner_email | Technical owner |
 | tpp_registration_id | varchar(128) | yes |  | tpp_registration_id | Open banking TPP registration / eIDAS id |
 | fapi_profile | boolean | no |  | fapi_profile | Enforce FAPI 2.0 security profile |
@@ -8999,8 +9007,8 @@ API: /v1/api-clients/{api_client_id}/keys · Requirements: API-02
 | key_prefix | varchar(16) | no |  | key_prefix (read-only) | Visible prefix, e.g. mk_live_4f9a |
 | key_hash | varchar(255) | no |  | — | SHA-256 of the key secret |
 | scopes | jsonb | yes |  | scopes | Scopes (subset of the client's) |
-| status | varchar(40) (ApiKeyStatus) | no |  | status | Status |
-| rotated_from_id | uuid | yes | FK → api_key | rotated_from_id | Key this one replaced |
+| status | varchar(40) (ApiKeyStatus) | no |  | status (read-only) | Status |
+| rotated_from_id | uuid | yes | FK → api_key | rotated_from_id (read-only) | Key this one replaced |
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
 | last_used_at | timestamptz | yes |  | last_used_at (read-only) | Last use |
 | last_used_ip | inet | yes |  | last_used_ip (read-only) | Last caller IP |
@@ -9133,11 +9141,13 @@ API: /v1/config/entries · Requirements: ADM-01, LIM-02
 | version | integer | no |  | version (read-only) | Version number |
 | value | jsonb | no |  | value | Configuration document |
 | value_schema | jsonb | yes |  | value_schema | JSON Schema the value must satisfy |
-| status | varchar(40) (ConfigEntryStatus) | no |  | status | Status |
+| status | varchar(40) (ConfigEntryStatus) | no |  | status (read-only) | Status (changed by lifecycle actions) |
 | effective_from | timestamptz | yes |  | effective_from | When the version takes effect |
 | change_reason | varchar(500) | yes |  | change_reason | Why it changed |
-| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Maker-checker approval |
-| promoted_from_environment | varchar(32) | yes |  | promoted_from_environment | Source environment when promoted |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Maker-checker approval |
+| promoted_from_environment | varchar(32) | yes |  | promoted_from_environment (read-only) | Source environment when promoted |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the version for approval |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | When the version was submitted |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9161,8 +9171,8 @@ API: /v1/config/changes · Requirements: ADM-03, LIM-02
 | config_key | varchar(128) | no |  | config_key | Key |
 | from_version | integer | yes |  | from_version | Previous version |
 | to_version | integer | no |  | to_version | New version |
-| change_type | varchar(32) | no |  | change_type | CREATED, ACTIVATED, ROLLED_BACK, PROMOTED |
-| diff | jsonb | yes |  | diff | JSON patch from the previous version |
+| change_type | varchar(40) (ConfigChangeType) | no |  | change_type | Kind of change |
+| diff | jsonb | yes |  | diff | JSON Patch operations from the previous version |
 | approved_by | varchar(64) | yes |  | approved_by | Checker |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -9215,8 +9225,8 @@ API: /v1/config/installed-country-packs · Requirements: REG-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| country_pack_id | uuid | no | FK → country_pack | country_pack_id | Installed pack version |
-| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Legal entity |
+| country_pack_id | uuid | no | FK → country_pack | country_pack_id (read-only) | Installed pack version (changed by /upgrade) |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id (read-only) | Legal entity |
 | status | varchar(40) (InstalledPackStatus) | no |  | status (read-only) | Status |
 | installed_at | timestamptz | yes |  | installed_at (read-only) | Install time |
 | overrides | jsonb | yes |  | overrides | Tenant overrides of pack defaults |
@@ -9320,7 +9330,7 @@ API: /v1/reference/countries · Requirements: ADM-04
 | is_eea | boolean | no |  | is_eea | European Economic Area member |
 | is_sanctioned | boolean | no |  | is_sanctioned | Comprehensively sanctioned jurisdiction |
 | fatf_status | varchar(40) (FatfStatus) | no |  | fatf_status | FATF list status |
-| address_format | jsonb | yes |  | address_format | Address fields and order |
+| address_format | jsonb | yes |  | address_format | Address fields in display order |
 | postal_code_regex | varchar(255) | yes |  | postal_code_regex | Postal code validation pattern |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -9448,7 +9458,7 @@ API: /v1/reference/fx-rates · Requirements: ADM-04, LED-03, PAY-06
 | quote_currency | char(3) | no |  | quote_currency | Quote currency |
 | rate_type | varchar(40) (FxRateType) | no |  | rate_type | Mid, buy, sell, cash or revaluation |
 | rate | numeric(18,10) | no |  | rate | Units of quote per 1 base |
-| inverse_rate | numeric(18,10) | no |  | inverse_rate | Units of base per 1 quote |
+| inverse_rate | numeric(18,10) | no |  | inverse_rate (read-only) | Units of base per 1 quote (computed as 1 / rate) |
 | as_of_date | date | no |  | as_of_date | Business date |
 | valid_from | timestamptz | no |  | valid_from | Valid from |
 | valid_to | timestamptz | yes |  | valid_to | Valid to (empty = until superseded) |
@@ -9576,8 +9586,14 @@ API: /v1/documents · Requirements: ONB-02, DEP-06, ADM-03
 | issued_on | date | yes |  | issued_on | Issue date |
 | expires_on | date | yes |  | expires_on | Expiry date |
 | retention_until | date | yes |  | retention_until | Earliest deletion date |
-| legal_hold | boolean | no |  | legal_hold | Deletion blocked by legal hold |
+| legal_hold | boolean | no |  | legal_hold (read-only) | Deletion blocked by legal hold (set via /legal-hold) |
+| legal_hold_reason | varchar(255) | yes |  | legal_hold_reason (read-only) | Reason for the current legal hold |
+| legal_hold_changed_at | timestamptz | yes |  | legal_hold_changed_at (read-only) | When the hold was last placed or lifted |
+| legal_hold_changed_by | varchar(64) | yes |  | legal_hold_changed_by (read-only) | Who last placed or lifted the hold |
 | uploaded_via | varchar(32) | yes |  | uploaded_via | API, CONSOLE, MOBILE_APP, AGENT_APP, SYSTEM |
+| archived_at | timestamptz | yes |  | archived_at (read-only) | When the document moved to archive storage |
+| storage_class | varchar(32) | yes |  | storage_class (read-only) | Object storage class, e.g. STANDARD, GLACIER_IR |
+| expiry_notified_on | date | yes |  | — | Date the expiring-document event was published (sweep bookkeeping) |
 | metadata | jsonb | yes |  | metadata | Extra attributes (OCR fields, page count) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -9610,7 +9626,7 @@ API: /v1/document-templates · Requirements: DEP-06, LND-01
 | body_document_id | uuid | yes | FK → document | body_document_id | Binary template file (e.g. DOCX) |
 | variables_schema | jsonb | yes |  | variables_schema | JSON Schema of the input data |
 | legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity (empty = all) |
-| status | varchar(40) (PlatformTemplateStatus) | no |  | status | Status |
+| status | varchar(40) (PlatformTemplateStatus) | no |  | status (read-only) | Status (changes via /publish, /retire and approval) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9633,9 +9649,10 @@ API: /v1/generated-documents · Requirements: DEP-06
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | document_template_id | uuid | no | FK → document_template | document_template_id | Template version used |
-| document_id | uuid | yes | FK → document | document_id | Resulting document |
+| document_id | uuid | yes | FK → document | document_id (read-only) | Resulting document |
 | owner_type | varchar(40) | no |  | owner_type | Owning object type |
 | owner_id | uuid | no |  | owner_id | Owning object id |
+| data | jsonb | yes |  | data | Template input data (variables); input_hash is its hash PII |
 | input_hash | varchar(64) | no |  | input_hash (read-only) | Hash of input data (reproducibility) |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Generation status |
 | error | text | yes |  | error (read-only) | Error details |
@@ -9664,19 +9681,43 @@ API: /v1/esign-requests · Requirements: LND-01, DEP-02
 | document_id | uuid | no | FK → document | document_id | Document to sign |
 | owner_type | varchar(40) | no |  | owner_type | Owning object type, e.g. LOAN_APPLICATION |
 | owner_id | uuid | no |  | owner_id | Owning object id |
-| provider | varchar(32) | no |  | provider | DOCUSIGN, ADOBE_SIGN, NATIVE_OTP |
+| provider | varchar(40) (EsignProvider) | no |  | provider | E-signature provider |
 | provider_envelope_id | varchar(128) | yes |  | provider_envelope_id (read-only) | Provider envelope id |
-| signers | jsonb | no |  | signers | Signers: name, email/phone, order, auth method |
+| signers | jsonb | no |  | signers | Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service |
 | status | varchar(40) (EsignStatus) | no |  | status (read-only) | Status |
 | signed_document_id | uuid | yes | FK → document | signed_document_id (read-only) | Signed copy with audit certificate |
 | sent_at | timestamptz | yes |  | sent_at (read-only) | Sent time |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
+| reminder_count | integer | no |  | reminder_count (read-only) | Reminders sent |
+| last_reminded_at | timestamptz | yes |  | last_reminded_at (read-only) | Last reminder time |
+| cancellation_reason | varchar(255) | yes |  | cancellation_reason (read-only) | Why the envelope was cancelled |
+| cancelled_by | varchar(64) | yes |  | cancelled_by (read-only) | Who cancelled it |
+| decline_reason | varchar(500) | yes |  | decline_reason (read-only) | Reason given by the declining signer |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `esign_callback_route`
+
+Routes provider callbacks (which carry no tenant context) to the owning tenant's envelope
+
+API: internal only
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| provider | varchar(40) (EsignProvider) | no |  | provider | Provider |
+| provider_envelope_id | varchar(128) | no |  | provider_envelope_id | Provider envelope id |
+| esign_request_id | uuid | no |  | esign_request_id | Envelope in the owning tenant |
+| owner_tenant_id | uuid | no |  | owner_tenant_id | Tenant owning the envelope |
 
 ### Service `workflow-service` — database `workflow_db`
 
@@ -9703,7 +9744,7 @@ API: /v1/approval-policies · Requirements: LIM-02
 | resource_type | varchar(64) | no |  | resource_type | Resource, e.g. product, payment, config_entry, user_role |
 | action | varchar(40) | no |  | action | Action, e.g. publish, release, update |
 | required_approvals | integer | no |  | required_approvals | Approvals needed at each level |
-| approval_levels | jsonb | no |  | approval_levels | Levels with approver roles and amount thresholds |
+| approval_levels | jsonb | no |  | approval_levels | Levels in order: {level, approver_roles, min_amount, required_approvals} |
 | allow_self_approval | boolean | no |  | allow_self_approval | Maker may approve (never for money movement) |
 | expires_after_hours | integer | no |  | expires_after_hours | Pending requests expire after this |
 | auto_execute | boolean | no |  | auto_execute | Execute the operation once approved |
@@ -9749,6 +9790,8 @@ API: /v1/approval-requests · Requirements: LIM-02, ADM-03
 | decided_at | timestamptz | yes |  | decided_at (read-only) | Final decision time |
 | executed_at | timestamptz | yes |  | executed_at (read-only) | Execution time |
 | execution_result | jsonb | yes |  | execution_result (read-only) | Result or error from executing the operation |
+| approval_route | jsonb | yes |  | approval_route (read-only) | Snapshot of the applicable levels taken at creation (policy edits do not affect it) |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Reason given by the maker when cancelling |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9800,7 +9843,7 @@ API: /v1/workflows/definitions · Requirements: ONB-01, SRV-01
 | engine | varchar(32) | no |  | engine | Engine |
 | definition | jsonb | no |  | definition | Steps, transitions, SLAs, forms |
 | input_schema | jsonb | yes |  | input_schema | JSON Schema of the input |
-| status | varchar(40) (WorkflowDefinitionStatus) | no |  | status | Status |
+| status | varchar(40) (WorkflowDefinitionStatus) | no |  | status (read-only) | Status (changed by /publish, /deprecate) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9833,6 +9876,8 @@ API: /v1/workflows/instances · Requirements: ONB-01, SRV-01
 | started_at | timestamptz | no |  | started_at (read-only) | Start |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | End |
 | error | text | yes |  | error (read-only) | Failure details |
+| outcome | varchar(64) | yes |  | outcome (read-only) | Outcome of the END step reached, e.g. COMPLETED, DECLINED |
+| engine_state | jsonb | yes |  | — | Engine bookkeeping (step visits, failed step); not exposed |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9854,7 +9899,7 @@ API: /v1/tasks · Requirements: SRV-01, ONB-05, COL-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| workflow_instance_id | uuid | yes | FK → workflow_instance | workflow_instance_id | Owning workflow |
+| workflow_instance_id | uuid | yes | FK → workflow_instance | workflow_instance_id (read-only) | Owning workflow (set by the engine) |
 | task_type | varchar(64) | no |  | task_type | Task type, e.g. KYC_REVIEW, PAYMENT_REPAIR |
 | title | varchar(255) | no |  | title | Title |
 | description | text | yes |  | description | Instructions |
@@ -9864,12 +9909,13 @@ API: /v1/tasks · Requirements: SRV-01, ONB-05, COL-02
 | assignee | varchar(64) | yes |  | assignee | Assigned user |
 | candidate_roles | jsonb | yes |  | candidate_roles | Roles that may claim the task |
 | priority | varchar(40) (WorkTaskPriority) | no |  | priority | Priority |
-| status | varchar(40) (WorkTaskStatus) | no |  | status | Status |
+| status | varchar(40) (WorkTaskStatus) | no |  | status (read-only) | Status (changed by task actions) |
 | due_at | timestamptz | yes |  | due_at | SLA due time |
 | sla_breached | boolean | no |  | sla_breached (read-only) | SLA breached |
 | form_data | jsonb | yes |  | form_data | Data captured by the task form |
-| outcome | varchar(64) | yes |  | outcome | Completion outcome |
+| outcome | varchar(64) | yes |  | outcome (read-only) | Completion outcome (set by /complete) |
 | completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
+| escalation_reason | varchar(255) | yes |  | escalation_reason (read-only) | Reason of the last escalation |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9904,7 +9950,7 @@ API: /v1/notification-templates · Requirements: NOT-01
 | body | text | no |  | body | Body with placeholders |
 | variables_schema | jsonb | yes |  | variables_schema | Expected variables |
 | version | integer | no |  | version (read-only) | Version |
-| status | varchar(40) (PlatformTemplateStatus) | no |  | status | Status |
+| status | varchar(40) (PlatformTemplateStatus) | no |  | status (read-only) | Status (changes via /publish and approval) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9929,9 +9975,9 @@ API: /v1/notification-providers · Requirements: NOT-01
 | channel | varchar(40) (NotificationChannel) | no |  | channel | Channel |
 | provider_name | varchar(64) | no |  | provider_name | TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP |
 | priority | integer | no |  | priority | Lower is tried first |
-| credentials_ref | varchar(255) | no |  | — | Vault path of credentials secret |
+| credentials_ref | varchar(255) | yes |  | credentials_ref | Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id> |
 | sender_id | varchar(64) | yes |  | sender_id | Sender id / from address |
-| country_scope | jsonb | yes |  | country_scope | Countries routed to this provider |
+| country_scope | jsonb | yes |  | country_scope | ISO country codes routed to this provider |
 | config | jsonb | yes |  | config | Provider options |
 | status | varchar(40) (ProviderIntegrationStatus) | no |  | status | Status |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -10031,6 +10077,7 @@ API: internal only · Requirements: NOT-01
 | provider_response | jsonb | yes |  | provider_response | Raw provider response |
 | error_code | varchar(64) | yes |  | error_code | Provider error code |
 | latency_ms | integer | yes |  | latency_ms | Provider latency |
+| cycle | integer | no |  | cycle | Send cycle (a resend starts a new one) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -10092,9 +10139,11 @@ API: /v1/webhook-endpoints · Requirements: API-01
 | api_client_id | uuid | yes | ref → api_client | api_client_id | Owning API client |
 | environment | varchar(40) (ApiEnvironment) | no |  | environment | Sandbox or production |
 | api_version | varchar(16) | no |  | api_version | Payload version |
-| signing_secret | varchar(255) | no |  | — | HMAC secret (vault reference) secret |
+| signing_secret_enc | varchar(255) | no |  | — | Current HMAC signing secret (encrypted at rest) secret |
 | signing_secret_version | integer | no |  | signing_secret_version (read-only) | Secret version (rotation) |
-| status | varchar(40) (WebhookEndpointStatus) | no |  | status | Status |
+| previous_signing_secret_enc | varchar(255) | yes |  | — | Previous HMAC secret, still used for signing until previous_secret_expires_at (encrypted) secret |
+| previous_secret_expires_at | timestamptz | yes |  | previous_secret_expires_at (read-only) | End of the 24 h rotation grace period |
+| status | varchar(40) (WebhookEndpointStatus) | no |  | status (read-only) | Status (changed by /enable, /disable and delivery health) |
 | max_requests_per_second | integer | no |  | max_requests_per_second | Delivery rate cap |
 | mtls_enabled | boolean | no |  | mtls_enabled | Present a client certificate |
 | custom_headers | jsonb | yes |  | custom_headers | Extra headers sent with each delivery |
@@ -10159,7 +10208,7 @@ API: /v1/webhook-deliveries · Requirements: API-01
 | last_status_code | integer | yes |  | last_status_code (read-only) | Last HTTP status |
 | last_error | varchar(500) | yes |  | last_error (read-only) | Last error |
 | delivered_at | timestamptz | yes |  | delivered_at (read-only) | Success time |
-| replay_job_id | uuid | yes | FK → webhook_replay_job | replay_job_id | Replay job that produced it |
+| replay_job_id | uuid | yes | FK → webhook_replay_job | replay_job_id (read-only) | Replay job that produced it |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -10207,7 +10256,7 @@ API: /v1/event-replays · Requirements: API-01
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | webhook_endpoint_id | uuid | no | FK → webhook_endpoint | webhook_endpoint_id | Endpoint |
-| event_types | jsonb | yes |  | event_types | Event types to replay (empty = subscribed types) |
+| event_types | jsonb | yes |  | event_types | Event types or wildcards to replay (empty = subscribed types) |
 | from_time | timestamptz | no |  | from_time | Range start |
 | to_time | timestamptz | no |  | to_time | Range end |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
@@ -10257,6 +10306,7 @@ API: /v1/audit-events · Requirements: ADM-03
 | request_id | varchar(64) | yes |  | request_id | Request id |
 | trace_id | varchar(32) | yes |  | trace_id | Trace id |
 | service_name | varchar(64) | no |  | service_name | Service that emitted the event |
+| source_event_id | varchar(64) | yes |  | source_event_id (read-only) | CloudEvents id of the consumed domain event (de-duplication) |
 | hash | varchar(64) | no |  | hash (read-only) | SHA-256 over this event and prev_hash |
 | prev_hash | varchar(64) | no |  | prev_hash (read-only) | Hash of the previous event |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -10313,11 +10363,11 @@ API: /v1/data-exports · Requirements: ADM-03, CIF-04
 | from_time | timestamptz | yes |  | from_time | Range start |
 | to_time | timestamptz | yes |  | to_time | Range end |
 | filters | jsonb | yes |  | filters | Additional filters |
-| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Approval (four-eyes) |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Approval (four-eyes) |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Status |
 | row_count | integer | yes |  | row_count (read-only) | Rows exported |
 | document_id | uuid | yes | ref → document | document_id (read-only) | Export file |
-| expires_at | timestamptz | yes |  | expires_at | Download link expiry |
+| expires_at | timestamptz | yes |  | expires_at (read-only) | Download link expiry |
 | due_date | date | yes |  | due_date | Legal deadline (e.g. 30 days for DSAR) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -10352,9 +10402,11 @@ API: /v1/billing/price-plans · Requirements: ADM-05
 | included_active_accounts | integer | no |  | included_active_accounts | Active accounts included |
 | price_per_active_account | numeric(28,8) | no |  | price_per_active_account | Price per extra active account |
 | metric_prices | jsonb | no |  | metric_prices | Tiered prices per usage metric |
-| status | varchar(40) (PricePlanStatus) | no |  | status | Status |
+| status | varchar(40) (PricePlanStatus) | no |  | status (read-only) | Status (changed by /publish, /retire) |
 | valid_from | date | no |  | valid_from | Available from |
 | valid_to | date | yes |  | valid_to | Available to |
+| retire_reason | varchar(255) | yes |  | retire_reason (read-only) | Reason given on /retire |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -10387,6 +10439,9 @@ API: /v1/billing/subscriptions · Requirements: ADM-05
 | billing_email | varchar(320) | no |  | billing_email | Invoice recipient |
 | payment_terms_days | integer | no |  | payment_terms_days | Payment terms |
 | external_customer_ref | varchar(64) | yes |  | external_customer_ref | Customer id in the finance system |
+| proration_adjustments | jsonb | yes |  | proration_adjustments (read-only) | Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id, amount, description |
+| cancellation_reason | varchar(255) | yes |  | cancellation_reason (read-only) | Reason given on /cancel |
+| cancelled_at | timestamptz | yes |  | cancelled_at (read-only) | When the cancellation was requested |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -10445,6 +10500,8 @@ API: /v1/billing/invoices · Requirements: ADM-05
 | issued_at | timestamptz | yes |  | issued_at (read-only) | Issue time |
 | due_date | date | yes |  | due_date | Due date |
 | paid_at | timestamptz | yes |  | paid_at (read-only) | Fully paid time |
+| void_reason | varchar(255) | yes |  | void_reason (read-only) | Reason given on /void |
+| voided_at | timestamptz | yes |  | voided_at (read-only) | Void time |
 | document_id | uuid | yes | ref → document | document_id (read-only) | PDF invoice |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -10472,6 +10529,29 @@ API: internal only · Requirements: ADM-05
 | unit_price | numeric(28,8) | no |  | unit_price | Unit price |
 | amount | numeric(28,8) | no |  | amount | Line amount |
 | tier | varchar(64) | yes |  | tier | Pricing tier applied |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `tenant_invoice_payment` (append-only)
+
+A payment recorded against a tenant invoice. Append-only.
+
+API: internal only · Requirements: ADM-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| tenant_invoice_id | uuid | no | FK → tenant_invoice | tenant_invoice_id | Invoice |
+| amount | numeric(28,8) | no |  | amount | Amount paid |
+| currency | char(3) | no |  | currency | Currency |
+| paid_at | timestamptz | no |  | paid_at | When the payment was made |
+| reference | varchar(64) | yes |  | reference | Payment reference (e.g. wire id) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

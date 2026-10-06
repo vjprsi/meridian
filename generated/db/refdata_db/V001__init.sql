@@ -113,7 +113,7 @@ COMMENT ON COLUMN country.iban_length IS 'IBAN length when IBAN is used';
 COMMENT ON COLUMN country.is_eea IS 'European Economic Area member';
 COMMENT ON COLUMN country.is_sanctioned IS 'Comprehensively sanctioned jurisdiction';
 COMMENT ON COLUMN country.fatf_status IS 'FATF list status';
-COMMENT ON COLUMN country.address_format IS 'Address fields and order';
+COMMENT ON COLUMN country.address_format IS 'Address fields in display order';
 COMMENT ON COLUMN country.postal_code_regex IS 'Postal code validation pattern';
 COMMENT ON COLUMN country.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN country.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -295,11 +295,11 @@ CREATE TABLE fx_rate (
   fx_rate_source_id            uuid NOT NULL REFERENCES fx_rate_source(id),
   base_currency                char(3) NOT NULL,
   quote_currency               char(3) NOT NULL,
-  rate_type                    varchar(40) NOT NULL CHECK (rate_type IN ('MID', 'BUY', 'SELL', 'CASH_BUY', 'CASH_SELL', 'REVALUATION')),
+  rate_type                    varchar(40) NOT NULL DEFAULT 'MID' CHECK (rate_type IN ('MID', 'BUY', 'SELL', 'CASH_BUY', 'CASH_SELL', 'REVALUATION')),
   rate                         numeric(18,10) NOT NULL,
   inverse_rate                 numeric(18,10) NOT NULL,
   as_of_date                   date NOT NULL,
-  valid_from                   timestamptz NOT NULL,
+  valid_from                   timestamptz NOT NULL DEFAULT now(),
   valid_to                     timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -317,7 +317,7 @@ COMMENT ON COLUMN fx_rate.base_currency IS 'Base currency';
 COMMENT ON COLUMN fx_rate.quote_currency IS 'Quote currency';
 COMMENT ON COLUMN fx_rate.rate_type IS 'Mid, buy, sell, cash or revaluation';
 COMMENT ON COLUMN fx_rate.rate IS 'Units of quote per 1 base';
-COMMENT ON COLUMN fx_rate.inverse_rate IS 'Units of base per 1 quote';
+COMMENT ON COLUMN fx_rate.inverse_rate IS 'Units of base per 1 quote (computed as 1 / rate)';
 COMMENT ON COLUMN fx_rate.as_of_date IS 'Business date';
 COMMENT ON COLUMN fx_rate.valid_from IS 'Valid from';
 COMMENT ON COLUMN fx_rate.valid_to IS 'Valid to (empty = until superseded)';

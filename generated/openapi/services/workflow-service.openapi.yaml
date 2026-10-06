@@ -200,9 +200,9 @@ components:
           description: Maker may approve (never for money movement)
           type: boolean
         approval_levels:
-          additionalProperties: true
-          description: Levels with approver roles and amount thresholds
-          type: object
+          description: 'Levels in order: {level, approver_roles, min_amount, required_approvals}'
+          items: {}
+          type: array
         auto_execute:
           description: Execute the operation once approved
           type: boolean
@@ -319,9 +319,9 @@ components:
           description: Maker may approve (never for money movement)
           type: boolean
         approval_levels:
-          additionalProperties: true
-          description: Levels with approver roles and amount thresholds
-          type: object
+          description: 'Levels in order: {level, approver_roles, min_amount, required_approvals}'
+          items: {}
+          type: array
         auto_execute:
           description: Execute the operation once approved
           type: boolean
@@ -403,9 +403,9 @@ components:
           description: Maker may approve (never for money movement)
           type: boolean
         approval_levels:
-          additionalProperties: true
-          description: Levels with approver roles and amount thresholds
-          type: object
+          description: 'Levels in order: {level, approver_roles, min_amount, required_approvals}'
+          items: {}
+          type: array
         auto_execute:
           description: Execute the operation once approved
           type: boolean
@@ -474,11 +474,25 @@ components:
           type:
           - string
           - 'null'
+        approval_route:
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         approvals_received:
           description: Approvals received
           format: int32
           readOnly: true
           type: integer
+        cancel_reason:
+          description: Reason given by the maker when cancelling
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -614,6 +628,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -853,10 +868,10 @@ components:
           - string
           - 'null'
         candidate_roles:
-          additionalProperties: true
           description: Roles that may claim the task
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         completed_at:
           description: Completion time
@@ -918,6 +933,13 @@ components:
           type:
           - string
           - 'null'
+        escalation_reason:
+          description: Reason of the last escalation
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         form_data:
           additionalProperties: true
           description: Data captured by the task form
@@ -930,8 +952,9 @@ components:
           readOnly: true
           type: string
         outcome:
-          description: Completion outcome
+          description: Completion outcome (set by /complete)
           maxLength: 64
+          readOnly: true
           type:
           - string
           - 'null'
@@ -957,7 +980,7 @@ components:
           readOnly: true
           type: boolean
         status:
-          description: Status
+          description: Status (changed by task actions)
           enum:
           - OPEN
           - CLAIMED
@@ -965,6 +988,7 @@ components:
           - COMPLETED
           - CANCELLED
           - ESCALATED
+          readOnly: true
           type: string
         subject_id:
           description: Subject id
@@ -999,8 +1023,9 @@ components:
           - string
           - 'null'
         workflow_instance_id:
-          description: Owning workflow
+          description: Owning workflow (set by the engine)
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -1016,34 +1041,16 @@ components:
       - status
       - sla_breached
       type: object
-    WorkTaskPage:
-      description: One page of WorkTask results (newest first)
-      properties:
-        data:
-          items:
-            $ref: '#/components/schemas/WorkTask'
-          type: array
-        has_more:
-          type: boolean
-        next_cursor:
-          description: Pass as ?cursor= to fetch the next page
-          type:
-          - string
-          - 'null'
-      required:
-      - data
-      - has_more
-      type: object
-    WorkTaskUpdate:
+    WorkTaskCreate:
       properties:
         assignee:
           description: Assigned user
           maxLength: 64
           type: string
         candidate_roles:
-          additionalProperties: true
           description: Roles that may claim the task
-          type: object
+          items: {}
+          type: array
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -1075,10 +1082,6 @@ components:
           additionalProperties: true
           description: Data captured by the task form
           type: object
-        outcome:
-          description: Completion outcome
-          maxLength: 64
-          type: string
         priority:
           description: Priority
           enum:
@@ -1090,16 +1093,6 @@ components:
         queue:
           description: Work queue
           maxLength: 64
-          type: string
-        status:
-          description: Status
-          enum:
-          - OPEN
-          - CLAIMED
-          - IN_PROGRESS
-          - COMPLETED
-          - CANCELLED
-          - ESCALATED
           type: string
         subject_id:
           description: Subject id
@@ -1117,9 +1110,97 @@ components:
           description: Title
           maxLength: 255
           type: string
-        workflow_instance_id:
-          description: Owning workflow
+      required:
+      - task_type
+      - title
+      - queue
+      type: object
+    WorkTaskPage:
+      description: One page of WorkTask results (newest first)
+      properties:
+        data:
+          items:
+            $ref: '#/components/schemas/WorkTask'
+          type: array
+        has_more:
+          type: boolean
+        next_cursor:
+          description: Pass as ?cursor= to fetch the next page
+          type:
+          - string
+          - 'null'
+      required:
+      - data
+      - has_more
+      type: object
+    WorkTaskUpdate:
+      properties:
+        assignee:
+          description: Assigned user
+          maxLength: 64
+          type: string
+        candidate_roles:
+          description: Roles that may claim the task
+          items: {}
+          type: array
+        custom_field_1:
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_2:
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_3:
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_4:
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        custom_field_5:
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+          maxLength: 500
+          type: string
+        description:
+          description: Instructions
+          type: string
+        due_at:
+          description: SLA due time
+          format: date-time
+          type: string
+        form_data:
+          additionalProperties: true
+          description: Data captured by the task form
+          type: object
+        priority:
+          description: Priority
+          enum:
+          - LOW
+          - NORMAL
+          - HIGH
+          - URGENT
+          type: string
+        queue:
+          description: Work queue
+          maxLength: 64
+          type: string
+        subject_id:
+          description: Subject id
           format: uuid
+          type: string
+        subject_type:
+          description: Subject type
+          maxLength: 40
+          type: string
+        task_type:
+          description: Task type, e.g. KYC_REVIEW, PAYMENT_REPAIR
+          maxLength: 64
+          type: string
+        title:
+          description: Title
+          maxLength: 255
           type: string
       type: object
     WorkflowDefinition:
@@ -1200,11 +1281,12 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changed by /publish, /deprecate)
           enum:
           - DRAFT
           - PUBLISHED
           - DEPRECATED
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -1277,13 +1359,6 @@ components:
           description: Name
           maxLength: 160
           type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - DEPRECATED
-          type: string
       required:
       - code
       - name
@@ -1348,13 +1423,6 @@ components:
         name:
           description: Name
           maxLength: 160
-          type: string
-        status:
-          description: Status
-          enum:
-          - DRAFT
-          - PUBLISHED
-          - DEPRECATED
           type: string
       type: object
     WorkflowInstance:
@@ -1440,6 +1508,13 @@ components:
           format: uuid
           readOnly: true
           type: string
+        outcome:
+          description: Outcome of the END step reached, e.g. COMPLETED, DECLINED
+          maxLength: 64
+          readOnly: true
+          type:
+          - string
+          - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
@@ -1863,6 +1938,7 @@ paths:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -2928,6 +3004,46 @@ paths:
       x-table: work_task
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: tasksCreate
+      summary: Create task
+      tags:
+      - Tasks
+      security:
+      - oauth2:
+        - platform:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkTask'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkTaskCreate'
+      x-requirements:
+      - COL-02
+      - ONB-05
+      - SRV-01
+      x-service: workflow-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("platform:write")'
+      x-table: work_task
+      x-crud: true
+      x-crud-create: true
   /v1/tasks/{id}:
     get:
       operationId: tasksGet

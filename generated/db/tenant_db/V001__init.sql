@@ -37,6 +37,8 @@ CREATE TABLE cell (
   ledger_db_cluster            varchar(128),
   kafka_cluster                varchar(128),
   standby_region               varchar(32),
+  drain_reason                 varchar(255),
+  drain_requested_at           timestamptz,
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -63,6 +65,8 @@ COMMENT ON COLUMN cell.kubernetes_cluster IS 'Cluster identifier';
 COMMENT ON COLUMN cell.ledger_db_cluster IS 'Ledger database cluster';
 COMMENT ON COLUMN cell.kafka_cluster IS 'Event backbone cluster';
 COMMENT ON COLUMN cell.standby_region IS 'Paired region for failover';
+COMMENT ON COLUMN cell.drain_reason IS 'Why the cell is draining';
+COMMENT ON COLUMN cell.drain_requested_at IS 'When draining started';
 COMMENT ON COLUMN cell.metadata IS 'Operational metadata';
 COMMENT ON COLUMN cell.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cell.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -98,6 +102,9 @@ CREATE TABLE tenant (
   activated_at                 timestamptz,
   suspended_at                 timestamptz,
   suspension_reason            varchar(255),
+  reinstatement_reason         varchar(255),
+  reinstated_at                timestamptz,
+  template_code                varchar(64),
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -117,7 +124,7 @@ COMMENT ON COLUMN tenant.code IS 'Short unique tenant code';
 COMMENT ON COLUMN tenant.name IS 'Display name';
 COMMENT ON COLUMN tenant.legal_name IS 'Registered legal name';
 COMMENT ON COLUMN tenant.tenant_type IS 'Kind of organisation';
-COMMENT ON COLUMN tenant.status IS 'Lifecycle status';
+COMMENT ON COLUMN tenant.status IS 'Lifecycle status (changed by lifecycle actions)';
 COMMENT ON COLUMN tenant.deployment_model IS 'How the tenant is deployed';
 COMMENT ON COLUMN tenant.cell_id IS 'Home cell';
 COMMENT ON COLUMN tenant.home_region IS 'Home region for data residency';
@@ -132,6 +139,9 @@ COMMENT ON COLUMN tenant.billing_email IS 'Billing contact';
 COMMENT ON COLUMN tenant.activated_at IS 'Activation time';
 COMMENT ON COLUMN tenant.suspended_at IS 'Suspension time';
 COMMENT ON COLUMN tenant.suspension_reason IS 'Reason for suspension';
+COMMENT ON COLUMN tenant.reinstatement_reason IS 'Reason given on the last /reinstate';
+COMMENT ON COLUMN tenant.reinstated_at IS 'Last reinstatement time';
+COMMENT ON COLUMN tenant.template_code IS 'Template the tenant was provisioned from';
 COMMENT ON COLUMN tenant.metadata IS 'Operator metadata';
 COMMENT ON COLUMN tenant.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -155,6 +165,7 @@ CREATE TABLE tenant_placement (
   effective_from               timestamptz NOT NULL,
   effective_to                 timestamptz,
   reason                       varchar(255),
+  from_cell_id                 uuid REFERENCES cell(id),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -174,6 +185,7 @@ COMMENT ON COLUMN tenant_placement.status IS 'Placement status';
 COMMENT ON COLUMN tenant_placement.effective_from IS 'Start of placement';
 COMMENT ON COLUMN tenant_placement.effective_to IS 'End of placement';
 COMMENT ON COLUMN tenant_placement.reason IS 'Reason, e.g. initial placement, rebalancing, dedicated upgrade';
+COMMENT ON COLUMN tenant_placement.from_cell_id IS 'Previous cell (migrations)';
 COMMENT ON COLUMN tenant_placement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_placement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_placement.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -181,6 +193,7 @@ COMMENT ON COLUMN tenant_placement.custom_field_4 IS 'Tenant-defined custom fiel
 COMMENT ON COLUMN tenant_placement.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_tenant_placement_subject_tenant_id ON tenant_placement (subject_tenant_id);
 CREATE INDEX ix_tenant_placement_cell_id ON tenant_placement (cell_id);
+CREATE INDEX ix_tenant_placement_from_cell_id ON tenant_placement (from_cell_id);
 CREATE TRIGGER trg_tenant_placement_touch BEFORE UPDATE ON tenant_placement FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- tenant_module: Platform modules enabled for the tenant and their module-level configuration
@@ -196,6 +209,7 @@ CREATE TABLE tenant_module (
   is_enabled                   boolean NOT NULL DEFAULT false,
   enabled_at                   timestamptz,
   config                       jsonb,
+  approval_request_id          uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -211,16 +225,18 @@ COMMENT ON COLUMN tenant_module.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN tenant_module.updated_at IS 'Last update time';
 COMMENT ON COLUMN tenant_module.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN tenant_module.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN tenant_module.module IS 'Module';
-COMMENT ON COLUMN tenant_module.is_enabled IS 'Whether the module is enabled';
+COMMENT ON COLUMN tenant_module.module IS 'Module (seeded at provisioning)';
+COMMENT ON COLUMN tenant_module.is_enabled IS 'Whether the module is enabled (changed via /enable, /disable)';
 COMMENT ON COLUMN tenant_module.enabled_at IS 'When it was enabled';
 COMMENT ON COLUMN tenant_module.config IS 'Module-level configuration';
+COMMENT ON COLUMN tenant_module.approval_request_id IS 'Approval request that applied the last enable/disable';
 COMMENT ON COLUMN tenant_module.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_module.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_module.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_module.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN tenant_module.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_tenant_module_tenant ON tenant_module (tenant_id, created_at);
+CREATE INDEX ix_tenant_module_approval_request_id ON tenant_module (approval_request_id);
 ALTER TABLE tenant_module ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON tenant_module USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_tenant_module_touch BEFORE UPDATE ON tenant_module FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -331,6 +347,7 @@ CREATE TABLE branch (
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'TEMPORARILY_CLOSED', 'CLOSED')),
   opened_on                    date,
   closed_on                    date,
+  close_reason                 varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -367,7 +384,8 @@ COMMENT ON COLUMN branch.holiday_calendar_id IS 'Holiday calendar';
 COMMENT ON COLUMN branch.manager_user_id IS 'Branch manager';
 COMMENT ON COLUMN branch.status IS 'Status';
 COMMENT ON COLUMN branch.opened_on IS 'Opening date';
-COMMENT ON COLUMN branch.closed_on IS 'Closing date';
+COMMENT ON COLUMN branch.closed_on IS 'Closing date (set by /close)';
+COMMENT ON COLUMN branch.close_reason IS 'Reason given on /close';
 COMMENT ON COLUMN branch.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN branch.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN branch.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -464,7 +482,7 @@ COMMENT ON COLUMN feature_flag.flag_key IS 'Flag key';
 COMMENT ON COLUMN feature_flag.description IS 'Purpose';
 COMMENT ON COLUMN feature_flag.is_enabled IS 'Master switch';
 COMMENT ON COLUMN feature_flag.rollout_percentage IS 'Percent of subjects that see the feature (0-100)';
-COMMENT ON COLUMN feature_flag.targeting_rules IS 'Rules by legal entity, segment, user, app version';
+COMMENT ON COLUMN feature_flag.targeting_rules IS 'Ordered targeting rules {attribute, operator, value|values, serve, variant}';
 COMMENT ON COLUMN feature_flag.variants IS 'Multivariate values';
 COMMENT ON COLUMN feature_flag.owner IS 'Owning team';
 COMMENT ON COLUMN feature_flag.expires_at IS 'When the flag should be removed';
@@ -533,7 +551,7 @@ COMMENT ON COLUMN tenant_branding.accent_color IS 'Hex colour';
 COMMENT ON COLUMN tenant_branding.font_family IS 'Font family';
 COMMENT ON COLUMN tenant_branding.theme_tokens IS 'Full design-token overrides (light and dark)';
 COMMENT ON COLUMN tenant_branding.default_locale IS 'Default locale';
-COMMENT ON COLUMN tenant_branding.supported_locales IS 'Enabled locales';
+COMMENT ON COLUMN tenant_branding.supported_locales IS 'Enabled locales (BCP 47 tags)';
 COMMENT ON COLUMN tenant_branding.custom_domain IS 'Custom domain for web apps';
 COMMENT ON COLUMN tenant_branding.support_email IS 'Support email';
 COMMENT ON COLUMN tenant_branding.support_phone IS 'Support phone';

@@ -104,9 +104,9 @@ components:
       description: Attribute-based access control policy evaluated after RBAC (e.g. time, amount, branch, data owner)
       properties:
         actions:
-          additionalProperties: true
           description: Actions covered
-          type: object
+          items: {}
+          type: array
         condition_expression:
           description: CEL expression over subject, resource and context
           type: string
@@ -217,9 +217,9 @@ components:
     AccessPolicyCreate:
       properties:
         actions:
-          additionalProperties: true
           description: Actions covered
-          type: object
+          items: {}
+          type: array
         condition_expression:
           description: CEL expression over subject, resource and context
           type: string
@@ -296,9 +296,9 @@ components:
     AccessPolicyUpdate:
       properties:
         actions:
-          additionalProperties: true
           description: Actions covered
-          type: object
+          items: {}
+          type: array
         condition_expression:
           description: CEL expression over subject, resource and context
           type: string
@@ -352,15 +352,15 @@ components:
       description: An OAuth 2.1 client (server integration, app, partner or open banking TPP)
       properties:
         allowed_ip_ranges:
-          additionalProperties: true
           description: CIDR allow-list
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         allowed_scopes:
-          additionalProperties: true
           description: Scopes this client may request
-          type: object
+          items: {}
+          type: array
         auth_method:
           description: Token endpoint authentication
           enum:
@@ -373,6 +373,12 @@ components:
         client_id:
           description: Public client identifier
           maxLength: 64
+          readOnly: true
+          type: string
+        client_secret:
+          description: Plaintext client secret for CLIENT_SECRET_* clients (on create and rotate-secret) (returned once; never
+            stored)
+          maxLength: 128
           readOnly: true
           type: string
         client_type:
@@ -489,10 +495,10 @@ components:
           - string
           - 'null'
         redirect_uris:
-          additionalProperties: true
           description: Allowed redirect URIs
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -500,11 +506,12 @@ components:
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changed by /suspend, /reactivate)
           enum:
           - ACTIVE
           - SUSPENDED
           - REVOKED
+          readOnly: true
           type: string
         tpp_registration_id:
           description: Open banking TPP registration / eIDAS id
@@ -541,13 +548,13 @@ components:
     ApiClientCreate:
       properties:
         allowed_ip_ranges:
-          additionalProperties: true
           description: CIDR allow-list
-          type: object
+          items: {}
+          type: array
         allowed_scopes:
-          additionalProperties: true
           description: Scopes this client may request
-          type: object
+          items: {}
+          type: array
         auth_method:
           description: Token endpoint authentication
           enum:
@@ -625,16 +632,9 @@ components:
           format: uuid
           type: string
         redirect_uris:
-          additionalProperties: true
           description: Allowed redirect URIs
-          type: object
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - REVOKED
-          type: string
+          items: {}
+          type: array
         tpp_registration_id:
           description: Open banking TPP registration / eIDAS id
           maxLength: 128
@@ -665,13 +665,13 @@ components:
     ApiClientUpdate:
       properties:
         allowed_ip_ranges:
-          additionalProperties: true
           description: CIDR allow-list
-          type: object
+          items: {}
+          type: array
         allowed_scopes:
-          additionalProperties: true
           description: Scopes this client may request
-          type: object
+          items: {}
+          type: array
         auth_method:
           description: Token endpoint authentication
           enum:
@@ -749,16 +749,9 @@ components:
           format: uuid
           type: string
         redirect_uris:
-          additionalProperties: true
           description: Allowed redirect URIs
-          type: object
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - REVOKED
-          type: string
+          items: {}
+          type: array
         tpp_registration_id:
           description: Open banking TPP registration / eIDAS id
           maxLength: 128
@@ -778,6 +771,11 @@ components:
         api_client_id:
           description: Client
           format: uuid
+          type: string
+        api_key:
+          description: Plaintext key (on create and rotate) (returned once; never stored)
+          maxLength: 128
+          readOnly: true
           type: string
         created_at:
           description: Creation time
@@ -864,6 +862,7 @@ components:
         rotated_from_id:
           description: Key this one replaced
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -873,10 +872,10 @@ components:
           readOnly: true
           type: integer
         scopes:
-          additionalProperties: true
           description: Scopes (subset of the client's)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         status:
           description: Status
@@ -885,6 +884,7 @@ components:
           - ROTATING
           - REVOKED
           - EXPIRED
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -942,22 +942,10 @@ components:
           description: Key label
           maxLength: 120
           type: string
-        rotated_from_id:
-          description: Key this one replaced
-          format: uuid
-          type: string
         scopes:
-          additionalProperties: true
           description: Scopes (subset of the client's)
-          type: object
-        status:
-          description: Status
-          enum:
-          - ACTIVE
-          - ROTATING
-          - REVOKED
-          - EXPIRED
-          type: string
+          items: {}
+          type: array
       required:
       - api_client_id
       - name
@@ -1321,13 +1309,14 @@ components:
           - string
           - 'null'
         status:
-          description: Status
+          description: Status (changed by lifecycle actions)
           enum:
           - INVITED
           - ACTIVE
           - LOCKED
           - SUSPENDED
           - DEACTIVATED
+          readOnly: true
           type: string
         timezone:
           description: Timezone
@@ -1449,15 +1438,6 @@ components:
           description: SSO provider, if federated
           format: uuid
           type: string
-        status:
-          description: Status
-          enum:
-          - INVITED
-          - ACTIVE
-          - LOCKED
-          - SUSPENDED
-          - DEACTIVATED
-          type: string
         timezone:
           description: Timezone
           maxLength: 64
@@ -1574,15 +1554,6 @@ components:
           description: SSO provider, if federated
           format: uuid
           type: string
-        status:
-          description: Status
-          enum:
-          - INVITED
-          - ACTIVE
-          - LOCKED
-          - SUSPENDED
-          - DEACTIVATED
-          type: string
         timezone:
           description: Timezone
           maxLength: 64
@@ -1622,11 +1593,25 @@ components:
           type:
           - string
           - 'null'
+        approval_route:
+          description: Snapshot of the applicable levels taken at creation (policy edits do not affect it)
+          items: {}
+          readOnly: true
+          type:
+          - array
+          - 'null'
         approvals_received:
           description: Approvals received
           format: int32
           readOnly: true
           type: integer
+        cancel_reason:
+          description: Reason given by the maker when cancelling
+          maxLength: 255
+          readOnly: true
+          type:
+          - string
+          - 'null'
         created_at:
           description: Creation time
           format: date-time
@@ -1762,6 +1747,7 @@ components:
           - PENDING
           - APPROVED
           - REJECTED
+          - CHANGES_REQUESTED
           - CANCELLED
           - EXPIRED
           - EXECUTED
@@ -1878,6 +1864,7 @@ components:
           type: string
         is_primary:
           description: Default factor
+          readOnly: true
           type: boolean
         label:
           description: User-visible label, e.g. YubiKey 5C
@@ -1892,17 +1879,28 @@ components:
           type:
           - string
           - 'null'
+        otpauth_uri:
+          description: otpauth:// provisioning URI for authenticator apps (TOTP enrolment only) (returned once; never stored)
+          maxLength: 500
+          readOnly: true
+          type: string
         row_version:
           description: Optimistic lock version; send as If-Match
           format: int32
           readOnly: true
           type: integer
         status:
-          description: Status
+          description: Status (changed by /verify)
           enum:
           - PENDING_VERIFICATION
           - ACTIVE
           - DISABLED
+          readOnly: true
+          type: string
+        totp_secret:
+          description: Base32 TOTP seed (TOTP enrolment only) (returned once; never stored)
+          maxLength: 64
+          readOnly: true
           type: string
         updated_at:
           description: Last update time
@@ -1969,19 +1967,9 @@ components:
           - EMAIL_OTP
           - PUSH
           type: string
-        is_primary:
-          description: Default factor
-          type: boolean
         label:
           description: User-visible label, e.g. YubiKey 5C
           maxLength: 120
-          type: string
-        status:
-          description: Status
-          enum:
-          - PENDING_VERIFICATION
-          - ACTIVE
-          - DISABLED
           type: string
         user_id:
           description: User
@@ -2601,10 +2589,10 @@ components:
           readOnly: true
           type: string
         incompatible_role_ids:
-          additionalProperties: true
-          description: Segregation-of-duties conflicts
+          description: Segregation-of-duties conflicts (role ids)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         is_privileged:
           description: Privileged roles need just-in-time elevation and approval
@@ -2625,6 +2613,7 @@ components:
           enum:
           - SYSTEM
           - CUSTOM
+          readOnly: true
           type: string
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -2686,9 +2675,9 @@ components:
           maxLength: 500
           type: string
         incompatible_role_ids:
-          additionalProperties: true
-          description: Segregation-of-duties conflicts
-          type: object
+          description: Segregation-of-duties conflicts (role ids)
+          items: {}
+          type: array
         is_privileged:
           description: Privileged roles need just-in-time elevation and approval
           type: boolean
@@ -2703,12 +2692,6 @@ components:
         requires_mfa:
           description: MFA required for sessions using this role
           type: boolean
-        role_type:
-          description: System roles cannot be edited
-          enum:
-          - SYSTEM
-          - CUSTOM
-          type: string
       required:
       - code
       - name
@@ -2869,9 +2852,9 @@ components:
           maxLength: 500
           type: string
         incompatible_role_ids:
-          additionalProperties: true
-          description: Segregation-of-duties conflicts
-          type: object
+          description: Segregation-of-duties conflicts (role ids)
+          items: {}
+          type: array
         is_privileged:
           description: Privileged roles need just-in-time elevation and approval
           type: boolean
@@ -2886,12 +2869,6 @@ components:
         requires_mfa:
           description: MFA required for sessions using this role
           type: boolean
-        role_type:
-          description: System roles cannot be edited
-          enum:
-          - SYSTEM
-          - CUSTOM
-          type: string
       type: object
     RolesCloneRequest:
       properties:
@@ -2911,8 +2888,8 @@ components:
           additionalProperties: true
           type: object
         permission_ids:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
       required:
       - permission_ids
       type: object
@@ -2948,6 +2925,12 @@ components:
         client_id:
           description: OIDC client id
           maxLength: 255
+          type:
+          - string
+          - 'null'
+        client_secret_ref:
+          description: Vault path of the OIDC client secret (a reference, never the secret itself)
+          maxLength: 500
           type:
           - string
           - 'null'
@@ -3000,10 +2983,10 @@ components:
           - string
           - 'null'
         email_domains:
-          additionalProperties: true
           description: Email domains that must use this provider
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         id:
           description: Unique id (UUIDv7, time-ordered)
@@ -3084,6 +3067,10 @@ components:
           description: OIDC client id
           maxLength: 255
           type: string
+        client_secret_ref:
+          description: Vault path of the OIDC client secret (a reference, never the secret itself)
+          maxLength: 500
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -3109,9 +3096,9 @@ components:
           format: uuid
           type: string
         email_domains:
-          additionalProperties: true
           description: Email domains that must use this provider
-          type: object
+          items: {}
+          type: array
         issuer_url:
           description: Issuer / entity id
           maxLength: 500
@@ -3177,6 +3164,10 @@ components:
           description: OIDC client id
           maxLength: 255
           type: string
+        client_secret_ref:
+          description: Vault path of the OIDC client secret (a reference, never the secret itself)
+          maxLength: 500
+          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -3202,9 +3193,9 @@ components:
           format: uuid
           type: string
         email_domains:
-          additionalProperties: true
           description: Email domains that must use this provider
-          type: object
+          items: {}
+          type: array
         issuer_url:
           description: Issuer / entity id
           maxLength: 500
@@ -3244,6 +3235,7 @@ components:
         approval_request_id:
           description: Approval for privileged roles
           format: uuid
+          readOnly: true
           type:
           - string
           - 'null'
@@ -3367,10 +3359,6 @@ components:
       type: object
     UserRoleCreate:
       properties:
-        approval_request_id:
-          description: Approval for privileged roles
-          format: uuid
-          type: string
         custom_field_1:
           description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
           maxLength: 500
@@ -4176,8 +4164,14 @@ paths:
           type: string
           format: uuid
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5235,8 +5229,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5490,8 +5490,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -5899,7 +5905,7 @@ paths:
   /v1/sessions/revoke-all:
     post:
       operationId: sessionsRevokeAll
-      summary: Revoke all sessions of a user
+      summary: Revoke all sessions of a user (returns revoked_count)
       tags:
       - Sessions
       security:
@@ -5908,8 +5914,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6152,8 +6164,12 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClient'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -6259,7 +6275,7 @@ paths:
   /v1/api-clients/{id}/usage:
     get:
       operationId: apiClientsUsage
-      summary: Request counts, error rates and latency for a period (?from=&to=)
+      summary: 'Request counts, error rates and latency for a period (default: last 30 days)'
       tags:
       - Api Clients
       security:
@@ -6272,9 +6288,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

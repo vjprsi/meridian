@@ -182,10 +182,10 @@ components:
           - string
           - 'null'
         rail_participation:
-          additionalProperties: true
           description: Rails the bank participates in (SEPA_INST, FEDNOW, PIX ...)
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         row_version:
           description: Optimistic lock version; send as If-Match
@@ -263,10 +263,10 @@ components:
       description: ISO 3166 country with banking and compliance attributes
       properties:
         address_format:
-          additionalProperties: true
-          description: Address fields and order
+          description: Address fields in display order
+          items: {}
           type:
-          - object
+          - array
           - 'null'
         alpha3:
           description: ISO 3166-1 alpha-3
@@ -438,9 +438,9 @@ components:
     CountryUpdate:
       properties:
         address_format:
-          additionalProperties: true
-          description: Address fields and order
-          type: object
+          description: Address fields in display order
+          items: {}
+          type: array
         alpha3:
           description: ISO 3166-1 alpha-3
           maxLength: 3
@@ -829,10 +829,11 @@ components:
           readOnly: true
           type: string
         inverse_rate:
-          description: Units of base per 1 quote
+          description: Units of base per 1 quote (computed as 1 / rate)
           examples:
           - '125.50'
           format: decimal
+          readOnly: true
           type: string
         quote_currency:
           description: Quote currency (ISO 4217)
@@ -910,12 +911,6 @@ components:
           description: Source
           format: uuid
           type: string
-        inverse_rate:
-          description: Units of base per 1 quote
-          examples:
-          - '125.50'
-          format: decimal
-          type: string
         quote_currency:
           description: Quote currency (ISO 4217)
           pattern: ^[A-Z]{3}$
@@ -948,11 +943,8 @@ components:
       - fx_rate_source_id
       - base_currency
       - quote_currency
-      - rate_type
       - rate
-      - inverse_rate
       - as_of_date
-      - valid_from
       type: object
     FxRatePage:
       description: One page of FxRate results (newest first)
@@ -1178,9 +1170,30 @@ components:
       type: object
     FxRatesBulkRequest:
       properties:
+        as_of_date:
+          format: date
+          type: string
+        fx_rate_source_id:
+          format: uuid
+          type: string
+        rate_type:
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
+          type: string
         rates:
-          additionalProperties: true
-          type: object
+          items: {}
+          type: array
+        valid_from:
+          format: date-time
+          type: string
+        valid_to:
+          format: date-time
+          type: string
       required:
       - rates
       type: object
@@ -1423,9 +1436,9 @@ components:
           - string
           - 'null'
         weekend_days:
-          additionalProperties: true
           description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
-          type: object
+          items: {}
+          type: array
       required:
       - id
       - created_at
@@ -1494,9 +1507,9 @@ components:
           maxLength: 64
           type: string
         weekend_days:
-          additionalProperties: true
           description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
-          type: object
+          items: {}
+          type: array
       required:
       - code
       - name
@@ -1579,9 +1592,9 @@ components:
           maxLength: 64
           type: string
         weekend_days:
-          additionalProperties: true
           description: Non-business weekdays, e.g. [SATURDAY, SUNDAY]
-          type: object
+          items: {}
+          type: array
       type: object
     HolidayCalendarsImportRequest:
       properties:
@@ -2936,7 +2949,7 @@ paths:
   /v1/reference/holiday-calendars/{id}/is-business-day:
     get:
       operationId: holidayCalendarsIsBusinessDay
-      summary: Whether a date is a business day (?date=)
+      summary: Whether a date is a business day
       tags:
       - Holiday Calendars
       security:
@@ -2949,9 +2962,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -2967,7 +2992,7 @@ paths:
   /v1/reference/holiday-calendars/{id}/next-business-day:
     get:
       operationId: holidayCalendarsNextBusinessDay
-      summary: Next business day after a date, with offset (?date=&days=)
+      summary: Business day at an offset of days (default 1) from a date
       tags:
       - Holiday Calendars
       security:
@@ -2980,9 +3005,27 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: days
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3013,8 +3056,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3612,13 +3661,37 @@ paths:
   /v1/reference/fx-rates/latest:
     get:
       operationId: fxRatesLatest
-      summary: Latest rate for a pair and type (?base=&quote=&type=)
+      summary: Latest rate for a pair and type (default MID)
       tags:
       - Fx Rates
       security:
       - oauth2:
         - platform:read
-      parameters: []
+      parameters:
+      - name: base
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: quote
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - MID
+          - BUY
+          - SELL
+          - CASH_BUY
+          - CASH_SELL
+          - REVALUATION
       responses:
         '200':
           description: OK
@@ -3651,8 +3724,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3679,7 +3758,7 @@ paths:
   /v1/reference/fx-rates/bulk:
     post:
       operationId: fxRatesBulk
-      summary: Load a batch of rates
+      summary: Load a batch of rates (defaults apply to every item)
       tags:
       - Fx Rates
       security:
@@ -3688,8 +3767,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -3840,8 +3925,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003

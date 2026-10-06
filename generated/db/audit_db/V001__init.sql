@@ -45,6 +45,7 @@ CREATE TABLE audit_event (
   request_id                   varchar(64),
   trace_id                     varchar(32),
   service_name                 varchar(64) NOT NULL,
+  source_event_id              varchar(64),
   hash                         varchar(64) NOT NULL,
   prev_hash                    varchar(64) NOT NULL,
   custom_field_1               varchar(500),
@@ -52,7 +53,8 @@ CREATE TABLE audit_event (
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500),
-  CONSTRAINT uq_audit_event_1 UNIQUE (tenant_id, sequence_no)
+  CONSTRAINT uq_audit_event_1 UNIQUE (tenant_id, sequence_no),
+  CONSTRAINT uq_audit_event_2 UNIQUE (tenant_id, source_event_id)
 );
 COMMENT ON TABLE audit_event IS 'One audited action. Append-only and hash-chained per tenant; stored on WORM storage.';
 COMMENT ON COLUMN audit_event.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -80,6 +82,7 @@ COMMENT ON COLUMN audit_event.session_id IS 'Session id';
 COMMENT ON COLUMN audit_event.request_id IS 'Request id';
 COMMENT ON COLUMN audit_event.trace_id IS 'Trace id';
 COMMENT ON COLUMN audit_event.service_name IS 'Service that emitted the event';
+COMMENT ON COLUMN audit_event.source_event_id IS 'CloudEvents id of the consumed domain event (de-duplication)';
 COMMENT ON COLUMN audit_event.hash IS 'SHA-256 over this event and prev_hash';
 COMMENT ON COLUMN audit_event.prev_hash IS 'Hash of the previous event';
 COMMENT ON COLUMN audit_event.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
