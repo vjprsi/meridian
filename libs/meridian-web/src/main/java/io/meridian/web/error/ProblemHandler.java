@@ -17,6 +17,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -58,6 +60,16 @@ public class ProblemHandler {
             MissingRequestHeaderException.class})
     ResponseEntity<ProblemDetail> badRequest(Exception e, HttpServletRequest req) {
         return problem(HttpStatus.BAD_REQUEST, "malformed_request", e.getMessage(), req, List.of());
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ProblemDetail> methodNotAllowed(HttpRequestMethodNotSupportedException e, HttpServletRequest req) {
+        return problem(HttpStatus.METHOD_NOT_ALLOWED, "method_not_allowed", e.getMessage(), req, List.of());
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    ResponseEntity<ProblemDetail> mediaType(HttpMediaTypeNotSupportedException e, HttpServletRequest req) {
+        return problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "unsupported_media_type", e.getMessage(), req, List.of());
     }
 
     @ExceptionHandler(DuplicateKeyException.class)
