@@ -43,6 +43,9 @@ CREATE TABLE treasury_counterparty (
   gmra_signed                  boolean NOT NULL DEFAULT false,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'ACTIVE', 'SUSPENDED', 'CLOSED')),
   approval_request_id          uuid,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  status_reason                varchar(255),
   notes                        text,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -63,18 +66,21 @@ COMMENT ON COLUMN treasury_counterparty.legal_entity_id IS 'Our legal entity dea
 COMMENT ON COLUMN treasury_counterparty.code IS 'Short code';
 COMMENT ON COLUMN treasury_counterparty.name IS 'Legal name';
 COMMENT ON COLUMN treasury_counterparty.counterparty_type IS 'Type';
-COMMENT ON COLUMN treasury_counterparty.bic IS 'SWIFT BIC';
-COMMENT ON COLUMN treasury_counterparty.lei IS 'Legal Entity Identifier';
-COMMENT ON COLUMN treasury_counterparty.country_code IS 'Country of incorporation';
+COMMENT ON COLUMN treasury_counterparty.bic IS 'SWIFT BIC (8 or 11 characters; required for SWIFT confirmations)';
+COMMENT ON COLUMN treasury_counterparty.lei IS 'Legal Entity Identifier (ISO 17442, validated check digits)';
+COMMENT ON COLUMN treasury_counterparty.country_code IS 'Country of incorporation (COUNTRY limits)';
 COMMENT ON COLUMN treasury_counterparty.parent_counterparty_id IS 'Group parent for aggregated limits';
 COMMENT ON COLUMN treasury_counterparty.external_rating IS 'External credit rating, e.g. AA-';
 COMMENT ON COLUMN treasury_counterparty.rating_agency IS 'Agency for the rating';
 COMMENT ON COLUMN treasury_counterparty.internal_rating IS 'Internal rating grade';
-COMMENT ON COLUMN treasury_counterparty.isda_signed IS 'ISDA master agreement in place';
+COMMENT ON COLUMN treasury_counterparty.isda_signed IS 'ISDA master agreement in place (required for forwards, swaps and NDFs)';
 COMMENT ON COLUMN treasury_counterparty.csa_signed IS 'Credit support annex in place';
-COMMENT ON COLUMN treasury_counterparty.gmra_signed IS 'GMRA in place (repos)';
-COMMENT ON COLUMN treasury_counterparty.status IS 'Status';
+COMMENT ON COLUMN treasury_counterparty.gmra_signed IS 'GMRA in place (required for repos)';
+COMMENT ON COLUMN treasury_counterparty.status IS 'Status (driven by approve / suspend / reactivate)';
 COMMENT ON COLUMN treasury_counterparty.approval_request_id IS 'Onboarding approval';
+COMMENT ON COLUMN treasury_counterparty.approved_by IS 'Checker who approved onboarding (four-eyes)';
+COMMENT ON COLUMN treasury_counterparty.approved_at IS 'Approval time';
+COMMENT ON COLUMN treasury_counterparty.status_reason IS 'Reason of the last suspension or reactivation';
 COMMENT ON COLUMN treasury_counterparty.notes IS 'Notes';
 COMMENT ON COLUMN treasury_counterparty.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN treasury_counterparty.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -91,7 +97,7 @@ ALTER TABLE treasury_counterparty ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON treasury_counterparty USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_treasury_counterparty_touch BEFORE UPDATE ON treasury_counterparty FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- treasury_ssi: Standing settlement instructions per counterparty and currency
+-- treasury_ssi: Standing settlement instructions per counterparty and currency (used only once verified)
 CREATE TABLE treasury_ssi (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -110,6 +116,7 @@ CREATE TABLE treasury_ssi (
   valid_to                     date,
   is_default                   boolean NOT NULL DEFAULT true,
   verified_by                  varchar(64),
+  verified_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -117,7 +124,7 @@ CREATE TABLE treasury_ssi (
   custom_field_5               varchar(500),
   CONSTRAINT uq_treasury_ssi_1 UNIQUE (tenant_id, treasury_counterparty_id, currency, valid_from)
 );
-COMMENT ON TABLE treasury_ssi IS 'Standing settlement instructions per counterparty and currency';
+COMMENT ON TABLE treasury_ssi IS 'Standing settlement instructions per counterparty and currency (used only once verified)';
 COMMENT ON COLUMN treasury_ssi.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN treasury_ssi.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN treasury_ssi.created_at IS 'Creation time';
@@ -134,7 +141,8 @@ COMMENT ON COLUMN treasury_ssi.our_nostro_account_id IS 'Our nostro used to sett
 COMMENT ON COLUMN treasury_ssi.valid_from IS 'Effective from';
 COMMENT ON COLUMN treasury_ssi.valid_to IS 'Effective to';
 COMMENT ON COLUMN treasury_ssi.is_default IS 'Default SSI for the currency';
-COMMENT ON COLUMN treasury_ssi.verified_by IS 'Four-eyes verification';
+COMMENT ON COLUMN treasury_ssi.verified_by IS 'Four-eyes verifier (set by verify; cleared when payment details change)';
+COMMENT ON COLUMN treasury_ssi.verified_at IS 'Verification time';
 COMMENT ON COLUMN treasury_ssi.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN treasury_ssi.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN treasury_ssi.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -147,7 +155,7 @@ ALTER TABLE treasury_ssi ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON treasury_ssi USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_treasury_ssi_touch BEFORE UPDATE ON treasury_ssi FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- treasury_counterparty_limit: Credit / settlement / tenor limit on a counterparty (or its group)
+-- treasury_counterparty_limit: Credit / settlement / tenor limit on a counterparty (or its group); usable once approved
 CREATE TABLE treasury_counterparty_limit (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -166,8 +174,10 @@ CREATE TABLE treasury_counterparty_limit (
   warning_threshold_pct        numeric(18,10) NOT NULL DEFAULT 0.8,
   valid_from                   date NOT NULL,
   valid_to                     date,
-  status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'EXPIRED')),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'ACTIVE', 'SUSPENDED', 'EXPIRED')),
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  refreshed_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -175,7 +185,7 @@ CREATE TABLE treasury_counterparty_limit (
   custom_field_5               varchar(500),
   CONSTRAINT uq_treasury_counterparty_limit_1 UNIQUE (tenant_id, treasury_counterparty_id, limit_type, currency, valid_from)
 );
-COMMENT ON TABLE treasury_counterparty_limit IS 'Credit / settlement / tenor limit on a counterparty (or its group)';
+COMMENT ON TABLE treasury_counterparty_limit IS 'Credit / settlement / tenor limit on a counterparty (or its group); usable once approved';
 COMMENT ON COLUMN treasury_counterparty_limit.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN treasury_counterparty_limit.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN treasury_counterparty_limit.created_at IS 'Creation time';
@@ -183,18 +193,20 @@ COMMENT ON COLUMN treasury_counterparty_limit.created_by IS 'Principal that crea
 COMMENT ON COLUMN treasury_counterparty_limit.updated_at IS 'Last update time';
 COMMENT ON COLUMN treasury_counterparty_limit.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN treasury_counterparty_limit.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN treasury_counterparty_limit.treasury_counterparty_id IS 'Counterparty';
+COMMENT ON COLUMN treasury_counterparty_limit.treasury_counterparty_id IS 'Counterparty (or group parent)';
 COMMENT ON COLUMN treasury_counterparty_limit.limit_type IS 'Limit type';
 COMMENT ON COLUMN treasury_counterparty_limit.currency IS 'Limit currency';
 COMMENT ON COLUMN treasury_counterparty_limit.limit_amount IS 'Approved limit';
-COMMENT ON COLUMN treasury_counterparty_limit.max_tenor_days IS 'Maximum tenor allowed';
+COMMENT ON COLUMN treasury_counterparty_limit.max_tenor_days IS 'Maximum tenor allowed (TENOR limits; optional cap on any limit)';
 COMMENT ON COLUMN treasury_counterparty_limit.utilised_amount IS 'Current utilisation';
 COMMENT ON COLUMN treasury_counterparty_limit.available_amount IS 'Limit minus utilisation';
 COMMENT ON COLUMN treasury_counterparty_limit.warning_threshold_pct IS 'Warn at this share of the limit';
 COMMENT ON COLUMN treasury_counterparty_limit.valid_from IS 'Effective from';
 COMMENT ON COLUMN treasury_counterparty_limit.valid_to IS 'Expiry';
-COMMENT ON COLUMN treasury_counterparty_limit.status IS 'Status';
-COMMENT ON COLUMN treasury_counterparty_limit.approved_by IS 'Credit approver';
+COMMENT ON COLUMN treasury_counterparty_limit.status IS 'Status (approve activates)';
+COMMENT ON COLUMN treasury_counterparty_limit.approved_by IS 'Credit approver (four-eyes)';
+COMMENT ON COLUMN treasury_counterparty_limit.approved_at IS 'Approval time';
+COMMENT ON COLUMN treasury_counterparty_limit.refreshed_at IS 'Last utilisation refresh (end of day)';
 COMMENT ON COLUMN treasury_counterparty_limit.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN treasury_counterparty_limit.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN treasury_counterparty_limit.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -213,8 +225,9 @@ CREATE TABLE treasury_limit_utilisation (
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   treasury_counterparty_limit_id uuid NOT NULL REFERENCES treasury_counterparty_limit(id),
-  deal_type                    varchar(32) NOT NULL,
+  deal_type                    varchar(40) NOT NULL CHECK (deal_type IN ('MONEY_MARKET', 'FX', 'SECURITY')),
   deal_id                      uuid NOT NULL,
+  reason                       varchar(40) NOT NULL CHECK (reason IN ('RESERVE', 'RELEASE', 'REFRESH')),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   utilised_after               numeric(28,8) NOT NULL,
@@ -232,8 +245,9 @@ COMMENT ON COLUMN treasury_limit_utilisation.tenant_id IS 'Owning tenant; enforc
 COMMENT ON COLUMN treasury_limit_utilisation.created_at IS 'Creation time';
 COMMENT ON COLUMN treasury_limit_utilisation.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN treasury_limit_utilisation.treasury_counterparty_limit_id IS 'Limit';
-COMMENT ON COLUMN treasury_limit_utilisation.deal_type IS 'MONEY_MARKET, FX, SECURITY';
+COMMENT ON COLUMN treasury_limit_utilisation.deal_type IS 'Deal family';
 COMMENT ON COLUMN treasury_limit_utilisation.deal_id IS 'Deal consuming the limit';
+COMMENT ON COLUMN treasury_limit_utilisation.reason IS 'Reserve on capture, release on maturity / cancel, end-of-day refresh';
 COMMENT ON COLUMN treasury_limit_utilisation.amount IS 'Utilisation change (negative releases)';
 COMMENT ON COLUMN treasury_limit_utilisation.currency IS 'Currency';
 COMMENT ON COLUMN treasury_limit_utilisation.utilised_after IS 'Utilisation after this change';
@@ -278,12 +292,20 @@ CREATE TABLE money_market_deal (
   spread                       numeric(18,10),
   day_count                    varchar(40) NOT NULL DEFAULT 'ACT_360' CHECK (day_count IN ('ACT_360', 'ACT_365', 'ACT_365L', 'ACT_ACT_ISDA', 'THIRTY_360', 'THIRTY_E_360')),
   interest_amount              numeric(28,8),
+  maturity_amount              numeric(28,8),
   accrued_interest             numeric(28,8) NOT NULL DEFAULT 0,
+  accrued_through              date,
   rollover_type                varchar(40) NOT NULL DEFAULT 'NONE' CHECK (rollover_type IN ('NONE', 'PRINCIPAL_ONLY', 'PRINCIPAL_AND_INTEREST')),
   rolled_from_deal_id          uuid REFERENCES money_market_deal(id),
+  rolled_into_deal_id          uuid REFERENCES money_market_deal(id),
   collateral_description       text,
   dealer_id                    uuid NOT NULL,
+  nostro_account_id            uuid,
   verified_by                  varchar(64),
+  verified_at                  timestamptz,
+  confirmed_at                 timestamptz,
+  settled_at                   timestamptz,
+  matured_at                   timestamptz,
   status                       varchar(40) NOT NULL DEFAULT 'CAPTURED' CHECK (status IN ('CAPTURED', 'VERIFIED', 'CONFIRMED', 'SETTLED', 'MATURED', 'CANCELLED', 'AMENDED')),
   ledger_account_id            uuid,
   settlement_journal_entry_id  uuid,
@@ -304,7 +326,7 @@ COMMENT ON COLUMN money_market_deal.created_by IS 'Principal that created the ro
 COMMENT ON COLUMN money_market_deal.updated_at IS 'Last update time';
 COMMENT ON COLUMN money_market_deal.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN money_market_deal.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN money_market_deal.deal_ref IS 'Deal reference';
+COMMENT ON COLUMN money_market_deal.deal_ref IS 'Deal reference (server-generated)';
 COMMENT ON COLUMN money_market_deal.legal_entity_id IS 'Booking entity';
 COMMENT ON COLUMN money_market_deal.treasury_counterparty_id IS 'Counterparty';
 COMMENT ON COLUMN money_market_deal.deal_type IS 'Placement, borrowing, repo, ...';
@@ -312,21 +334,29 @@ COMMENT ON COLUMN money_market_deal.currency IS 'Currency';
 COMMENT ON COLUMN money_market_deal.principal IS 'Principal amount';
 COMMENT ON COLUMN money_market_deal.trade_date IS 'Trade date';
 COMMENT ON COLUMN money_market_deal.value_date IS 'Value (start) date';
-COMMENT ON COLUMN money_market_deal.maturity_date IS 'Maturity date (empty for call deals)';
+COMMENT ON COLUMN money_market_deal.maturity_date IS 'Maturity date (empty for call deals until called)';
 COMMENT ON COLUMN money_market_deal.is_call IS 'Call (open-ended) deal';
 COMMENT ON COLUMN money_market_deal.notice_days IS 'Notice period for call deals';
 COMMENT ON COLUMN money_market_deal.rate_type IS 'Fixed or floating';
-COMMENT ON COLUMN money_market_deal.interest_rate IS 'All-in rate';
+COMMENT ON COLUMN money_market_deal.interest_rate IS 'All-in rate (annual, decimal)';
 COMMENT ON COLUMN money_market_deal.rate_index IS 'Index for floating deals, e.g. SOFR';
 COMMENT ON COLUMN money_market_deal.spread IS 'Spread over index';
 COMMENT ON COLUMN money_market_deal.day_count IS 'Day-count basis';
-COMMENT ON COLUMN money_market_deal.interest_amount IS 'Interest to maturity';
-COMMENT ON COLUMN money_market_deal.accrued_interest IS 'Accrued interest to date';
-COMMENT ON COLUMN money_market_deal.rollover_type IS 'Rollover instruction';
+COMMENT ON COLUMN money_market_deal.interest_amount IS 'Interest to maturity (paid at maturity)';
+COMMENT ON COLUMN money_market_deal.maturity_amount IS 'Principal plus interest at maturity';
+COMMENT ON COLUMN money_market_deal.accrued_interest IS 'Accrued interest to accrued_through';
+COMMENT ON COLUMN money_market_deal.accrued_through IS 'Last date included in accrued_interest';
+COMMENT ON COLUMN money_market_deal.rollover_type IS 'Rollover instruction at maturity';
 COMMENT ON COLUMN money_market_deal.rolled_from_deal_id IS 'Previous deal when rolled';
+COMMENT ON COLUMN money_market_deal.rolled_into_deal_id IS 'New deal when this one was rolled';
 COMMENT ON COLUMN money_market_deal.collateral_description IS 'Repo collateral details';
 COMMENT ON COLUMN money_market_deal.dealer_id IS 'Dealer';
-COMMENT ON COLUMN money_market_deal.verified_by IS 'Back-office verifier';
+COMMENT ON COLUMN money_market_deal.nostro_account_id IS 'Our nostro (default: SSI nostro)';
+COMMENT ON COLUMN money_market_deal.verified_by IS 'Back-office verifier (four-eyes)';
+COMMENT ON COLUMN money_market_deal.verified_at IS 'Verification time';
+COMMENT ON COLUMN money_market_deal.confirmed_at IS 'Confirmation time';
+COMMENT ON COLUMN money_market_deal.settled_at IS 'Start-leg settlement time';
+COMMENT ON COLUMN money_market_deal.matured_at IS 'Maturity processing time';
 COMMENT ON COLUMN money_market_deal.status IS 'Lifecycle status';
 COMMENT ON COLUMN money_market_deal.ledger_account_id IS 'Ledger account carrying the deal';
 COMMENT ON COLUMN money_market_deal.settlement_journal_entry_id IS 'Posting on settlement';
@@ -341,7 +371,9 @@ CREATE INDEX ix_money_market_deal_tenant ON money_market_deal (tenant_id, create
 CREATE INDEX ix_money_market_deal_legal_entity_id ON money_market_deal (legal_entity_id);
 CREATE INDEX ix_money_market_deal_treasury_counterparty_id ON money_market_deal (treasury_counterparty_id);
 CREATE INDEX ix_money_market_deal_rolled_from_deal_id ON money_market_deal (rolled_from_deal_id);
+CREATE INDEX ix_money_market_deal_rolled_into_deal_id ON money_market_deal (rolled_into_deal_id);
 CREATE INDEX ix_money_market_deal_dealer_id ON money_market_deal (dealer_id);
+CREATE INDEX ix_money_market_deal_nostro_account_id ON money_market_deal (nostro_account_id);
 CREATE INDEX ix_money_market_deal_ledger_account_id ON money_market_deal (ledger_account_id);
 CREATE INDEX ix_money_market_deal_settlement_journal_entry_id ON money_market_deal (settlement_journal_entry_id);
 CREATE INDEX ix_money_market_deal_maturity_journal_entry_id ON money_market_deal (maturity_journal_entry_id);
@@ -351,7 +383,7 @@ ALTER TABLE money_market_deal ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON money_market_deal USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_money_market_deal_touch BEFORE UPDATE ON money_market_deal FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- treasury_fx_deal: Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+-- treasury_fx_deal: Treasury FX deal (spot, forward, swap, NDF) with its legs — distinct from customer FX in payments
 CREATE TABLE treasury_fx_deal (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -366,11 +398,18 @@ CREATE TABLE treasury_fx_deal (
   deal_type                    varchar(40) NOT NULL CHECK (deal_type IN ('SPOT', 'FORWARD', 'SWAP', 'NDF')),
   trade_date                   date NOT NULL,
   dealer_id                    uuid NOT NULL,
+  non_deliverable              boolean NOT NULL DEFAULT false,
+  settlement_currency          char(3),
   fixing_date                  date,
   fixing_source                varchar(64),
+  fixing_rate                  numeric(18,10),
+  ndf_settlement_amount        numeric(28,8),
   status                       varchar(40) NOT NULL DEFAULT 'CAPTURED' CHECK (status IN ('CAPTURED', 'VERIFIED', 'CONFIRMED', 'SETTLED', 'MATURED', 'CANCELLED', 'AMENDED')),
   verified_by                  varchar(64),
+  verified_at                  timestamptz,
+  confirmed_at                 timestamptz,
   mtm_value                    numeric(28,8),
+  mtm_currency                 char(3),
   mtm_date                     date,
   cancel_reason                varchar(255),
   custom_field_1               varchar(500),
@@ -380,7 +419,7 @@ CREATE TABLE treasury_fx_deal (
   custom_field_5               varchar(500),
   CONSTRAINT uq_treasury_fx_deal_deal_ref UNIQUE (tenant_id, deal_ref)
 );
-COMMENT ON TABLE treasury_fx_deal IS 'Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments';
+COMMENT ON TABLE treasury_fx_deal IS 'Treasury FX deal (spot, forward, swap, NDF) with its legs — distinct from customer FX in payments';
 COMMENT ON COLUMN treasury_fx_deal.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN treasury_fx_deal.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN treasury_fx_deal.created_at IS 'Creation time';
@@ -388,17 +427,24 @@ COMMENT ON COLUMN treasury_fx_deal.created_by IS 'Principal that created the row
 COMMENT ON COLUMN treasury_fx_deal.updated_at IS 'Last update time';
 COMMENT ON COLUMN treasury_fx_deal.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN treasury_fx_deal.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN treasury_fx_deal.deal_ref IS 'Deal reference';
+COMMENT ON COLUMN treasury_fx_deal.deal_ref IS 'Deal reference (server-generated)';
 COMMENT ON COLUMN treasury_fx_deal.legal_entity_id IS 'Booking entity';
 COMMENT ON COLUMN treasury_fx_deal.treasury_counterparty_id IS 'Counterparty';
 COMMENT ON COLUMN treasury_fx_deal.deal_type IS 'Spot, forward, swap or NDF';
 COMMENT ON COLUMN treasury_fx_deal.trade_date IS 'Trade date';
 COMMENT ON COLUMN treasury_fx_deal.dealer_id IS 'Dealer';
+COMMENT ON COLUMN treasury_fx_deal.non_deliverable IS 'NDF: net cash settlement in settlement_currency at the fixing (always true for deal_type NDF)';
+COMMENT ON COLUMN treasury_fx_deal.settlement_currency IS 'NDF settlement currency';
 COMMENT ON COLUMN treasury_fx_deal.fixing_date IS 'NDF fixing date';
 COMMENT ON COLUMN treasury_fx_deal.fixing_source IS 'NDF fixing source';
+COMMENT ON COLUMN treasury_fx_deal.fixing_rate IS 'NDF fixing rate recorded by fix';
+COMMENT ON COLUMN treasury_fx_deal.ndf_settlement_amount IS 'NDF net settlement amount in settlement_currency (positive = we receive)';
 COMMENT ON COLUMN treasury_fx_deal.status IS 'Lifecycle status';
-COMMENT ON COLUMN treasury_fx_deal.verified_by IS 'Back-office verifier';
-COMMENT ON COLUMN treasury_fx_deal.mtm_value IS 'Latest mark-to-market in base currency';
+COMMENT ON COLUMN treasury_fx_deal.verified_by IS 'Back-office verifier (four-eyes)';
+COMMENT ON COLUMN treasury_fx_deal.verified_at IS 'Verification time';
+COMMENT ON COLUMN treasury_fx_deal.confirmed_at IS 'Confirmation time';
+COMMENT ON COLUMN treasury_fx_deal.mtm_value IS 'Latest mark-to-market in mtm_currency (positive = asset)';
+COMMENT ON COLUMN treasury_fx_deal.mtm_currency IS 'Currency of mtm_value (quote currency of the near leg)';
 COMMENT ON COLUMN treasury_fx_deal.mtm_date IS 'Valuation date';
 COMMENT ON COLUMN treasury_fx_deal.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN treasury_fx_deal.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -429,7 +475,7 @@ CREATE TABLE treasury_fx_deal_leg (
   base_currency                char(3) NOT NULL,
   base_amount                  numeric(28,8) NOT NULL,
   quote_currency               char(3) NOT NULL,
-  quote_amount                 numeric(28,8) NOT NULL,
+  quote_amount                 numeric(28,8),
   deal_rate                    numeric(18,10) NOT NULL,
   spot_rate                    numeric(18,10),
   forward_points               numeric(18,10),
@@ -457,10 +503,10 @@ COMMENT ON COLUMN treasury_fx_deal_leg.buy_sell IS 'Our direction on the base cu
 COMMENT ON COLUMN treasury_fx_deal_leg.base_currency IS 'Base currency';
 COMMENT ON COLUMN treasury_fx_deal_leg.base_amount IS 'Base amount';
 COMMENT ON COLUMN treasury_fx_deal_leg.quote_currency IS 'Quote currency';
-COMMENT ON COLUMN treasury_fx_deal_leg.quote_amount IS 'Quote amount';
-COMMENT ON COLUMN treasury_fx_deal_leg.deal_rate IS 'All-in rate';
+COMMENT ON COLUMN treasury_fx_deal_leg.quote_amount IS 'Quote amount (base_amount x deal_rate)';
+COMMENT ON COLUMN treasury_fx_deal_leg.deal_rate IS 'All-in rate (quote units per base unit)';
 COMMENT ON COLUMN treasury_fx_deal_leg.spot_rate IS 'Spot component';
-COMMENT ON COLUMN treasury_fx_deal_leg.forward_points IS 'Forward points';
+COMMENT ON COLUMN treasury_fx_deal_leg.forward_points IS 'Forward points in pips (0.0001; 0.01 for JPY quotes): deal_rate = spot_rate + points x pip';
 COMMENT ON COLUMN treasury_fx_deal_leg.value_date IS 'Settlement date';
 COMMENT ON COLUMN treasury_fx_deal_leg.settlement_status IS 'Settlement status';
 COMMENT ON COLUMN treasury_fx_deal_leg.journal_entry_id IS 'Settlement posting';
@@ -496,7 +542,7 @@ CREATE TABLE treasury_security (
   issue_date                   date,
   maturity_date                date NOT NULL,
   day_count                    varchar(40) NOT NULL DEFAULT 'ACT_ACT_ISDA' CHECK (day_count IN ('ACT_360', 'ACT_365', 'ACT_365L', 'ACT_ACT_ISDA', 'THIRTY_360', 'THIRTY_E_360')),
-  hqla_level                   varchar(10),
+  hqla_level                   varchar(40) NOT NULL DEFAULT 'NONE' CHECK (hqla_level IN ('L1', 'L2A', 'L2B', 'NONE')),
   last_price                   numeric(18,10),
   last_price_date              date,
   custom_field_1               varchar(500),
@@ -514,18 +560,18 @@ COMMENT ON COLUMN treasury_security.created_by IS 'Principal that created the ro
 COMMENT ON COLUMN treasury_security.updated_at IS 'Last update time';
 COMMENT ON COLUMN treasury_security.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN treasury_security.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN treasury_security.isin IS 'ISIN';
+COMMENT ON COLUMN treasury_security.isin IS 'ISIN (ISO 6166, validated check digit)';
 COMMENT ON COLUMN treasury_security.name IS 'Security name';
 COMMENT ON COLUMN treasury_security.security_type IS 'Type';
 COMMENT ON COLUMN treasury_security.issuer_name IS 'Issuer';
 COMMENT ON COLUMN treasury_security.issuer_counterparty_id IS 'Issuer as counterparty (issuer limits)';
 COMMENT ON COLUMN treasury_security.currency IS 'Currency';
 COMMENT ON COLUMN treasury_security.coupon_rate IS 'Coupon rate (empty for discount instruments)';
-COMMENT ON COLUMN treasury_security.coupon_frequency IS 'Coupons per year';
+COMMENT ON COLUMN treasury_security.coupon_frequency IS 'Coupons per year (1, 2, 4 or 12)';
 COMMENT ON COLUMN treasury_security.issue_date IS 'Issue date';
 COMMENT ON COLUMN treasury_security.maturity_date IS 'Maturity';
 COMMENT ON COLUMN treasury_security.day_count IS 'Day count';
-COMMENT ON COLUMN treasury_security.hqla_level IS 'Basel HQLA level: L1, L2A, L2B or NONE';
+COMMENT ON COLUMN treasury_security.hqla_level IS 'Basel HQLA level';
 COMMENT ON COLUMN treasury_security.last_price IS 'Last clean price (% of nominal)';
 COMMENT ON COLUMN treasury_security.last_price_date IS 'Price date';
 COMMENT ON COLUMN treasury_security.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -539,7 +585,7 @@ ALTER TABLE treasury_security ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON treasury_security USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_treasury_security_touch BEFORE UPDATE ON treasury_security FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- securities_holding: Position in a security by portfolio and accounting classification
+-- securities_holding: Position in a security by portfolio and accounting classification (maintained by trade settlement)
 CREATE TABLE securities_holding (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -553,11 +599,14 @@ CREATE TABLE securities_holding (
   portfolio                    varchar(64) NOT NULL,
   accounting_class             varchar(40) NOT NULL CHECK (accounting_class IN ('HTM', 'AFS', 'FVTPL', 'AMORTISED_COST', 'FVOCI')),
   nominal                      numeric(28,8) NOT NULL DEFAULT 0,
+  average_price                numeric(18,10),
   book_value                   numeric(28,8) NOT NULL DEFAULT 0,
   market_value                 numeric(28,8),
   accrued_interest             numeric(28,8) NOT NULL DEFAULT 0,
   unrealised_pnl               numeric(28,8),
+  realised_pnl                 numeric(28,8) NOT NULL DEFAULT 0,
   is_encumbered                boolean NOT NULL DEFAULT false,
+  encumbrance_reason           varchar(255),
   ledger_account_id            uuid,
   valuation_date               date,
   custom_field_1               varchar(500),
@@ -567,7 +616,7 @@ CREATE TABLE securities_holding (
   custom_field_5               varchar(500),
   CONSTRAINT uq_securities_holding_1 UNIQUE (tenant_id, treasury_security_id, portfolio, accounting_class)
 );
-COMMENT ON TABLE securities_holding IS 'Position in a security by portfolio and accounting classification';
+COMMENT ON TABLE securities_holding IS 'Position in a security by portfolio and accounting classification (maintained by trade settlement)';
 COMMENT ON COLUMN securities_holding.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN securities_holding.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN securities_holding.created_at IS 'Creation time';
@@ -580,11 +629,14 @@ COMMENT ON COLUMN securities_holding.treasury_security_id IS 'Security';
 COMMENT ON COLUMN securities_holding.portfolio IS 'Portfolio / book';
 COMMENT ON COLUMN securities_holding.accounting_class IS 'HTM, AFS, FVTPL, ...';
 COMMENT ON COLUMN securities_holding.nominal IS 'Face value held';
-COMMENT ON COLUMN securities_holding.book_value IS 'Amortised book value';
-COMMENT ON COLUMN securities_holding.market_value IS 'Market value';
-COMMENT ON COLUMN securities_holding.accrued_interest IS 'Accrued coupon';
-COMMENT ON COLUMN securities_holding.unrealised_pnl IS 'Unrealised gain / loss';
-COMMENT ON COLUMN securities_holding.is_encumbered IS 'Pledged as collateral';
+COMMENT ON COLUMN securities_holding.average_price IS 'Weighted average clean purchase price (% of nominal)';
+COMMENT ON COLUMN securities_holding.book_value IS 'Book value (nominal x average price)';
+COMMENT ON COLUMN securities_holding.market_value IS 'Clean market value at valuation_date';
+COMMENT ON COLUMN securities_holding.accrued_interest IS 'Accrued coupon at valuation_date';
+COMMENT ON COLUMN securities_holding.unrealised_pnl IS 'Market value minus book value (P&L for FVTPL, OCI for AFS / FVOCI)';
+COMMENT ON COLUMN securities_holding.realised_pnl IS 'Cumulative realised P&L from sales';
+COMMENT ON COLUMN securities_holding.is_encumbered IS 'Pledged as collateral (encumber action)';
+COMMENT ON COLUMN securities_holding.encumbrance_reason IS 'Reason of the last encumbrance change';
 COMMENT ON COLUMN securities_holding.ledger_account_id IS 'Ledger account';
 COMMENT ON COLUMN securities_holding.valuation_date IS 'Valuation date';
 COMMENT ON COLUMN securities_holding.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -600,7 +652,7 @@ ALTER TABLE securities_holding ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON securities_holding USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_securities_holding_touch BEFORE UPDATE ON securities_holding FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- securities_trade: Purchase or sale of a security that changes a holding
+-- securities_trade: Purchase or sale of a security that changes a holding (holding resolved or opened on capture)
 CREATE TABLE securities_trade (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -610,19 +662,27 @@ CREATE TABLE securities_trade (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   deal_ref                     varchar(32) NOT NULL,
+  legal_entity_id              uuid NOT NULL,
+  treasury_security_id         uuid NOT NULL REFERENCES treasury_security(id),
+  portfolio                    varchar(64) NOT NULL,
+  accounting_class             varchar(40) NOT NULL CHECK (accounting_class IN ('HTM', 'AFS', 'FVTPL', 'AMORTISED_COST', 'FVOCI')),
   securities_holding_id        uuid NOT NULL REFERENCES securities_holding(id),
   treasury_counterparty_id     uuid NOT NULL REFERENCES treasury_counterparty(id),
   buy_sell                     varchar(40) NOT NULL CHECK (buy_sell IN ('BUY', 'SELL')),
   nominal                      numeric(28,8) NOT NULL,
   clean_price                  numeric(18,10) NOT NULL,
+  dirty_price                  numeric(18,10),
   accrued_interest             numeric(28,8) NOT NULL,
   settlement_amount            numeric(28,8) NOT NULL,
+  simple_yield                 numeric(18,10),
   currency                     char(3) NOT NULL,
   trade_date                   date NOT NULL,
   settlement_date              date NOT NULL,
   dealer_id                    uuid NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SETTLED', 'MATURED', 'SOLD', 'CANCELLED')),
   realised_pnl                 numeric(28,8),
+  settled_at                   timestamptz,
+  cancel_reason                varchar(255),
   journal_entry_id             uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -631,7 +691,7 @@ CREATE TABLE securities_trade (
   custom_field_5               varchar(500),
   CONSTRAINT uq_securities_trade_deal_ref UNIQUE (tenant_id, deal_ref)
 );
-COMMENT ON TABLE securities_trade IS 'Purchase or sale of a security that changes a holding';
+COMMENT ON TABLE securities_trade IS 'Purchase or sale of a security that changes a holding (holding resolved or opened on capture)';
 COMMENT ON COLUMN securities_trade.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN securities_trade.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN securities_trade.created_at IS 'Creation time';
@@ -639,20 +699,28 @@ COMMENT ON COLUMN securities_trade.created_by IS 'Principal that created the row
 COMMENT ON COLUMN securities_trade.updated_at IS 'Last update time';
 COMMENT ON COLUMN securities_trade.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN securities_trade.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN securities_trade.deal_ref IS 'Trade reference';
+COMMENT ON COLUMN securities_trade.deal_ref IS 'Trade reference (server-generated)';
+COMMENT ON COLUMN securities_trade.legal_entity_id IS 'Booking entity';
+COMMENT ON COLUMN securities_trade.treasury_security_id IS 'Security traded';
+COMMENT ON COLUMN securities_trade.portfolio IS 'Portfolio / book';
+COMMENT ON COLUMN securities_trade.accounting_class IS 'Classification of the holding';
 COMMENT ON COLUMN securities_trade.securities_holding_id IS 'Holding affected';
 COMMENT ON COLUMN securities_trade.treasury_counterparty_id IS 'Counterparty / broker';
 COMMENT ON COLUMN securities_trade.buy_sell IS 'Buy or sell';
 COMMENT ON COLUMN securities_trade.nominal IS 'Nominal traded';
 COMMENT ON COLUMN securities_trade.clean_price IS 'Clean price (% of nominal)';
-COMMENT ON COLUMN securities_trade.accrued_interest IS 'Accrued interest paid / received';
+COMMENT ON COLUMN securities_trade.dirty_price IS 'Dirty price (% of nominal)';
+COMMENT ON COLUMN securities_trade.accrued_interest IS 'Accrued interest paid / received (security day count)';
 COMMENT ON COLUMN securities_trade.settlement_amount IS 'Dirty settlement amount';
-COMMENT ON COLUMN securities_trade.currency IS 'Currency';
+COMMENT ON COLUMN securities_trade.simple_yield IS 'Simple yield to maturity at the clean price';
+COMMENT ON COLUMN securities_trade.currency IS 'Currency (from the security)';
 COMMENT ON COLUMN securities_trade.trade_date IS 'Trade date';
 COMMENT ON COLUMN securities_trade.settlement_date IS 'Settlement date';
 COMMENT ON COLUMN securities_trade.dealer_id IS 'Dealer';
 COMMENT ON COLUMN securities_trade.status IS 'Status';
 COMMENT ON COLUMN securities_trade.realised_pnl IS 'Realised P&L on sale';
+COMMENT ON COLUMN securities_trade.settled_at IS 'Settlement time';
+COMMENT ON COLUMN securities_trade.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN securities_trade.journal_entry_id IS 'Settlement posting';
 COMMENT ON COLUMN securities_trade.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN securities_trade.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -660,6 +728,8 @@ COMMENT ON COLUMN securities_trade.custom_field_3 IS 'Tenant-defined custom fiel
 COMMENT ON COLUMN securities_trade.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN securities_trade.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_securities_trade_tenant ON securities_trade (tenant_id, created_at);
+CREATE INDEX ix_securities_trade_legal_entity_id ON securities_trade (legal_entity_id);
+CREATE INDEX ix_securities_trade_treasury_security_id ON securities_trade (treasury_security_id);
 CREATE INDEX ix_securities_trade_securities_holding_id ON securities_trade (securities_holding_id);
 CREATE INDEX ix_securities_trade_treasury_counterparty_id ON securities_trade (treasury_counterparty_id);
 CREATE INDEX ix_securities_trade_dealer_id ON securities_trade (dealer_id);
@@ -677,15 +747,18 @@ CREATE TABLE treasury_deal_confirmation (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  deal_type                    varchar(32) NOT NULL,
-  deal_id                      uuid NOT NULL,
+  deal_type                    varchar(40) NOT NULL CHECK (deal_type IN ('MONEY_MARKET', 'FX', 'SECURITY')),
+  deal_id                      uuid,
   channel                      varchar(40) NOT NULL DEFAULT 'SWIFT' CHECK (channel IN ('SWIFT', 'EMAIL', 'PLATFORM', 'MANUAL')),
   message_type                 varchar(16),
   our_reference                varchar(35) NOT NULL,
   their_reference              varchar(35),
-  direction                    varchar(10) NOT NULL,
+  direction                    varchar(40) NOT NULL CHECK (direction IN ('OUTBOUND', 'INBOUND')),
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SENT', 'RECEIVED', 'MATCHED', 'UNMATCHED', 'DISPUTED', 'CANCELLED')),
+  fields                       jsonb,
+  message_text                 text,
   mismatch_fields              jsonb,
+  dispute_reason               varchar(500),
   sent_at                      timestamptz,
   matched_at                   timestamptz,
   raw_message_document_id      uuid,
@@ -703,15 +776,18 @@ COMMENT ON COLUMN treasury_deal_confirmation.created_by IS 'Principal that creat
 COMMENT ON COLUMN treasury_deal_confirmation.updated_at IS 'Last update time';
 COMMENT ON COLUMN treasury_deal_confirmation.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN treasury_deal_confirmation.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN treasury_deal_confirmation.deal_type IS 'MONEY_MARKET, FX, SECURITY';
-COMMENT ON COLUMN treasury_deal_confirmation.deal_id IS 'Deal confirmed';
+COMMENT ON COLUMN treasury_deal_confirmation.deal_type IS 'Deal family';
+COMMENT ON COLUMN treasury_deal_confirmation.deal_id IS 'Deal confirmed (empty for an inbound confirmation not yet matched)';
 COMMENT ON COLUMN treasury_deal_confirmation.channel IS 'Channel';
 COMMENT ON COLUMN treasury_deal_confirmation.message_type IS 'MT300, MT320, MT541, MT543, ...';
-COMMENT ON COLUMN treasury_deal_confirmation.our_reference IS 'Our SWIFT reference (field 20)';
+COMMENT ON COLUMN treasury_deal_confirmation.our_reference IS 'Our SWIFT reference (field 20 outbound, field 21 inbound)';
 COMMENT ON COLUMN treasury_deal_confirmation.their_reference IS 'Counterparty reference';
-COMMENT ON COLUMN treasury_deal_confirmation.direction IS 'OUTBOUND or INBOUND';
+COMMENT ON COLUMN treasury_deal_confirmation.direction IS 'OUTBOUND (generated) or INBOUND (received)';
 COMMENT ON COLUMN treasury_deal_confirmation.status IS 'Matching status';
-COMMENT ON COLUMN treasury_deal_confirmation.mismatch_fields IS 'Fields that did not match';
+COMMENT ON COLUMN treasury_deal_confirmation.fields IS 'Inbound confirmation fields from the counterparty''s perspective (parsed from message_text when absent)';
+COMMENT ON COLUMN treasury_deal_confirmation.message_text IS 'Raw message (MT text) — generated for outbound, received for inbound';
+COMMENT ON COLUMN treasury_deal_confirmation.mismatch_fields IS 'Fields that did not match: [{field, ours, theirs}]';
+COMMENT ON COLUMN treasury_deal_confirmation.dispute_reason IS 'Reason given when disputed';
 COMMENT ON COLUMN treasury_deal_confirmation.sent_at IS 'Sent time';
 COMMENT ON COLUMN treasury_deal_confirmation.matched_at IS 'Match time';
 COMMENT ON COLUMN treasury_deal_confirmation.raw_message_document_id IS 'Stored raw message';
@@ -736,9 +812,9 @@ CREATE TABLE treasury_settlement (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  deal_type                    varchar(32) NOT NULL,
+  deal_type                    varchar(40) NOT NULL CHECK (deal_type IN ('MONEY_MARKET', 'FX', 'SECURITY')),
   deal_id                      uuid NOT NULL,
-  flow_type                    varchar(32) NOT NULL,
+  flow_type                    varchar(40) NOT NULL CHECK (flow_type IN ('PRINCIPAL_OUT', 'PRINCIPAL_IN', 'INTEREST_IN', 'INTEREST_OUT', 'FX_PAY', 'FX_RECEIVE', 'NDF_PAY', 'NDF_RECEIVE', 'SECURITY_CASH_PAY', 'SECURITY_CASH_RECEIVE')),
   direction                    varchar(40) NOT NULL CHECK (direction IN ('DEBIT', 'CREDIT')),
   amount                       numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
@@ -748,12 +824,16 @@ CREATE TABLE treasury_settlement (
   payment_id                   uuid,
   status                       varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'INSTRUCTED', 'SETTLED', 'FAILED', 'CANCELLED')),
   journal_entry_id             uuid,
+  instructed_at                timestamptz,
+  settled_at                   timestamptz,
+  settlement_reference         varchar(64),
   failure_reason               varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_treasury_settlement_1 UNIQUE (tenant_id, deal_id, flow_type, value_date)
 );
 COMMENT ON TABLE treasury_settlement IS 'Settlement instruction generated for a treasury deal cash flow';
 COMMENT ON COLUMN treasury_settlement.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -763,18 +843,21 @@ COMMENT ON COLUMN treasury_settlement.created_by IS 'Principal that created the 
 COMMENT ON COLUMN treasury_settlement.updated_at IS 'Last update time';
 COMMENT ON COLUMN treasury_settlement.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN treasury_settlement.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN treasury_settlement.deal_type IS 'MONEY_MARKET, FX, SECURITY';
+COMMENT ON COLUMN treasury_settlement.deal_type IS 'Deal family';
 COMMENT ON COLUMN treasury_settlement.deal_id IS 'Deal';
-COMMENT ON COLUMN treasury_settlement.flow_type IS 'PRINCIPAL_OUT, PRINCIPAL_IN, INTEREST, FX_PAY, FX_RECEIVE, SECURITY_CASH';
+COMMENT ON COLUMN treasury_settlement.flow_type IS 'Cash flow';
 COMMENT ON COLUMN treasury_settlement.direction IS 'Pay (CREDIT nostro) or receive (DEBIT nostro)';
 COMMENT ON COLUMN treasury_settlement.amount IS 'Amount';
 COMMENT ON COLUMN treasury_settlement.currency IS 'Currency';
 COMMENT ON COLUMN treasury_settlement.value_date IS 'Settlement date';
 COMMENT ON COLUMN treasury_settlement.treasury_ssi_id IS 'Counterparty SSI used';
 COMMENT ON COLUMN treasury_settlement.nostro_account_id IS 'Our nostro';
-COMMENT ON COLUMN treasury_settlement.payment_id IS 'Outgoing payment created';
+COMMENT ON COLUMN treasury_settlement.payment_id IS 'Outgoing payment created by instruct';
 COMMENT ON COLUMN treasury_settlement.status IS 'Status';
 COMMENT ON COLUMN treasury_settlement.journal_entry_id IS 'Ledger posting';
+COMMENT ON COLUMN treasury_settlement.instructed_at IS 'Release time';
+COMMENT ON COLUMN treasury_settlement.settled_at IS 'Confirmed settled';
+COMMENT ON COLUMN treasury_settlement.settlement_reference IS 'Nostro statement reference';
 COMMENT ON COLUMN treasury_settlement.failure_reason IS 'Failure reason';
 COMMENT ON COLUMN treasury_settlement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN treasury_settlement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -791,6 +874,54 @@ CREATE INDEX ix_treasury_settlement_c1 ON treasury_settlement (value_date, statu
 ALTER TABLE treasury_settlement ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON treasury_settlement USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_treasury_settlement_touch BEFORE UPDATE ON treasury_settlement FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- treasury_eod_run: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+CREATE TABLE treasury_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('MARK_TO_MARKET', 'INTEREST_ACCRUAL', 'MATURITY_PROCESSING', 'LIMIT_UTILISATION_REFRESH', 'LIQUIDITY_POSITION_SNAPSHOT')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_treasury_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE treasury_eod_run IS 'One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)';
+COMMENT ON COLUMN treasury_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN treasury_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN treasury_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN treasury_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN treasury_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN treasury_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN treasury_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN treasury_eod_run.job IS 'Job';
+COMMENT ON COLUMN treasury_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN treasury_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN treasury_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN treasury_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN treasury_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN treasury_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN treasury_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN treasury_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN treasury_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN treasury_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN treasury_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_treasury_eod_run_tenant ON treasury_eod_run (tenant_id, created_at);
+ALTER TABLE treasury_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON treasury_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_treasury_eod_run_touch BEFORE UPDATE ON treasury_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

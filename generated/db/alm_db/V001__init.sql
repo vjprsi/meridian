@@ -18,7 +18,7 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- alm_behavioural_assumption: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+-- alm_behavioural_assumption: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product; used once approved
 CREATE TABLE alm_behavioural_assumption (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -36,13 +36,14 @@ CREATE TABLE alm_behavioural_assumption (
   valid_to                     date,
   model_version                varchar(32) NOT NULL,
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE alm_behavioural_assumption IS 'Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product';
+COMMENT ON TABLE alm_behavioural_assumption IS 'Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product; used once approved';
 COMMENT ON COLUMN alm_behavioural_assumption.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN alm_behavioural_assumption.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN alm_behavioural_assumption.created_at IS 'Creation time';
@@ -54,11 +55,12 @@ COMMENT ON COLUMN alm_behavioural_assumption.assumption_type IS 'Assumption type
 COMMENT ON COLUMN alm_behavioural_assumption.product_id IS 'Product (empty = all products of the segment)';
 COMMENT ON COLUMN alm_behavioural_assumption.segment IS 'Customer / product segment';
 COMMENT ON COLUMN alm_behavioural_assumption.currency IS 'Currency';
-COMMENT ON COLUMN alm_behavioural_assumption.parameters IS 'Model parameters, e.g. CPR curve, decay rates, core/volatile split';
+COMMENT ON COLUMN alm_behavioural_assumption.parameters IS 'PREPAYMENT {cpr}; DEPOSIT_DECAY {core_ratio, decay_rate, core_max_months, pass_through}; NON_MATURITY_REPRICING {repricing_months, pass_through}';
 COMMENT ON COLUMN alm_behavioural_assumption.valid_from IS 'Effective from';
 COMMENT ON COLUMN alm_behavioural_assumption.valid_to IS 'Effective to';
 COMMENT ON COLUMN alm_behavioural_assumption.model_version IS 'Model version';
-COMMENT ON COLUMN alm_behavioural_assumption.approved_by IS 'Model approver';
+COMMENT ON COLUMN alm_behavioural_assumption.approved_by IS 'Model approver (four-eyes)';
+COMMENT ON COLUMN alm_behavioural_assumption.approved_at IS 'Approval time';
 COMMENT ON COLUMN alm_behavioural_assumption.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_behavioural_assumption.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_behavioural_assumption.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -84,6 +86,10 @@ CREATE TABLE alm_gap_run (
   currency                     char(3),
   behavioural                  boolean NOT NULL DEFAULT true,
   status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
+  total_assets                 numeric(28,8),
+  total_liabilities            numeric(28,8),
+  assumptions_used             jsonb,
+  error_message                varchar(500),
   started_at                   timestamptz,
   finished_at                  timestamptz,
   custom_field_1               varchar(500),
@@ -102,9 +108,13 @@ COMMENT ON COLUMN alm_gap_run.updated_by IS 'Principal that last updated the row
 COMMENT ON COLUMN alm_gap_run.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN alm_gap_run.legal_entity_id IS 'Entity';
 COMMENT ON COLUMN alm_gap_run.as_of_date IS 'As-of date';
-COMMENT ON COLUMN alm_gap_run.currency IS 'Currency (empty = all, in base currency)';
-COMMENT ON COLUMN alm_gap_run.behavioural IS 'Apply behavioural assumptions';
+COMMENT ON COLUMN alm_gap_run.currency IS 'Currency (empty = all, amounts taken as base currency)';
+COMMENT ON COLUMN alm_gap_run.behavioural IS 'Apply approved behavioural assumptions';
 COMMENT ON COLUMN alm_gap_run.status IS 'Run status';
+COMMENT ON COLUMN alm_gap_run.total_assets IS 'Rate-sensitive assets';
+COMMENT ON COLUMN alm_gap_run.total_liabilities IS 'Rate-sensitive liabilities';
+COMMENT ON COLUMN alm_gap_run.assumptions_used IS 'Behavioural assumptions applied';
+COMMENT ON COLUMN alm_gap_run.error_message IS 'Why the run failed';
 COMMENT ON COLUMN alm_gap_run.started_at IS 'Start';
 COMMENT ON COLUMN alm_gap_run.finished_at IS 'End';
 COMMENT ON COLUMN alm_gap_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -152,7 +162,7 @@ COMMENT ON COLUMN alm_gap_bucket.rate_sensitive_liabilities IS 'Liabilities repr
 COMMENT ON COLUMN alm_gap_bucket.off_balance_net IS 'Off-balance-sheet net position';
 COMMENT ON COLUMN alm_gap_bucket.gap IS 'Net repricing gap';
 COMMENT ON COLUMN alm_gap_bucket.cumulative_gap IS 'Cumulative gap';
-COMMENT ON COLUMN alm_gap_bucket.breakdown IS 'Amounts by product';
+COMMENT ON COLUMN alm_gap_bucket.breakdown IS 'Amounts by position code: {CODE: amount}';
 COMMENT ON COLUMN alm_gap_bucket.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_gap_bucket.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_gap_bucket.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -185,6 +195,7 @@ CREATE TABLE alm_sensitivity_run (
   shocked_value                numeric(28,8),
   delta                        numeric(28,8),
   delta_pct_tier1              numeric(18,10),
+  outlier                      boolean,
   status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
   results                      jsonb,
   custom_field_1               varchar(500),
@@ -205,16 +216,17 @@ COMMENT ON COLUMN alm_sensitivity_run.legal_entity_id IS 'Entity';
 COMMENT ON COLUMN alm_sensitivity_run.as_of_date IS 'As-of date';
 COMMENT ON COLUMN alm_sensitivity_run.measure IS 'NII, EVE or EaR';
 COMMENT ON COLUMN alm_sensitivity_run.shock_type IS 'Shock scenario';
-COMMENT ON COLUMN alm_sensitivity_run.shock_bps IS 'Parallel shock size in basis points';
-COMMENT ON COLUMN alm_sensitivity_run.custom_shock IS 'Tenor-by-tenor shocks for CUSTOM';
+COMMENT ON COLUMN alm_sensitivity_run.shock_bps IS 'Parallel shock size in basis points (default 200); short 250 / long 100 for rotations';
+COMMENT ON COLUMN alm_sensitivity_run.custom_shock IS 'Tenor-by-tenor shocks for CUSTOM [{tenor_days, bps}] (linear interpolation)';
 COMMENT ON COLUMN alm_sensitivity_run.horizon_months IS 'NII horizon';
 COMMENT ON COLUMN alm_sensitivity_run.currency IS 'Reporting currency';
 COMMENT ON COLUMN alm_sensitivity_run.base_value IS 'Base-case NII or EVE';
 COMMENT ON COLUMN alm_sensitivity_run.shocked_value IS 'Shocked NII or EVE';
 COMMENT ON COLUMN alm_sensitivity_run.delta IS 'Change versus base';
 COMMENT ON COLUMN alm_sensitivity_run.delta_pct_tier1 IS 'Change as share of Tier 1 capital (EVE outlier test)';
+COMMENT ON COLUMN alm_sensitivity_run.outlier IS 'EVE decline beyond 15% of Tier 1';
 COMMENT ON COLUMN alm_sensitivity_run.status IS 'Run status';
-COMMENT ON COLUMN alm_sensitivity_run.results IS 'Detail by product and bucket';
+COMMENT ON COLUMN alm_sensitivity_run.results IS 'Detail {positions [{code, base, shocked, delta}], shock [{tenor_days, shock_bps, base_rate, shocked_rate}]}';
 COMMENT ON COLUMN alm_sensitivity_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_sensitivity_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN alm_sensitivity_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -242,6 +254,7 @@ CREATE TABLE ftp_curve (
   source                       varchar(64),
   is_published                 boolean NOT NULL DEFAULT false,
   approved_by                  varchar(64),
+  published_at                 timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -262,8 +275,9 @@ COMMENT ON COLUMN ftp_curve.currency IS 'Currency';
 COMMENT ON COLUMN ftp_curve.curve_type IS 'Base, liquidity premium, ...';
 COMMENT ON COLUMN ftp_curve.effective_date IS 'Effective date';
 COMMENT ON COLUMN ftp_curve.source IS 'Market source / construction method';
-COMMENT ON COLUMN ftp_curve.is_published IS 'Published for use';
-COMMENT ON COLUMN ftp_curve.approved_by IS 'ALCO approver';
+COMMENT ON COLUMN ftp_curve.is_published IS 'Published for use (publish action)';
+COMMENT ON COLUMN ftp_curve.approved_by IS 'ALCO approver (four-eyes)';
+COMMENT ON COLUMN ftp_curve.published_at IS 'Publication time';
 COMMENT ON COLUMN ftp_curve.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ftp_curve.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ftp_curve.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -274,7 +288,7 @@ ALTER TABLE ftp_curve ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ftp_curve USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_ftp_curve_touch BEFORE UPDATE ON ftp_curve FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- ftp_curve_point: Tenor point on an FTP curve
+-- ftp_curve_point: Tenor point on an FTP curve (frozen once the curve is published)
 CREATE TABLE ftp_curve_point (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -294,7 +308,7 @@ CREATE TABLE ftp_curve_point (
   custom_field_5               varchar(500),
   CONSTRAINT uq_ftp_curve_point_1 UNIQUE (ftp_curve_id, tenor_days)
 );
-COMMENT ON TABLE ftp_curve_point IS 'Tenor point on an FTP curve';
+COMMENT ON TABLE ftp_curve_point IS 'Tenor point on an FTP curve (frozen once the curve is published)';
 COMMENT ON COLUMN ftp_curve_point.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN ftp_curve_point.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN ftp_curve_point.created_at IS 'Creation time';
@@ -333,6 +347,7 @@ CREATE TABLE ftp_rule (
   base_curve_code              varchar(32) NOT NULL,
   liquidity_curve_code         varchar(32),
   fixed_spread                 numeric(18,10),
+  pool_tenor_days              integer,
   priority                     integer NOT NULL DEFAULT 100,
   valid_from                   date NOT NULL,
   valid_to                     date,
@@ -357,6 +372,7 @@ COMMENT ON COLUMN ftp_rule.method IS 'Pricing method';
 COMMENT ON COLUMN ftp_rule.base_curve_code IS 'Base curve code';
 COMMENT ON COLUMN ftp_rule.liquidity_curve_code IS 'Liquidity premium curve code';
 COMMENT ON COLUMN ftp_rule.fixed_spread IS 'Spread for FIXED_SPREAD method';
+COMMENT ON COLUMN ftp_rule.pool_tenor_days IS 'Pricing tenor for POOLED (default 30)';
 COMMENT ON COLUMN ftp_rule.priority IS 'Lower wins';
 COMMENT ON COLUMN ftp_rule.valid_from IS 'Effective from';
 COMMENT ON COLUMN ftp_rule.valid_to IS 'Effective to';
@@ -379,12 +395,13 @@ CREATE TABLE ftp_assignment (
   created_by                   varchar(64),
   period_start                 date NOT NULL,
   period_end                   date NOT NULL,
-  exposure_type                varchar(32) NOT NULL,
+  exposure_type                varchar(40) NOT NULL CHECK (exposure_type IN ('DEPOSIT_ACCOUNT', 'TERM_DEPOSIT', 'LOAN', 'CREDIT_LINE')),
   exposure_id                  uuid NOT NULL,
   deposit_account_id           uuid,
   loan_id                      uuid,
   product_id                   uuid,
   ftp_rule_id                  uuid REFERENCES ftp_rule(id),
+  term_days                    integer,
   average_balance              numeric(28,8) NOT NULL,
   currency                     char(3) NOT NULL,
   customer_rate                numeric(18,10) NOT NULL,
@@ -405,18 +422,19 @@ COMMENT ON COLUMN ftp_assignment.created_at IS 'Creation time';
 COMMENT ON COLUMN ftp_assignment.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN ftp_assignment.period_start IS 'Period start';
 COMMENT ON COLUMN ftp_assignment.period_end IS 'Period end';
-COMMENT ON COLUMN ftp_assignment.exposure_type IS 'DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE';
+COMMENT ON COLUMN ftp_assignment.exposure_type IS 'Deposit account, term deposit, loan or credit line';
 COMMENT ON COLUMN ftp_assignment.exposure_id IS 'Account or loan id';
 COMMENT ON COLUMN ftp_assignment.deposit_account_id IS 'Deposit account, when applicable';
 COMMENT ON COLUMN ftp_assignment.loan_id IS 'Loan, when applicable';
 COMMENT ON COLUMN ftp_assignment.product_id IS 'Product';
 COMMENT ON COLUMN ftp_assignment.ftp_rule_id IS 'Rule applied';
+COMMENT ON COLUMN ftp_assignment.term_days IS 'Pricing tenor used';
 COMMENT ON COLUMN ftp_assignment.average_balance IS 'Average balance for the period';
 COMMENT ON COLUMN ftp_assignment.currency IS 'Currency';
 COMMENT ON COLUMN ftp_assignment.customer_rate IS 'Rate paid / earned with the customer';
 COMMENT ON COLUMN ftp_assignment.ftp_rate IS 'Transfer price';
-COMMENT ON COLUMN ftp_assignment.net_margin IS 'Customer rate minus FTP (sign by side)';
-COMMENT ON COLUMN ftp_assignment.ftp_charge_credit IS 'FTP charge (loans) or credit (deposits)';
+COMMENT ON COLUMN ftp_assignment.net_margin IS 'Customer rate minus FTP for assets, FTP minus customer rate for liabilities';
+COMMENT ON COLUMN ftp_assignment.ftp_charge_credit IS 'FTP charge (loans) or credit (deposits) for the period (ACT/365)';
 COMMENT ON COLUMN ftp_assignment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ftp_assignment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN ftp_assignment.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

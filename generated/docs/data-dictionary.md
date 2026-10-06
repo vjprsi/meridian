@@ -14112,7 +14112,7 @@ Front-to-back treasury: money market, FX and securities deals with confirmations
 
 ### Service `treasury-deal-service` — database `treasury_deal_db`
 
-Front and middle office for treasury: counterparties and limits, money market, FX and securities deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement.
+Front and middle office for treasury: counterparties and limits, money market, FX and securities deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement, accrual and maturity, and releases payment instructions through payment-service.
 
 
 #### `treasury_counterparty`
@@ -14134,18 +14134,21 @@ API: /v1/treasury/counterparties · Requirements: TRY-01, TRY-02
 | code | varchar(32) | no | UQ | code | Short code |
 | name | varchar(200) | no |  | name | Legal name |
 | counterparty_type | varchar(40) (TreasuryCounterpartyType) | no |  | counterparty_type | Type |
-| bic | varchar(11) | yes |  | bic | SWIFT BIC |
-| lei | varchar(20) | yes |  | lei | Legal Entity Identifier |
-| country_code | char(2) | no |  | country_code | Country of incorporation |
+| bic | varchar(11) | yes |  | bic | SWIFT BIC (8 or 11 characters; required for SWIFT confirmations) |
+| lei | varchar(20) | yes |  | lei | Legal Entity Identifier (ISO 17442, validated check digits) |
+| country_code | char(2) | no |  | country_code | Country of incorporation (COUNTRY limits) |
 | parent_counterparty_id | uuid | yes | FK → treasury_counterparty | parent_counterparty_id | Group parent for aggregated limits |
 | external_rating | varchar(10) | yes |  | external_rating | External credit rating, e.g. AA- |
 | rating_agency | varchar(32) | yes |  | rating_agency | Agency for the rating |
 | internal_rating | varchar(10) | yes |  | internal_rating | Internal rating grade |
-| isda_signed | boolean | no |  | isda_signed | ISDA master agreement in place |
+| isda_signed | boolean | no |  | isda_signed | ISDA master agreement in place (required for forwards, swaps and NDFs) |
 | csa_signed | boolean | no |  | csa_signed | Credit support annex in place |
-| gmra_signed | boolean | no |  | gmra_signed | GMRA in place (repos) |
-| status | varchar(40) (TreasuryCounterpartyStatus) | no |  | status | Status |
+| gmra_signed | boolean | no |  | gmra_signed | GMRA in place (required for repos) |
+| status | varchar(40) (TreasuryCounterpartyStatus) | no |  | status (read-only) | Status (driven by approve / suspend / reactivate) |
 | approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Onboarding approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved onboarding (four-eyes) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last suspension or reactivation |
 | notes | text | yes |  | notes | Notes |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -14155,7 +14158,7 @@ API: /v1/treasury/counterparties · Requirements: TRY-01, TRY-02
 
 #### `treasury_ssi`
 
-Standing settlement instructions per counterparty and currency
+Standing settlement instructions per counterparty and currency (used only once verified)
 
 API: /v1/treasury/ssis · Requirements: TRY-01
 
@@ -14177,7 +14180,8 @@ API: /v1/treasury/ssis · Requirements: TRY-01
 | valid_from | date | no |  | valid_from | Effective from |
 | valid_to | date | yes |  | valid_to | Effective to |
 | is_default | boolean | no |  | is_default | Default SSI for the currency |
-| verified_by | varchar(64) | yes |  | verified_by | Four-eyes verification |
+| verified_by | varchar(64) | yes |  | verified_by (read-only) | Four-eyes verifier (set by verify; cleared when payment details change) |
+| verified_at | timestamptz | yes |  | verified_at (read-only) | Verification time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14186,7 +14190,7 @@ API: /v1/treasury/ssis · Requirements: TRY-01
 
 #### `treasury_counterparty_limit`
 
-Credit / settlement / tenor limit on a counterparty (or its group)
+Credit / settlement / tenor limit on a counterparty (or its group); usable once approved
 
 API: /v1/treasury/limits · Requirements: TRY-02
 
@@ -14199,18 +14203,20 @@ API: /v1/treasury/limits · Requirements: TRY-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
+| treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty (or group parent) |
 | limit_type | varchar(40) (TreasuryLimitType) | no |  | limit_type | Limit type |
 | currency | char(3) | no |  | currency | Limit currency |
 | limit_amount | numeric(28,8) | no |  | limit_amount | Approved limit |
-| max_tenor_days | integer | yes |  | max_tenor_days | Maximum tenor allowed |
+| max_tenor_days | integer | yes |  | max_tenor_days | Maximum tenor allowed (TENOR limits; optional cap on any limit) |
 | utilised_amount | numeric(28,8) | no |  | utilised_amount (read-only) | Current utilisation |
 | available_amount | numeric(28,8) | no |  | available_amount (read-only) | Limit minus utilisation |
 | warning_threshold_pct | numeric(18,10) | no |  | warning_threshold_pct | Warn at this share of the limit |
 | valid_from | date | no |  | valid_from | Effective from |
 | valid_to | date | yes |  | valid_to | Expiry |
-| status | varchar(40) (TreasuryLimitStatus) | no |  | status | Status |
-| approved_by | varchar(64) | yes |  | approved_by | Credit approver |
+| status | varchar(40) (TreasuryLimitStatus) | no |  | status (read-only) | Status (approve activates) |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Credit approver (four-eyes) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| refreshed_at | timestamptz | yes |  | refreshed_at (read-only) | Last utilisation refresh (end of day) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14230,8 +14236,9 @@ API: /v1/treasury/limit-utilisations · Requirements: TRY-02
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | treasury_counterparty_limit_id | uuid | no | FK → treasury_counterparty_limit | treasury_counterparty_limit_id | Limit |
-| deal_type | varchar(32) | no |  | deal_type | MONEY_MARKET, FX, SECURITY |
+| deal_type | varchar(40) (TreasuryDealType) | no |  | deal_type | Deal family |
 | deal_id | uuid | no |  | deal_id | Deal consuming the limit |
+| reason | varchar(40) (TreasuryUtilisationReason) | no |  | reason | Reserve on capture, release on maturity / cancel, end-of-day refresh |
 | amount | numeric(28,8) | no |  | amount | Utilisation change (negative releases) |
 | currency | char(3) | no |  | currency | Currency |
 | utilised_after | numeric(28,8) | no |  | utilised_after | Utilisation after this change |
@@ -14258,7 +14265,7 @@ API: /v1/treasury/money-market-deals · Requirements: TRY-01, GL-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| deal_ref | varchar(32) | no | UQ | deal_ref | Deal reference |
+| deal_ref | varchar(32) | no | UQ | deal_ref (read-only) | Deal reference (server-generated) |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Booking entity |
 | treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
 | deal_type | varchar(40) (TreasuryMmDealType) | no |  | deal_type | Placement, borrowing, repo, ... |
@@ -14266,26 +14273,34 @@ API: /v1/treasury/money-market-deals · Requirements: TRY-01, GL-02
 | principal | numeric(28,8) | no |  | principal | Principal amount |
 | trade_date | date | no |  | trade_date | Trade date |
 | value_date | date | no |  | value_date | Value (start) date |
-| maturity_date | date | yes |  | maturity_date | Maturity date (empty for call deals) |
+| maturity_date | date | yes |  | maturity_date | Maturity date (empty for call deals until called) |
 | is_call | boolean | no |  | is_call | Call (open-ended) deal |
 | notice_days | integer | yes |  | notice_days | Notice period for call deals |
 | rate_type | varchar(40) (TreasuryRateType) | no |  | rate_type | Fixed or floating |
-| interest_rate | numeric(18,10) | no |  | interest_rate | All-in rate |
+| interest_rate | numeric(18,10) | no |  | interest_rate | All-in rate (annual, decimal) |
 | rate_index | varchar(32) | yes |  | rate_index | Index for floating deals, e.g. SOFR |
 | spread | numeric(18,10) | yes |  | spread | Spread over index |
 | day_count | varchar(40) (DayCountBasis) | no |  | day_count | Day-count basis |
-| interest_amount | numeric(28,8) | yes |  | interest_amount (read-only) | Interest to maturity |
-| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued interest to date |
-| rollover_type | varchar(40) (TreasuryRolloverType) | no |  | rollover_type | Rollover instruction |
-| rolled_from_deal_id | uuid | yes | FK → money_market_deal | rolled_from_deal_id | Previous deal when rolled |
+| interest_amount | numeric(28,8) | yes |  | interest_amount (read-only) | Interest to maturity (paid at maturity) |
+| maturity_amount | numeric(28,8) | yes |  | maturity_amount (read-only) | Principal plus interest at maturity |
+| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued interest to accrued_through |
+| accrued_through | date | yes |  | accrued_through (read-only) | Last date included in accrued_interest |
+| rollover_type | varchar(40) (TreasuryRolloverType) | no |  | rollover_type | Rollover instruction at maturity |
+| rolled_from_deal_id | uuid | yes | FK → money_market_deal | rolled_from_deal_id (read-only) | Previous deal when rolled |
+| rolled_into_deal_id | uuid | yes | FK → money_market_deal | rolled_into_deal_id (read-only) | New deal when this one was rolled |
 | collateral_description | text | yes |  | collateral_description | Repo collateral details |
 | dealer_id | uuid | no | ref → app_user | dealer_id | Dealer |
-| verified_by | varchar(64) | yes |  | verified_by (read-only) | Back-office verifier |
+| nostro_account_id | uuid | yes | ref → nostro_account | nostro_account_id | Our nostro (default: SSI nostro) |
+| verified_by | varchar(64) | yes |  | verified_by (read-only) | Back-office verifier (four-eyes) |
+| verified_at | timestamptz | yes |  | verified_at (read-only) | Verification time |
+| confirmed_at | timestamptz | yes |  | confirmed_at (read-only) | Confirmation time |
+| settled_at | timestamptz | yes |  | settled_at (read-only) | Start-leg settlement time |
+| matured_at | timestamptz | yes |  | matured_at (read-only) | Maturity processing time |
 | status | varchar(40) (TreasuryDealStatus) | no |  | status (read-only) | Lifecycle status |
-| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Ledger account carrying the deal |
-| settlement_journal_entry_id | uuid | yes | ref → journal_entry | settlement_journal_entry_id | Posting on settlement |
-| maturity_journal_entry_id | uuid | yes | ref → journal_entry | maturity_journal_entry_id | Posting on maturity |
-| cancel_reason | varchar(255) | yes |  | cancel_reason | Cancellation reason |
+| ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id (read-only) | Ledger account carrying the deal |
+| settlement_journal_entry_id | uuid | yes | ref → journal_entry | settlement_journal_entry_id (read-only) | Posting on settlement |
+| maturity_journal_entry_id | uuid | yes | ref → journal_entry | maturity_journal_entry_id (read-only) | Posting on maturity |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14294,7 +14309,7 @@ API: /v1/treasury/money-market-deals · Requirements: TRY-01, GL-02
 
 #### `treasury_fx_deal`
 
-Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+Treasury FX deal (spot, forward, swap, NDF) with its legs — distinct from customer FX in payments
 
 API: /v1/treasury/fx-deals · Requirements: TRY-01, GL-02
 
@@ -14307,19 +14322,26 @@ API: /v1/treasury/fx-deals · Requirements: TRY-01, GL-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| deal_ref | varchar(32) | no | UQ | deal_ref | Deal reference |
+| deal_ref | varchar(32) | no | UQ | deal_ref (read-only) | Deal reference (server-generated) |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Booking entity |
 | treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty |
 | deal_type | varchar(40) (TreasuryFxDealType) | no |  | deal_type | Spot, forward, swap or NDF |
 | trade_date | date | no |  | trade_date | Trade date |
 | dealer_id | uuid | no | ref → app_user | dealer_id | Dealer |
+| non_deliverable | boolean | no |  | non_deliverable | NDF: net cash settlement in settlement_currency at the fixing (always true for deal_type NDF) |
+| settlement_currency | char(3) | yes |  | settlement_currency | NDF settlement currency |
 | fixing_date | date | yes |  | fixing_date | NDF fixing date |
 | fixing_source | varchar(64) | yes |  | fixing_source | NDF fixing source |
+| fixing_rate | numeric(18,10) | yes |  | fixing_rate (read-only) | NDF fixing rate recorded by fix |
+| ndf_settlement_amount | numeric(28,8) | yes |  | ndf_settlement_amount (read-only) | NDF net settlement amount in settlement_currency (positive = we receive) |
 | status | varchar(40) (TreasuryDealStatus) | no |  | status (read-only) | Lifecycle status |
-| verified_by | varchar(64) | yes |  | verified_by (read-only) | Back-office verifier |
-| mtm_value | numeric(28,8) | yes |  | mtm_value (read-only) | Latest mark-to-market in base currency |
+| verified_by | varchar(64) | yes |  | verified_by (read-only) | Back-office verifier (four-eyes) |
+| verified_at | timestamptz | yes |  | verified_at (read-only) | Verification time |
+| confirmed_at | timestamptz | yes |  | confirmed_at (read-only) | Confirmation time |
+| mtm_value | numeric(28,8) | yes |  | mtm_value (read-only) | Latest mark-to-market in mtm_currency (positive = asset) |
+| mtm_currency | char(3) | yes |  | mtm_currency (read-only) | Currency of mtm_value (quote currency of the near leg) |
 | mtm_date | date | yes |  | mtm_date (read-only) | Valuation date |
-| cancel_reason | varchar(255) | yes |  | cancel_reason | Cancellation reason |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation reason |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14341,19 +14363,19 @@ API: /v1/treasury/fx-deal-legs · Requirements: TRY-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| treasury_fx_deal_id | uuid | no | FK → treasury_fx_deal | treasury_fx_deal_id | Deal |
+| treasury_fx_deal_id | uuid | no | FK → treasury_fx_deal | treasury_fx_deal_id (read-only) | Deal |
 | leg_type | varchar(40) (TreasuryFxLegType) | no |  | leg_type | Near or far leg |
 | buy_sell | varchar(40) (TreasuryBuySell) | no |  | buy_sell | Our direction on the base currency |
 | base_currency | char(3) | no |  | base_currency | Base currency |
 | base_amount | numeric(28,8) | no |  | base_amount | Base amount |
 | quote_currency | char(3) | no |  | quote_currency | Quote currency |
-| quote_amount | numeric(28,8) | no |  | quote_amount | Quote amount |
-| deal_rate | numeric(18,10) | no |  | deal_rate | All-in rate |
+| quote_amount | numeric(28,8) | yes |  | quote_amount (read-only) | Quote amount (base_amount x deal_rate) |
+| deal_rate | numeric(18,10) | no |  | deal_rate | All-in rate (quote units per base unit) |
 | spot_rate | numeric(18,10) | yes |  | spot_rate | Spot component |
-| forward_points | numeric(18,10) | yes |  | forward_points | Forward points |
+| forward_points | numeric(18,10) | yes |  | forward_points | Forward points in pips (0.0001; 0.01 for JPY quotes): deal_rate = spot_rate + points x pip |
 | value_date | date | no |  | value_date | Settlement date |
 | settlement_status | varchar(40) (TreasurySettlementStatus) | no |  | settlement_status (read-only) | Settlement status |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Settlement posting |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Settlement posting |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14375,18 +14397,18 @@ API: /v1/treasury/securities · Requirements: TRY-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| isin | varchar(12) | no | UQ | isin | ISIN |
+| isin | varchar(12) | no | UQ | isin | ISIN (ISO 6166, validated check digit) |
 | name | varchar(200) | no |  | name | Security name |
 | security_type | varchar(40) (TreasurySecurityType) | no |  | security_type | Type |
 | issuer_name | varchar(200) | no |  | issuer_name | Issuer |
 | issuer_counterparty_id | uuid | yes | FK → treasury_counterparty | issuer_counterparty_id | Issuer as counterparty (issuer limits) |
 | currency | char(3) | no |  | currency | Currency |
 | coupon_rate | numeric(18,10) | yes |  | coupon_rate | Coupon rate (empty for discount instruments) |
-| coupon_frequency | integer | yes |  | coupon_frequency | Coupons per year |
+| coupon_frequency | integer | yes |  | coupon_frequency | Coupons per year (1, 2, 4 or 12) |
 | issue_date | date | yes |  | issue_date | Issue date |
 | maturity_date | date | no |  | maturity_date | Maturity |
 | day_count | varchar(40) (DayCountBasis) | no |  | day_count | Day count |
-| hqla_level | varchar(10) | yes |  | hqla_level | Basel HQLA level: L1, L2A, L2B or NONE |
+| hqla_level | varchar(40) (TreasuryHqlaLevel) | no |  | hqla_level | Basel HQLA level |
 | last_price | numeric(18,10) | yes |  | last_price (read-only) | Last clean price (% of nominal) |
 | last_price_date | date | yes |  | last_price_date (read-only) | Price date |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -14397,7 +14419,7 @@ API: /v1/treasury/securities · Requirements: TRY-01
 
 #### `securities_holding`
 
-Position in a security by portfolio and accounting classification
+Position in a security by portfolio and accounting classification (maintained by trade settlement)
 
 API: /v1/treasury/holdings · Requirements: TRY-01, GL-02
 
@@ -14415,11 +14437,14 @@ API: /v1/treasury/holdings · Requirements: TRY-01, GL-02
 | portfolio | varchar(64) | no |  | portfolio | Portfolio / book |
 | accounting_class | varchar(40) (TreasuryAccountingClass) | no |  | accounting_class | HTM, AFS, FVTPL, ... |
 | nominal | numeric(28,8) | no |  | nominal (read-only) | Face value held |
-| book_value | numeric(28,8) | no |  | book_value (read-only) | Amortised book value |
-| market_value | numeric(28,8) | yes |  | market_value (read-only) | Market value |
-| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued coupon |
-| unrealised_pnl | numeric(28,8) | yes |  | unrealised_pnl (read-only) | Unrealised gain / loss |
-| is_encumbered | boolean | no |  | is_encumbered | Pledged as collateral |
+| average_price | numeric(18,10) | yes |  | average_price (read-only) | Weighted average clean purchase price (% of nominal) |
+| book_value | numeric(28,8) | no |  | book_value (read-only) | Book value (nominal x average price) |
+| market_value | numeric(28,8) | yes |  | market_value (read-only) | Clean market value at valuation_date |
+| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued coupon at valuation_date |
+| unrealised_pnl | numeric(28,8) | yes |  | unrealised_pnl (read-only) | Market value minus book value (P&L for FVTPL, OCI for AFS / FVOCI) |
+| realised_pnl | numeric(28,8) | no |  | realised_pnl (read-only) | Cumulative realised P&L from sales |
+| is_encumbered | boolean | no |  | is_encumbered (read-only) | Pledged as collateral (encumber action) |
+| encumbrance_reason | varchar(255) | yes |  | encumbrance_reason (read-only) | Reason of the last encumbrance change |
 | ledger_account_id | uuid | yes | ref → ledger_account | ledger_account_id | Ledger account |
 | valuation_date | date | yes |  | valuation_date (read-only) | Valuation date |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -14430,7 +14455,7 @@ API: /v1/treasury/holdings · Requirements: TRY-01, GL-02
 
 #### `securities_trade`
 
-Purchase or sale of a security that changes a holding
+Purchase or sale of a security that changes a holding (holding resolved or opened on capture)
 
 API: /v1/treasury/securities-trades · Requirements: TRY-01, GL-02
 
@@ -14443,21 +14468,29 @@ API: /v1/treasury/securities-trades · Requirements: TRY-01, GL-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| deal_ref | varchar(32) | no | UQ | deal_ref | Trade reference |
-| securities_holding_id | uuid | no | FK → securities_holding | securities_holding_id | Holding affected |
+| deal_ref | varchar(32) | no | UQ | deal_ref (read-only) | Trade reference (server-generated) |
+| legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Booking entity |
+| treasury_security_id | uuid | no | FK → treasury_security | treasury_security_id | Security traded |
+| portfolio | varchar(64) | no |  | portfolio | Portfolio / book |
+| accounting_class | varchar(40) (TreasuryAccountingClass) | no |  | accounting_class | Classification of the holding |
+| securities_holding_id | uuid | no | FK → securities_holding | securities_holding_id (read-only) | Holding affected |
 | treasury_counterparty_id | uuid | no | FK → treasury_counterparty | treasury_counterparty_id | Counterparty / broker |
 | buy_sell | varchar(40) (TreasuryBuySell) | no |  | buy_sell | Buy or sell |
 | nominal | numeric(28,8) | no |  | nominal | Nominal traded |
 | clean_price | numeric(18,10) | no |  | clean_price | Clean price (% of nominal) |
-| accrued_interest | numeric(28,8) | no |  | accrued_interest | Accrued interest paid / received |
-| settlement_amount | numeric(28,8) | no |  | settlement_amount | Dirty settlement amount |
-| currency | char(3) | no |  | currency | Currency |
+| dirty_price | numeric(18,10) | yes |  | dirty_price (read-only) | Dirty price (% of nominal) |
+| accrued_interest | numeric(28,8) | no |  | accrued_interest (read-only) | Accrued interest paid / received (security day count) |
+| settlement_amount | numeric(28,8) | no |  | settlement_amount (read-only) | Dirty settlement amount |
+| simple_yield | numeric(18,10) | yes |  | simple_yield (read-only) | Simple yield to maturity at the clean price |
+| currency | char(3) | no |  | currency (read-only) | Currency (from the security) |
 | trade_date | date | no |  | trade_date | Trade date |
 | settlement_date | date | no |  | settlement_date | Settlement date |
 | dealer_id | uuid | no | ref → app_user | dealer_id | Dealer |
 | status | varchar(40) (TreasuryTradeStatus) | no |  | status (read-only) | Status |
 | realised_pnl | numeric(28,8) | yes |  | realised_pnl (read-only) | Realised P&L on sale |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Settlement posting |
+| settled_at | timestamptz | yes |  | settled_at (read-only) | Settlement time |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation reason |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Settlement posting |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14479,15 +14512,18 @@ API: /v1/treasury/confirmations · Requirements: TRY-01
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| deal_type | varchar(32) | no |  | deal_type | MONEY_MARKET, FX, SECURITY |
-| deal_id | uuid | no |  | deal_id | Deal confirmed |
+| deal_type | varchar(40) (TreasuryDealType) | no |  | deal_type | Deal family |
+| deal_id | uuid | yes |  | deal_id | Deal confirmed (empty for an inbound confirmation not yet matched) |
 | channel | varchar(40) (TreasuryConfirmationChannel) | no |  | channel | Channel |
 | message_type | varchar(16) | yes |  | message_type | MT300, MT320, MT541, MT543, ... |
-| our_reference | varchar(35) | no |  | our_reference | Our SWIFT reference (field 20) |
+| our_reference | varchar(35) | no |  | our_reference | Our SWIFT reference (field 20 outbound, field 21 inbound) |
 | their_reference | varchar(35) | yes |  | their_reference | Counterparty reference |
-| direction | varchar(10) | no |  | direction | OUTBOUND or INBOUND |
-| status | varchar(40) (TreasuryConfirmationStatus) | no |  | status | Matching status |
-| mismatch_fields | jsonb | yes |  | mismatch_fields (read-only) | Fields that did not match |
+| direction | varchar(40) (TreasuryConfirmationDirection) | no |  | direction | OUTBOUND (generated) or INBOUND (received) |
+| status | varchar(40) (TreasuryConfirmationStatus) | no |  | status (read-only) | Matching status |
+| fields | jsonb | yes |  | fields | Inbound confirmation fields from the counterparty's perspective (parsed from message_text when absent) |
+| message_text | text | yes |  | message_text | Raw message (MT text) — generated for outbound, received for inbound |
+| mismatch_fields | jsonb | yes |  | mismatch_fields (read-only) | Fields that did not match: [{field, ours, theirs}] |
+| dispute_reason | varchar(500) | yes |  | dispute_reason (read-only) | Reason given when disputed |
 | sent_at | timestamptz | yes |  | sent_at (read-only) | Sent time |
 | matched_at | timestamptz | yes |  | matched_at (read-only) | Match time |
 | raw_message_document_id | uuid | yes | ref → document | raw_message_document_id | Stored raw message |
@@ -14512,19 +14548,50 @@ API: /v1/treasury/settlements · Requirements: TRY-01, GL-02
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| deal_type | varchar(32) | no |  | deal_type | MONEY_MARKET, FX, SECURITY |
+| deal_type | varchar(40) (TreasuryDealType) | no |  | deal_type | Deal family |
 | deal_id | uuid | no |  | deal_id | Deal |
-| flow_type | varchar(32) | no |  | flow_type | PRINCIPAL_OUT, PRINCIPAL_IN, INTEREST, FX_PAY, FX_RECEIVE, SECURITY_CASH |
+| flow_type | varchar(40) (TreasurySettlementFlowType) | no |  | flow_type | Cash flow |
 | direction | varchar(40) (EntryDirection) | no |  | direction | Pay (CREDIT nostro) or receive (DEBIT nostro) |
 | amount | numeric(28,8) | no |  | amount | Amount |
 | currency | char(3) | no |  | currency | Currency |
 | value_date | date | no |  | value_date | Settlement date |
 | treasury_ssi_id | uuid | yes | FK → treasury_ssi | treasury_ssi_id | Counterparty SSI used |
 | nostro_account_id | uuid | yes | ref → nostro_account | nostro_account_id | Our nostro |
-| payment_id | uuid | yes | ref → payment | payment_id | Outgoing payment created |
-| status | varchar(40) (TreasurySettlementStatus) | no |  | status | Status |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting |
-| failure_reason | varchar(255) | yes |  | failure_reason | Failure reason |
+| payment_id | uuid | yes | ref → payment | payment_id (read-only) | Outgoing payment created by instruct |
+| status | varchar(40) (TreasurySettlementStatus) | no |  | status (read-only) | Status |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting |
+| instructed_at | timestamptz | yes |  | instructed_at (read-only) | Release time |
+| settled_at | timestamptz | yes |  | settled_at (read-only) | Confirmed settled |
+| settlement_reference | varchar(64) | yes |  | settlement_reference (read-only) | Nostro statement reference |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `treasury_eod_run`
+
+One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+
+API: /v1/treasury/eod-runs · Requirements: TRY-01, TRY-02, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (TreasuryEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (TreasuryEodRunStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14540,7 +14607,7 @@ Real-time and projected cash positions by currency and nostro, maturity ladders,
 
 Actual or projected cash position by currency, nostro and day
 
-API: /v1/treasury/liquidity/positions · Requirements: TRY-03
+API: /v1/treasury/liquidity/cash-positions · Requirements: TRY-03
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -14559,10 +14626,10 @@ API: /v1/treasury/liquidity/positions · Requirements: TRY-03
 | opening_balance | numeric(28,8) | no |  | opening_balance | Opening balance |
 | expected_inflows | numeric(28,8) | no |  | expected_inflows | Expected inflows |
 | expected_outflows | numeric(28,8) | no |  | expected_outflows | Expected outflows |
-| closing_balance | numeric(28,8) | no |  | closing_balance | Closing (projected) balance |
+| closing_balance | numeric(28,8) | no |  | closing_balance (read-only) | Closing balance = opening + inflows - outflows |
 | minimum_buffer | numeric(28,8) | yes |  | minimum_buffer | Minimum buffer required |
-| shortfall | numeric(28,8) | yes |  | shortfall (read-only) | Buffer shortfall, if any |
-| flows_by_category | jsonb | yes |  | flows_by_category (read-only) | Inflows/outflows by LiquidityFlowCategory |
+| shortfall | numeric(28,8) | yes |  | shortfall (read-only) | Buffer shortfall (minimum_buffer - closing_balance), if positive |
+| flows_by_category | jsonb | yes |  | flows_by_category (read-only) | Inflows/outflows by LiquidityFlowCategory: {CATEGORY: {inflows, outflows}} |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14586,9 +14653,13 @@ API: /v1/treasury/liquidity/ladders · Requirements: TRY-03
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
 | as_of_date | date | no |  | as_of_date | As-of date |
-| currency | char(3) | yes |  | currency | Currency (empty = all, in base currency) |
-| behavioural | boolean | no |  | behavioural | Apply behavioural assumptions |
+| currency | char(3) | yes |  | currency | Currency (empty = all, amounts taken as base currency) |
+| behavioural | boolean | no |  | behavioural | Apply behavioural profiles to non-maturity items |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
+| total_inflows | numeric(28,8) | yes |  | total_inflows (read-only) | Sum of inflows over all buckets |
+| total_outflows | numeric(28,8) | yes |  | total_outflows (read-only) | Sum of outflows over all buckets |
+| negative_gap_bucket | varchar(16) | yes |  | negative_gap_bucket (read-only) | First bucket whose cumulative gap is negative |
+| error_message | varchar(500) | yes |  | error_message (read-only) | Why the run failed |
 | started_at | timestamptz | yes |  | started_at (read-only) | Start |
 | finished_at | timestamptz | yes |  | finished_at (read-only) | End |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -14618,7 +14689,7 @@ API: internal only · Requirements: TRY-03
 | outflows | numeric(28,8) | no |  | outflows | Outflows |
 | net_gap | numeric(28,8) | no |  | net_gap | Inflows minus outflows |
 | cumulative_gap | numeric(28,8) | no |  | cumulative_gap | Cumulative gap |
-| breakdown | jsonb | yes |  | breakdown | Amounts by flow category |
+| breakdown | jsonb | yes |  | breakdown | Amounts by flow category: {CATEGORY: {inflows, outflows}} |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14643,18 +14714,22 @@ API: /v1/treasury/liquidity/lcr · Requirements: TRY-03, REG-01
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
 | as_of_date | date | no |  | as_of_date | As-of date |
 | currency | char(3) | no |  | currency | Reporting currency |
-| hqla_level1 | numeric(28,8) | no |  | hqla_level1 | Level 1 HQLA after haircuts |
-| hqla_level2a | numeric(28,8) | no |  | hqla_level2a | Level 2A HQLA after haircuts |
-| hqla_level2b | numeric(28,8) | no |  | hqla_level2b | Level 2B HQLA after haircuts |
-| total_hqla | numeric(28,8) | no |  | total_hqla | Total HQLA after caps |
-| outflows_30d | numeric(28,8) | no |  | outflows_30d | Weighted 30-day outflows |
-| inflows_30d | numeric(28,8) | no |  | inflows_30d | Weighted inflows (capped at 75% of outflows) |
-| net_outflows | numeric(28,8) | no |  | net_outflows | Net cash outflows |
-| lcr_ratio | numeric(18,10) | no |  | lcr_ratio | LCR = HQLA / net outflows |
+| hqla_level1 | numeric(28,8) | no |  | hqla_level1 (read-only) | Level 1 HQLA after haircuts |
+| hqla_level2a | numeric(28,8) | no |  | hqla_level2a (read-only) | Level 2A HQLA after haircuts |
+| hqla_level2b | numeric(28,8) | no |  | hqla_level2b (read-only) | Level 2B HQLA after haircuts |
+| cap_adjustment | numeric(28,8) | no |  | cap_adjustment (read-only) | Reduction applied by the 15% (L2B) and 40% (L2) caps |
+| total_hqla | numeric(28,8) | no |  | total_hqla (read-only) | Total HQLA after caps |
+| outflows_30d | numeric(28,8) | no |  | outflows_30d (read-only) | Weighted 30-day outflows |
+| inflows_30d | numeric(28,8) | no |  | inflows_30d (read-only) | Weighted inflows (capped at 75% of outflows) |
+| uncapped_inflows | numeric(28,8) | no |  | uncapped_inflows (read-only) | Weighted inflows before the 75% cap |
+| net_outflows | numeric(28,8) | no |  | net_outflows (read-only) | Net cash outflows |
+| lcr_ratio | numeric(18,10) | no |  | lcr_ratio (read-only) | LCR = HQLA / net outflows |
 | regulatory_minimum | numeric(18,10) | no |  | regulatory_minimum | Minimum ratio |
-| components | jsonb | no |  | components | Line-level components with run-off / inflow factors |
-| status | varchar(40) (LiquidityRatioStatus) | no |  | status | Status |
-| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| breach | boolean | no |  | breach (read-only) | Ratio below the regulatory minimum |
+| components | jsonb | no |  | components (read-only) | Line-level components [{line, code, category, amount, factor, weighted}] |
+| status | varchar(40) (LiquidityRatioStatus) | no |  | status (read-only) | Status |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver (four-eyes) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14679,13 +14754,15 @@ API: /v1/treasury/liquidity/nsfr · Requirements: TRY-03, REG-01
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
 | as_of_date | date | no |  | as_of_date | As-of date |
 | currency | char(3) | no |  | currency | Reporting currency |
-| available_stable_funding | numeric(28,8) | no |  | available_stable_funding | ASF |
-| required_stable_funding | numeric(28,8) | no |  | required_stable_funding | RSF |
-| nsfr_ratio | numeric(18,10) | no |  | nsfr_ratio | ASF / RSF |
+| available_stable_funding | numeric(28,8) | no |  | available_stable_funding (read-only) | ASF |
+| required_stable_funding | numeric(28,8) | no |  | required_stable_funding (read-only) | RSF |
+| nsfr_ratio | numeric(18,10) | no |  | nsfr_ratio (read-only) | ASF / RSF |
 | regulatory_minimum | numeric(18,10) | no |  | regulatory_minimum | Minimum ratio |
-| components | jsonb | no |  | components | ASF/RSF factors per balance-sheet line |
-| status | varchar(40) (LiquidityRatioStatus) | no |  | status | Status |
-| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| breach | boolean | no |  | breach (read-only) | Ratio below the regulatory minimum |
+| components | jsonb | no |  | components (read-only) | ASF/RSF factors per balance-sheet line [{line, code, side, amount, factor, weighted}] |
+| status | varchar(40) (LiquidityRatioStatus) | no |  | status (read-only) | Status |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver (four-eyes) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14711,9 +14788,10 @@ API: /v1/treasury/liquidity/stress-scenarios · Requirements: TRY-03
 | name | varchar(160) | no |  | name | Name |
 | severity | varchar(40) (LiquidityStressSeverity) | no |  | severity | Severity / type |
 | horizon_days | integer | no |  | horizon_days | Survival horizon |
-| assumptions | jsonb | no |  | assumptions | Deposit run-off, drawdown, haircut and market assumptions |
+| assumptions | jsonb | no |  | assumptions | {runoff_rates {CODE: rate}, inflow_rates {CODE: rate}, hqla_haircuts {L1, L2A, L2B}, runoff_multiplier, runoff_profile LINEAR|UPFRONT, min_survival_days} |
 | is_active | boolean | no |  | is_active | Active |
-| approved_by | varchar(64) | yes |  | approved_by | Approver |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Approver (four-eyes) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14737,11 +14815,12 @@ API: /v1/treasury/liquidity/stress-results · Requirements: TRY-03
 | as_of_date | date | no |  | as_of_date | As-of date |
 | currency | char(3) | no |  | currency | Currency |
 | stressed_outflows | numeric(28,8) | no |  | stressed_outflows | Stressed outflows over the horizon |
-| counterbalancing_capacity | numeric(28,8) | no |  | counterbalancing_capacity | Liquidity available to cover them |
-| net_position | numeric(28,8) | no |  | net_position | Surplus / shortfall |
-| survival_days | integer | no |  | survival_days | Days until the buffer is exhausted |
-| daily_profile | jsonb | no |  | daily_profile | Day-by-day stressed position |
-| breach | boolean | no |  | breach | Breaches the risk appetite |
+| stressed_inflows | numeric(28,8) | no |  | stressed_inflows | Stressed inflows over the horizon |
+| counterbalancing_capacity | numeric(28,8) | no |  | counterbalancing_capacity | Liquidity available to cover them (stressed HQLA) |
+| net_position | numeric(28,8) | no |  | net_position | Surplus / shortfall at the horizon |
+| survival_days | integer | no |  | survival_days | Days until the buffer is exhausted (horizon + 1 when never) |
+| daily_profile | jsonb | no |  | daily_profile | Day-by-day stressed position [{day, outflows, inflows, cumulative_position}] |
+| breach | boolean | no |  | breach | Breaches the risk appetite (survival below min_survival_days) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14764,12 +14843,42 @@ API: /v1/treasury/liquidity/intraday · Requirements: TRY-03, REG-01
 | snapshot_at | timestamptz | no |  | snapshot_at | Snapshot time |
 | currency | char(3) | no |  | currency | Currency |
 | nostro_account_id | uuid | yes | ref → nostro_account | nostro_account_id | Settlement account |
-| available_liquidity | numeric(28,8) | no |  | available_liquidity | Available intraday liquidity |
-| used_liquidity | numeric(28,8) | no |  | used_liquidity | Liquidity used so far today |
-| largest_negative_position | numeric(28,8) | no |  | largest_negative_position | Largest net negative position so far |
-| payments_sent | numeric(28,8) | no |  | payments_sent | Gross payments sent |
-| payments_received | numeric(28,8) | no |  | payments_received | Gross payments received |
-| throughput_pct | numeric(18,10) | yes |  | throughput_pct | Share of payments settled by this time |
+| available_liquidity | numeric(28,8) | no |  | available_liquidity | Available intraday liquidity at the start of the day (balance + credit lines + collateral) |
+| used_liquidity | numeric(28,8) | no |  | used_liquidity (read-only) | Liquidity used so far today (= largest negative net cumulative position) |
+| largest_negative_position | numeric(28,8) | no |  | largest_negative_position (read-only) | Largest net negative cumulative position (reported as a positive number) |
+| largest_positive_position | numeric(28,8) | no |  | largest_positive_position (read-only) | Largest net positive cumulative position |
+| payments_sent | numeric(28,8) | no |  | payments_sent (read-only) | Gross payments sent |
+| payments_received | numeric(28,8) | no |  | payments_received (read-only) | Gross payments received |
+| throughput_pct | numeric(18,10) | yes |  | throughput_pct (read-only) | Share of the day's expected payments sent by snapshot_at |
+| profile | jsonb | yes |  | profile (read-only) | Net cumulative position after each movement [{at, net_cumulative}] |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `liquidity_eod_run`
+
+One end-of-day liquidity job execution per tenant, job and business date (idempotency)
+
+API: /v1/treasury/liquidity/eod-runs · Requirements: TRY-03, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (TreasuryEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (TreasuryEodRunStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14783,7 +14892,7 @@ Interest rate risk in the banking book: repricing gap, NII and EVE sensitivity u
 
 #### `alm_behavioural_assumption`
 
-Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product; used once approved
 
 API: /v1/treasury/alm/assumptions · Requirements: TRY-04, TRY-05
 
@@ -14800,11 +14909,12 @@ API: /v1/treasury/alm/assumptions · Requirements: TRY-04, TRY-05
 | product_id | uuid | yes | ref → product | product_id | Product (empty = all products of the segment) |
 | segment | varchar(64) | yes |  | segment | Customer / product segment |
 | currency | char(3) | yes |  | currency | Currency |
-| parameters | jsonb | no |  | parameters | Model parameters, e.g. CPR curve, decay rates, core/volatile split |
+| parameters | jsonb | no |  | parameters | PREPAYMENT {cpr}; DEPOSIT_DECAY {core_ratio, decay_rate, core_max_months, pass_through}; NON_MATURITY_REPRICING {repricing_months, pass_through} |
 | valid_from | date | no |  | valid_from | Effective from |
 | valid_to | date | yes |  | valid_to | Effective to |
 | model_version | varchar(32) | no |  | model_version | Model version |
-| approved_by | varchar(64) | yes |  | approved_by | Model approver |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Model approver (four-eyes) |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14828,9 +14938,13 @@ API: /v1/treasury/alm/gap-runs · Requirements: TRY-04
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | legal_entity_id | uuid | no | ref → legal_entity | legal_entity_id | Entity |
 | as_of_date | date | no |  | as_of_date | As-of date |
-| currency | char(3) | yes |  | currency | Currency (empty = all, in base currency) |
-| behavioural | boolean | no |  | behavioural | Apply behavioural assumptions |
+| currency | char(3) | yes |  | currency | Currency (empty = all, amounts taken as base currency) |
+| behavioural | boolean | no |  | behavioural | Apply approved behavioural assumptions |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
+| total_assets | numeric(28,8) | yes |  | total_assets (read-only) | Rate-sensitive assets |
+| total_liabilities | numeric(28,8) | yes |  | total_liabilities (read-only) | Rate-sensitive liabilities |
+| assumptions_used | jsonb | yes |  | assumptions_used (read-only) | Behavioural assumptions applied |
+| error_message | varchar(500) | yes |  | error_message (read-only) | Why the run failed |
 | started_at | timestamptz | yes |  | started_at (read-only) | Start |
 | finished_at | timestamptz | yes |  | finished_at (read-only) | End |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -14859,7 +14973,7 @@ API: internal only · Requirements: TRY-04
 | off_balance_net | numeric(28,8) | no |  | off_balance_net | Off-balance-sheet net position |
 | gap | numeric(28,8) | no |  | gap | Net repricing gap |
 | cumulative_gap | numeric(28,8) | no |  | cumulative_gap | Cumulative gap |
-| breakdown | jsonb | yes |  | breakdown | Amounts by product |
+| breakdown | jsonb | yes |  | breakdown | Amounts by position code: {CODE: amount} |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14885,16 +14999,17 @@ API: /v1/treasury/alm/sensitivity-runs · Requirements: TRY-04, REG-01
 | as_of_date | date | no |  | as_of_date | As-of date |
 | measure | varchar(40) (AlmMeasure) | no |  | measure | NII, EVE or EaR |
 | shock_type | varchar(40) (AlmShockType) | no |  | shock_type | Shock scenario |
-| shock_bps | integer | yes |  | shock_bps | Parallel shock size in basis points |
-| custom_shock | jsonb | yes |  | custom_shock | Tenor-by-tenor shocks for CUSTOM |
+| shock_bps | integer | yes |  | shock_bps | Parallel shock size in basis points (default 200); short 250 / long 100 for rotations |
+| custom_shock | jsonb | yes |  | custom_shock | Tenor-by-tenor shocks for CUSTOM [{tenor_days, bps}] (linear interpolation) |
 | horizon_months | integer | no |  | horizon_months | NII horizon |
 | currency | char(3) | no |  | currency | Reporting currency |
 | base_value | numeric(28,8) | yes |  | base_value (read-only) | Base-case NII or EVE |
 | shocked_value | numeric(28,8) | yes |  | shocked_value (read-only) | Shocked NII or EVE |
 | delta | numeric(28,8) | yes |  | delta (read-only) | Change versus base |
 | delta_pct_tier1 | numeric(18,10) | yes |  | delta_pct_tier1 (read-only) | Change as share of Tier 1 capital (EVE outlier test) |
+| outlier | boolean | yes |  | outlier (read-only) | EVE decline beyond 15% of Tier 1 |
 | status | varchar(40) (RunStatus) | no |  | status (read-only) | Run status |
-| results | jsonb | yes |  | results (read-only) | Detail by product and bucket |
+| results | jsonb | yes |  | results (read-only) | Detail {positions [{code, base, shocked, delta}], shock [{tenor_days, shock_bps, base_rate, shocked_rate}]} |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14921,8 +15036,9 @@ API: /v1/treasury/ftp/curves · Requirements: TRY-05
 | curve_type | varchar(40) (FtpCurveType) | no |  | curve_type | Base, liquidity premium, ... |
 | effective_date | date | no |  | effective_date | Effective date |
 | source | varchar(64) | yes |  | source | Market source / construction method |
-| is_published | boolean | no |  | is_published | Published for use |
-| approved_by | varchar(64) | yes |  | approved_by | ALCO approver |
+| is_published | boolean | no |  | is_published (read-only) | Published for use (publish action) |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | ALCO approver (four-eyes) |
+| published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -14931,7 +15047,7 @@ API: /v1/treasury/ftp/curves · Requirements: TRY-05
 
 #### `ftp_curve_point`
 
-Tenor point on an FTP curve
+Tenor point on an FTP curve (frozen once the curve is published)
 
 API: /v1/treasury/ftp/curve-points · Requirements: TRY-05
 
@@ -14976,6 +15092,7 @@ API: /v1/treasury/ftp/rules · Requirements: TRY-05
 | base_curve_code | varchar(32) | no |  | base_curve_code | Base curve code |
 | liquidity_curve_code | varchar(32) | yes |  | liquidity_curve_code | Liquidity premium curve code |
 | fixed_spread | numeric(18,10) | yes |  | fixed_spread | Spread for FIXED_SPREAD method |
+| pool_tenor_days | integer | yes |  | pool_tenor_days | Pricing tenor for POOLED (default 30) |
 | priority | integer | no |  | priority | Lower wins |
 | valid_from | date | no |  | valid_from | Effective from |
 | valid_to | date | yes |  | valid_to | Effective to |
@@ -14999,18 +15116,19 @@ API: /v1/treasury/ftp/assignments · Requirements: TRY-05
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | period_start | date | no |  | period_start | Period start |
 | period_end | date | no |  | period_end | Period end |
-| exposure_type | varchar(32) | no |  | exposure_type | DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE |
+| exposure_type | varchar(40) (FtpExposureType) | no |  | exposure_type | Deposit account, term deposit, loan or credit line |
 | exposure_id | uuid | no |  | exposure_id | Account or loan id |
 | deposit_account_id | uuid | yes | ref → deposit_account | deposit_account_id | Deposit account, when applicable |
 | loan_id | uuid | yes | ref → loan | loan_id | Loan, when applicable |
 | product_id | uuid | yes | ref → product | product_id | Product |
 | ftp_rule_id | uuid | yes | FK → ftp_rule | ftp_rule_id | Rule applied |
+| term_days | integer | yes |  | term_days | Pricing tenor used |
 | average_balance | numeric(28,8) | no |  | average_balance | Average balance for the period |
 | currency | char(3) | no |  | currency | Currency |
 | customer_rate | numeric(18,10) | no |  | customer_rate | Rate paid / earned with the customer |
 | ftp_rate | numeric(18,10) | no |  | ftp_rate | Transfer price |
-| net_margin | numeric(18,10) | no |  | net_margin | Customer rate minus FTP (sign by side) |
-| ftp_charge_credit | numeric(28,8) | no |  | ftp_charge_credit | FTP charge (loans) or credit (deposits) |
+| net_margin | numeric(18,10) | no |  | net_margin | Customer rate minus FTP for assets, FTP minus customer rate for liabilities |
+| ftp_charge_credit | numeric(28,8) | no |  | ftp_charge_credit | FTP charge (loans) or credit (deposits) for the period (ACT/365) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

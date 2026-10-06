@@ -1174,10 +1174,10 @@ tags:
   description: Treasury counterparty (bank, central bank, broker, corporate) with identifiers and rating
   x-domain: Treasury and ALM
 - name: Treasury Ssis
-  description: Standing settlement instructions per counterparty and currency
+  description: Standing settlement instructions per counterparty and currency (used only once verified)
   x-domain: Treasury and ALM
 - name: Treasury Counterparty Limits
-  description: Credit / settlement / tenor limit on a counterparty (or its group)
+  description: Credit / settlement / tenor limit on a counterparty (or its group); usable once approved
   x-domain: Treasury and ALM
 - name: Treasury Limit Utilisations
   description: Immutable record of a deal consuming or releasing a counterparty limit
@@ -1186,7 +1186,7 @@ tags:
   description: Money market placement, borrowing, call, repo or CD with full lifecycle
   x-domain: Treasury and ALM
 - name: Treasury Fx Deals
-  description: Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+  description: Treasury FX deal (spot, forward, swap, NDF) with its legs — distinct from customer FX in payments
   x-domain: Treasury and ALM
 - name: Treasury Fx Deal Legs
   description: A leg of a treasury FX deal (one for spot/forward, two for swaps)
@@ -1195,10 +1195,10 @@ tags:
   description: Security master record (bonds, bills, CP, CDs)
   x-domain: Treasury and ALM
 - name: Securities Holdings
-  description: Position in a security by portfolio and accounting classification
+  description: Position in a security by portfolio and accounting classification (maintained by trade settlement)
   x-domain: Treasury and ALM
 - name: Securities Trades
-  description: Purchase or sale of a security that changes a holding
+  description: Purchase or sale of a security that changes a holding (holding resolved or opened on capture)
   x-domain: Treasury and ALM
 - name: Treasury Confirmations
   description: Confirmation of a treasury deal (SWIFT MT300 FX, MT320 MM, MT541/543 securities) and matching
@@ -1206,7 +1206,10 @@ tags:
 - name: Treasury Settlements
   description: Settlement instruction generated for a treasury deal cash flow
   x-domain: Treasury and ALM
-- name: Liquidity Positions
+- name: Treasury Eod Runs
+  description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+  x-domain: Treasury and ALM
+- name: Cash Positions
   description: Actual or projected cash position by currency, nostro and day
   x-domain: Treasury and ALM
 - name: Liquidity Ladder Runs
@@ -1227,8 +1230,11 @@ tags:
 - name: Intraday Liquidity
   description: Intraday liquidity monitoring per currency and settlement account (BCBS 248)
   x-domain: Treasury and ALM
+- name: Liquidity Eod Runs
+  description: One end-of-day liquidity job execution per tenant, job and business date (idempotency)
+  x-domain: Treasury and ALM
 - name: Alm Behavioural Assumptions
-  description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+  description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product; used once approved
   x-domain: Treasury and ALM
 - name: Alm Gap Runs
   description: Repricing gap report run at an as-of date
@@ -1240,7 +1246,7 @@ tags:
   description: Funds transfer pricing curve per currency, type and effective date
   x-domain: Treasury and ALM
 - name: Ftp Curve Points
-  description: Tenor point on an FTP curve
+  description: Tenor point on an FTP curve (frozen once the curve is published)
   x-domain: Treasury and ALM
 - name: Ftp Rules
   description: Rule assigning an FTP method and curves to products / segments
@@ -106649,7 +106655,7 @@ paths:
   /v1/treasury/counterparties/{id}/approve:
     post:
       operationId: treasuryCounterpartiesApprove
-      summary: Approve counterparty onboarding (checker)
+      summary: Approve counterparty onboarding (checker; not the maker)
       tags:
       - Treasury Counterparties
       security:
@@ -106740,10 +106746,57 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
       x-table: treasury_counterparty
+  /v1/treasury/counterparties/{id}/reactivate:
+    post:
+      operationId: treasuryCounterpartiesReactivate
+      summary: Reactivate a suspended counterparty
+      tags:
+      - Treasury Counterparties
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterparty'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartiesReactivateRequest'
+      x-requirements:
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_counterparty
   /v1/treasury/counterparties/{id}/exposure:
     get:
       operationId: treasuryCounterpartiesExposure
-      summary: Aggregated exposure across deals and limits
+      summary: 'Aggregated exposure: limits with utilisation and headroom, outstanding deals by family'
       tags:
       - Treasury Counterparties
       security:
@@ -106756,15 +106809,15 @@ paths:
         schema:
           type: string
           format: uuid
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TreasuryCounterpartyLimitPage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -106972,7 +107025,7 @@ paths:
   /v1/treasury/ssis/{id}/verify:
     post:
       operationId: treasurySsisVerify
-      summary: Four-eyes verification of an SSI
+      summary: Four-eyes verification of an SSI (checker; not the maker)
       tags:
       - Treasury Ssis
       security:
@@ -107056,6 +107109,7 @@ paths:
         schema:
           type: string
           enum:
+          - PENDING_APPROVAL
           - ACTIVE
           - SUSPENDED
           - EXPIRED
@@ -107222,10 +107276,56 @@ paths:
       x-table: treasury_counterparty_limit
       x-crud: true
       x-crud-update: true
+  /v1/treasury/limits/{id}/approve:
+    post:
+      operationId: treasuryCounterpartyLimitsApprove
+      summary: Approve the limit (credit checker; not the maker)
+      tags:
+      - Treasury Counterparty Limits
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryCounterpartyLimit'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryCounterpartyLimitsApproveRequest'
+      x-requirements:
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_counterparty_limit
   /v1/treasury/limits/check:
     post:
       operationId: treasuryCounterpartyLimitsCheck
-      summary: Pre-deal limit check
+      summary: Pre-deal limit check of a prospective exposure (no reservation)
       tags:
       - Treasury Counterparty Limits
       security:
@@ -107234,8 +107334,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -107323,6 +107429,14 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: reason
+        in: query
+        schema:
+          type: string
+          enum:
+          - RESERVE
+          - RELEASE
+          - REFRESH
       - name: custom_field_1
         in: query
         schema:
@@ -107638,7 +107752,7 @@ paths:
   /v1/treasury/money-market-deals/{id}/verify:
     post:
       operationId: moneyMarketDealsVerify
-      summary: Back-office verification (checker)
+      summary: Back-office verification (checker; not the capturing dealer)
       tags:
       - Money Market Deals
       security:
@@ -107679,7 +107793,7 @@ paths:
   /v1/treasury/money-market-deals/{id}/confirm:
     post:
       operationId: moneyMarketDealsConfirm
-      summary: Mark confirmed after confirmation matching
+      summary: Mark confirmed (requires a matched inbound confirmation unless confirmed manually with a reference)
       tags:
       - Money Market Deals
       security:
@@ -107710,6 +107824,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoneyMarketDealsConfirmRequest'
       x-requirements:
       - GL-02
       - TRY-01
@@ -107720,7 +107840,7 @@ paths:
   /v1/treasury/money-market-deals/{id}/settle:
     post:
       operationId: moneyMarketDealsSettle
-      summary: Settle the start leg and post to the ledger
+      summary: 'Settle the start leg: settlement instructions and ledger posting'
       tags:
       - Money Market Deals
       security:
@@ -107849,7 +107969,7 @@ paths:
   /v1/treasury/money-market-deals/{id}/call:
     post:
       operationId: moneyMarketDealsCall
-      summary: Call an open-ended deal with notice
+      summary: Call an open-ended deal; maturity = call_date + notice_days
       tags:
       - Money Market Deals
       security:
@@ -107896,7 +108016,7 @@ paths:
   /v1/treasury/money-market-deals/{id}/cancel:
     post:
       operationId: moneyMarketDealsCancel
-      summary: Cancel a deal before settlement
+      summary: Cancel a deal before settlement (releases limits)
       tags:
       - Money Market Deals
       security:
@@ -107943,7 +108063,7 @@ paths:
   /v1/treasury/money-market-deals/{id}/accrue:
     post:
       operationId: moneyMarketDealsAccrue
-      summary: Recalculate accrued interest to a date
+      summary: Recalculate accrued interest through a date
       tags:
       - Money Market Deals
       security:
@@ -107986,6 +108106,42 @@ paths:
       x-service: treasury-deal-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
+      x-table: money_market_deal
+  /v1/treasury/money-market-deals/{id}/confirmation-message:
+    get:
+      operationId: moneyMarketDealsConfirmationMessage
+      summary: MT320 confirmation text for the deal
+      tags:
+      - Money Market Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
       x-table: money_market_deal
   /v1/treasury/fx-deals:
     get:
@@ -108245,7 +108401,7 @@ paths:
   /v1/treasury/fx-deals/{id}/verify:
     post:
       operationId: treasuryFxDealsVerify
-      summary: Back-office verification
+      summary: Back-office verification (checker; not the capturing dealer)
       tags:
       - Treasury Fx Deals
       security:
@@ -108286,7 +108442,7 @@ paths:
   /v1/treasury/fx-deals/{id}/confirm:
     post:
       operationId: treasuryFxDealsConfirm
-      summary: Mark confirmed
+      summary: Mark confirmed (requires a matched inbound confirmation unless confirmed manually with a reference)
       tags:
       - Treasury Fx Deals
       security:
@@ -108317,6 +108473,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealsConfirmRequest'
       x-requirements:
       - GL-02
       - TRY-01
@@ -108371,10 +108533,57 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
       x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/fix:
+    post:
+      operationId: treasuryFxDealsFix
+      summary: Record the NDF fixing and compute the net settlement amount
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryFxDeal'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryFxDealsFixRequest'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_fx_deal
   /v1/treasury/fx-deals/{id}/revalue:
     post:
       operationId: treasuryFxDealsRevalue
-      summary: Mark to market
+      summary: 'Mark to market (market_rate default: reference-data REVALUATION rate)'
       tags:
       - Treasury Fx Deals
       security:
@@ -108421,7 +108630,7 @@ paths:
   /v1/treasury/fx-deals/{id}/cancel:
     post:
       operationId: treasuryFxDealsCancel
-      summary: Cancel the deal
+      summary: Cancel the deal (releases limits)
       tags:
       - Treasury Fx Deals
       security:
@@ -108464,6 +108673,42 @@ paths:
       x-service: treasury-deal-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
+      x-table: treasury_fx_deal
+  /v1/treasury/fx-deals/{id}/confirmation-message:
+    get:
+      operationId: treasuryFxDealsConfirmationMessage
+      summary: MT300 confirmation text for the deal
+      tags:
+      - Treasury Fx Deals
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
       x-table: treasury_fx_deal
   /v1/treasury/fx-deal-legs:
     get:
@@ -108630,7 +108875,11 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 10
+          enum:
+          - L1
+          - L2A
+          - L2B
+          - NONE
       - name: maturity_date
         in: query
         schema:
@@ -108845,6 +109094,65 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
       x-table: treasury_security
+  /v1/treasury/securities/{id}/analytics:
+    get:
+      operationId: treasurySecuritiesAnalytics
+      summary: Accrued interest, dirty price, settlement amount and simple yield
+      tags:
+      - Treasury Securities
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: clean_price
+        in: query
+        required: true
+        schema:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      - name: settlement_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: nominal
+        in: query
+        required: false
+        schema:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: treasury_security
   /v1/treasury/holdings:
     get:
       operationId: securitiesHoldingsList
@@ -108974,7 +109282,7 @@ paths:
   /v1/treasury/holdings/revalue:
     post:
       operationId: securitiesHoldingsRevalue
-      summary: Revalue holdings at a valuation date
+      summary: Revalue holdings at a valuation date (last prices, accrued coupon, unrealised P&L)
       tags:
       - Securities Holdings
       security:
@@ -108983,8 +109291,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -109070,6 +109384,11 @@ paths:
       - $ref: '#/components/parameters/CreatedAfter'
       - $ref: '#/components/parameters/CreatedBefore'
       - name: securities_holding_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: treasury_security_id
         in: query
         schema:
           type: string
@@ -109227,7 +109546,7 @@ paths:
   /v1/treasury/securities-trades/{id}/settle:
     post:
       operationId: securitiesTradesSettle
-      summary: Settle the trade and update the holding
+      summary: Settle the trade, update the holding and post to the ledger
       tags:
       - Securities Trades
       security:
@@ -109330,7 +109649,10 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
       - name: deal_id
         in: query
         schema:
@@ -109357,6 +109679,13 @@ paths:
           - EMAIL
           - PLATFORM
           - MANUAL
+      - name: direction
+        in: query
+        schema:
+          type: string
+          enum:
+          - OUTBOUND
+          - INBOUND
       - name: custom_field_1
         in: query
         schema:
@@ -109477,10 +109806,50 @@ paths:
       x-table: treasury_deal_confirmation
       x-crud: true
       x-crud-get: true
+  /v1/treasury/confirmations/generate:
+    post:
+      operationId: treasuryConfirmationsGenerate
+      summary: Generate and send our outbound confirmation (MT320 / MT300) for a deal
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryDealConfirmation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TreasuryConfirmationsGenerateRequest'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_deal_confirmation
   /v1/treasury/confirmations/{id}/match:
     post:
       operationId: treasuryConfirmationsMatch
-      summary: Match an inbound confirmation to a deal
+      summary: Match an inbound confirmation to a deal (MATCHED confirms a verified deal)
       tags:
       - Treasury Confirmations
       security:
@@ -109569,6 +109938,41 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
       x-table: treasury_deal_confirmation
+  /v1/treasury/confirmations/{id}/message:
+    get:
+      operationId: treasuryConfirmationsMessage
+      summary: Confirmation message text
+      tags:
+      - Treasury Confirmations
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: treasury_deal_confirmation
   /v1/treasury/settlements:
     get:
       operationId: treasurySettlementsList
@@ -109587,7 +109991,10 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
       - name: deal_id
         in: query
         schema:
@@ -109699,7 +110106,7 @@ paths:
   /v1/treasury/settlements/{id}/instruct:
     post:
       operationId: treasurySettlementsInstruct
-      summary: Release the settlement as a payment
+      summary: Release the settlement as a payment (pay flows) or await receipt (receive flows)
       tags:
       - Treasury Settlements
       security:
@@ -109831,12 +110238,368 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
       x-required-scope: treasury:write
       x-table: treasury_settlement
-  /v1/treasury/liquidity/positions:
+  /v1/treasury/settlements/projected-flows:
     get:
-      operationId: liquidityPositionsList2
-      summary: List liquidity positions
+      operationId: treasurySettlementsProjectedFlows
+      summary: Contractual cash flows of live deals and open settlements by value date (liquidity projection)
       tags:
-      - Liquidity Positions
+      - Treasury Settlements
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: legal_entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - GL-02
+      - TRY-01
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: treasury_settlement
+  /v1/treasury/eod-runs:
+    get:
+      operationId: treasuryEodRunsList
+      summary: List treasury eod runs
+      tags:
+      - Treasury Eod Runs
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - MARK_TO_MARKET
+          - INTEREST_ACCRUAL
+          - MATURITY_PROCESSING
+          - LIMIT_UTILISATION_REFRESH
+          - LIQUIDITY_POSITION_SNAPSHOT
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: treasury_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/treasury/eod-runs/{id}:
+    get:
+      operationId: treasuryEodRunsGet
+      summary: Retrieve treasury eod run
+      tags:
+      - Treasury Eod Runs
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TreasuryEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: treasury_eod_run
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/eod-runs/mark-to-market:
+    post:
+      operationId: treasuryEodRunsMarkToMarket
+      summary: End of day - revalue live FX deals and securities holdings as of business_date (idempotent per business date)
+      tags:
+      - Treasury Eod Runs
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_eod_run
+  /v1/treasury/eod-runs/accruals:
+    post:
+      operationId: treasuryEodRunsAccruals
+      summary: End of day - accrue money market interest and holding coupons through business_date with ledger postings (idempotent
+        per business date)
+      tags:
+      - Treasury Eod Runs
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_eod_run
+  /v1/treasury/eod-runs/maturities:
+    post:
+      operationId: treasuryEodRunsMaturities
+      summary: End of day - mature or roll over money market deals due on or before business_date (idempotent per business
+        date)
+      tags:
+      - Treasury Eod Runs
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_eod_run
+  /v1/treasury/eod-runs/limit-utilisation:
+    post:
+      operationId: treasuryEodRunsLimitUtilisation
+      summary: End of day - expire limits and rebuild utilisation from live deals (idempotent per business date)
+      tags:
+      - Treasury Eod Runs
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      - TRY-01
+      - TRY-02
+      x-service: treasury-deal-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: treasury_eod_run
+  /v1/treasury/liquidity/cash-positions:
+    get:
+      operationId: cashPositionsList
+      summary: List cash positions
+      tags:
+      - Cash Positions
       security:
       - oauth2:
         - treasury:read
@@ -109917,12 +110680,51 @@ paths:
       x-table: liquidity_cash_position
       x-crud: true
       x-crud-list: true
-  /v1/treasury/liquidity/positions/{id}:
-    get:
-      operationId: liquidityPositionsGet2
-      summary: Retrieve liquidity position
+    post:
+      operationId: cashPositionsCreate
+      summary: Create cash position
       tags:
-      - Liquidity Positions
+      - Cash Positions
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidityCashPosition'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiquidityCashPositionCreate'
+      x-requirements:
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: liquidity_cash_position
+      x-crud: true
+      x-crud-create: true
+  /v1/treasury/liquidity/cash-positions/{id}:
+    get:
+      operationId: cashPositionsGet
+      summary: Retrieve cash position
+      tags:
+      - Cash Positions
       security:
       - oauth2:
         - treasury:read
@@ -109954,20 +110756,26 @@ paths:
       x-table: liquidity_cash_position
       x-crud: true
       x-crud-get: true
-  /v1/treasury/liquidity/positions/project:
+  /v1/treasury/liquidity/cash-positions/project:
     post:
-      operationId: liquidityPositionsProject
-      summary: Recompute projected positions for a horizon
+      operationId: cashPositionsProject
+      summary: Recompute projected positions for a horizon from treasury deal flows and scheduled payments
       tags:
-      - Liquidity Positions
+      - Cash Positions
       security:
       - oauth2:
         - treasury:write
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -109983,7 +110791,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LiquidityPositionsProjectRequest'
+              $ref: '#/components/schemas/CashPositionsProjectRequest'
       x-requirements:
       - TRY-03
       x-service: liquidity-service
@@ -110312,7 +111120,7 @@ paths:
   /v1/treasury/liquidity/lcr/calculate:
     post:
       operationId: lcrCalculationsCalculate
-      summary: Calculate LCR for a date
+      summary: Calculate LCR for a date from position lines [{line, code, category HQLA/OUTFLOW/INFLOW, amount, factor}]
       tags:
       - Lcr Calculations
       security:
@@ -110353,7 +111161,7 @@ paths:
   /v1/treasury/liquidity/lcr/{id}/approve:
     post:
       operationId: lcrCalculationsApprove
-      summary: Approve for regulatory reporting
+      summary: Approve for regulatory reporting (checker; not the calculator)
       tags:
       - Lcr Calculations
       security:
@@ -110522,7 +111330,7 @@ paths:
   /v1/treasury/liquidity/nsfr/calculate:
     post:
       operationId: nsfrCalculationsCalculate
-      summary: Calculate NSFR for a date
+      summary: Calculate NSFR for a date from balance-sheet lines [{line, code, side ASF/RSF, amount, factor}]
       tags:
       - Nsfr Calculations
       security:
@@ -110563,7 +111371,7 @@ paths:
   /v1/treasury/liquidity/nsfr/{id}/approve:
     post:
       operationId: nsfrCalculationsApprove
-      summary: Approve for regulatory reporting
+      summary: Approve for regulatory reporting (checker; not the calculator)
       tags:
       - Nsfr Calculations
       security:
@@ -110799,10 +111607,56 @@ paths:
       x-table: liquidity_stress_scenario
       x-crud: true
       x-crud-update: true
+  /v1/treasury/liquidity/stress-scenarios/{id}/approve:
+    post:
+      operationId: liquidityStressScenariosApprove
+      summary: Approve the scenario (checker; not the maker)
+      tags:
+      - Liquidity Stress Scenarios
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidityStressScenario'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiquidityStressScenariosApproveRequest'
+      x-requirements:
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: liquidity_stress_scenario
   /v1/treasury/liquidity/stress-scenarios/{id}/run:
     post:
       operationId: liquidityStressScenariosRun
-      summary: Run the scenario at a date
+      summary: Run the scenario at a date over position lines (LCR line codes)
       tags:
       - Liquidity Stress Scenarios
       security:
@@ -111033,6 +111887,46 @@ paths:
       x-table: intraday_liquidity_snapshot
       x-crud: true
       x-crud-list: true
+    post:
+      operationId: intradayLiquidityCreate
+      summary: Create intraday liquidity
+      tags:
+      - Intraday Liquidity
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntradayLiquiditySnapshot'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntradayLiquiditySnapshotCreate'
+      x-requirements:
+      - REG-01
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: intraday_liquidity_snapshot
+      x-crud: true
+      x-crud-create: true
   /v1/treasury/liquidity/intraday/{id}:
     get:
       operationId: intradayLiquidityGet
@@ -111071,6 +111965,170 @@ paths:
       x-table: intraday_liquidity_snapshot
       x-crud: true
       x-crud-get: true
+  /v1/treasury/liquidity/eod-runs:
+    get:
+      operationId: liquidityEodRunsList
+      summary: List liquidity eod runs
+      tags:
+      - Liquidity Eod Runs
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - MARK_TO_MARKET
+          - INTEREST_ACCRUAL
+          - MATURITY_PROCESSING
+          - LIMIT_UTILISATION_REFRESH
+          - LIQUIDITY_POSITION_SNAPSHOT
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidityEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - OPS-01
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: liquidity_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/treasury/liquidity/eod-runs/{id}:
+    get:
+      operationId: liquidityEodRunsGet
+      summary: Retrieve liquidity eod run
+      tags:
+      - Liquidity Eod Runs
+      security:
+      - oauth2:
+        - treasury:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidityEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - OPS-01
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:read")'
+      x-required-scope: treasury:read
+      x-table: liquidity_eod_run
+      x-crud: true
+      x-crud-get: true
+  /v1/treasury/liquidity/eod-runs/position-snapshot:
+    post:
+      operationId: liquidityEodRunsPositionSnapshot
+      summary: End of day - snapshot ACTUAL cash positions for business_date from the day's flows (idempotent per business
+        date)
+      tags:
+      - Liquidity Eod Runs
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - OPS-01
+      - TRY-03
+      x-service: liquidity-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: liquidity_eod_run
   /v1/treasury/alm/assumptions:
     get:
       operationId: almBehaviouralAssumptionsList
@@ -111280,7 +112338,7 @@ paths:
   /v1/treasury/alm/assumptions/{id}/approve:
     post:
       operationId: almBehaviouralAssumptionsApprove
-      summary: Approve the model assumption (model risk)
+      summary: Approve the model assumption (model risk checker; not the maker)
       tags:
       - Alm Behavioural Assumptions
       security:
@@ -111702,7 +112760,7 @@ paths:
   /v1/treasury/alm/sensitivity-runs/standard-shocks:
     post:
       operationId: almSensitivityRunsStandardShocks
-      summary: Run all six Basel IRRBB standard shocks for NII and EVE
+      summary: Run all six Basel IRRBB standard shocks for NII and EVE; returns the runs and the outlier test
       tags:
       - Alm Sensitivity Runs
       security:
@@ -111711,8 +112769,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -111750,6 +112814,11 @@ paths:
       - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/CreatedAfter'
       - $ref: '#/components/parameters/CreatedBefore'
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
       - name: currency
         in: query
         schema:
@@ -111976,7 +113045,7 @@ paths:
   /v1/treasury/ftp/curves/{id}/publish:
     post:
       operationId: ftpCurvesPublish
-      summary: Publish the curve after ALCO approval
+      summary: Publish the curve after ALCO approval (checker; not the maker)
       tags:
       - Ftp Curves
       security:
@@ -112022,7 +113091,7 @@ paths:
   /v1/treasury/ftp/curves/{id}/rate:
     get:
       operationId: ftpCurvesRate
-      summary: Interpolated rate for a tenor (?tenor_days=)
+      summary: Linearly interpolated rate for a tenor (flat beyond the ends)
       tags:
       - Ftp Curves
       security:
@@ -112035,9 +113104,21 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: tenor_days
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -112503,7 +113584,11 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 32
+          enum:
+          - DEPOSIT_ACCOUNT
+          - TERM_DEPOSIT
+          - LOAN
+          - CREDIT_LINE
       - name: exposure_id
         in: query
         schema:
@@ -112608,7 +113693,8 @@ paths:
   /v1/treasury/ftp/assignments/run:
     post:
       operationId: ftpAssignmentsRun
-      summary: Compute FTP for all exposures for a period
+      summary: Compute FTP for exposures for a period [{exposure_type, exposure_id, product_id, segment, currency, average_balance,
+        customer_rate, term_days}] (existing assignments are kept)
       tags:
       - Ftp Assignments
       security:
@@ -112617,8 +113703,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -112635,6 +113727,48 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/FtpAssignmentsRunRequest'
+      x-requirements:
+      - TRY-05
+      x-service: alm-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("treasury:write")'
+      x-required-scope: treasury:write
+      x-table: ftp_assignment
+  /v1/treasury/ftp/assignments/quote:
+    post:
+      operationId: ftpAssignmentsQuote
+      summary: Price one exposure without storing it (FTP rate, components and margin)
+      tags:
+      - Ftp Assignments
+      security:
+      - oauth2:
+        - treasury:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FtpAssignmentsQuoteRequest'
       x-requirements:
       - TRY-05
       x-service: alm-service
@@ -238107,24 +239241,14 @@ components:
           maxLength: 255
       required:
       - reason
-    TreasuryCounterpartyLimitPage:
+    TreasuryCounterpartiesReactivateRequest:
       type: object
-      description: One page of TreasuryCounterpartyLimit results (newest first)
       properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/TreasuryCounterpartyLimit'
-        next_cursor:
-          type:
-          - string
-          - 'null'
-          description: Pass as ?cursor= to fetch the next page
-        has_more:
-          type: boolean
+        reason:
+          type: string
+          maxLength: 255
       required:
-      - data
-      - has_more
+      - reason
     TreasurySsiPage:
       type: object
       description: One page of TreasurySsi results (newest first)
@@ -238144,6 +239268,30 @@ components:
       - data
       - has_more
     TreasurySsisVerifyRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    TreasuryCounterpartyLimitPage:
+      type: object
+      description: One page of TreasuryCounterpartyLimit results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryCounterpartyLimit'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    TreasuryCounterpartyLimitsApproveRequest:
       type: object
       properties:
         comment:
@@ -238218,6 +239366,12 @@ components:
       required:
       - data
       - has_more
+    MoneyMarketDealsConfirmRequest:
+      type: object
+      properties:
+        manual_reference:
+          type: string
+          maxLength: 64
     MoneyMarketDealsRolloverRequest:
       type: object
       properties:
@@ -238298,6 +239452,12 @@ components:
       required:
       - data
       - has_more
+    TreasuryFxDealsConfirmRequest:
+      type: object
+      properties:
+        manual_reference:
+          type: string
+          maxLength: 64
     TreasuryFxDealsSettleRequest:
       type: object
       properties:
@@ -238308,12 +239468,27 @@ components:
           - FAR
       required:
       - leg_type
+    TreasuryFxDealsFixRequest:
+      type: object
+      properties:
+        fixing_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - fixing_rate
     TreasuryFxDealsRevalueRequest:
       type: object
       properties:
         valuation_date:
           type: string
           format: date
+        market_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - valuation_date
     TreasuryFxDealsCancelRequest:
@@ -238440,6 +239615,28 @@ components:
       required:
       - data
       - has_more
+    TreasuryConfirmationsGenerateRequest:
+      type: object
+      properties:
+        deal_type:
+          type: string
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
+        deal_id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum:
+          - SWIFT
+          - EMAIL
+          - PLATFORM
+          - MANUAL
+      required:
+      - deal_type
+      - deal_id
     TreasuryConfirmationsMatchRequest:
       type: object
       properties:
@@ -238488,6 +239685,24 @@ components:
           maxLength: 255
       required:
       - reason
+    TreasuryEodRunPage:
+      type: object
+      description: One page of TreasuryEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryEodRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     LiquidityCashPositionPage:
       type: object
       description: One page of LiquidityCashPosition results (newest first)
@@ -238506,7 +239721,7 @@ components:
       required:
       - data
       - has_more
-    LiquidityPositionsProjectRequest:
+    CashPositionsProjectRequest:
       type: object
       properties:
         legal_entity_id:
@@ -238518,6 +239733,9 @@ components:
         days:
           type: integer
           format: int32
+        opening_balances:
+          type: array
+          items: {}
       required:
       - legal_entity_id
       - from_date
@@ -238589,10 +239807,19 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        positions:
+          type: array
+          items: {}
+        regulatory_minimum:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - legal_entity_id
       - as_of_date
       - currency
+      - positions
     LcrCalculationsApproveRequest:
       type: object
       properties:
@@ -238630,10 +239857,19 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        positions:
+          type: array
+          items: {}
+        regulatory_minimum:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - legal_entity_id
       - as_of_date
       - currency
+      - positions
     NsfrCalculationsApproveRequest:
       type: object
       properties:
@@ -238658,6 +239894,12 @@ components:
       required:
       - data
       - has_more
+    LiquidityStressScenariosApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
     LiquidityStressScenariosRunRequest:
       type: object
       properties:
@@ -238671,10 +239913,14 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        positions:
+          type: array
+          items: {}
       required:
       - legal_entity_id
       - as_of_date
       - currency
+      - positions
     LiquidityStressResultPage:
       type: object
       description: One page of LiquidityStressResult results (newest first)
@@ -238701,6 +239947,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/IntradayLiquiditySnapshot'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    LiquidityEodRunPage:
+      type: object
+      description: One page of LiquidityEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiquidityEodRun'
         next_cursor:
           type:
           - string
@@ -238802,10 +240066,25 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        positions:
+          type: array
+          items: {}
+        base_curve:
+          type: array
+          items: {}
+        tier1_capital:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        horizon_months:
+          type: integer
+          format: int32
       required:
       - legal_entity_id
       - as_of_date
       - currency
+      - positions
     FtpCurvePage:
       type: object
       description: One page of FtpCurve results (newest first)
@@ -238893,12 +240172,57 @@ components:
         period_end:
           type: string
           format: date
+        exposures:
+          type: array
+          items: {}
       required:
       - period_start
       - period_end
+      - exposures
+    FtpAssignmentsQuoteRequest:
+      type: object
+      properties:
+        exposure_type:
+          type: string
+          enum:
+          - DEPOSIT_ACCOUNT
+          - TERM_DEPOSIT
+          - LOAN
+          - CREDIT_LINE
+        product_id:
+          type: string
+          format: uuid
+        segment:
+          type: string
+          maxLength: 64
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        term_days:
+          type: integer
+          format: int32
+        customer_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        as_of_date:
+          type: string
+          format: date
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - exposure_type
+      - currency
+      - term_days
+      - as_of_date
     AlmBehaviouralAssumption:
       type: object
-      description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product
+      description: Behavioural assumption (prepayment, deposit decay, non-maturity repricing) by product; used once approved
       properties:
         id:
           type: string
@@ -238964,7 +240288,8 @@ components:
         parameters:
           type: object
           additionalProperties: true
-          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
+          description: PREPAYMENT {cpr}; DEPOSIT_DECAY {core_ratio, decay_rate, core_max_months, pass_through}; NON_MATURITY_REPRICING
+            {repricing_months, pass_through}
         valid_from:
           type: string
           format: date
@@ -238984,7 +240309,15 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Model approver
+          description: Model approver (four-eyes)
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -239051,7 +240384,8 @@ components:
         parameters:
           type: object
           additionalProperties: true
-          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
+          description: PREPAYMENT {cpr}; DEPOSIT_DECAY {core_ratio, decay_rate, core_max_months, pass_through}; NON_MATURITY_REPRICING
+            {repricing_months, pass_through}
         valid_from:
           type: string
           format: date
@@ -239064,10 +240398,6 @@ components:
           type: string
           maxLength: 32
           description: Model version
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Model approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -239120,7 +240450,8 @@ components:
         parameters:
           type: object
           additionalProperties: true
-          description: Model parameters, e.g. CPR curve, decay rates, core/volatile split
+          description: PREPAYMENT {cpr}; DEPOSIT_DECAY {core_ratio, decay_rate, core_max_months, pass_through}; NON_MATURITY_REPRICING
+            {repricing_months, pass_through}
         valid_from:
           type: string
           format: date
@@ -239133,10 +240464,6 @@ components:
           type: string
           maxLength: 32
           description: Model version
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Model approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -239225,7 +240552,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Amounts by product
+          description: 'Amounts by position code: {CODE: amount}'
         custom_field_1:
           type:
           - string
@@ -239318,10 +240645,10 @@ components:
           - string
           - 'null'
           pattern: ^[A-Z]{3}$
-          description: Currency (empty = all, in base currency) (ISO 4217)
+          description: Currency (empty = all, amounts taken as base currency) (ISO 4217)
         behavioural:
           type: boolean
-          description: Apply behavioural assumptions
+          description: Apply approved behavioural assumptions
         status:
           type: string
           enum:
@@ -239332,6 +240659,40 @@ components:
           - CANCELLED
           - PARTIALLY_SUCCEEDED
           description: Run status
+          readOnly: true
+        total_assets:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate-sensitive assets
+          readOnly: true
+        total_liabilities:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Rate-sensitive liabilities
+          readOnly: true
+        assumptions_used:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+            format: uuid
+          description: Behavioural assumptions applied
+          readOnly: true
+        error_message:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the run failed
           readOnly: true
         started_at:
           type:
@@ -239400,10 +240761,10 @@ components:
         currency:
           type: string
           pattern: ^[A-Z]{3}$
-          description: Currency (empty = all, in base currency) (ISO 4217)
+          description: Currency (empty = all, amounts taken as base currency) (ISO 4217)
         behavioural:
           type: boolean
-          description: Apply behavioural assumptions
+          description: Apply approved behavioural assumptions
         custom_field_1:
           type: string
           maxLength: 500
@@ -239424,9 +240785,16 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        positions:
+          type: array
+          items: {}
+          description: Positions [{code, product_id, segment, side ASSET|LIABILITY|OFF_BALANCE, amount, currency, rate, rate_type,
+            repricing_date | maturity_date, non_maturity}] (write-only; not stored as a column)
+          writeOnly: true
       required:
       - legal_entity_id
       - as_of_date
+      - positions
     AlmSensitivityRun:
       type: object
       description: NII / EVE / EaR sensitivity simulation under a rate shock
@@ -239496,13 +240864,13 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Parallel shock size in basis points
+          description: Parallel shock size in basis points (default 200); short 250 / long 100 for rotations
         custom_shock:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Tenor-by-tenor shocks for CUSTOM
+          items: {}
+          description: Tenor-by-tenor shocks for CUSTOM [{tenor_days, bps}] (linear interpolation)
         horizon_months:
           type: integer
           format: int32
@@ -239547,6 +240915,12 @@ components:
           - '125.50'
           description: Change as share of Tier 1 capital (EVE outlier test)
           readOnly: true
+        outlier:
+          type:
+          - boolean
+          - 'null'
+          description: EVE decline beyond 15% of Tier 1
+          readOnly: true
         status:
           type: string
           enum:
@@ -239563,7 +240937,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Detail by product and bucket
+          description: Detail {positions [{code, base, shocked, delta}], shock [{tenor_days, shock_bps, base_rate, shocked_rate}]}
           readOnly: true
         custom_field_1:
           type:
@@ -239639,11 +241013,11 @@ components:
         shock_bps:
           type: integer
           format: int32
-          description: Parallel shock size in basis points
+          description: Parallel shock size in basis points (default 200); short 250 / long 100 for rotations
         custom_shock:
-          type: object
-          additionalProperties: true
-          description: Tenor-by-tenor shocks for CUSTOM
+          type: array
+          items: {}
+          description: Tenor-by-tenor shocks for CUSTOM [{tenor_days, bps}] (linear interpolation)
         horizon_months:
           type: integer
           format: int32
@@ -239672,12 +241046,32 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        positions:
+          type: array
+          items: {}
+          description: Positions [{code, side ASSET|LIABILITY, amount, rate, rate_type, repricing_date, maturity_date, payment_frequency_months}]
+            (write-only; not stored as a column)
+          writeOnly: true
+        base_curve:
+          type: array
+          items: {}
+          description: Discount curve [{tenor_days, rate}]; empty = latest published BASE FTP curve of the currency (write-only;
+            not stored as a column)
+          writeOnly: true
+        tier1_capital:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tier 1 capital for the outlier test (write-only; not stored as a column)
+          writeOnly: true
       required:
       - legal_entity_id
       - as_of_date
       - measure
       - shock_type
       - currency
+      - positions
     FtpAssignment:
       type: object
       description: FTP rate and margin assigned to an account or loan for a period
@@ -239709,8 +241103,12 @@ components:
           description: Period end
         exposure_type:
           type: string
-          maxLength: 32
-          description: DEPOSIT_ACCOUNT, TERM_DEPOSIT, LOAN, CREDIT_LINE
+          enum:
+          - DEPOSIT_ACCOUNT
+          - TERM_DEPOSIT
+          - LOAN
+          - CREDIT_LINE
+          description: Deposit account, term deposit, loan or credit line
         exposure_id:
           type: string
           format: uuid
@@ -239739,6 +241137,12 @@ components:
           - 'null'
           format: uuid
           description: Rule applied
+        term_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Pricing tenor used
         average_balance:
           type: string
           format: decimal
@@ -239766,13 +241170,13 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Customer rate minus FTP (sign by side)
+          description: Customer rate minus FTP for assets, FTP minus customer rate for liabilities
         ftp_charge_credit:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: FTP charge (loans) or credit (deposits)
+          description: FTP charge (loans) or credit (deposits) for the period (ACT/365)
         custom_field_1:
           type:
           - string
@@ -239882,13 +241286,22 @@ components:
           description: Market source / construction method
         is_published:
           type: boolean
-          description: Published for use
+          description: Published for use (publish action)
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: ALCO approver
+          description: ALCO approver (four-eyes)
+          readOnly: true
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -239956,13 +241369,6 @@ components:
           type: string
           maxLength: 64
           description: Market source / construction method
-        is_published:
-          type: boolean
-          description: Published for use
-        approved_by:
-          type: string
-          maxLength: 64
-          description: ALCO approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -240015,13 +241421,6 @@ components:
           type: string
           maxLength: 64
           description: Market source / construction method
-        is_published:
-          type: boolean
-          description: Published for use
-        approved_by:
-          type: string
-          maxLength: 64
-          description: ALCO approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -240044,7 +241443,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     FtpCurvePoint:
       type: object
-      description: Tenor point on an FTP curve
+      description: Tenor point on an FTP curve (frozen once the curve is published)
       properties:
         id:
           type: string
@@ -240306,6 +241705,12 @@ components:
           examples:
           - '125.50'
           description: Spread for FIXED_SPREAD method
+        pool_tenor_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Pricing tenor for POOLED (default 30)
         priority:
           type: integer
           format: int32
@@ -240396,6 +241801,10 @@ components:
           examples:
           - '125.50'
           description: Spread for FIXED_SPREAD method
+        pool_tenor_days:
+          type: integer
+          format: int32
+          description: Pricing tenor for POOLED (default 30)
         priority:
           type: integer
           format: int32
@@ -240469,6 +241878,10 @@ components:
           examples:
           - '125.50'
           description: Spread for FIXED_SPREAD method
+        pool_tenor_days:
+          type: integer
+          format: int32
+          description: Pricing tenor for POOLED (default 30)
         priority:
           type: integer
           format: int32
@@ -240545,31 +241958,42 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Available intraday liquidity
+          description: Available intraday liquidity at the start of the day (balance + credit lines + collateral)
         used_liquidity:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Liquidity used so far today
+          description: Liquidity used so far today (= largest negative net cumulative position)
+          readOnly: true
         largest_negative_position:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Largest net negative position so far
+          description: Largest net negative cumulative position (reported as a positive number)
+          readOnly: true
+        largest_positive_position:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Largest net positive cumulative position
+          readOnly: true
         payments_sent:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Gross payments sent
+          readOnly: true
         payments_received:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Gross payments received
+          readOnly: true
         throughput_pct:
           type:
           - string
@@ -240577,7 +242001,15 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Share of payments settled by this time
+          description: Share of the day's expected payments sent by snapshot_at
+          readOnly: true
+        profile:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Net cumulative position after each movement [{at, net_cumulative}]
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -240617,8 +242049,74 @@ components:
       - available_liquidity
       - used_liquidity
       - largest_negative_position
+      - largest_positive_position
       - payments_sent
       - payments_received
+    IntradayLiquiditySnapshotCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Entity
+        snapshot_at:
+          type: string
+          format: date-time
+          description: Snapshot time
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        nostro_account_id:
+          type: string
+          format: uuid
+          description: Settlement account
+        available_liquidity:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Available intraday liquidity at the start of the day (balance + credit lines + collateral)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        movements:
+          type: array
+          items: {}
+          description: Settled payments up to snapshot_at [{at, direction SENT|RECEIVED, amount}] (write-only; not stored
+            as a column)
+          writeOnly: true
+        expected_daily_payments:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross payments expected to be sent over the whole day (throughput denominator) (write-only; not stored
+            as a column)
+          writeOnly: true
+      required:
+      - legal_entity_id
+      - snapshot_at
+      - currency
+      - available_liquidity
+      - movements
     LcrCalculation:
       type: object
       description: Basel III Liquidity Coverage Ratio snapshot
@@ -240675,58 +242173,85 @@ components:
           examples:
           - '125.50'
           description: Level 1 HQLA after haircuts
+          readOnly: true
         hqla_level2a:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Level 2A HQLA after haircuts
+          readOnly: true
         hqla_level2b:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Level 2B HQLA after haircuts
+          readOnly: true
+        cap_adjustment:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reduction applied by the 15% (L2B) and 40% (L2) caps
+          readOnly: true
         total_hqla:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Total HQLA after caps
+          readOnly: true
         outflows_30d:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Weighted 30-day outflows
+          readOnly: true
         inflows_30d:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Weighted inflows (capped at 75% of outflows)
+          readOnly: true
+        uncapped_inflows:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Weighted inflows before the 75% cap
+          readOnly: true
         net_outflows:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Net cash outflows
+          readOnly: true
         lcr_ratio:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: LCR = HQLA / net outflows
+          readOnly: true
         regulatory_minimum:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Minimum ratio
+        breach:
+          type: boolean
+          description: Ratio below the regulatory minimum
+          readOnly: true
         components:
-          type: object
-          additionalProperties: true
-          description: Line-level components with run-off / inflow factors
+          type: array
+          items: {}
+          description: Line-level components [{line, code, category, amount, factor, weighted}]
+          readOnly: true
         status:
           type: string
           enum:
@@ -240736,12 +242261,21 @@ components:
           - APPROVED
           - SUBMITTED
           description: Status
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Approver
+          description: Approver (four-eyes)
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -240783,12 +242317,15 @@ components:
       - hqla_level1
       - hqla_level2a
       - hqla_level2b
+      - cap_adjustment
       - total_hqla
       - outflows_30d
       - inflows_30d
+      - uncapped_inflows
       - net_outflows
       - lcr_ratio
       - regulatory_minimum
+      - breach
       - components
       - status
     LiquidityBucket:
@@ -240863,7 +242400,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Amounts by flow category
+          description: 'Amounts by flow category: {CATEGORY: {inflows, outflows}}'
         custom_field_1:
           type:
           - string
@@ -240991,7 +242528,8 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Closing (projected) balance
+          description: Closing balance = opening + inflows - outflows
+          readOnly: true
         minimum_buffer:
           type:
           - string
@@ -241007,14 +242545,14 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Buffer shortfall, if any
+          description: Buffer shortfall (minimum_buffer - closing_balance), if positive
           readOnly: true
         flows_by_category:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Inflows/outflows by LiquidityFlowCategory
+          description: 'Inflows/outflows by LiquidityFlowCategory: {CATEGORY: {inflows, outflows}}'
           readOnly: true
         custom_field_1:
           type:
@@ -241059,6 +242597,205 @@ components:
       - expected_inflows
       - expected_outflows
       - closing_balance
+    LiquidityCashPositionCreate:
+      type: object
+      properties:
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Entity
+        position_date:
+          type: string
+          format: date
+          description: Business date
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        nostro_account_id:
+          type: string
+          format: uuid
+          description: Nostro (empty = all accounts in the currency)
+        position_type:
+          type: string
+          enum:
+          - ACTUAL
+          - PROJECTED
+          - FORECAST
+          description: Actual, projected or forecast
+        opening_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Opening balance
+        expected_inflows:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Expected inflows
+        expected_outflows:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Expected outflows
+        minimum_buffer:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum buffer required
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - legal_entity_id
+      - position_date
+      - currency
+      - position_type
+      - opening_balance
+    LiquidityEodRun:
+      type: object
+      description: One end-of-day liquidity job execution per tenant, job and business date (idempotency)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - MARK_TO_MARKET
+          - INTEREST_ACCRUAL
+          - MATURITY_PROCESSING
+          - LIMIT_UTILISATION_REFRESH
+          - LIQUIDITY_POSITION_SNAPSHOT
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     LiquidityLadderRun:
       type: object
       description: A maturity ladder (liquidity gap) computation at an as-of date
@@ -241110,10 +242847,10 @@ components:
           - string
           - 'null'
           pattern: ^[A-Z]{3}$
-          description: Currency (empty = all, in base currency) (ISO 4217)
+          description: Currency (empty = all, amounts taken as base currency) (ISO 4217)
         behavioural:
           type: boolean
-          description: Apply behavioural assumptions
+          description: Apply behavioural profiles to non-maturity items
         status:
           type: string
           enum:
@@ -241124,6 +242861,38 @@ components:
           - CANCELLED
           - PARTIALLY_SUCCEEDED
           description: Run status
+          readOnly: true
+        total_inflows:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Sum of inflows over all buckets
+          readOnly: true
+        total_outflows:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Sum of outflows over all buckets
+          readOnly: true
+        negative_gap_bucket:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: First bucket whose cumulative gap is negative
+          readOnly: true
+        error_message:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Why the run failed
           readOnly: true
         started_at:
           type:
@@ -241192,10 +242961,10 @@ components:
         currency:
           type: string
           pattern: ^[A-Z]{3}$
-          description: Currency (empty = all, in base currency) (ISO 4217)
+          description: Currency (empty = all, amounts taken as base currency) (ISO 4217)
         behavioural:
           type: boolean
-          description: Apply behavioural assumptions
+          description: Apply behavioural profiles to non-maturity items
         custom_field_1:
           type: string
           maxLength: 500
@@ -241216,6 +242985,12 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        items:
+          type: array
+          items: {}
+          description: Flows [{category, direction IN|OUT, amount, currency, maturity_date | days, behavioural_profile [{bucket_code,
+            share}]}]; empty = projected flows of live treasury deals (write-only; not stored as a column)
+          writeOnly: true
       required:
       - legal_entity_id
       - as_of_date
@@ -241262,29 +243037,35 @@ components:
           examples:
           - '125.50'
           description: Stressed outflows over the horizon
+        stressed_inflows:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Stressed inflows over the horizon
         counterbalancing_capacity:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Liquidity available to cover them
+          description: Liquidity available to cover them (stressed HQLA)
         net_position:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Surplus / shortfall
+          description: Surplus / shortfall at the horizon
         survival_days:
           type: integer
           format: int32
-          description: Days until the buffer is exhausted
+          description: Days until the buffer is exhausted (horizon + 1 when never)
         daily_profile:
-          type: object
-          additionalProperties: true
-          description: Day-by-day stressed position
+          type: array
+          items: {}
+          description: Day-by-day stressed position [{day, outflows, inflows, cumulative_position}]
         breach:
           type: boolean
-          description: Breaches the risk appetite
+          description: Breaches the risk appetite (survival below min_survival_days)
         custom_field_1:
           type:
           - string
@@ -241323,6 +243104,7 @@ components:
       - as_of_date
       - currency
       - stressed_outflows
+      - stressed_inflows
       - counterbalancing_capacity
       - net_position
       - survival_days
@@ -241391,7 +243173,8 @@ components:
         assumptions:
           type: object
           additionalProperties: true
-          description: Deposit run-off, drawdown, haircut and market assumptions
+          description: '{runoff_rates {CODE: rate}, inflow_rates {CODE: rate}, hqla_haircuts {L1, L2A, L2B}, runoff_multiplier,
+            runoff_profile LINEAR|UPFRONT, min_survival_days}'
         is_active:
           type: boolean
           description: Active
@@ -241400,7 +243183,15 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Approver
+          description: Approver (four-eyes)
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -241470,14 +243261,11 @@ components:
         assumptions:
           type: object
           additionalProperties: true
-          description: Deposit run-off, drawdown, haircut and market assumptions
+          description: '{runoff_rates {CODE: rate}, inflow_rates {CODE: rate}, hqla_haircuts {L1, L2A, L2B}, runoff_multiplier,
+            runoff_profile LINEAR|UPFRONT, min_survival_days}'
         is_active:
           type: boolean
           description: Active
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -241531,14 +243319,11 @@ components:
         assumptions:
           type: object
           additionalProperties: true
-          description: Deposit run-off, drawdown, haircut and market assumptions
+          description: '{runoff_rates {CODE: rate}, inflow_rates {CODE: rate}, hqla_haircuts {L1, L2A, L2B}, runoff_multiplier,
+            runoff_profile LINEAR|UPFRONT, min_survival_days}'
         is_active:
           type: boolean
           description: Active
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -241600,7 +243385,8 @@ components:
         deal_ref:
           type: string
           maxLength: 32
-          description: Deal reference
+          description: Deal reference (server-generated)
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
@@ -241644,7 +243430,7 @@ components:
           - string
           - 'null'
           format: date
-          description: Maturity date (empty for call deals)
+          description: Maturity date (empty for call deals until called)
         is_call:
           type: boolean
           description: Call (open-ended) deal
@@ -241665,7 +243451,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: All-in rate
+          description: All-in rate (annual, decimal)
         rate_index:
           type:
           - string
@@ -241697,14 +243483,30 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Interest to maturity
+          description: Interest to maturity (paid at maturity)
+          readOnly: true
+        maturity_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Principal plus interest at maturity
           readOnly: true
         accrued_interest:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Accrued interest to date
+          description: Accrued interest to accrued_through
+          readOnly: true
+        accrued_through:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Last date included in accrued_interest
           readOnly: true
         rollover_type:
           type: string
@@ -241712,13 +243514,21 @@ components:
           - NONE
           - PRINCIPAL_ONLY
           - PRINCIPAL_AND_INTEREST
-          description: Rollover instruction
+          description: Rollover instruction at maturity
         rolled_from_deal_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Previous deal when rolled
+          readOnly: true
+        rolled_into_deal_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: New deal when this one was rolled
+          readOnly: true
         collateral_description:
           type:
           - string
@@ -241728,12 +243538,46 @@ components:
           type: string
           format: uuid
           description: Dealer
+        nostro_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Our nostro (default: SSI nostro)'
         verified_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Back-office verifier
+          description: Back-office verifier (four-eyes)
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
+        confirmed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Confirmation time
+          readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start-leg settlement time
+          readOnly: true
+        matured_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Maturity processing time
           readOnly: true
         status:
           type: string
@@ -241753,24 +243597,28 @@ components:
           - 'null'
           format: uuid
           description: Ledger account carrying the deal
+          readOnly: true
         settlement_journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Posting on settlement
+          readOnly: true
         maturity_journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Posting on maturity
+          readOnly: true
         cancel_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Cancellation reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -241825,10 +243673,6 @@ components:
     MoneyMarketDealCreate:
       type: object
       properties:
-        deal_ref:
-          type: string
-          maxLength: 32
-          description: Deal reference
         legal_entity_id:
           type: string
           format: uuid
@@ -241870,7 +243714,7 @@ components:
         maturity_date:
           type: string
           format: date
-          description: Maturity date (empty for call deals)
+          description: Maturity date (empty for call deals until called)
         is_call:
           type: boolean
           description: Call (open-ended) deal
@@ -241889,7 +243733,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: All-in rate
+          description: All-in rate (annual, decimal)
         rate_index:
           type: string
           maxLength: 32
@@ -241916,11 +243760,7 @@ components:
           - NONE
           - PRINCIPAL_ONLY
           - PRINCIPAL_AND_INTEREST
-          description: Rollover instruction
-        rolled_from_deal_id:
-          type: string
-          format: uuid
-          description: Previous deal when rolled
+          description: Rollover instruction at maturity
         collateral_description:
           type: string
           description: Repo collateral details
@@ -241928,22 +243768,10 @@ components:
           type: string
           format: uuid
           description: Dealer
-        ledger_account_id:
+        nostro_account_id:
           type: string
           format: uuid
-          description: Ledger account carrying the deal
-        settlement_journal_entry_id:
-          type: string
-          format: uuid
-          description: Posting on settlement
-        maturity_journal_entry_id:
-          type: string
-          format: uuid
-          description: Posting on maturity
-        cancel_reason:
-          type: string
-          maxLength: 255
-          description: Cancellation reason
+          description: 'Our nostro (default: SSI nostro)'
         custom_field_1:
           type: string
           maxLength: 500
@@ -241965,7 +243793,6 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - deal_ref
       - legal_entity_id
       - treasury_counterparty_id
       - deal_type
@@ -241978,10 +243805,6 @@ components:
     MoneyMarketDealUpdate:
       type: object
       properties:
-        deal_ref:
-          type: string
-          maxLength: 32
-          description: Deal reference
         legal_entity_id:
           type: string
           format: uuid
@@ -242023,7 +243846,7 @@ components:
         maturity_date:
           type: string
           format: date
-          description: Maturity date (empty for call deals)
+          description: Maturity date (empty for call deals until called)
         is_call:
           type: boolean
           description: Call (open-ended) deal
@@ -242042,7 +243865,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: All-in rate
+          description: All-in rate (annual, decimal)
         rate_index:
           type: string
           maxLength: 32
@@ -242069,11 +243892,7 @@ components:
           - NONE
           - PRINCIPAL_ONLY
           - PRINCIPAL_AND_INTEREST
-          description: Rollover instruction
-        rolled_from_deal_id:
-          type: string
-          format: uuid
-          description: Previous deal when rolled
+          description: Rollover instruction at maturity
         collateral_description:
           type: string
           description: Repo collateral details
@@ -242081,22 +243900,10 @@ components:
           type: string
           format: uuid
           description: Dealer
-        ledger_account_id:
+        nostro_account_id:
           type: string
           format: uuid
-          description: Ledger account carrying the deal
-        settlement_journal_entry_id:
-          type: string
-          format: uuid
-          description: Posting on settlement
-        maturity_journal_entry_id:
-          type: string
-          format: uuid
-          description: Posting on maturity
-        cancel_reason:
-          type: string
-          maxLength: 255
-          description: Cancellation reason
+          description: 'Our nostro (default: SSI nostro)'
         custom_field_1:
           type: string
           maxLength: 500
@@ -242173,28 +243980,36 @@ components:
           examples:
           - '125.50'
           description: ASF
+          readOnly: true
         required_stable_funding:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: RSF
+          readOnly: true
         nsfr_ratio:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: ASF / RSF
+          readOnly: true
         regulatory_minimum:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Minimum ratio
+        breach:
+          type: boolean
+          description: Ratio below the regulatory minimum
+          readOnly: true
         components:
-          type: object
-          additionalProperties: true
-          description: ASF/RSF factors per balance-sheet line
+          type: array
+          items: {}
+          description: ASF/RSF factors per balance-sheet line [{line, code, side, amount, factor, weighted}]
+          readOnly: true
         status:
           type: string
           enum:
@@ -242204,12 +244019,21 @@ components:
           - APPROVED
           - SUBMITTED
           description: Status
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Approver
+          description: Approver (four-eyes)
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -242252,11 +244076,12 @@ components:
       - required_stable_funding
       - nsfr_ratio
       - regulatory_minimum
+      - breach
       - components
       - status
     SecuritiesHolding:
       type: object
-      description: Position in a security by portfolio and accounting classification
+      description: Position in a security by portfolio and accounting classification (maintained by trade settlement)
       properties:
         id:
           type: string
@@ -242320,12 +244145,21 @@ components:
           - '125.50'
           description: Face value held
           readOnly: true
+        average_price:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Weighted average clean purchase price (% of nominal)
+          readOnly: true
         book_value:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Amortised book value
+          description: Book value (nominal x average price)
           readOnly: true
         market_value:
           type:
@@ -242334,14 +244168,14 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Market value
+          description: Clean market value at valuation_date
           readOnly: true
         accrued_interest:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Accrued coupon
+          description: Accrued coupon at valuation_date
           readOnly: true
         unrealised_pnl:
           type:
@@ -242350,11 +244184,26 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Unrealised gain / loss
+          description: Market value minus book value (P&L for FVTPL, OCI for AFS / FVOCI)
+          readOnly: true
+        realised_pnl:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cumulative realised P&L from sales
           readOnly: true
         is_encumbered:
           type: boolean
-          description: Pledged as collateral
+          description: Pledged as collateral (encumber action)
+          readOnly: true
+        encumbrance_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last encumbrance change
+          readOnly: true
         ledger_account_id:
           type:
           - string
@@ -242410,10 +244259,11 @@ components:
       - nominal
       - book_value
       - accrued_interest
+      - realised_pnl
       - is_encumbered
     SecuritiesTrade:
       type: object
-      description: Purchase or sale of a security that changes a holding
+      description: Purchase or sale of a security that changes a holding (holding resolved or opened on capture)
       properties:
         id:
           type: string
@@ -242452,11 +244302,34 @@ components:
         deal_ref:
           type: string
           maxLength: 32
-          description: Trade reference
+          description: Trade reference (server-generated)
+          readOnly: true
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Booking entity
+        treasury_security_id:
+          type: string
+          format: uuid
+          description: Security traded
+        portfolio:
+          type: string
+          maxLength: 64
+          description: Portfolio / book
+        accounting_class:
+          type: string
+          enum:
+          - HTM
+          - AFS
+          - FVTPL
+          - AMORTISED_COST
+          - FVOCI
+          description: Classification of the holding
         securities_holding_id:
           type: string
           format: uuid
           description: Holding affected
+          readOnly: true
         treasury_counterparty_id:
           type: string
           format: uuid
@@ -242479,22 +244352,43 @@ components:
           examples:
           - '125.50'
           description: Clean price (% of nominal)
+        dirty_price:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Dirty price (% of nominal)
+          readOnly: true
         accrued_interest:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Accrued interest paid / received
+          description: Accrued interest paid / received (security day count)
+          readOnly: true
         settlement_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Dirty settlement amount
+          readOnly: true
+        simple_yield:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Simple yield to maturity at the clean price
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
-          description: Currency (ISO 4217)
+          description: Currency (from the security) (ISO 4217)
+          readOnly: true
         trade_date:
           type: string
           format: date
@@ -242526,12 +244420,27 @@ components:
           - '125.50'
           description: Realised P&L on sale
           readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Settlement time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation reason
+          readOnly: true
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Settlement posting
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -242568,6 +244477,10 @@ components:
       - updated_at
       - row_version
       - deal_ref
+      - legal_entity_id
+      - treasury_security_id
+      - portfolio
+      - accounting_class
       - securities_holding_id
       - treasury_counterparty_id
       - buy_sell
@@ -242583,14 +244496,27 @@ components:
     SecuritiesTradeCreate:
       type: object
       properties:
-        deal_ref:
-          type: string
-          maxLength: 32
-          description: Trade reference
-        securities_holding_id:
+        legal_entity_id:
           type: string
           format: uuid
-          description: Holding affected
+          description: Booking entity
+        treasury_security_id:
+          type: string
+          format: uuid
+          description: Security traded
+        portfolio:
+          type: string
+          maxLength: 64
+          description: Portfolio / book
+        accounting_class:
+          type: string
+          enum:
+          - HTM
+          - AFS
+          - FVTPL
+          - AMORTISED_COST
+          - FVOCI
+          description: Classification of the holding
         treasury_counterparty_id:
           type: string
           format: uuid
@@ -242613,22 +244539,6 @@ components:
           examples:
           - '125.50'
           description: Clean price (% of nominal)
-        accrued_interest:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Accrued interest paid / received
-        settlement_amount:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Dirty settlement amount
-        currency:
-          type: string
-          pattern: ^[A-Z]{3}$
-          description: Currency (ISO 4217)
         trade_date:
           type: string
           format: date
@@ -242641,10 +244551,6 @@ components:
           type: string
           format: uuid
           description: Dealer
-        journal_entry_id:
-          type: string
-          format: uuid
-          description: Settlement posting
         custom_field_1:
           type: string
           maxLength: 500
@@ -242666,15 +244572,14 @@ components:
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
-      - deal_ref
-      - securities_holding_id
+      - legal_entity_id
+      - treasury_security_id
+      - portfolio
+      - accounting_class
       - treasury_counterparty_id
       - buy_sell
       - nominal
       - clean_price
-      - accrued_interest
-      - settlement_amount
-      - currency
       - trade_date
       - settlement_date
       - dealer_id
@@ -242745,17 +244650,17 @@ components:
           - string
           - 'null'
           maxLength: 11
-          description: SWIFT BIC
+          description: SWIFT BIC (8 or 11 characters; required for SWIFT confirmations)
         lei:
           type:
           - string
           - 'null'
           maxLength: 20
-          description: Legal Entity Identifier
+          description: Legal Entity Identifier (ISO 17442, validated check digits)
         country_code:
           type: string
           pattern: ^[A-Z]{2}$
-          description: Country of incorporation (ISO 3166-1 alpha-2)
+          description: Country of incorporation (COUNTRY limits) (ISO 3166-1 alpha-2)
         parent_counterparty_id:
           type:
           - string
@@ -242782,13 +244687,13 @@ components:
           description: Internal rating grade
         isda_signed:
           type: boolean
-          description: ISDA master agreement in place
+          description: ISDA master agreement in place (required for forwards, swaps and NDFs)
         csa_signed:
           type: boolean
           description: Credit support annex in place
         gmra_signed:
           type: boolean
-          description: GMRA in place (repos)
+          description: GMRA in place (required for repos)
         status:
           type: string
           enum:
@@ -242796,13 +244701,35 @@ components:
           - ACTIVE
           - SUSPENDED
           - CLOSED
-          description: Status
+          description: Status (driven by approve / suspend / reactivate)
+          readOnly: true
         approval_request_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Onboarding approval
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved onboarding (four-eyes)
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last suspension or reactivation
+          readOnly: true
         notes:
           type:
           - string
@@ -242882,15 +244809,15 @@ components:
         bic:
           type: string
           maxLength: 11
-          description: SWIFT BIC
+          description: SWIFT BIC (8 or 11 characters; required for SWIFT confirmations)
         lei:
           type: string
           maxLength: 20
-          description: Legal Entity Identifier
+          description: Legal Entity Identifier (ISO 17442, validated check digits)
         country_code:
           type: string
           pattern: ^[A-Z]{2}$
-          description: Country of incorporation (ISO 3166-1 alpha-2)
+          description: Country of incorporation (COUNTRY limits) (ISO 3166-1 alpha-2)
         parent_counterparty_id:
           type: string
           format: uuid
@@ -242909,21 +244836,13 @@ components:
           description: Internal rating grade
         isda_signed:
           type: boolean
-          description: ISDA master agreement in place
+          description: ISDA master agreement in place (required for forwards, swaps and NDFs)
         csa_signed:
           type: boolean
           description: Credit support annex in place
         gmra_signed:
           type: boolean
-          description: GMRA in place (repos)
-        status:
-          type: string
-          enum:
-          - PENDING_APPROVAL
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
+          description: GMRA in place (required for repos)
         approval_request_id:
           type: string
           format: uuid
@@ -242987,15 +244906,15 @@ components:
         bic:
           type: string
           maxLength: 11
-          description: SWIFT BIC
+          description: SWIFT BIC (8 or 11 characters; required for SWIFT confirmations)
         lei:
           type: string
           maxLength: 20
-          description: Legal Entity Identifier
+          description: Legal Entity Identifier (ISO 17442, validated check digits)
         country_code:
           type: string
           pattern: ^[A-Z]{2}$
-          description: Country of incorporation (ISO 3166-1 alpha-2)
+          description: Country of incorporation (COUNTRY limits) (ISO 3166-1 alpha-2)
         parent_counterparty_id:
           type: string
           format: uuid
@@ -243014,21 +244933,13 @@ components:
           description: Internal rating grade
         isda_signed:
           type: boolean
-          description: ISDA master agreement in place
+          description: ISDA master agreement in place (required for forwards, swaps and NDFs)
         csa_signed:
           type: boolean
           description: Credit support annex in place
         gmra_signed:
           type: boolean
-          description: GMRA in place (repos)
-        status:
-          type: string
-          enum:
-          - PENDING_APPROVAL
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
+          description: GMRA in place (required for repos)
         approval_request_id:
           type: string
           format: uuid
@@ -243058,7 +244969,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     TreasuryCounterpartyLimit:
       type: object
-      description: Credit / settlement / tenor limit on a counterparty (or its group)
+      description: Credit / settlement / tenor limit on a counterparty (or its group); usable once approved
       properties:
         id:
           type: string
@@ -243097,7 +245008,7 @@ components:
         treasury_counterparty_id:
           type: string
           format: uuid
-          description: Counterparty
+          description: Counterparty (or group parent)
         limit_type:
           type: string
           enum:
@@ -243124,7 +245035,7 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Maximum tenor allowed
+          description: Maximum tenor allowed (TENOR limits; optional cap on any limit)
         utilised_amount:
           type: string
           format: decimal
@@ -243158,16 +245069,33 @@ components:
         status:
           type: string
           enum:
+          - PENDING_APPROVAL
           - ACTIVE
           - SUSPENDED
           - EXPIRED
-          description: Status
+          description: Status (approve activates)
+          readOnly: true
         approved_by:
           type:
           - string
           - 'null'
           maxLength: 64
-          description: Credit approver
+          description: Credit approver (four-eyes)
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        refreshed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last utilisation refresh (end of day)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -243218,7 +245146,7 @@ components:
         treasury_counterparty_id:
           type: string
           format: uuid
-          description: Counterparty
+          description: Counterparty (or group parent)
         limit_type:
           type: string
           enum:
@@ -243243,7 +245171,7 @@ components:
         max_tenor_days:
           type: integer
           format: int32
-          description: Maximum tenor allowed
+          description: Maximum tenor allowed (TENOR limits; optional cap on any limit)
         warning_threshold_pct:
           type: string
           format: decimal
@@ -243258,17 +245186,6 @@ components:
           type: string
           format: date
           description: Expiry
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - EXPIRED
-          description: Status
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Credit approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -243301,7 +245218,7 @@ components:
         treasury_counterparty_id:
           type: string
           format: uuid
-          description: Counterparty
+          description: Counterparty (or group parent)
         limit_type:
           type: string
           enum:
@@ -243326,7 +245243,7 @@ components:
         max_tenor_days:
           type: integer
           format: int32
-          description: Maximum tenor allowed
+          description: Maximum tenor allowed (TENOR limits; optional cap on any limit)
         warning_threshold_pct:
           type: string
           format: decimal
@@ -243341,17 +245258,6 @@ components:
           type: string
           format: date
           description: Expiry
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - EXPIRED
-          description: Status
-        approved_by:
-          type: string
-          maxLength: 64
-          description: Credit approver
         custom_field_1:
           type: string
           maxLength: 500
@@ -243412,12 +245318,17 @@ components:
           readOnly: true
         deal_type:
           type: string
-          maxLength: 32
-          description: MONEY_MARKET, FX, SECURITY
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
+          description: Deal family
         deal_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Deal confirmed
+          description: Deal confirmed (empty for an inbound confirmation not yet matched)
         channel:
           type: string
           enum:
@@ -243435,7 +245346,7 @@ components:
         our_reference:
           type: string
           maxLength: 35
-          description: Our SWIFT reference (field 20)
+          description: Our SWIFT reference (field 20 outbound, field 21 inbound)
         their_reference:
           type:
           - string
@@ -243444,8 +245355,10 @@ components:
           description: Counterparty reference
         direction:
           type: string
-          maxLength: 10
-          description: OUTBOUND or INBOUND
+          enum:
+          - OUTBOUND
+          - INBOUND
+          description: OUTBOUND (generated) or INBOUND (received)
         status:
           type: string
           enum:
@@ -243457,12 +245370,31 @@ components:
           - DISPUTED
           - CANCELLED
           description: Matching status
-        mismatch_fields:
+          readOnly: true
+        fields:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Fields that did not match
+          description: Inbound confirmation fields from the counterparty's perspective (parsed from message_text when absent)
+        message_text:
+          type:
+          - string
+          - 'null'
+          description: Raw message (MT text) — generated for outbound, received for inbound
+        mismatch_fields:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'Fields that did not match: [{field, ours, theirs}]'
+          readOnly: true
+        dispute_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Reason given when disputed
           readOnly: true
         sent_at:
           type:
@@ -243520,7 +245452,6 @@ components:
       - updated_at
       - row_version
       - deal_type
-      - deal_id
       - channel
       - our_reference
       - direction
@@ -243530,12 +245461,15 @@ components:
       properties:
         deal_type:
           type: string
-          maxLength: 32
-          description: MONEY_MARKET, FX, SECURITY
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
+          description: Deal family
         deal_id:
           type: string
           format: uuid
-          description: Deal confirmed
+          description: Deal confirmed (empty for an inbound confirmation not yet matched)
         channel:
           type: string
           enum:
@@ -243551,26 +245485,24 @@ components:
         our_reference:
           type: string
           maxLength: 35
-          description: Our SWIFT reference (field 20)
+          description: Our SWIFT reference (field 20 outbound, field 21 inbound)
         their_reference:
           type: string
           maxLength: 35
           description: Counterparty reference
         direction:
           type: string
-          maxLength: 10
-          description: OUTBOUND or INBOUND
-        status:
-          type: string
           enum:
-          - PENDING
-          - SENT
-          - RECEIVED
-          - MATCHED
-          - UNMATCHED
-          - DISPUTED
-          - CANCELLED
-          description: Matching status
+          - OUTBOUND
+          - INBOUND
+          description: OUTBOUND (generated) or INBOUND (received)
+        fields:
+          type: object
+          additionalProperties: true
+          description: Inbound confirmation fields from the counterparty's perspective (parsed from message_text when absent)
+        message_text:
+          type: string
+          description: Raw message (MT text) — generated for outbound, received for inbound
         raw_message_document_id:
           type: string
           format: uuid
@@ -243597,12 +245529,134 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - deal_type
-      - deal_id
       - our_reference
       - direction
+    TreasuryEodRun:
+      type: object
+      description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - MARK_TO_MARKET
+          - INTEREST_ACCRUAL
+          - MATURITY_PROCESSING
+          - LIMIT_UTILISATION_REFRESH
+          - LIQUIDITY_POSITION_SNAPSHOT
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     TreasuryFxDeal:
       type: object
-      description: Treasury FX deal (spot, forward, swap, NDF) — distinct from customer FX in payments
+      description: Treasury FX deal (spot, forward, swap, NDF) with its legs — distinct from customer FX in payments
       properties:
         id:
           type: string
@@ -243641,7 +245695,8 @@ components:
         deal_ref:
           type: string
           maxLength: 32
-          description: Deal reference
+          description: Deal reference (server-generated)
+          readOnly: true
         legal_entity_id:
           type: string
           format: uuid
@@ -243666,6 +245721,15 @@ components:
           type: string
           format: uuid
           description: Dealer
+        non_deliverable:
+          type: boolean
+          description: 'NDF: net cash settlement in settlement_currency at the fixing (always true for deal_type NDF)'
+        settlement_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: NDF settlement currency (ISO 4217)
         fixing_date:
           type:
           - string
@@ -243678,6 +245742,24 @@ components:
           - 'null'
           maxLength: 64
           description: NDF fixing source
+        fixing_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: NDF fixing rate recorded by fix
+          readOnly: true
+        ndf_settlement_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: NDF net settlement amount in settlement_currency (positive = we receive)
+          readOnly: true
         status:
           type: string
           enum:
@@ -243695,7 +245777,21 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Back-office verifier
+          description: Back-office verifier (four-eyes)
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
+        confirmed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Confirmation time
           readOnly: true
         mtm_value:
           type:
@@ -243704,7 +245800,14 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Latest mark-to-market in base currency
+          description: Latest mark-to-market in mtm_currency (positive = asset)
+          readOnly: true
+        mtm_currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of mtm_value (quote currency of the near leg) (ISO 4217)
           readOnly: true
         mtm_date:
           type:
@@ -243719,6 +245822,7 @@ components:
           - 'null'
           maxLength: 255
           description: Cancellation reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -243749,6 +245853,12 @@ components:
           - 'null'
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryFxDealLeg'
+          readOnly: true
+          description: One leg for spot / forward / NDF, NEAR and FAR legs for swaps
       required:
       - id
       - created_at
@@ -243760,14 +245870,11 @@ components:
       - deal_type
       - trade_date
       - dealer_id
+      - non_deliverable
       - status
     TreasuryFxDealCreate:
       type: object
       properties:
-        deal_ref:
-          type: string
-          maxLength: 32
-          description: Deal reference
         legal_entity_id:
           type: string
           format: uuid
@@ -243792,6 +245899,13 @@ components:
           type: string
           format: uuid
           description: Dealer
+        non_deliverable:
+          type: boolean
+          description: 'NDF: net cash settlement in settlement_currency at the fixing (always true for deal_type NDF)'
+        settlement_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: NDF settlement currency (ISO 4217)
         fixing_date:
           type: string
           format: date
@@ -243800,10 +245914,6 @@ components:
           type: string
           maxLength: 64
           description: NDF fixing source
-        cancel_reason:
-          type: string
-          maxLength: 255
-          description: Cancellation reason
         custom_field_1:
           type: string
           maxLength: 500
@@ -243824,20 +245934,22 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/TreasuryFxDealLegCreate'
+          minItems: 1
+          description: One leg for spot / forward / NDF, NEAR and FAR legs for swaps
       required:
-      - deal_ref
       - legal_entity_id
       - treasury_counterparty_id
       - deal_type
       - trade_date
       - dealer_id
+      - legs
     TreasuryFxDealUpdate:
       type: object
       properties:
-        deal_ref:
-          type: string
-          maxLength: 32
-          description: Deal reference
         legal_entity_id:
           type: string
           format: uuid
@@ -243862,6 +245974,13 @@ components:
           type: string
           format: uuid
           description: Dealer
+        non_deliverable:
+          type: boolean
+          description: 'NDF: net cash settlement in settlement_currency at the fixing (always true for deal_type NDF)'
+        settlement_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: NDF settlement currency (ISO 4217)
         fixing_date:
           type: string
           format: date
@@ -243870,10 +245989,6 @@ components:
           type: string
           maxLength: 64
           description: NDF fixing source
-        cancel_reason:
-          type: string
-          maxLength: 255
-          description: Cancellation reason
         custom_field_1:
           type: string
           maxLength: 500
@@ -243936,6 +246051,7 @@ components:
           type: string
           format: uuid
           description: Deal
+          readOnly: true
         leg_type:
           type: string
           enum:
@@ -243963,17 +246079,20 @@ components:
           pattern: ^[A-Z]{3}$
           description: Quote currency (ISO 4217)
         quote_amount:
-          type: string
+          type:
+          - string
+          - 'null'
           format: decimal
           examples:
           - '125.50'
-          description: Quote amount
+          description: Quote amount (base_amount x deal_rate)
+          readOnly: true
         deal_rate:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: All-in rate
+          description: All-in rate (quote units per base unit)
         spot_rate:
           type:
           - string
@@ -243989,7 +246108,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Forward points
+          description: 'Forward points in pips (0.0001; 0.01 for JPY quotes): deal_rate = spot_rate + points x pip'
         value_date:
           type: string
           format: date
@@ -244010,6 +246129,7 @@ components:
           - 'null'
           format: uuid
           description: Settlement posting
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -244051,10 +246171,87 @@ components:
       - base_currency
       - base_amount
       - quote_currency
-      - quote_amount
       - deal_rate
       - value_date
       - settlement_status
+    TreasuryFxDealLegCreate:
+      type: object
+      properties:
+        leg_type:
+          type: string
+          enum:
+          - NEAR
+          - FAR
+          description: Near or far leg
+        buy_sell:
+          type: string
+          enum:
+          - BUY
+          - SELL
+          description: Our direction on the base currency
+        base_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Base currency (ISO 4217)
+        base_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Base amount
+        quote_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Quote currency (ISO 4217)
+        deal_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: All-in rate (quote units per base unit)
+        spot_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Spot component
+        forward_points:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'Forward points in pips (0.0001; 0.01 for JPY quotes): deal_rate = spot_rate + points x pip'
+        value_date:
+          type: string
+          format: date
+          description: Settlement date
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - buy_sell
+      - base_currency
+      - base_amount
+      - quote_currency
+      - deal_rate
+      - value_date
     TreasuryLimitUtilisation:
       type: object
       description: Immutable record of a deal consuming or releasing a counterparty limit
@@ -244082,12 +246279,22 @@ components:
           description: Limit
         deal_type:
           type: string
-          maxLength: 32
-          description: MONEY_MARKET, FX, SECURITY
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
+          description: Deal family
         deal_id:
           type: string
           format: uuid
           description: Deal consuming the limit
+        reason:
+          type: string
+          enum:
+          - RESERVE
+          - RELEASE
+          - REFRESH
+          description: Reserve on capture, release on maturity / cancel, end-of-day refresh
         amount:
           type: string
           format: decimal
@@ -244149,6 +246356,7 @@ components:
       - treasury_counterparty_limit_id
       - deal_type
       - deal_id
+      - reason
       - amount
       - currency
       - utilised_after
@@ -244194,7 +246402,7 @@ components:
         isin:
           type: string
           maxLength: 12
-          description: ISIN
+          description: ISIN (ISO 6166, validated check digit)
         name:
           type: string
           maxLength: 200
@@ -244237,7 +246445,7 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Coupons per year
+          description: Coupons per year (1, 2, 4 or 12)
         issue_date:
           type:
           - string
@@ -244259,11 +246467,13 @@ components:
           - THIRTY_E_360
           description: Day count
         hqla_level:
-          type:
-          - string
-          - 'null'
-          maxLength: 10
-          description: 'Basel HQLA level: L1, L2A, L2B or NONE'
+          type: string
+          enum:
+          - L1
+          - L2A
+          - L2B
+          - NONE
+          description: Basel HQLA level
         last_price:
           type:
           - string
@@ -244322,13 +246532,14 @@ components:
       - currency
       - maturity_date
       - day_count
+      - hqla_level
     TreasurySecurityCreate:
       type: object
       properties:
         isin:
           type: string
           maxLength: 12
-          description: ISIN
+          description: ISIN (ISO 6166, validated check digit)
         name:
           type: string
           maxLength: 200
@@ -244365,7 +246576,7 @@ components:
         coupon_frequency:
           type: integer
           format: int32
-          description: Coupons per year
+          description: Coupons per year (1, 2, 4 or 12)
         issue_date:
           type: string
           format: date
@@ -244386,8 +246597,12 @@ components:
           description: Day count
         hqla_level:
           type: string
-          maxLength: 10
-          description: 'Basel HQLA level: L1, L2A, L2B or NONE'
+          enum:
+          - L1
+          - L2A
+          - L2B
+          - NONE
+          description: Basel HQLA level
         custom_field_1:
           type: string
           maxLength: 500
@@ -244421,7 +246636,7 @@ components:
         isin:
           type: string
           maxLength: 12
-          description: ISIN
+          description: ISIN (ISO 6166, validated check digit)
         name:
           type: string
           maxLength: 200
@@ -244458,7 +246673,7 @@ components:
         coupon_frequency:
           type: integer
           format: int32
-          description: Coupons per year
+          description: Coupons per year (1, 2, 4 or 12)
         issue_date:
           type: string
           format: date
@@ -244479,8 +246694,12 @@ components:
           description: Day count
         hqla_level:
           type: string
-          maxLength: 10
-          description: 'Basel HQLA level: L1, L2A, L2B or NONE'
+          enum:
+          - L1
+          - L2A
+          - L2B
+          - NONE
+          description: Basel HQLA level
         custom_field_1:
           type: string
           maxLength: 500
@@ -244541,16 +246760,29 @@ components:
           readOnly: true
         deal_type:
           type: string
-          maxLength: 32
-          description: MONEY_MARKET, FX, SECURITY
+          enum:
+          - MONEY_MARKET
+          - FX
+          - SECURITY
+          description: Deal family
         deal_id:
           type: string
           format: uuid
           description: Deal
         flow_type:
           type: string
-          maxLength: 32
-          description: PRINCIPAL_OUT, PRINCIPAL_IN, INTEREST, FX_PAY, FX_RECEIVE, SECURITY_CASH
+          enum:
+          - PRINCIPAL_OUT
+          - PRINCIPAL_IN
+          - INTEREST_IN
+          - INTEREST_OUT
+          - FX_PAY
+          - FX_RECEIVE
+          - NDF_PAY
+          - NDF_RECEIVE
+          - SECURITY_CASH_PAY
+          - SECURITY_CASH_RECEIVE
+          description: Cash flow
         direction:
           type: string
           enum:
@@ -244588,7 +246820,8 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Outgoing payment created
+          description: Outgoing payment created by instruct
+          readOnly: true
         status:
           type: string
           enum:
@@ -244598,18 +246831,42 @@ components:
           - FAILED
           - CANCELLED
           description: Status
+          readOnly: true
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Ledger posting
+          readOnly: true
+        instructed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Release time
+          readOnly: true
+        settled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Confirmed settled
+          readOnly: true
+        settlement_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Nostro statement reference
+          readOnly: true
         failure_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Failure reason
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -244655,7 +246912,7 @@ components:
       - status
     TreasurySsi:
       type: object
-      description: Standing settlement instructions per counterparty and currency
+      description: Standing settlement instructions per counterparty and currency (used only once verified)
       properties:
         id:
           type: string
@@ -244737,7 +246994,15 @@ components:
           - string
           - 'null'
           maxLength: 64
-          description: Four-eyes verification
+          description: Four-eyes verifier (set by verify; cleared when payment details change)
+          readOnly: true
+        verified_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Verification time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -244817,10 +247082,6 @@ components:
         is_default:
           type: boolean
           description: Default SSI for the currency
-        verified_by:
-          type: string
-          maxLength: 64
-          description: Four-eyes verification
         custom_field_1:
           type: string
           maxLength: 500
@@ -244885,10 +247146,6 @@ components:
         is_default:
           type: boolean
           description: Default SSI for the currency
-        verified_by:
-          type: string
-          maxLength: 64
-          description: Four-eyes verification
         custom_field_1:
           type: string
           maxLength: 500

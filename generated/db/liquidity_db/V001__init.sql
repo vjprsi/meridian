@@ -62,10 +62,10 @@ COMMENT ON COLUMN liquidity_cash_position.position_type IS 'Actual, projected or
 COMMENT ON COLUMN liquidity_cash_position.opening_balance IS 'Opening balance';
 COMMENT ON COLUMN liquidity_cash_position.expected_inflows IS 'Expected inflows';
 COMMENT ON COLUMN liquidity_cash_position.expected_outflows IS 'Expected outflows';
-COMMENT ON COLUMN liquidity_cash_position.closing_balance IS 'Closing (projected) balance';
+COMMENT ON COLUMN liquidity_cash_position.closing_balance IS 'Closing balance = opening + inflows - outflows';
 COMMENT ON COLUMN liquidity_cash_position.minimum_buffer IS 'Minimum buffer required';
-COMMENT ON COLUMN liquidity_cash_position.shortfall IS 'Buffer shortfall, if any';
-COMMENT ON COLUMN liquidity_cash_position.flows_by_category IS 'Inflows/outflows by LiquidityFlowCategory';
+COMMENT ON COLUMN liquidity_cash_position.shortfall IS 'Buffer shortfall (minimum_buffer - closing_balance), if positive';
+COMMENT ON COLUMN liquidity_cash_position.flows_by_category IS 'Inflows/outflows by LiquidityFlowCategory: {CATEGORY: {inflows, outflows}}';
 COMMENT ON COLUMN liquidity_cash_position.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_cash_position.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_cash_position.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -92,6 +92,10 @@ CREATE TABLE liquidity_ladder_run (
   currency                     char(3),
   behavioural                  boolean NOT NULL DEFAULT true,
   status                       varchar(40) NOT NULL DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'PARTIALLY_SUCCEEDED')),
+  total_inflows                numeric(28,8),
+  total_outflows               numeric(28,8),
+  negative_gap_bucket          varchar(16),
+  error_message                varchar(500),
   started_at                   timestamptz,
   finished_at                  timestamptz,
   custom_field_1               varchar(500),
@@ -110,9 +114,13 @@ COMMENT ON COLUMN liquidity_ladder_run.updated_by IS 'Principal that last update
 COMMENT ON COLUMN liquidity_ladder_run.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN liquidity_ladder_run.legal_entity_id IS 'Entity';
 COMMENT ON COLUMN liquidity_ladder_run.as_of_date IS 'As-of date';
-COMMENT ON COLUMN liquidity_ladder_run.currency IS 'Currency (empty = all, in base currency)';
-COMMENT ON COLUMN liquidity_ladder_run.behavioural IS 'Apply behavioural assumptions';
+COMMENT ON COLUMN liquidity_ladder_run.currency IS 'Currency (empty = all, amounts taken as base currency)';
+COMMENT ON COLUMN liquidity_ladder_run.behavioural IS 'Apply behavioural profiles to non-maturity items';
 COMMENT ON COLUMN liquidity_ladder_run.status IS 'Run status';
+COMMENT ON COLUMN liquidity_ladder_run.total_inflows IS 'Sum of inflows over all buckets';
+COMMENT ON COLUMN liquidity_ladder_run.total_outflows IS 'Sum of outflows over all buckets';
+COMMENT ON COLUMN liquidity_ladder_run.negative_gap_bucket IS 'First bucket whose cumulative gap is negative';
+COMMENT ON COLUMN liquidity_ladder_run.error_message IS 'Why the run failed';
 COMMENT ON COLUMN liquidity_ladder_run.started_at IS 'Start';
 COMMENT ON COLUMN liquidity_ladder_run.finished_at IS 'End';
 COMMENT ON COLUMN liquidity_ladder_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -162,7 +170,7 @@ COMMENT ON COLUMN liquidity_bucket.inflows IS 'Contractual / behavioural inflows
 COMMENT ON COLUMN liquidity_bucket.outflows IS 'Outflows';
 COMMENT ON COLUMN liquidity_bucket.net_gap IS 'Inflows minus outflows';
 COMMENT ON COLUMN liquidity_bucket.cumulative_gap IS 'Cumulative gap';
-COMMENT ON COLUMN liquidity_bucket.breakdown IS 'Amounts by flow category';
+COMMENT ON COLUMN liquidity_bucket.breakdown IS 'Amounts by flow category: {CATEGORY: {inflows, outflows}}';
 COMMENT ON COLUMN liquidity_bucket.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_bucket.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_bucket.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -189,15 +197,19 @@ CREATE TABLE lcr_calculation (
   hqla_level1                  numeric(28,8) NOT NULL,
   hqla_level2a                 numeric(28,8) NOT NULL,
   hqla_level2b                 numeric(28,8) NOT NULL,
+  cap_adjustment               numeric(28,8) NOT NULL DEFAULT 0,
   total_hqla                   numeric(28,8) NOT NULL,
   outflows_30d                 numeric(28,8) NOT NULL,
   inflows_30d                  numeric(28,8) NOT NULL,
+  uncapped_inflows             numeric(28,8) NOT NULL DEFAULT 0,
   net_outflows                 numeric(28,8) NOT NULL,
   lcr_ratio                    numeric(18,10) NOT NULL,
   regulatory_minimum           numeric(18,10) NOT NULL DEFAULT 1.0,
+  breach                       boolean NOT NULL DEFAULT false,
   components                   jsonb NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'CALCULATED' CHECK (status IN ('DRAFT', 'CALCULATED', 'REVIEWED', 'APPROVED', 'SUBMITTED')),
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -219,15 +231,19 @@ COMMENT ON COLUMN lcr_calculation.currency IS 'Reporting currency';
 COMMENT ON COLUMN lcr_calculation.hqla_level1 IS 'Level 1 HQLA after haircuts';
 COMMENT ON COLUMN lcr_calculation.hqla_level2a IS 'Level 2A HQLA after haircuts';
 COMMENT ON COLUMN lcr_calculation.hqla_level2b IS 'Level 2B HQLA after haircuts';
+COMMENT ON COLUMN lcr_calculation.cap_adjustment IS 'Reduction applied by the 15% (L2B) and 40% (L2) caps';
 COMMENT ON COLUMN lcr_calculation.total_hqla IS 'Total HQLA after caps';
 COMMENT ON COLUMN lcr_calculation.outflows_30d IS 'Weighted 30-day outflows';
 COMMENT ON COLUMN lcr_calculation.inflows_30d IS 'Weighted inflows (capped at 75% of outflows)';
+COMMENT ON COLUMN lcr_calculation.uncapped_inflows IS 'Weighted inflows before the 75% cap';
 COMMENT ON COLUMN lcr_calculation.net_outflows IS 'Net cash outflows';
 COMMENT ON COLUMN lcr_calculation.lcr_ratio IS 'LCR = HQLA / net outflows';
 COMMENT ON COLUMN lcr_calculation.regulatory_minimum IS 'Minimum ratio';
-COMMENT ON COLUMN lcr_calculation.components IS 'Line-level components with run-off / inflow factors';
+COMMENT ON COLUMN lcr_calculation.breach IS 'Ratio below the regulatory minimum';
+COMMENT ON COLUMN lcr_calculation.components IS 'Line-level components [{line, code, category, amount, factor, weighted}]';
 COMMENT ON COLUMN lcr_calculation.status IS 'Status';
-COMMENT ON COLUMN lcr_calculation.approved_by IS 'Approver';
+COMMENT ON COLUMN lcr_calculation.approved_by IS 'Approver (four-eyes)';
+COMMENT ON COLUMN lcr_calculation.approved_at IS 'Approval time';
 COMMENT ON COLUMN lcr_calculation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN lcr_calculation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN lcr_calculation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -255,9 +271,11 @@ CREATE TABLE nsfr_calculation (
   required_stable_funding      numeric(28,8) NOT NULL,
   nsfr_ratio                   numeric(18,10) NOT NULL,
   regulatory_minimum           numeric(18,10) NOT NULL DEFAULT 1.0,
+  breach                       boolean NOT NULL DEFAULT false,
   components                   jsonb NOT NULL,
   status                       varchar(40) NOT NULL DEFAULT 'CALCULATED' CHECK (status IN ('DRAFT', 'CALCULATED', 'REVIEWED', 'APPROVED', 'SUBMITTED')),
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -280,9 +298,11 @@ COMMENT ON COLUMN nsfr_calculation.available_stable_funding IS 'ASF';
 COMMENT ON COLUMN nsfr_calculation.required_stable_funding IS 'RSF';
 COMMENT ON COLUMN nsfr_calculation.nsfr_ratio IS 'ASF / RSF';
 COMMENT ON COLUMN nsfr_calculation.regulatory_minimum IS 'Minimum ratio';
-COMMENT ON COLUMN nsfr_calculation.components IS 'ASF/RSF factors per balance-sheet line';
+COMMENT ON COLUMN nsfr_calculation.breach IS 'Ratio below the regulatory minimum';
+COMMENT ON COLUMN nsfr_calculation.components IS 'ASF/RSF factors per balance-sheet line [{line, code, side, amount, factor, weighted}]';
 COMMENT ON COLUMN nsfr_calculation.status IS 'Status';
-COMMENT ON COLUMN nsfr_calculation.approved_by IS 'Approver';
+COMMENT ON COLUMN nsfr_calculation.approved_by IS 'Approver (four-eyes)';
+COMMENT ON COLUMN nsfr_calculation.approved_at IS 'Approval time';
 COMMENT ON COLUMN nsfr_calculation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN nsfr_calculation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN nsfr_calculation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -310,6 +330,7 @@ CREATE TABLE liquidity_stress_scenario (
   assumptions                  jsonb NOT NULL,
   is_active                    boolean NOT NULL DEFAULT true,
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -329,9 +350,10 @@ COMMENT ON COLUMN liquidity_stress_scenario.code IS 'Scenario code';
 COMMENT ON COLUMN liquidity_stress_scenario.name IS 'Name';
 COMMENT ON COLUMN liquidity_stress_scenario.severity IS 'Severity / type';
 COMMENT ON COLUMN liquidity_stress_scenario.horizon_days IS 'Survival horizon';
-COMMENT ON COLUMN liquidity_stress_scenario.assumptions IS 'Deposit run-off, drawdown, haircut and market assumptions';
+COMMENT ON COLUMN liquidity_stress_scenario.assumptions IS '{runoff_rates {CODE: rate}, inflow_rates {CODE: rate}, hqla_haircuts {L1, L2A, L2B}, runoff_multiplier, runoff_profile LINEAR|UPFRONT, min_survival_days}';
 COMMENT ON COLUMN liquidity_stress_scenario.is_active IS 'Active';
-COMMENT ON COLUMN liquidity_stress_scenario.approved_by IS 'Approver';
+COMMENT ON COLUMN liquidity_stress_scenario.approved_by IS 'Approver (four-eyes)';
+COMMENT ON COLUMN liquidity_stress_scenario.approved_at IS 'Approval time';
 COMMENT ON COLUMN liquidity_stress_scenario.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_stress_scenario.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_stress_scenario.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -353,6 +375,7 @@ CREATE TABLE liquidity_stress_result (
   as_of_date                   date NOT NULL,
   currency                     char(3) NOT NULL,
   stressed_outflows            numeric(28,8) NOT NULL,
+  stressed_inflows             numeric(28,8) NOT NULL DEFAULT 0,
   counterbalancing_capacity    numeric(28,8) NOT NULL,
   net_position                 numeric(28,8) NOT NULL,
   survival_days                integer NOT NULL,
@@ -374,11 +397,12 @@ COMMENT ON COLUMN liquidity_stress_result.legal_entity_id IS 'Entity';
 COMMENT ON COLUMN liquidity_stress_result.as_of_date IS 'As-of date';
 COMMENT ON COLUMN liquidity_stress_result.currency IS 'Currency';
 COMMENT ON COLUMN liquidity_stress_result.stressed_outflows IS 'Stressed outflows over the horizon';
-COMMENT ON COLUMN liquidity_stress_result.counterbalancing_capacity IS 'Liquidity available to cover them';
-COMMENT ON COLUMN liquidity_stress_result.net_position IS 'Surplus / shortfall';
-COMMENT ON COLUMN liquidity_stress_result.survival_days IS 'Days until the buffer is exhausted';
-COMMENT ON COLUMN liquidity_stress_result.daily_profile IS 'Day-by-day stressed position';
-COMMENT ON COLUMN liquidity_stress_result.breach IS 'Breaches the risk appetite';
+COMMENT ON COLUMN liquidity_stress_result.stressed_inflows IS 'Stressed inflows over the horizon';
+COMMENT ON COLUMN liquidity_stress_result.counterbalancing_capacity IS 'Liquidity available to cover them (stressed HQLA)';
+COMMENT ON COLUMN liquidity_stress_result.net_position IS 'Surplus / shortfall at the horizon';
+COMMENT ON COLUMN liquidity_stress_result.survival_days IS 'Days until the buffer is exhausted (horizon + 1 when never)';
+COMMENT ON COLUMN liquidity_stress_result.daily_profile IS 'Day-by-day stressed position [{day, outflows, inflows, cumulative_position}]';
+COMMENT ON COLUMN liquidity_stress_result.breach IS 'Breaches the risk appetite (survival below min_survival_days)';
 COMMENT ON COLUMN liquidity_stress_result.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_stress_result.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN liquidity_stress_result.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -404,9 +428,11 @@ CREATE TABLE intraday_liquidity_snapshot (
   available_liquidity          numeric(28,8) NOT NULL,
   used_liquidity               numeric(28,8) NOT NULL,
   largest_negative_position    numeric(28,8) NOT NULL,
+  largest_positive_position    numeric(28,8) NOT NULL DEFAULT 0,
   payments_sent                numeric(28,8) NOT NULL,
   payments_received            numeric(28,8) NOT NULL,
   throughput_pct               numeric(18,10),
+  profile                      jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -422,12 +448,14 @@ COMMENT ON COLUMN intraday_liquidity_snapshot.legal_entity_id IS 'Entity';
 COMMENT ON COLUMN intraday_liquidity_snapshot.snapshot_at IS 'Snapshot time';
 COMMENT ON COLUMN intraday_liquidity_snapshot.currency IS 'Currency';
 COMMENT ON COLUMN intraday_liquidity_snapshot.nostro_account_id IS 'Settlement account';
-COMMENT ON COLUMN intraday_liquidity_snapshot.available_liquidity IS 'Available intraday liquidity';
-COMMENT ON COLUMN intraday_liquidity_snapshot.used_liquidity IS 'Liquidity used so far today';
-COMMENT ON COLUMN intraday_liquidity_snapshot.largest_negative_position IS 'Largest net negative position so far';
+COMMENT ON COLUMN intraday_liquidity_snapshot.available_liquidity IS 'Available intraday liquidity at the start of the day (balance + credit lines + collateral)';
+COMMENT ON COLUMN intraday_liquidity_snapshot.used_liquidity IS 'Liquidity used so far today (= largest negative net cumulative position)';
+COMMENT ON COLUMN intraday_liquidity_snapshot.largest_negative_position IS 'Largest net negative cumulative position (reported as a positive number)';
+COMMENT ON COLUMN intraday_liquidity_snapshot.largest_positive_position IS 'Largest net positive cumulative position';
 COMMENT ON COLUMN intraday_liquidity_snapshot.payments_sent IS 'Gross payments sent';
 COMMENT ON COLUMN intraday_liquidity_snapshot.payments_received IS 'Gross payments received';
-COMMENT ON COLUMN intraday_liquidity_snapshot.throughput_pct IS 'Share of payments settled by this time';
+COMMENT ON COLUMN intraday_liquidity_snapshot.throughput_pct IS 'Share of the day''s expected payments sent by snapshot_at';
+COMMENT ON COLUMN intraday_liquidity_snapshot.profile IS 'Net cumulative position after each movement [{at, net_cumulative}]';
 COMMENT ON COLUMN intraday_liquidity_snapshot.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN intraday_liquidity_snapshot.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN intraday_liquidity_snapshot.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -440,6 +468,54 @@ CREATE INDEX ix_intraday_liquidity_snapshot_c1 ON intraday_liquidity_snapshot (c
 ALTER TABLE intraday_liquidity_snapshot ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON intraday_liquidity_snapshot USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_intraday_liquidity_snapshot_append_only BEFORE UPDATE OR DELETE ON intraday_liquidity_snapshot FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- liquidity_eod_run: One end-of-day liquidity job execution per tenant, job and business date (idempotency)
+CREATE TABLE liquidity_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('MARK_TO_MARKET', 'INTEREST_ACCRUAL', 'MATURITY_PROCESSING', 'LIMIT_UTILISATION_REFRESH', 'LIQUIDITY_POSITION_SNAPSHOT')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_liquidity_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE liquidity_eod_run IS 'One end-of-day liquidity job execution per tenant, job and business date (idempotency)';
+COMMENT ON COLUMN liquidity_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN liquidity_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN liquidity_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN liquidity_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN liquidity_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN liquidity_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN liquidity_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN liquidity_eod_run.job IS 'Job';
+COMMENT ON COLUMN liquidity_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN liquidity_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN liquidity_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN liquidity_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN liquidity_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN liquidity_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN liquidity_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN liquidity_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN liquidity_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN liquidity_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN liquidity_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_liquidity_eod_run_tenant ON liquidity_eod_run (tenant_id, created_at);
+ALTER TABLE liquidity_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON liquidity_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_liquidity_eod_run_touch BEFORE UPDATE ON liquidity_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

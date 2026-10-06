@@ -1742,7 +1742,7 @@
     "schema": "treasury_deal",
     "package": "io.meridian.treasurydeal",
     "port": 9161,
-    "description": "Front and middle office for treasury: counterparties and limits, money market, FX and securities deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement.",
+    "description": "Front and middle office for treasury: counterparties and limits, money market, FX and securities deals, confirmations (MT300/MT320) and settlement instructions; posts to the ledger on settlement, accrual and maturity, and releases payment instructions through payment-service.",
     "tags": [
       "Money Market Deals",
       "Securities Holdings",
@@ -1750,6 +1750,7 @@
       "Treasury Confirmations",
       "Treasury Counterparties",
       "Treasury Counterparty Limits",
+      "Treasury Eod Runs",
       "Treasury Fx Deal Legs",
       "Treasury Fx Deals",
       "Treasury Limit Utilisations",
@@ -1757,18 +1758,45 @@
       "Treasury Settlements",
       "Treasury Ssis"
     ],
-    "tables": 12,
+    "tables": 13,
     "events": [
+      "treasury.counterparty.created",
       "treasury.counterparty.approved",
+      "treasury.counterparty.suspended",
+      "treasury.counterparty.reactivated",
+      "treasury.ssi.verified",
+      "treasury.limit.approved",
+      "treasury.limit.warning_reached",
       "treasury.limit.breached",
       "treasury.money_market_deal.captured",
+      "treasury.money_market_deal.verified",
+      "treasury.money_market_deal.confirmed",
       "treasury.money_market_deal.settled",
+      "treasury.money_market_deal.called",
+      "treasury.money_market_deal.rolled_over",
       "treasury.money_market_deal.matured",
+      "treasury.money_market_deal.cancelled",
       "treasury.fx_deal.captured",
+      "treasury.fx_deal.verified",
+      "treasury.fx_deal.confirmed",
       "treasury.fx_deal.settled",
+      "treasury.fx_deal.fixed",
+      "treasury.fx_deal.revalued",
+      "treasury.fx_deal.cancelled",
+      "treasury.security.priced",
+      "treasury.securities_holding.revalued",
+      "treasury.securities_holding.encumbrance_changed",
+      "treasury.securities_trade.captured",
       "treasury.securities_trade.settled",
+      "treasury.securities_trade.cancelled",
+      "treasury.confirmation.sent",
+      "treasury.confirmation.matched",
       "treasury.confirmation.unmatched",
-      "treasury.settlement.failed"
+      "treasury.confirmation.disputed",
+      "treasury.settlement.instructed",
+      "treasury.settlement.settled",
+      "treasury.settlement.failed",
+      "treasury.eod_run.completed"
     ]
   },
   {
@@ -1782,20 +1810,31 @@
     "port": 9162,
     "description": "Real-time and projected cash positions by currency and nostro, maturity ladders, Basel III LCR and NSFR calculations, intraday liquidity monitoring and liquidity stress testing.",
     "tags": [
+      "Cash Positions",
       "Intraday Liquidity",
       "Lcr Calculations",
+      "Liquidity Eod Runs",
       "Liquidity Ladder Runs",
-      "Liquidity Positions",
       "Liquidity Stress Results",
       "Liquidity Stress Scenarios",
       "Nsfr Calculations"
     ],
-    "tables": 8,
+    "tables": 9,
     "events": [
+      "treasury.liquidity_position.projected",
       "treasury.liquidity_position.shortfall",
+      "treasury.liquidity_ladder.completed",
       "treasury.lcr.calculated",
+      "treasury.lcr.breached",
+      "treasury.lcr.approved",
       "treasury.nsfr.calculated",
-      "treasury.liquidity_stress.breached"
+      "treasury.nsfr.breached",
+      "treasury.nsfr.approved",
+      "treasury.liquidity_stress_scenario.approved",
+      "treasury.liquidity_stress.completed",
+      "treasury.liquidity_stress.breached",
+      "treasury.intraday_liquidity.recorded",
+      "treasury.liquidity_eod_run.completed"
     ]
   },
   {
@@ -1819,8 +1858,11 @@
     ],
     "tables": 8,
     "events": [
+      "treasury.alm_assumption.approved",
       "treasury.alm_gap_run.completed",
+      "treasury.alm_gap_run.failed",
       "treasury.alm_sensitivity.completed",
+      "treasury.alm_sensitivity.outlier_breached",
       "treasury.ftp_curve.published",
       "treasury.ftp_assignment.computed"
     ]
