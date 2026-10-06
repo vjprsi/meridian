@@ -6,27 +6,32 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Maker-checker lifecycle of a decision-table version (DecisionTableStatus):
- * DRAFT -submit-> PENDING_APPROVAL -approve-> PUBLISHED -superseded-> RETIRED; PENDING_APPROVAL -reject-> DRAFT.
- * Only DRAFT versions are editable; PUBLISHED and RETIRED versions are immutable.
+ * Maker-checker lifecycle of a decision-table version (DecisionTableVersionStatus):
+ * DRAFT/REJECTED -submit-> PENDING_APPROVAL -approve-> APPROVED -publish (effective_from reached)-> PUBLISHED
+ * -superseded-> RETIRED; PENDING_APPROVAL -reject-> REJECTED (reworkable). APPROVED versions that are overtaken
+ * by a later publication are retired too. Only DRAFT and REJECTED versions are editable.
  */
 public final class VersionLifecycle {
     public static final String DRAFT = "DRAFT";
     public static final String PENDING_APPROVAL = "PENDING_APPROVAL";
+    public static final String APPROVED = "APPROVED";
     public static final String PUBLISHED = "PUBLISHED";
+    public static final String REJECTED = "REJECTED";
     public static final String RETIRED = "RETIRED";
 
-    public enum Action { SUBMIT, APPROVE, REJECT, RETIRE }
+    public enum Action { SUBMIT, APPROVE, PUBLISH, REJECT, RETIRE }
 
     private static final Map<Action, Set<String>> FROM = Map.of(
-            Action.SUBMIT, Set.of(DRAFT),
+            Action.SUBMIT, Set.of(DRAFT, REJECTED),
             Action.APPROVE, Set.of(PENDING_APPROVAL),
+            Action.PUBLISH, Set.of(APPROVED),
             Action.REJECT, Set.of(PENDING_APPROVAL),
-            Action.RETIRE, Set.of(PUBLISHED));
+            Action.RETIRE, Set.of(PUBLISHED, APPROVED));
     private static final Map<Action, String> TO = Map.of(
             Action.SUBMIT, PENDING_APPROVAL,
-            Action.APPROVE, PUBLISHED,
-            Action.REJECT, DRAFT,
+            Action.APPROVE, APPROVED,
+            Action.PUBLISH, PUBLISHED,
+            Action.REJECT, REJECTED,
             Action.RETIRE, RETIRED);
 
     private VersionLifecycle() {}
@@ -41,9 +46,9 @@ public final class VersionLifecycle {
     }
 
     public static void requireEditable(String status) {
-        if (!DRAFT.equals(status)) {
+        if (!DRAFT.equals(status) && !REJECTED.equals(status)) {
             throw ApiException.conflict("version_not_editable",
-                    "Only DRAFT versions can be changed; this version is " + status);
+                    "Only DRAFT or REJECTED versions can be changed; this version is " + status);
         }
     }
 

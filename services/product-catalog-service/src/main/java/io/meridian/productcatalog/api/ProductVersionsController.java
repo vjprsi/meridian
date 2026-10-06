@@ -1,6 +1,5 @@
 package io.meridian.productcatalog.api;
 
-import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.productcatalog.api.generated.ProductVersionsApi;
 import io.meridian.productcatalog.api.generated.model.EligibilityRulePage;
@@ -23,10 +22,10 @@ import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
@@ -35,6 +34,9 @@ import tools.jackson.databind.json.JsonMapper;
 /** Product versions: drafting, maker-checker lifecycle, publication, new drafts, diffs, migrations, content views. */
 @RestController
 public class ProductVersionsController implements ProductVersionsApi {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static final Class<Map<String, Object>> MAP = (Class) Map.class;
+
     private final VersionService versions;
     private final CatalogStore store;
     private final CrudEngine crud;
@@ -106,16 +108,9 @@ public class ProductVersionsController implements ProductVersionsApi {
 
     /** {@code GET /v1/product-versions/{id}/diff?against=<version id>}: changes from {@code against} to this one. */
     @Override
-    public ResponseEntity<Void> productVersionsDiff(UUID id) {
+    public ResponseEntity<Map<String, Object>> productVersionsDiff(UUID id, UUID against) {
         TenantContext.require();
-        String against = ApiSupport.param("against");
-        UUID other;
-        try {
-            other = against == null ? null : UUID.fromString(against);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest("invalid_against", "against must be a version id");
-        }
-        return ApiSupport.document(MediaType.APPLICATION_JSON, store.toNode(versions.diff(id, other)).toString());
+        return ResponseEntity.ok(json.convertValue(store.toNode(versions.diff(id, against)), MAP));
     }
 
     @Override

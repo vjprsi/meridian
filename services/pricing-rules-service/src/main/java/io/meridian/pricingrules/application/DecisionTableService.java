@@ -90,7 +90,7 @@ public class DecisionTableService {
         if (VersionLifecycle.RETIRED.equals(table.get("status").asString())) {
             throw ApiException.conflict("table_retired", "Decision table " + tableId + " is retired");
         }
-        parse(text(req, "hit_policy"), req.get("inputs"), req.get("outputs"), req.get("rules"));
+        model(req);
         ObjectNode values = crud.toColumns(VERSION, req);
         values.put("version_no", store.nextVersionNo(tableId));
         values.put("status", VersionLifecycle.DRAFT);
@@ -103,15 +103,17 @@ public class DecisionTableService {
         JsonNode current = store.lock(VERSION, id);
         VersionLifecycle.requireEditable(current.get("status").asString());
         ObjectNode values = crud.toColumns(VERSION, req);
-        for (String f : List.of("decision_table_id", "version_no")) {
-            if (values.has(f) && !values.get(f).asString().equals(current.get(f).asString())) {
-                throw ApiException.unprocessable("immutable_field", f + " cannot be changed");
-            }
-            values.remove(f);
+        if (values.has("decision_table_id")
+                && !values.get("decision_table_id").asString().equals(current.get("decision_table_id").asString())) {
+            throw ApiException.unprocessable("immutable_field", "decision_table_id cannot be changed");
+        }
+        values.remove("decision_table_id");
+        if (VersionLifecycle.REJECTED.equals(current.get("status").asString())) {
+            values.put("status", VersionLifecycle.DRAFT); // rework of a rejected version
         }
         ObjectNode merged = (ObjectNode) current.deepCopy();
         merged.setAll(values);
-        parse(text(merged, "hit_policy"), merged.get("inputs"), merged.get("outputs"), merged.get("rules"));
+        model(merged);
         validateWindow(merged);
         return crud.updateRow(VERSION, Map.of("id", id), values, expectedVersion)
                 .orElseThrow(() -> ApiException.conflict("version_conflict",
@@ -129,6 +131,9 @@ public class DecisionTableService {
         ObjectNode values = json.createObjectNode();
         values.put("status", target);
         values.put("submitted_by", TenantContext.principal());
+        values.put("submitted_at", OffsetDateTime.now().toString());
+        values.putNull("rejected_by");
+        values.putNull("rejection_reason");
         values.put("checksum", checksum(v));
         JsonNode row = store.update(VERSION, id, values);
         UUID tableId = UUID.fromString(v.get("decision_table_id").asString());
@@ -139,6 +144,10 @@ public class DecisionTableService {
         return row.toString();
     }
 
+    /**
+     * Checker: four-eyes and integrity check. The version is published at once when its effective_from has been
+     * reached (or is empty); otherwise it stays APPROVED and is published by the first evaluation on or after it.
+     */
     @Transactional
     public String approve(UUID id, String comment) {
         JsonNode v = store.lock(VERSION, id);
@@ -153,14 +162,6 @@ public class DecisionTableService {
             throw ApiException.conflict("table_retired", "Decision table " + tableId + " is retired");
         }
         OffsetDateTime now = OffsetDateTime.now();
-        for (JsonNode prev : store.versionsInStatus(tableId, VersionLifecycle.PUBLISHED)) {
-            ObjectNode retire = json.createObjectNode();
-            retire.put("status", VersionLifecycle.transition(VersionLifecycle.PUBLISHED, Action.RETIRE));
-            if (!prev.hasNonNull("effective_to")) {
-                retire.put("effective_to", now.toString());
-            }
-            store.update(VERSION, UUID.fromString(prev.get("id").asString()), retire);
-        }
         ObjectNode values = json.createObjectNode();
         values.put("status", target);
         values.put("approved_by", TenantContext.principal());
@@ -169,11 +170,11 @@ public class DecisionTableService {
             values.put("effective_from", now.toString());
         }
         JsonNode row = store.update(VERSION, id, values);
-        ObjectNode tableValues = json.createObjectNode();
-        tableValues.put("status", VersionLifecycle.PUBLISHED);
-        tableValues.put("current_version_id", id.toString());
-        store.update(TABLE, tableId, tableValues);
-        outbox.publish("product.decision_table_version.published", VERSION, id, row);
+        if (!effectiveFrom(row).isAfter(now)) {
+            return publish(tableId, row, now).toString();
+        }
+        settleTableStatus(tableId);
+        outbox.publish("product.decision_table_version.approved", VERSION, id, row);
         return row.toString();
     }
 
@@ -186,28 +187,84 @@ public class DecisionTableService {
         String target = VersionLifecycle.transition(v.get("status").asString(), Action.REJECT);
         ObjectNode values = json.createObjectNode();
         values.put("status", target);
-        values.putNull("submitted_by");
+        values.put("rejected_by", TenantContext.principal());
+        values.put("rejection_reason", reason);
         values.putNull("checksum");
         JsonNode row = store.update(VERSION, id, values);
-        UUID tableId = UUID.fromString(v.get("decision_table_id").asString());
+        settleTableStatus(UUID.fromString(v.get("decision_table_id").asString()));
+        outbox.publish("product.decision_table_version.rejected", VERSION, id, row);
+        return row.toString();
+    }
+
+    /** Makes an APPROVED version the table's current one; earlier published (and overtaken approved) versions retire. */
+    private JsonNode publish(UUID tableId, JsonNode version, OffsetDateTime now) {
+        UUID id = UUID.fromString(version.get("id").asString());
+        OffsetDateTime from = effectiveFrom(version);
+        List<JsonNode> older = new ArrayList<>(store.versionsInStatus(tableId, VersionLifecycle.PUBLISHED));
+        store.versionsInStatus(tableId, VersionLifecycle.APPROVED).stream()
+                .filter(a -> !a.get("id").asString().equals(id.toString()) && !effectiveFrom(a).isAfter(from))
+                .forEach(older::add);
+        for (JsonNode prev : older) {
+            ObjectNode retire = json.createObjectNode();
+            retire.put("status", VersionLifecycle.transition(prev.get("status").asString(), Action.RETIRE));
+            if (!prev.hasNonNull("effective_to")) {
+                retire.put("effective_to", now.toString());
+            }
+            store.update(VERSION, UUID.fromString(prev.get("id").asString()), retire);
+        }
+        JsonNode row = store.update(VERSION, id, json.createObjectNode()
+                .put("status", VersionLifecycle.transition(version.get("status").asString(), Action.PUBLISH)));
+        ObjectNode tableValues = json.createObjectNode();
+        tableValues.put("status", VersionLifecycle.PUBLISHED);
+        tableValues.put("current_version_id", id.toString());
+        store.update(TABLE, tableId, tableValues);
+        outbox.publish("product.decision_table_version.published", VERSION, id, row);
+        return row;
+    }
+
+    /** Publishes APPROVED versions whose effective_from has been reached (oldest first). */
+    private void promoteDue(UUID tableId) {
+        OffsetDateTime now = OffsetDateTime.now();
+        List<JsonNode> due = store.versionsInStatus(tableId, VersionLifecycle.APPROVED).stream()
+                .filter(a -> !effectiveFrom(a).isAfter(now))
+                .sorted(java.util.Comparator.comparing(DecisionTableService::effectiveFrom))
+                .toList();
+        if (due.isEmpty()) {
+            return;
+        }
+        JsonNode table = store.lock(TABLE, tableId);
+        if (VersionLifecycle.RETIRED.equals(table.get("status").asString())) {
+            return;
+        }
+        for (JsonNode a : due) {
+            JsonNode current = store.lock(VERSION, UUID.fromString(a.get("id").asString()));
+            if (VersionLifecycle.APPROVED.equals(current.get("status").asString())) {
+                publish(tableId, current, now);
+            }
+        }
+    }
+
+    /** Table status after a version leaves PENDING_APPROVAL without being published. */
+    private void settleTableStatus(UUID tableId) {
         JsonNode table = store.lock(TABLE, tableId);
         if (VersionLifecycle.PENDING_APPROVAL.equals(table.get("status").asString())
                 && store.versionsInStatus(tableId, VersionLifecycle.PENDING_APPROVAL).isEmpty()) {
             store.update(TABLE, tableId, json.createObjectNode().put("status",
                     table.hasNonNull("current_version_id") ? VersionLifecycle.PUBLISHED : VersionLifecycle.DRAFT));
         }
-        return row.toString();
+    }
+
+    private static OffsetDateTime effectiveFrom(JsonNode v) {
+        return v.hasNonNull("effective_from") ? OffsetDateTime.parse(v.get("effective_from").asString()) : OffsetDateTime.MIN;
     }
 
     /** Runs test cases against a version (any status). Nothing is logged. */
-    public ObjectNode test(UUID id, JsonNode testCases) {
+    public ObjectNode test(UUID id, JsonNode cases) {
         JsonNode v = store.require(VERSION, id);
         DecisionTableModel model = model(v);
-        JsonNode cases = testCases == null ? null
-                : (testCases.isArray() ? testCases : (testCases.has("cases") ? testCases.get("cases") : testCases.get("items")));
         if (cases == null || !cases.isArray() || cases.isEmpty()) {
             throw ApiException.unprocessable("invalid_test_cases",
-                    "test_cases must be {\"cases\": [{\"name\", \"inputs\": {...}, \"expected\": {...}}]}");
+                    "test_cases must be [{\"name\", \"inputs\": {...}, \"expected\": {...}}]");
         }
         ObjectNode report = json.createObjectNode();
         report.put("decision_table_version_id", id.toString());
@@ -285,6 +342,7 @@ public class DecisionTableService {
         v.put("decision_table_id", tableId.toString());
         v.put("version_no", store.nextVersionNo(tableId));
         v.put("hit_policy", imp.hitPolicy());
+        v.put("aggregation", imp.aggregation());
         v.set("inputs", store.toNode(imp.inputs()));
         v.set("outputs", store.toNode(imp.outputs()));
         v.set("rules", store.toNode(imp.rules()));
@@ -305,6 +363,8 @@ public class DecisionTableService {
         if (r.inputs() == null) {
             throw ApiException.unprocessable("inputs_required", "inputs is required");
         }
+        store.require(TABLE, tableId);
+        promoteDue(tableId);
         JsonNode table = store.require(TABLE, tableId);
         if (VersionLifecycle.RETIRED.equals(table.get("status").asString())) {
             throw ApiException.conflict("table_retired", "Decision table " + tableId + " is retired");
@@ -367,17 +427,25 @@ public class DecisionTableService {
     // ------------------------------------------------------------------ helpers
 
     DecisionTableModel model(JsonNode v) {
-        return parse(text(v, "hit_policy"), v.get("inputs"), v.get("outputs"), v.get("rules"));
+        return wrap(() -> DecisionTableModel.parse(text(v, "hit_policy"), text(v, "aggregation"), list(v.get("inputs")),
+                list(v.get("outputs")), list(v.get("rules"))));
     }
 
-    private static DecisionTableModel parse(String hitPolicy, JsonNode inputs, JsonNode outputs, JsonNode rules) {
-        return wrap(() -> DecisionTableModel.parse(hitPolicy, null, PricingStore.toMap(inputs), PricingStore.toMap(outputs),
-                PricingStore.toMap(rules)));
+    /** A stored/requested JSON array as a plain list; null when absent; non-arrays are rejected. */
+    private static List<?> list(JsonNode n) {
+        if (n == null || n.isNull()) {
+            return null;
+        }
+        if (!n.isArray()) {
+            throw ApiException.unprocessable("invalid_decision_table", "inputs, outputs and rules must be JSON arrays");
+        }
+        return (List<?>) PricingStore.toJava(n);
     }
 
     private static String checksum(JsonNode v) {
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("hit_policy", text(v, "hit_policy"));
+        content.put("aggregation", text(v, "aggregation"));
         content.put("inputs", PricingStore.toJava(v.get("inputs")));
         content.put("outputs", PricingStore.toJava(v.get("outputs")));
         content.put("rules", PricingStore.toJava(v.get("rules")));

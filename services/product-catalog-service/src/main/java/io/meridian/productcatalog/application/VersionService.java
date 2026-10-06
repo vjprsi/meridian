@@ -31,7 +31,6 @@ import tools.jackson.databind.node.ObjectNode;
 public class VersionService {
     static final String VERSION = "product_version";
     static final Set<String> MIGRATION_POLICIES = Set.of("PIN", "MIGRATE_ON_RENEWAL", "FORCE_MIGRATE");
-    /** Spec gap: no migration event is declared for product versions; see the service report. */
     static final String MIGRATION_EVENT = "product.product_version.migration_requested";
 
     private final CatalogStore store;
@@ -117,6 +116,9 @@ public class VersionService {
         values.put("submitted_at", OffsetDateTime.now().toString());
         values.putNull("approved_by");
         values.putNull("approved_at");
+        values.putNull("rejected_by");
+        values.putNull("rejected_at");
+        values.putNull("rejection_reason");
         if (comment != null && !comment.isBlank()) {
             values.put("change_summary", comment);
         }
@@ -151,9 +153,11 @@ public class VersionService {
         String to = Lifecycles.VERSION.apply(v.get("status").asString(), "reject");
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
+        values.put("rejected_by", TenantContext.principal());
+        values.put("rejected_at", OffsetDateTime.now().toString());
+        values.put("rejection_reason", reason);
         JsonNode row = store.update(VERSION, id, values);
-        // No rejection-reason column exists; the reason travels with the event.
-        outbox.publish("product.product_version.rejected", VERSION, id, withNote(row, "rejection_reason", reason));
+        outbox.publish("product.product_version.rejected", VERSION, id, row);
         return row.toString();
     }
 

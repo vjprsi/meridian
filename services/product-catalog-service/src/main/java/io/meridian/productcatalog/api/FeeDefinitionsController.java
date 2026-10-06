@@ -13,13 +13,10 @@ import io.meridian.productcatalog.infrastructure.CatalogStore;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
-import java.math.BigDecimal;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Fee definitions (guarded content), their tiers and waiver rules, and the fee dry-run calculation. */
@@ -74,24 +71,17 @@ public class FeeDefinitionsController implements FeeDefinitionsApi {
     }
 
     /**
-     * Dry run. Besides base_amount / occurrence_no / customer_id, an optional {@code context} object in the body
-     * (balance, average_balance, salary_credit, transaction_count, segment, bundle_member, promotion_code,
-     * manual_waiver, charged_in_period, as_of) feeds the waiver rules and period cap.
+     * Dry run. The optional {@code context} object (balance, average_balance, salary_credit, transaction_count,
+     * segment, bundle_member, promotion_code, manual_waiver, charged_in_period, as_of) feeds the waiver rules and
+     * the period cap.
      */
     @Override
-    public ResponseEntity<Void> feeDefinitionsCalculate(UUID id, String idempotencyKey, FeeDefinitionsCalculateRequest body) {
+    public ResponseEntity<Map<String, Object>> feeDefinitionsCalculate(UUID id, String idempotencyKey,
+                                                                       FeeDefinitionsCalculateRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        BigDecimal base = new BigDecimal(req.get("base_amount").asString());
-        Integer occurrence = req.hasNonNull("occurrence_no") ? req.get("occurrence_no").asInt() : null;
-        UUID customer = req.hasNonNull("customer_id") ? UUID.fromString(req.get("customer_id").asString()) : null;
-        Map<String, Object> extras = ApiSupport.rawBodyExtras(json);
-        Map<String, Object> context = new LinkedHashMap<>(ApiSupport.queryParams());
-        if (extras.get("context") instanceof Map<?, ?> m) {
-            m.forEach((k, v) -> context.put(String.valueOf(k), v));
-        }
-        return ApiSupport.asVoid(idempotency.execute(idempotencyKey, ApiSupport.idem(json, "fee-calculate", id, body),
-                String.class, () -> ResponseEntity.ok(store.toNode(
-                        pricing.calculateFee(id, base, occurrence, customer, context)).toString())));
+        Map<String, Object> context = body.getContext() == null ? Map.of() : CatalogStore.toMap(json.valueToTree(body.getContext()));
+        return ApiSupport.result(idempotency, json, idempotencyKey, ApiSupport.idem(json, "fee-calculate", id, body),
+                () -> store.toNode(pricing.calculateFee(id, body.getBaseAmount(), body.getOccurrenceNo(),
+                        body.getCustomerId(), context)));
     }
 }

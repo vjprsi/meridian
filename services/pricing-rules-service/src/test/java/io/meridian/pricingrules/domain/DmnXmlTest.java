@@ -39,7 +39,7 @@ class DmnXmlTest {
         DmnXml.Imported imp = DmnXml.parse(DMN);
         assertThat(imp.decisionName()).isEqualTo("Loan pricing grid");
         assertThat(imp.hitPolicy()).isEqualTo("FIRST");
-        DecisionTableModel m = DecisionTableModel.parse(imp.hitPolicy(), null, imp.inputs(), imp.outputs(), imp.rules());
+        DecisionTableModel m = DecisionTableModel.parse(imp.hitPolicy(), imp.aggregation(), imp.inputs(), imp.outputs(), imp.rules());
         assertThat(m.inputs().getFirst().path()).isEqualTo("applicant.score");
         assertThat(m.rules()).hasSize(2);
         assertThat(m.rules().getFirst().annotation()).isEqualTo("prime");
@@ -53,7 +53,7 @@ class DmnXmlTest {
         String xml = DmnXml.write("LOAN_GRID", "Loan grid", original);
         assertThat(xml).contains("hitPolicy=\"RULE ORDER\"");
         DmnXml.Imported imp = DmnXml.parse(xml);
-        DecisionTableModel back = DecisionTableModel.parse(imp.hitPolicy(), null, imp.inputs(), imp.outputs(), imp.rules());
+        DecisionTableModel back = DecisionTableModel.parse(imp.hitPolicy(), imp.aggregation(), imp.inputs(), imp.outputs(), imp.rules());
         assertThat(Canonical.of(back.rulesJson())).isEqualTo(Canonical.of(original.rulesJson()));
         assertThat(Canonical.of(back.inputsJson())).isEqualTo(Canonical.of(original.inputsJson()));
         assertThat(Canonical.of(back.outputsJson())).isEqualTo(Canonical.of(original.outputsJson()));

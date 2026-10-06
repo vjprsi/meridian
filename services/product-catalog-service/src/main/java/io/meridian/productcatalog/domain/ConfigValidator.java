@@ -63,11 +63,10 @@ public final class ConfigValidator {
                 case "DURATION" -> java.time.Period.parse(text);
                 case "ENUM" -> {
                     Object allowed = p.get("allowed_values");
-                    List<Object> values = allowed instanceof Map<?, ?> m && m.get("values") instanceof List<?> l
-                            ? new ArrayList<>(l) : allowed instanceof List<?> l2 ? new ArrayList<>(l2) : null;
+                    List<Object> values = allowed instanceof List<?> l ? new ArrayList<>(l) : null;
                     if (values == null || values.isEmpty()) {
                         e.add(err(prefix + "allowed_values", "allowed_values_required",
-                                "ENUM parameters need allowed_values {\"values\": [...]}"));
+                                "ENUM parameters need allowed_values [...]"));
                     } else if (values.stream().noneMatch(v -> String.valueOf(v).equals(text))) {
                         e.add(err(prefix + "value_text", "value_not_allowed", text + " is not one of " + values));
                     }

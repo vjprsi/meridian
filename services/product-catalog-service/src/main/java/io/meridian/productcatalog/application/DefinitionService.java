@@ -28,7 +28,8 @@ public class DefinitionService {
     static final Set<String> STRIP = Set.of("id", "tenant_id", "created_at", "created_by", "updated_at", "updated_by",
             "row_version", "product_version_id", "interest_rate_config_id", "fee_definition_id", "custom_field_1",
             "custom_field_2", "custom_field_3", "custom_field_4", "custom_field_5");
-    static final Set<String> SCRIPT_RUNTIME = Set.of("validation_report", "wasm_module_uri");
+    static final Set<String> SCRIPT_RUNTIME = Set.of("validation_report", "wasm_module_uri", "submitted_by",
+            "submitted_at", "approved_at", "rejection_reason", "deprecation_reason");
 
     private final CatalogStore store;
 
@@ -174,16 +175,18 @@ public class DefinitionService {
             String sha = ScriptCompiler.moduleSha(lang, (String) row.get("source_code"), (String) row.get("entrypoint"));
             boolean carried = sha.equals(row.get("wasm_sha256"))
                     && ("ACTIVE".equals(row.get("status")) || "VALIDATED".equals(row.get("status")));
+            SCRIPT_RUNTIME.forEach(row::remove);
             if (!carried) {
                 row.put("status", "DRAFT");
-                row.put("wasm_sha256", ScriptService.PENDING_SHA);
+                row.remove("wasm_sha256");
                 row.remove("approved_by");
             }
-            JsonNode inserted = insert("product_script", row, versionId, Map.of("wasm_module_uri", "pending"));
-            UUID id = UUID.fromString(inserted.get("id").asString());
-            ObjectNode fix = (ObjectNode) store.toNumericNode(Map.of("wasm_module_uri",
-                    ScriptService.moduleUri(id, carried ? sha : null)));
-            store.update("product_script", id, fix);
+            JsonNode inserted = insert("product_script", row, versionId, null);
+            if (carried) {
+                UUID id = UUID.fromString(inserted.get("id").asString());
+                store.update("product_script", id, (ObjectNode) store.toNumericNode(
+                        Map.of("wasm_module_uri", ScriptService.moduleUri(id, sha))));
+            }
         }
     }
 

@@ -28,8 +28,6 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class ScriptService {
     static final String SCRIPT = "product_script";
-    /** Placeholder hash of a script that has not been compiled yet. */
-    public static final String PENDING_SHA = "0".repeat(64);
     static final Set<String> CODE_FIELDS = Set.of("source_code", "language", "entrypoint", "hook", "max_fuel",
             "max_memory_mb", "timeout_ms", "name");
 
@@ -49,7 +47,7 @@ public class ScriptService {
     }
 
     public static String moduleUri(UUID scriptId, String sha) {
-        return "wasm://product-scripts/" + scriptId + "/" + (sha == null ? "uncompiled" : sha) + ".wasm";
+        return "wasm://product-scripts/" + scriptId + "/" + sha + ".wasm";
     }
 
     @Transactional
@@ -63,8 +61,6 @@ public class ScriptService {
         UUID id = io.meridian.common.id.Ids.newId();
         values.put("id", id.toString());
         values.put("status", "DRAFT");
-        values.put("wasm_sha256", PENDING_SHA);
-        values.put("wasm_module_uri", moduleUri(id, null));
         return store.insert(SCRIPT, values).toString();
     }
 
@@ -88,8 +84,8 @@ public class ScriptService {
         budgets(merged);
         if (codeChange) {
             values.put("status", Lifecycles.SCRIPT.apply(status, "edit"));
-            values.put("wasm_sha256", PENDING_SHA);
-            values.put("wasm_module_uri", moduleUri(id, null));
+            values.putNull("wasm_sha256");
+            values.putNull("wasm_module_uri");
             values.putNull("validation_report");
         }
         return crud.updateRow(SCRIPT, Map.of("id", id), values, expectedVersion)
@@ -112,8 +108,13 @@ public class ScriptService {
         report.put("compile", ScriptCompiler.toMap(r));
         ObjectNode values = json.createObjectNode();
         values.put("status", Lifecycles.SCRIPT.apply(status, r.passed() ? "compile" : "compile_failed"));
-        values.put("wasm_sha256", r.passed() ? r.moduleSha256() : PENDING_SHA);
-        values.put("wasm_module_uri", moduleUri(id, r.passed() ? r.moduleSha256() : null));
+        if (r.passed()) {
+            values.put("wasm_sha256", r.moduleSha256());
+            values.put("wasm_module_uri", moduleUri(id, r.moduleSha256()));
+        } else {
+            values.putNull("wasm_sha256");
+            values.putNull("wasm_module_uri");
+        }
         values.set("validation_report", store.toNumericNode(report));
         return store.update(SCRIPT, id, values).toString();
     }
@@ -149,15 +150,16 @@ public class ScriptService {
         if (lastTest instanceof Map<?, ?> t && Boolean.FALSE.equals(t.get("passed"))) {
             throw ApiException.unprocessable("tests_failing", "The last test run failed; fix the script or inputs first");
         }
-        Map<String, Object> submission = new LinkedHashMap<>();
-        submission.put("submitted_by", TenantContext.principal());
-        submission.put("submitted_at", OffsetDateTime.now().toString());
         if (comment != null) {
-            submission.put("comment", comment);
+            report.put("submission_comment", comment);
         }
-        report.put("submission", submission);
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
+        values.put("submitted_by", TenantContext.principal());
+        values.put("submitted_at", OffsetDateTime.now().toString());
+        values.putNull("approved_by");
+        values.putNull("approved_at");
+        values.putNull("rejection_reason");
         values.set("validation_report", store.toNumericNode(report));
         return store.update(SCRIPT, id, values).toString();
     }
@@ -166,24 +168,36 @@ public class ScriptService {
     public String approve(UUID id, String comment) {
         JsonNode s = store.lock(SCRIPT, id);
         String to = Lifecycles.SCRIPT.apply(s.get("status").asString(), "approve");
-        JsonNode submission = s.path("validation_report").path("submission");
-        String maker = submission.hasNonNull("submitted_by") ? submission.get("submitted_by").asString() : null;
-        Lifecycles.requireFourEyes(maker, TenantContext.principal(), "Script " + s.get("name").asString());
+        Lifecycles.requireFourEyes(PricingInputs.text(s, "submitted_by"), TenantContext.principal(),
+                "Script " + s.get("name").asString());
         requireIntegrity(s);
-        Map<String, Object> report = CatalogStore.toMap(s.get("validation_report"));
-        Map<String, Object> approval = new LinkedHashMap<>();
-        approval.put("approved_by", TenantContext.principal());
-        approval.put("approved_at", OffsetDateTime.now().toString());
-        if (comment != null) {
-            approval.put("comment", comment);
-        }
-        report.put("approval", approval);
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
         values.put("approved_by", TenantContext.principal());
-        values.set("validation_report", store.toNumericNode(report));
+        values.put("approved_at", OffsetDateTime.now().toString());
+        if (comment != null) {
+            Map<String, Object> report = CatalogStore.toMap(s.get("validation_report"));
+            report.put("approval_comment", comment);
+            values.set("validation_report", store.toNumericNode(report));
+        }
         JsonNode row = store.update(SCRIPT, id, values);
         outbox.publish("product.product_script.activated", SCRIPT, id, row);
+        return row.toString();
+    }
+
+    /** Checker rejects a submitted script; the maker can edit and recompile it (REJECTED is reworkable). */
+    @Transactional
+    public String reject(UUID id, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw ApiException.unprocessable("reason_required", "A rejection reason is required");
+        }
+        JsonNode s = store.lock(SCRIPT, id);
+        String to = Lifecycles.SCRIPT.apply(s.get("status").asString(), "reject");
+        ObjectNode values = json.createObjectNode();
+        values.put("status", to);
+        values.put("rejection_reason", reason);
+        JsonNode row = store.update(SCRIPT, id, values);
+        outbox.publish("product.product_script.rejected", SCRIPT, id, row);
         return row.toString();
     }
 
@@ -194,15 +208,9 @@ public class ScriptService {
         }
         JsonNode s = store.lock(SCRIPT, id);
         String to = Lifecycles.SCRIPT.apply(s.get("status").asString(), "deprecate");
-        Map<String, Object> report = CatalogStore.toMap(s.get("validation_report"));
-        Map<String, Object> dep = new LinkedHashMap<>();
-        dep.put("deprecated_by", TenantContext.principal());
-        dep.put("deprecated_at", OffsetDateTime.now().toString());
-        dep.put("reason", reason);
-        report.put("deprecation", dep);
         ObjectNode values = json.createObjectNode();
         values.put("status", to);
-        values.set("validation_report", store.toNumericNode(report));
+        values.put("deprecation_reason", reason);
         return store.update(SCRIPT, id, values).toString();
     }
 
@@ -210,7 +218,7 @@ public class ScriptService {
     private static void requireIntegrity(JsonNode s) {
         String expected = ScriptCompiler.moduleSha(s.get("language").asString(), PricingInputs.text(s, "source_code"),
                 PricingInputs.text(s, "entrypoint"));
-        if (!expected.equals(s.get("wasm_sha256").asString())) {
+        if (!expected.equals(PricingInputs.text(s, "wasm_sha256"))) {
             throw ApiException.conflict("module_hash_mismatch", "The compiled module no longer matches the source; compile again");
         }
     }

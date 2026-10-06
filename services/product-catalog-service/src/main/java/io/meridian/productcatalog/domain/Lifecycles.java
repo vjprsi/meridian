@@ -40,7 +40,8 @@ public final class Lifecycles {
 
     /**
      * Product script: DRAFT/VALIDATED -compile(ok)-> VALIDATED, -compile(failed)-> DRAFT; VALIDATED -submit->
-     * PENDING_APPROVAL -approve-> ACTIVE; DRAFT/VALIDATED/PENDING_APPROVAL/ACTIVE -deprecate-> DEPRECATED.
+     * PENDING_APPROVAL -approve-> ACTIVE, -reject-> REJECTED (edit/recompile to rework);
+     * DRAFT/VALIDATED/PENDING_APPROVAL/ACTIVE -deprecate-> DEPRECATED.
      */
     public static final StateMachine SCRIPT = StateMachine.of("product script")
             .on("compile", Set.of("DRAFT", "VALIDATED", "REJECTED"), "VALIDATED")
@@ -48,6 +49,7 @@ public final class Lifecycles {
             .on("edit", Set.of("DRAFT", "VALIDATED", "REJECTED"), "DRAFT")
             .on("submit", "VALIDATED", "PENDING_APPROVAL")
             .on("approve", "PENDING_APPROVAL", "ACTIVE")
+            .on("reject", "PENDING_APPROVAL", "REJECTED")
             .on("deprecate", Set.of("DRAFT", "VALIDATED", "PENDING_APPROVAL", "ACTIVE"), "DEPRECATED")
             .build();
 

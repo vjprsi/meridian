@@ -1,6 +1,5 @@
 package io.meridian.productcatalog.api;
 
-import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.productcatalog.api.generated.ProductsApi;
 import io.meridian.productcatalog.api.generated.model.Product;
@@ -20,12 +19,12 @@ import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
@@ -34,6 +33,9 @@ import tools.jackson.databind.json.JsonMapper;
 /** Products: creation (plain, template, clone), guarded edits, suspend/retire, eligibility and quotes. */
 @RestController
 public class ProductsController implements ProductsApi {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static final Class<Map<String, Object>> MAP = (Class) Map.class;
+
     private final ProductService products;
     private final PricingService pricing;
     private final CatalogStore store;
@@ -101,45 +103,51 @@ public class ProductsController implements ProductsApi {
                 Crud.params().with("product_id", id).with("limit", limit).with("cursor", cursor));
     }
 
-    /**
-     * {@code GET /v1/products/{id}/eligibility-check?customer_id=&age=|date_of_birth=&residency_country=&nationality=
-     * &kyc_tier=&segment=&income=&credit_score=&existing_products=A,B&customer_type=&channel=&as_of=}
-     */
+    /** Eligibility of an applicant profile given as typed query parameters. */
     @Override
-    public ResponseEntity<Void> productsEligibilityCheck(UUID id) {
+    public ResponseEntity<Map<String, Object>> productsEligibilityCheck(UUID id, UUID customerId, Integer age,
+            LocalDate dateOfBirth, String residencyCountry, String nationality, Integer kycTier, String segment,
+            BigDecimal income, Integer creditScore, String existingProducts, String customerType, String channel,
+            LocalDate asOf) {
         TenantContext.require();
-        Map<String, Object> profile = new LinkedHashMap<>(ApiSupport.queryParams());
-        String customer = (String) profile.remove("customer_id");
-        String channel = (String) profile.remove("channel");
-        UUID customerId;
-        try {
-            customerId = customer == null ? null : UUID.fromString(customer);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest("invalid_customer_id", "customer_id must be a UUID");
+        Map<String, Object> profile = new LinkedHashMap<>();
+        put(profile, "age", age);
+        put(profile, "date_of_birth", dateOfBirth);
+        put(profile, "residency_country", residencyCountry);
+        put(profile, "nationality", nationality);
+        put(profile, "kyc_tier", kycTier);
+        put(profile, "segment", segment);
+        put(profile, "income", income);
+        put(profile, "credit_score", creditScore);
+        if (existingProducts != null && !existingProducts.isBlank()) {
+            profile.put("existing_products", Arrays.stream(existingProducts.split(","))
+                    .map(String::trim).filter(x -> !x.isEmpty()).toList());
         }
+        put(profile, "customer_type", customerType);
+        put(profile, "as_of", asOf);
         Map<String, Object> result = pricing.eligibility(id, customerId, profile, channel);
-        return ApiSupport.document(MediaType.APPLICATION_JSON, store.toNode(result).toString());
+        return ResponseEntity.ok(json.convertValue(store.toNode(result), MAP));
     }
 
     /**
-     * Quote for amount/term/channel; an optional {@code applicant} object in the body (segment,
-     * relationship_balance, products_held, new_customer, salary_credit, promotion_code ...) drives promotions,
-     * relationship pricing and fee waivers.
+     * Quote for amount/term/channel; the optional {@code applicant} object (segment, relationship_balance,
+     * products_held, new_customer, salary_credit, promotion_code ...) drives promotions, relationship pricing and
+     * fee waivers.
      */
     @Override
-    public ResponseEntity<Void> productsQuote(UUID id, String idempotencyKey, ProductsQuoteRequest body) {
+    public ResponseEntity<Map<String, Object>> productsQuote(UUID id, String idempotencyKey, ProductsQuoteRequest body) {
         TenantContext.require();
-        JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
-        Map<String, Object> extras = ApiSupport.rawBodyExtras(json);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> applicant = extras.get("applicant") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-        PricingService.QuoteRequest q = new PricingService.QuoteRequest(
-                req.hasNonNull("customer_id") ? UUID.fromString(req.get("customer_id").asString()) : null,
-                req.hasNonNull("amount") ? new BigDecimal(req.get("amount").asString()) : null,
-                req.hasNonNull("term_months") ? req.get("term_months").asInt() : null,
-                ApiSupport.text(req, "channel"), applicant);
-        return ApiSupport.asVoid(idempotency.execute(idempotencyKey, ApiSupport.idem(json, "quote", id, body), String.class,
-                () -> ResponseEntity.ok(store.toNode(pricing.quote(id, q)).toString())));
+        PricingService.QuoteRequest q = new PricingService.QuoteRequest(body.getCustomerId(), body.getAmount(),
+                body.getTermMonths(), body.getChannel() == null ? null : body.getChannel().getValue(),
+                body.getApplicant() == null ? Map.of() : body.getApplicant());
+        return ApiSupport.result(idempotency, json, idempotencyKey, ApiSupport.idem(json, "quote", id, body),
+                () -> store.toNode(pricing.quote(id, q)));
+    }
+
+    private static void put(Map<String, Object> m, String key, Object value) {
+        if (value != null) {
+            m.put(key, value instanceof LocalDate d ? d.toString() : value);
+        }
     }
 
     private ResponseEntity<Product> action(String op, UUID id, String key, Object body, Supplier<String> run) {

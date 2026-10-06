@@ -114,17 +114,17 @@ class DecisionEngineTest {
     @Test
     void collectAggregatesAndListsInRuleOrder() {
         DecisionTableModel sum = DecisionTableModel.parse("COLLECT", "SUM", inputs(),
-                Map.of("columns", List.of(col("rate", "number"))),
-                Map.of("rows", List.of(row(List.of("[700..850]", "-"), List.of("0.05")),
+                List.of(col("rate", "number")),
+                List.of(row(List.of("[700..850]", "-"), List.of("0.05")),
                         row(List.of("[600..700)", "-"), List.of("0.08")),
-                        row(List.of(">= 750", "RETAIL"), List.of("0.09")))));
+                        row(List.of(">= 750", "RETAIL"), List.of("0.09"))));
         DecisionEngine.Outcome o = DecisionEngine.evaluate(sum, Map.of("credit_score", 760, "segment", "RETAIL"));
         assertThat((BigDecimal) o.outputs().get("rate")).isEqualByComparingTo("0.14");
 
         DecisionTableModel list = DecisionTableModel.parse("RULE_ORDER", null,
-                Map.of("columns", List.of(col("x", "number"))),
-                Map.of("columns", List.of(col("r", "number"))),
-                Map.of("rows", List.of(row(List.of("> 1"), List.of("1")), row(List.of("> 2"), List.of("2")))));
+                List.of(col("x", "number")),
+                List.of(col("r", "number")),
+                List.of(row(List.of("> 1"), List.of("1")), row(List.of("> 2"), List.of("2"))));
         assertThat(DecisionEngine.evaluate(list, Map.of("x", 5)).outputs().get("r"))
                 .isEqualTo(List.of(new BigDecimal("1"), new BigDecimal("2")));
     }
@@ -136,16 +136,16 @@ class DecisionEngineTest {
         Map<String, Object> r2 = row(List.of("-"), List.of("\"HIGH\""));
         r2.put("priority", 1);
         DecisionTableModel t = DecisionTableModel.parse("PRIORITY", null,
-                Map.of("columns", List.of(col("x", "number"))), Map.of("columns", List.of(col("p", "string"))),
-                Map.of("rows", List.of(r1, r2)));
+                List.of(col("x", "number")), List.of(col("p", "string")),
+                List.of(r1, r2));
         assertThat(DecisionEngine.evaluate(t, Map.of("x", 1)).outputs().get("p")).isEqualTo("HIGH");
     }
 
     @Test
     void anyRequiresIdenticalOutputs() {
         DecisionTableModel t = DecisionTableModel.parse("ANY", null,
-                Map.of("columns", List.of(col("x", "number"))), Map.of("columns", List.of(col("ok", "boolean"))),
-                Map.of("rows", List.of(row(List.of("> 1"), List.of("true")), row(List.of("> 2"), List.of("false")))));
+                List.of(col("x", "number")), List.of(col("ok", "boolean")),
+                List.of(row(List.of("> 1"), List.of("true")), row(List.of("> 2"), List.of("false"))));
         assertThat(DecisionEngine.evaluate(t, Map.of("x", 2)).outputs().get("ok")).isEqualTo(true);
         assertThatThrownBy(() -> DecisionEngine.evaluate(t, Map.of("x", 3))).isInstanceOf(DecisionTableException.class);
     }
@@ -162,9 +162,9 @@ class DecisionEngineTest {
     @Test
     void nestedInputPathsAndInvalidInputs() {
         DecisionTableModel t = DecisionTableModel.parse("FIRST", null,
-                Map.of("columns", List.of(Map.of("name", "age", "type", "number", "expression", "applicant.age"))),
-                Map.of("columns", List.of(col("adult", "boolean"))),
-                Map.of("rows", List.of(row(List.of(">= 18"), List.of("true")), row(List.of("-"), List.of("false")))));
+                List.of(Map.of("name", "age", "type", "number", "expression", "applicant.age")),
+                List.of(col("adult", "boolean")),
+                List.of(row(List.of(">= 18"), List.of("true")), row(List.of("-"), List.of("false"))));
         assertThat(DecisionEngine.evaluate(t, Map.of("applicant", Map.of("age", 30))).outputs().get("adult")).isEqualTo(true);
         assertThatThrownBy(() -> DecisionEngine.evaluate(t, Map.of("applicant", Map.of("age", "thirty"))))
                 .isInstanceOf(DecisionTableException.class)
@@ -174,9 +174,9 @@ class DecisionEngineTest {
     @Test
     void definitionErrorsAreAllReported() {
         assertThatThrownBy(() -> DecisionTableModel.parse("FIRST", null,
-                Map.of("columns", List.of(col("a", "number"))),
-                Map.of("columns", List.of()),
-                Map.of("rows", List.of(row(List.of("[5..1]", "-"), List.of())))))
+                List.of(col("a", "number")),
+                List.of(),
+                List.of(row(List.of("[5..1]", "-"), List.of()))))
                 .isInstanceOf(DecisionTableException.class)
                 .satisfies(e -> assertThat(((DecisionTableException) e).violations()).hasSizeGreaterThanOrEqualTo(2));
     }
@@ -187,7 +187,7 @@ class DecisionEngineTest {
         rule.put("inputs", Map.of("segment", "\"SME\""));
         rule.put("outputs", Map.of("rate", "0.07", "tier", "\"SME\""));
         DecisionTableModel t = DecisionTableModel.parse("FIRST", null, inputs(), outputs(null),
-                Map.of("rows", List.of(rule)));
+                List.of(rule));
         DecisionEngine.Outcome o = DecisionEngine.evaluate(t, Map.of("credit_score", 1, "segment", "SME"));
         assertThat((BigDecimal) o.outputs().get("rate")).isEqualByComparingTo("0.07");
     }
@@ -219,10 +219,10 @@ class DecisionEngineTest {
                 expected = expected.add(BigDecimal.valueOf(i));
             }
         }
-        DecisionTableModel t = DecisionTableModel.parse("COLLECT", null,
-                Map.of("columns", List.of(col("x", "number"))),
-                Map.of("columns", List.of(col("points", "number")), "aggregation", "SUM"),
-                Map.of("rows", rows));
+        DecisionTableModel t = DecisionTableModel.parse("COLLECT", "SUM",
+                List.of(col("x", "number")),
+                List.of(col("points", "number")),
+                rows);
         DecisionEngine.Outcome o = DecisionEngine.evaluate(t, Map.of("x", x));
         BigDecimal actual = o.defaulted() ? BigDecimal.ZERO : (BigDecimal) o.outputs().get("points");
         assertThat(actual).isEqualByComparingTo(expected);
@@ -231,10 +231,10 @@ class DecisionEngineTest {
     @Property(tries = 100)
     void firstHitIsTheLowestMatchingRule(@ForAll @IntRange(min = 0, max = 100) int x) {
         DecisionTableModel t = DecisionTableModel.parse("FIRST", null,
-                Map.of("columns", List.of(col("x", "number"))),
-                Map.of("columns", List.of(col("band", "number"))),
-                Map.of("rows", List.of(row(List.of("< 25"), List.of("1")), row(List.of("< 50"), List.of("2")),
-                        row(List.of("< 75"), List.of("3")), row(List.of("-"), List.of("4")))));
+                List.of(col("x", "number")),
+                List.of(col("band", "number")),
+                List.of(row(List.of("< 25"), List.of("1")), row(List.of("< 50"), List.of("2")),
+                        row(List.of("< 75"), List.of("3")), row(List.of("-"), List.of("4"))));
         int band = ((BigDecimal) DecisionEngine.evaluate(t, Map.of("x", x)).outputs().get("band")).intValue();
         assertThat(band).isEqualTo(x < 25 ? 1 : x < 50 ? 2 : x < 75 ? 3 : 4);
     }
@@ -243,24 +243,22 @@ class DecisionEngineTest {
 
     static DecisionTableModel pricingGrid(String hitPolicy, String aggregation) {
         return DecisionTableModel.parse(hitPolicy, aggregation, inputs(), outputs("0.20"),
-                Map.of("rows", List.of(
+                List.of(
                         row(List.of("[700..850]", "-"), List.of("0.05", "\"PRIME\"")),
                         row(List.of("[600..700)", "\"SME\",\"RETAIL\""), List.of("0.08", "\"NEAR_PRIME\"")),
-                        row(List.of(">= 750", "RETAIL"), List.of("0.09", "\"RETAIL_BONUS\"")))));
+                        row(List.of(">= 750", "RETAIL"), List.of("0.09", "\"RETAIL_BONUS\""))));
     }
 
-    static Map<String, Object> inputs() {
-        return Map.of("columns", List.of(col("credit_score", "number"), col("segment", "string")));
+    static List<Object> inputs() {
+        return List.of(col("credit_score", "number"), col("segment", "string"));
     }
 
-    static Map<String, Object> outputs(String defaultRate) {
+    static List<Object> outputs(String defaultRate) {
         Map<String, Object> rate = new LinkedHashMap<>(col("rate", "number"));
         if (defaultRate != null) {
             rate.put("default", defaultRate);
         }
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("columns", List.of(rate, col("tier", "string")));
-        return m;
+        return List.of(rate, col("tier", "string"));
     }
 
     static Map<String, Object> col(String name, String type) {

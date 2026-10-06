@@ -9,11 +9,11 @@ import java.util.Map;
 /**
  * Parsed, validated decision table (DMN decisionTable subset).
  *
- * <p>Stored JSON shape (the contract types inputs/outputs/rules as JSON objects, so arrays are wrapped):
+ * <p>Stored JSON shape (JSON arrays; the COLLECT aggregation is a separate column):
  * <pre>
- * inputs:  {"columns": [{"name": "credit_score", "type": "number", "expression": "applicant.score"}]}
- * outputs: {"columns": [{"name": "rate", "type": "number", "default": "0.12"}], "aggregation": "SUM"}
- * rules:   {"rows": [{"inputs": ["[700..850]", "-"], "outputs": ["0.05"], "annotation": "prime", "priority": 1}]}
+ * inputs:  [{"name": "credit_score", "type": "number", "expression": "applicant.score"}]
+ * outputs: [{"name": "rate", "type": "number", "default": "0.12"}]
+ * rules:   [{"inputs": ["[700..850]", "-"], "outputs": ["0.05"], "annotation": "prime", "priority": 1}]
  * </pre>
  * Rule inputs/outputs may also be objects keyed by column name (missing input = "-").
  */
@@ -38,8 +38,8 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
                        String annotation, int priority) {}
 
     /** Parses the stored JSON (as plain Java maps/lists) and reports every problem at once. */
-    public static DecisionTableModel parse(String hitPolicy, String aggregation, Map<String, Object> inputs,
-                                           Map<String, Object> outputs, Map<String, Object> rules) {
+    public static DecisionTableModel parse(String hitPolicy, String aggregation, List<?> inputs, List<?> outputs,
+                                           List<?> rules) {
         List<DecisionTableException.Violation> v = new ArrayList<>();
         HitPolicy hp = HitPolicy.FIRST;
         if (hitPolicy != null) {
@@ -50,23 +50,23 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
             }
         }
         Aggregation agg = Aggregation.NONE;
-        String aggText = aggregation != null ? aggregation : (outputs == null ? null : str(outputs.get("aggregation")));
+        String aggText = aggregation;
         if (aggText != null && !aggText.isBlank()) {
             try {
                 agg = Aggregation.valueOf(aggText.trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
-                v.add(new DecisionTableException.Violation("outputs.aggregation", "invalid_aggregation", "Unknown aggregation " + aggText));
+                v.add(new DecisionTableException.Violation("aggregation", "invalid_aggregation", "Unknown aggregation " + aggText));
             }
         }
         if (agg != Aggregation.NONE && hp != HitPolicy.COLLECT) {
-            v.add(new DecisionTableException.Violation("outputs.aggregation", "invalid_aggregation",
+            v.add(new DecisionTableException.Violation("aggregation", "invalid_aggregation",
                     "Aggregation is only allowed with hit policy COLLECT"));
         }
 
         List<InputColumn> in = new ArrayList<>();
         List<Object> inCols = columns(inputs, "inputs", v);
         for (int i = 0; i < inCols.size(); i++) {
-            String f = "inputs.columns[" + i + "]";
+            String f = "inputs[" + i + "]";
             if (!(inCols.get(i) instanceof Map<?, ?> c)) {
                 v.add(new DecisionTableException.Violation(f, "invalid_column", "Column must be an object"));
                 continue;
@@ -86,10 +86,10 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
         List<OutputColumn> out = new ArrayList<>();
         List<Object> outCols = columns(outputs, "outputs", v);
         if (outCols.isEmpty()) {
-            v.add(new DecisionTableException.Violation("outputs.columns", "required", "At least one output column is required"));
+            v.add(new DecisionTableException.Violation("outputs", "required", "At least one output column is required"));
         }
         for (int i = 0; i < outCols.size(); i++) {
-            String f = "outputs.columns[" + i + "]";
+            String f = "outputs[" + i + "]";
             if (!(outCols.get(i) instanceof Map<?, ?> c)) {
                 v.add(new DecisionTableException.Violation(f, "invalid_column", "Column must be an object"));
                 continue;
@@ -115,14 +115,14 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
         }
         if ((agg == Aggregation.SUM || agg == Aggregation.MIN || agg == Aggregation.MAX)
                 && out.stream().anyMatch(o -> o.type() != ValueType.NUMBER)) {
-            v.add(new DecisionTableException.Violation("outputs.aggregation", "invalid_aggregation",
+            v.add(new DecisionTableException.Violation("aggregation", "invalid_aggregation",
                     agg + " needs numeric output columns"));
         }
 
         List<Rule> parsed = new ArrayList<>();
         List<Object> rows = rows(rules, v);
         for (int r = 0; r < rows.size(); r++) {
-            String f = "rules.rows[" + r + "]";
+            String f = "rules[" + r + "]";
             if (!(rows.get(r) instanceof Map<?, ?> row)) {
                 v.add(new DecisionTableException.Violation(f, "invalid_rule", "Rule must be an object"));
                 continue;
@@ -170,7 +170,7 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
     }
 
     /** Back to the stored JSON shape (plain maps), e.g. after a DMN import. */
-    public Map<String, Object> inputsJson() {
+    public List<Object> inputsJson() {
         List<Object> cols = new ArrayList<>();
         for (InputColumn c : inputs) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -181,12 +181,10 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
             }
             cols.add(m);
         }
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("columns", cols);
-        return m;
+        return cols;
     }
 
-    public Map<String, Object> outputsJson() {
+    public List<Object> outputsJson() {
         List<Object> cols = new ArrayList<>();
         for (OutputColumn c : outputs) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -197,15 +195,10 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
             }
             cols.add(m);
         }
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("columns", cols);
-        if (aggregation != Aggregation.NONE) {
-            m.put("aggregation", aggregation.name());
-        }
-        return m;
+        return cols;
     }
 
-    public Map<String, Object> rulesJson() {
+    public List<Object> rulesJson() {
         List<Object> rows = new ArrayList<>();
         for (Rule r : rules) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -219,9 +212,7 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
             }
             rows.add(m);
         }
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("rows", rows);
-        return m;
+        return rows;
     }
 
     static Object plain(Object v) {
@@ -231,33 +222,20 @@ public record DecisionTableModel(HitPolicy hitPolicy, Aggregation aggregation, L
         return v instanceof java.time.LocalDate d ? d.toString() : v;
     }
 
-    private static List<Object> columns(Map<String, Object> wrapper, String field, List<DecisionTableException.Violation> v) {
-        if (wrapper == null) {
+    private static List<Object> columns(List<?> cols, String field, List<DecisionTableException.Violation> v) {
+        if (cols == null) {
             v.add(new DecisionTableException.Violation(field, "required", field + " is required"));
             return List.of();
         }
-        Object cols = wrapper.containsKey("columns") ? wrapper.get("columns") : wrapper.get("items");
-        if (cols == null && field.equals("inputs") && wrapper.isEmpty()) {
-            return List.of();
-        }
-        if (!(cols instanceof List<?> l)) {
-            v.add(new DecisionTableException.Violation(field + ".columns", "invalid_columns", field + ".columns must be an array"));
-            return List.of();
-        }
-        return new ArrayList<>(l);
+        return new ArrayList<>(cols);
     }
 
-    private static List<Object> rows(Map<String, Object> wrapper, List<DecisionTableException.Violation> v) {
-        if (wrapper == null) {
+    private static List<Object> rows(List<?> rules, List<DecisionTableException.Violation> v) {
+        if (rules == null) {
             v.add(new DecisionTableException.Violation("rules", "required", "rules is required"));
             return List.of();
         }
-        Object rows = wrapper.containsKey("rows") ? wrapper.get("rows") : wrapper.get("items");
-        if (!(rows instanceof List<?> l)) {
-            v.add(new DecisionTableException.Violation("rules.rows", "invalid_rules", "rules.rows must be an array"));
-            return List.of();
-        }
-        return new ArrayList<>(l);
+        return new ArrayList<>(rules);
     }
 
     private static List<String> entries(Object raw, List<String> columns, String missing, String field,
