@@ -67,10 +67,12 @@ public class PaymentProcessor {
     private final PaymentHooks hooks;
     private final TransactionTemplate tx;
     private final ApprovalMatrix matrix;
+    private final PaymentApprovalRequests central;
 
     public PaymentProcessor(Rows rows, PaymentRecords records, Events events, LedgerClient ledger,
                             CoreBankingClient core, RoutingClient routing, RiskClient risk, PaymentProperties props,
-                            PaymentHooks hooks, TransactionTemplate tx) {
+                            PaymentHooks hooks, TransactionTemplate tx, PaymentApprovalRequests central) {
+        this.central = central;
         this.rows = rows;
         this.records = records;
         this.events = events;
@@ -528,8 +530,11 @@ public class PaymentProcessor {
             return inTx(() -> {
                 ObjectNode locked = records.lock(id);
                 createApprovalSteps(id, null, steps);
-                return records.transition(locked, "PENDING_APPROVAL", null,
+                ObjectNode pending = records.transition(locked, "PENDING_APPROVAL", null,
                         steps.size() + " approval level(s) required", null, null);
+                // Central maker-checker: checkers decide in the workflow inbox; PaymentApprovalHandler applies it.
+                central.requestPayment(pending);
+                return pending;
             });
         }
         inTx(() -> records.transition(records.lock(id), "APPROVED", null, "Approval not required", null, null));
@@ -998,6 +1003,9 @@ public class PaymentProcessor {
             releaseFunds(p, reason);
             rows.execute("update payment_approval set status = 'REJECTED', comment = 'Payment cancelled', decided_at = now() "
                     + "where payment_id = ? and status = 'PENDING'", id);
+            if ("PENDING_APPROVAL".equals(str(p, "status"))) {
+                central.closed(PaymentApprovalRequests.PAYMENT, id, "payment cancelled");
+            }
             ObjectNode c = rows.object();
             c.put("rejection_code", Reason.REQUESTED_BY_CUSTOMER);
             c.put("rejection_reason", truncate(reason == null ? "Cancelled" : reason, 255));

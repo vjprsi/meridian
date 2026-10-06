@@ -35,9 +35,11 @@ public class ApprovalService {
     private final PaymentRecords records;
     private final BulkService bulk;
     private final TransactionTemplate tx;
+    private final PaymentApprovalRequests central;
 
     public ApprovalService(Rows rows, Events events, PaymentProcessor processor, PaymentRecords records,
-                           BulkService bulk, TransactionTemplate tx) {
+                           BulkService bulk, TransactionTemplate tx, PaymentApprovalRequests central) {
+        this.central = central;
         this.rows = rows;
         this.events = events;
         this.processor = processor;
@@ -81,7 +83,10 @@ public class ApprovalService {
                 .orElseThrow(() -> ApiException.conflict("no_pending_approval", "There is no pending approval level"));
     }
 
-    /** Approves or rejects one approval level; returns the approval row. */
+    /**
+     * Approves or rejects one approval level; returns the approval row. Runs outside a transaction: afterwards the
+     * open workflow-service request (now stale) is cancelled and, when approvals remain, the next one opened (G11).
+     */
     public ObjectNode decide(UUID approvalId, boolean approve, String comment) {
         Decision d = tx.execute(s -> decideInTx(approvalId, approve, comment));
         if (d.error() != null) {
@@ -90,6 +95,8 @@ public class ApprovalService {
         }
         UUID paymentId = uuid(d.approval(), "payment_id");
         UUID bulkId = uuid(d.approval(), "bulk_payment_id");
+        central.afterDecision(paymentId != null ? PaymentApprovalRequests.PAYMENT : PaymentApprovalRequests.BULK,
+                paymentId != null ? paymentId : bulkId, d.allDone() || d.rejected());
         if (d.allDone()) {
             if (paymentId != null) {
                 processor.approvalsComplete(paymentId);
