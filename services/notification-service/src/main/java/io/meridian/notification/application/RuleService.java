@@ -18,7 +18,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Event-driven notifications: domain events are matched against active rules (event type, optional condition) and
- * turned into templated sends. Also routes maker-checker outcomes for notification templates.
+ * turned into templated sends. (Maker-checker outcomes for notification templates arrive through
+ * libs/meridian-approvals, see {@link NotificationTemplateApprovalHandler}.)
  *
  * <p>Rule fields: {@code channels} = {@code ["PUSH","SMS"]} (preference order; the first channel with an
  * active template, a destination and no opt-out wins); {@code recipient_expression} = {@code TYPE:path} into the
@@ -34,13 +35,11 @@ public class RuleService {
 
     private final NotificationStore store;
     private final NotificationService notifications;
-    private final TemplateService templates;
     private final JsonMapper json;
 
-    public RuleService(NotificationStore store, NotificationService notifications, TemplateService templates, JsonMapper json) {
+    public RuleService(NotificationStore store, NotificationService notifications, JsonMapper json) {
         this.store = store;
         this.notifications = notifications;
-        this.templates = templates;
         this.json = json;
     }
 
@@ -83,12 +82,6 @@ public class RuleService {
         List<UUID> created = new ArrayList<>();
         if (eventType == null || eventType.startsWith("platform.notification")) {
             return created; // never notify about our own notifications (loops)
-        }
-        if (eventType.startsWith("platform.approval_request.")
-                && TemplateService.RESOURCE_TYPE.equals(payload.path("resource_type").asString(null))
-                && payload.hasNonNull("resource_id")) {
-            templates.onApprovalDecided(UUID.fromString(payload.get("resource_id").asString()),
-                    payload.path("status").asString(eventType.substring(eventType.lastIndexOf('.') + 1).toUpperCase()));
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> data = payload.isObject() ? json.convertValue(payload, LinkedHashMap.class) : new LinkedHashMap<>();

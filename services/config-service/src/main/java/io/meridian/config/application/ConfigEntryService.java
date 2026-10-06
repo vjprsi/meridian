@@ -1,5 +1,7 @@
 package io.meridian.config.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.id.Ids;
 import io.meridian.common.tenancy.TenantContext;
@@ -8,16 +10,19 @@ import io.meridian.config.domain.ConfigLifecycle.Status;
 import io.meridian.config.domain.JsonDiff;
 import io.meridian.config.domain.JsonSchemaValidator;
 import io.meridian.config.infrastructure.ConfigStore;
-import io.meridian.config.infrastructure.WorkflowGateway;
 import io.meridian.events.OutboxWriter;
+import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -31,10 +36,17 @@ import tools.jackson.databind.node.ObjectNode;
  * DRAFT -> submit (approval request in workflow-service) -> PENDING_APPROVAL -> activate (checker, after approval)
  * -> ACTIVE; the previous ACTIVE version becomes SUPERSEDED. Rollback re-activates a previously approved value
  * as a new version. Every version change is recorded in the append-only config_change history.
+ *
+ * <p>Approvals go through libs/meridian-approvals (G11). Activation needs a granted workflow approval, so there is
+ * no local decision path: submit always opens the request in workflow-service, whatever
+ * {@code meridian.approvals.mode} says. An approval arriving from workflow-service activates the version
+ * ({@link ConfigEntryApprovalHandler}); the checker can also activate it directly once the approval is granted.
  */
 @Service
 public class ConfigEntryService {
     static final String BUNDLE_FORMAT = "meridian.config.bundle/v1";
+    /** Approval resource type for config versions in workflow-service. */
+    public static final String APPROVAL_RESOURCE = "config_entry";
     private static final Pattern NAME = Pattern.compile("^[a-z][a-z0-9_.-]{0,127}$");
     private static final Set<String> GRANTED = Set.of("APPROVED", "EXECUTED");
     /** Approval outcomes that end the request without granting it (sent back for changes counts as refused). */
@@ -43,16 +55,19 @@ public class ConfigEntryService {
 
     private final CrudEngine crud;
     private final ConfigStore store;
-    private final WorkflowGateway workflow;
+    private final Approvals approvals;
+    private final ServiceClient client;
     private final OutboxWriter outbox;
     private final TransactionTemplate tx;
     private final JsonMapper json;
 
-    public ConfigEntryService(CrudEngine crud, ConfigStore store, WorkflowGateway workflow, OutboxWriter outbox,
+    public ConfigEntryService(CrudEngine crud, ConfigStore store, ServiceClient client,
+                              @Value("${spring.application.name}") String application, OutboxWriter outbox,
                               TransactionTemplate tx, JsonMapper json) {
         this.crud = crud;
         this.store = store;
-        this.workflow = workflow;
+        this.client = client;
+        this.approvals = new Approvals(client, application, "workflow");
         this.outbox = outbox;
         this.tx = tx;
         this.json = json;
@@ -103,24 +118,19 @@ public class ConfigEntryService {
         String key = entry.get("config_key").asString();
         JsonNode active = store.active(namespace, key).map(json::readTree).orElse(null);
 
-        ObjectNode req = json.createObjectNode();
-        req.put("resource_type", "config_entry");
-        req.put("resource_id", id.toString());
-        req.put("action", "activate");
-        req.put("title", "Activate " + namespace + "." + key + " v" + entry.get("version").asInt());
-        req.put("summary", changeReason);
-        req.put("priority", "NORMAL");
-        ObjectNode payload = req.putObject("payload");
+        Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("service", "config-service");
         payload.put("operation", "configEntriesActivate");
         payload.put("config_entry_id", id.toString());
         payload.put("namespace", namespace);
         payload.put("config_key", key);
         payload.put("version", entry.get("version").asInt());
-        payload.set("value", entry.get("value"));
-        // approval_request.diff is a JSON object, so the patch operations are wrapped for workflow-service
-        req.set("diff", approvalDiff(JsonDiff.diff(json, active == null ? null : active.get("value"), entry.get("value"))));
-        JsonNode approval = workflow.requestApproval(req, "config-service:" + idempotencyKey);
+        payload.put("value", entry.get("value"));
+        // the library has no approval_request.diff field yet: the json-patch document travels in the payload
+        payload.put("diff", approvalDiff(JsonDiff.diff(json, active == null ? null : active.get("value"), entry.get("value"))));
+        JsonNode approval = approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "activate",
+                "Activate " + namespace + "." + key + " v" + entry.get("version").asInt(), payload)
+                .withSummary(changeReason), "submit:" + id + ":" + idempotencyKey);
         String approvalId = approval == null ? null : approval.path("id").asString(null);
         if (approvalId == null) {
             throw new ApiException(502, "upstream_error", "workflow-service returned no approval request id");
@@ -148,6 +158,22 @@ public class ConfigEntryService {
      * sent-back (CHANGES_REQUESTED) approval cannot be activated; the maker creates a new version instead.
      */
     public String activate(UUID id) {
+        return activate(id, null);
+    }
+
+    /** True while the version is PENDING_APPROVAL under this approval request (decisions on older ones are stale). */
+    public boolean awaitsApproval(UUID id, UUID approvalRequestId) {
+        return approvalRequestId != null && store.entry(id, false).map(json::readTree)
+                .filter(e -> Status.PENDING_APPROVAL.name().equals(e.path("status").asString()))
+                .filter(e -> approvalRequestId.toString().equals(e.path("approval_request_id").asString(null)))
+                .isPresent();
+    }
+
+    /**
+     * Activates with the approval decision already known (workflow-service's approved event) or, when {@code known}
+     * is null, after reading the approval request from workflow-service.
+     */
+    String activate(UUID id, JsonNode known) {
         JsonNode entry = json.readTree(store.entry(id, false).orElseThrow(() -> ApiException.notFound("config entry", id)));
         ConfigLifecycle.require(entry.get("status").asString(), Status.ACTIVE);
         String principal = TenantContext.principal();
@@ -159,7 +185,11 @@ public class ConfigEntryService {
         if (approvalId == null) {
             throw ApiException.conflict("approval_missing", "Config entry " + id + " has no approval request");
         }
-        JsonNode approval = workflow.approval(UUID.fromString(approvalId));
+        if (known != null && !approvalId.equals(known.path("id").asString(null))) {
+            throw ApiException.conflict("approval_mismatch", "Approval " + known.path("id").asString(null)
+                    + " is not the current approval request of config entry " + id);
+        }
+        JsonNode approval = known != null ? known : client.get(Approvals.WORKFLOW, "/v1/approval-requests/" + approvalId);
         if (approval == null) {
             throw new ApiException(502, "upstream_error", "workflow-service returned no approval request " + approvalId);
         }

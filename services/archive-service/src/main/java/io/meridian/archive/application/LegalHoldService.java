@@ -34,8 +34,11 @@ public class LegalHoldService {
     private final OutboxWriter outbox;
     private final TransactionTemplate tx;
     private final JsonMapper json;
+    private final PurgeApprovals approvals;
 
-    public LegalHoldService(Rows rows, CrudEngine crud, OutboxWriter outbox, TransactionTemplate tx, JsonMapper json) {
+    public LegalHoldService(Rows rows, CrudEngine crud, OutboxWriter outbox, TransactionTemplate tx, JsonMapper json,
+                            PurgeApprovals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.crud = crud;
         this.outbox = outbox;
@@ -171,6 +174,9 @@ public class LegalHoldService {
             if (decide(List.of(hold), p).blocked()) {
                 rows.update("update purge_request set status = 'BLOCKED_BY_HOLD', blocked_by_hold_id = ?::uuid where id = ?",
                         hold.id(), UUID.fromString(p.get("id").asString()));
+                if ("PENDING_APPROVAL".equals(p.get("status").asString())) {
+                    approvals.decided(UUID.fromString(p.get("id").asString()), "blocked by legal hold");
+                }
             }
         }
     }
@@ -187,7 +193,9 @@ public class LegalHoldService {
                 rows.update("update purge_request set blocked_by_hold_id = ?::uuid where id = ?", d.blockedBy().id(), pid);
             } else {
                 // circumstances changed while blocked: the purge needs a fresh approval
-                rows.update("update purge_request set status = 'PENDING_APPROVAL', blocked_by_hold_id = null where id = ?", pid);
+                approvals.request(rows.tree(rows.updateReturning("""
+                        update purge_request set status = 'PENDING_APPROVAL', blocked_by_hold_id = null where id = ?
+                        returning row_to_json(purge_request)::text""", pid)));
             }
         }
     }

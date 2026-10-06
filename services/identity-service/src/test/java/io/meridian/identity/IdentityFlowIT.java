@@ -81,7 +81,7 @@ class IdentityFlowIT {
     void stubWorkflow() {
         when(serviceClient.post(eq("workflow-service"), eq("/v1/approval-requests"), any(), anyString()))
                 .thenAnswer(inv -> {
-                    ObjectNode body = ((ObjectNode) inv.getArgument(2)).deepCopy();
+                    ObjectNode body = json.valueToTree(inv.getArgument(2)); // the approvals library sends a Map
                     body.put("id", UUID.randomUUID().toString());
                     body.put("status", "PENDING");
                     body.put("maker", TenantContext.principal());

@@ -40,9 +40,11 @@ public class PurgeService {
     private final OutboxWriter outbox;
     private final TransactionTemplate tx;
     private final JsonMapper json;
+    private final PurgeApprovals approvals;
 
     public PurgeService(Rows rows, LegalHoldService holds, SourceClient source, WormStore worm, OutboxWriter outbox,
-                        TransactionTemplate tx, JsonMapper json) {
+                        TransactionTemplate tx, JsonMapper json, PurgeApprovals approvals) {
+        this.approvals = approvals;
         this.rows = rows;
         this.holds = holds;
         this.source = source;
@@ -102,6 +104,9 @@ public class PurgeService {
                     returning row_to_json(purge_request)::text""", approvalNeeded ? "PENDING_APPROVAL" : "APPROVED", estimate, id);
             if (!approvalNeeded) {
                 outbox.publish("operations.purge_request.approved", "purge_request", id, json.readTree(row));
+            } else {
+                // Central maker-checker: the checker may decide in the workflow inbox (PurgeApprovalHandler).
+                approvals.request(json.readTree(row));
             }
             return row;
         });
@@ -120,8 +125,17 @@ public class PurgeService {
                     where id = ? returning row_to_json(purge_request)::text""", TenantContext.principal(),
                     TenantContext.principal(), id);
             outbox.publish("operations.purge_request.approved", "purge_request", id, json.readTree(row));
+            approvals.decided(id, "approved directly");
             return row;
         });
+    }
+
+    /** True while the purge is PENDING_APPROVAL and unchanged since the submission with this row_version. */
+    public boolean awaitsApproval(UUID id, Integer rowVersion) {
+        return tx.execute(s -> rows.text("purge_request", id, false).map(rows::tree)
+                .filter(p -> "PENDING_APPROVAL".equals(p.path("status").asString()))
+                .filter(p -> rowVersion == null || rowVersion == p.path("row_version").asInt())
+                .isPresent());
     }
 
     /** The checker rejects a pending purge; the reason is kept on the request. */
@@ -133,6 +147,7 @@ public class PurgeService {
                     update purge_request set status = 'REJECTED', decision_reason = ?, decided_at = now(), updated_by = ?
                     where id = ? returning row_to_json(purge_request)::text""", reason, TenantContext.principal(), id);
             outbox.publish("operations.purge_request.rejected", "purge_request", id, json.readTree(row));
+            approvals.decided(id, "rejected directly");
             return row;
         });
     }
@@ -146,6 +161,7 @@ public class PurgeService {
                     update purge_request set status = 'CANCELLED', decision_reason = ?, decided_at = now(), updated_by = ?
                     where id = ? returning row_to_json(purge_request)::text""", reason, TenantContext.principal(), id);
             outbox.publish("operations.purge_request.cancelled", "purge_request", id, json.readTree(row));
+            approvals.decided(id, "purge request cancelled");
             return row;
         });
     }

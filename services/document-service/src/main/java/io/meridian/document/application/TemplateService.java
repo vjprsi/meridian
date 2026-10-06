@@ -1,5 +1,7 @@
 package io.meridian.document.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.document.domain.Lifecycles;
@@ -8,11 +10,15 @@ import io.meridian.document.infrastructure.DocumentStore;
 import io.meridian.events.OutboxWriter;
 import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,22 +30,30 @@ import tools.jackson.databind.node.ObjectNode;
  * Document templates: versioned per code + locale, editable only as DRAFT, published through a maker-checker
  * approval in workflow-service, activated when that approval is granted (superseding the previous ACTIVE
  * version), and retired explicitly.
+ *
+ * <p>The publish approval goes through libs/meridian-approvals (G11). There is no local decision endpoint, so
+ * publishing always opens the request in workflow-service whatever {@code meridian.approvals.mode} says; the
+ * decision comes back through {@link DocumentTemplateApprovalHandler}.
  */
 @Service
 public class TemplateService {
+    /** Approval resource type for template publishing in workflow-service. */
+    public static final String APPROVAL_RESOURCE = "document_template";
+
     private final CrudEngine crud;
     private final DocumentStore store;
-    private final ServiceClient services;
+    private final Approvals approvals;
     private final JdbcClient jdbc;
     private final JsonMapper json;
     private final OutboxWriter outbox;
 
-    public TemplateService(CrudEngine crud, DocumentStore store, ServiceClient services, JdbcClient jdbc, JsonMapper json,
+    public TemplateService(CrudEngine crud, DocumentStore store, ServiceClient services,
+                           @Value("${spring.application.name}") String application, JdbcClient jdbc, JsonMapper json,
                            OutboxWriter outbox) {
         this.outbox = outbox;
         this.crud = crud;
         this.store = store;
-        this.services = services;
+        this.approvals = new Approvals(services, application, "workflow");
         this.jdbc = jdbc;
         this.json = json;
     }
@@ -110,16 +124,52 @@ public class TemplateService {
         payload.put("code", t.get("code").asString());
         payload.put("locale", t.get("locale").asString());
         payload.put("version", t.get("version").asInt());
-        ObjectNode req = json.createObjectNode();
-        req.put("resource_type", "document_template");
-        req.put("resource_id", id.toString());
-        req.put("action", "publish");
-        req.put("title", "Publish document template " + t.get("code").asString() + " v" + t.get("version").asInt()
-                + " (" + t.get("locale").asString() + ")");
-        req.put("summary", t.get("name").asString());
-        req.set("payload", payload);
-        String key = ("dtp-publish:" + id + ":" + idempotencyKey);
-        return services.post("workflow-service", "/v1/approval-requests", req, key.substring(0, Math.min(128, key.length())));
+        payload.put("checksum", checksum(t));
+        return approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "publish",
+                "Publish document template " + t.get("code").asString() + " v" + t.get("version").asInt()
+                        + " (" + t.get("locale").asString() + ")", payload)
+                .withSummary(t.get("name").asString()), "publish:" + id + ":" + idempotencyKey);
+    }
+
+    /**
+     * A decision from workflow-service on a publish request: ignored unless the template is still PENDING_APPROVAL
+     * with the submitted content (checksum); an approval by the template's maker or publisher is refused
+     * ({@code four_eyes_violation}).
+     *
+     * @return true when the template changed
+     */
+    @Transactional
+    public boolean onWorkflowDecision(UUID templateId, String checksum, String approvalStatus, String maker) {
+        JsonNode t;
+        try {
+            t = store.lock("document_template", templateId);
+        } catch (ApiException e) {
+            return false;
+        }
+        if (!"PENDING_APPROVAL".equals(t.get("status").asString())
+                || (checksum != null && !checksum.equals(checksum(t)))) {
+            return false;
+        }
+        String principal = TenantContext.principal();
+        if (("APPROVED".equals(approvalStatus) || "EXECUTED".equals(approvalStatus))
+                && (principal.equals(maker) || principal.equals(t.path("created_by").asString(null))
+                        || principal.equals(t.path("updated_by").asString(null)))) {
+            throw ApiException.unprocessable("four_eyes_violation",
+                    "The maker of a template cannot approve its publication; another user must act as checker");
+        }
+        return onApprovalDecided(templateId, approvalStatus);
+    }
+
+    /** Content fingerprint of a template version (what approvers saw). */
+    static String checksum(JsonNode t) {
+        String content = t.path("body").asString("") + "\u0000" + t.path("body_document_id").asString("") + "\u0000"
+                + t.path("variables_schema").toString() + "\u0000" + t.path("output_format").asString("");
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(content.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**
