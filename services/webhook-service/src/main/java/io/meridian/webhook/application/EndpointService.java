@@ -11,6 +11,7 @@ import io.meridian.webhook.domain.WebhookRules;
 import io.meridian.webhook.infrastructure.SecretCipher;
 import io.meridian.webhook.infrastructure.WebhookStore;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,31 +56,26 @@ public class EndpointService {
         SigningSecrets secrets = SigningSecrets.fresh();
         values.put("id", id.toString());
         values.put("status", "ACTIVE"); // status is managed by enable/disable actions and delivery health
-        values.put("signing_secret", cipher.encrypt(secrets.serialise(), id.toString()));
+        values.put("signing_secret_enc", cipher.encrypt(secrets.current(), id.toString()));
         values.put("signing_secret_version", 1);
         values.put("consecutive_failures", 0);
         return new WithSecret(crud.insert("webhook_endpoint", values), secrets.current());
     }
 
-    /** Validates a PATCH before it is applied generically; status may only change through actions. */
+    /** Validates a PATCH before it is applied generically (status is read-only: it changes through actions). */
     public void validateUpdate(UUID id, Object body) {
         ObjectNode values = crud.toColumns("webhook_endpoint", body);
         WebhookRules.validateUrl(values.has("url") ? values.get("url").asString() : "https://unchanged.invalid",
                 allowInsecureLocalhost);
         validateHeaders(values.get("custom_headers"));
-        if (values.has("status")) {
-            String current = store.requireEndpoint(id, false).status();
-            if (!current.equals(values.get("status").asString())) {
-                throw ApiException.conflict("invalid_transition",
-                        "Endpoint status changes go through /enable and /disable");
-            }
-        }
     }
 
     @Transactional
     public String enable(UUID id) {
         WebhookStore.EndpointRow e = store.requireEndpoint(id, true);
         store.setEndpointStatus(id, WebhookRules.enable(e.status()), null, true);
+        outbox.publish("platform.webhook_endpoint.enabled", "webhook_endpoint", id,
+                json.readTree(store.endpointEventJson(id)));
         return store.endpointJson(id);
     }
 
@@ -88,9 +84,9 @@ public class EndpointService {
         WebhookStore.EndpointRow e = store.requireEndpoint(id, true);
         String r = reason == null || reason.isBlank() ? "Disabled by " + io.meridian.common.tenancy.TenantContext.principal() : reason;
         store.setEndpointStatus(id, WebhookRules.disable(e.status()), r, false);
-        String row = store.endpointJson(id);
-        outbox.publish("platform.webhook_endpoint.disabled", "webhook_endpoint", id, json.readTree(row));
-        return row;
+        outbox.publish("platform.webhook_endpoint.disabled", "webhook_endpoint", id,
+                json.readTree(store.endpointEventJson(id)));
+        return store.endpointJson(id);
     }
 
     /** Issues a new secret; the previous one stays valid (signatures carry both) for 24 hours. */
@@ -98,7 +94,11 @@ public class EndpointService {
     public WithSecret rotateSecret(UUID id) {
         WebhookStore.EndpointRow e = store.requireEndpoint(id, true);
         SigningSecrets rotated = secrets(e).rotate(Instant.now());
-        store.updateSecret(id, cipher.encrypt(rotated.serialise(), id.toString()), e.secretVersion() + 1);
+        store.updateSecret(id, cipher.encrypt(rotated.current(), id.toString()), e.secretVersion() + 1,
+                cipher.encrypt(rotated.previous(), id.toString()),
+                rotated.previousExpiresAt().atOffset(ZoneOffset.UTC));
+        outbox.publish("platform.webhook_endpoint.secret_rotated", "webhook_endpoint", id,
+                json.readTree(store.endpointEventJson(id)));
         return new WithSecret(store.endpointJson(id), rotated.current());
     }
 
@@ -113,7 +113,10 @@ public class EndpointService {
     }
 
     public SigningSecrets secrets(WebhookStore.EndpointRow e) {
-        return SigningSecrets.parse(cipher.decrypt(e.secretBlob(), e.id().toString()));
+        String aad = e.id().toString();
+        String previous = e.previousSecretBlob() == null ? null : cipher.decrypt(e.previousSecretBlob(), aad);
+        return new SigningSecrets(cipher.decrypt(e.secretBlob(), aad), previous,
+                e.previousSecretExpiresAt() == null ? null : e.previousSecretExpiresAt().toInstant());
     }
 
     private void validateHeaders(JsonNode headers) {

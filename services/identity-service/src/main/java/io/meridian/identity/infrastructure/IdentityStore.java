@@ -20,7 +20,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class IdentityStore {
     /** Columns flagged {@code secret} in the spec: never leave the service (API responses or events). */
     public static final Set<String> SECRET_COLUMNS =
-            Set.of("password_hash", "totp_secret", "public_key", "key_hash", "client_secret_hash", "client_secret");
+            Set.of("password_hash", "totp_seed_enc", "public_key", "key_hash", "client_secret_hash");
     private static final Set<String> TABLES = Set.of("app_user", "role", "permission", "role_permission", "user_role",
             "access_policy", "mfa_factor", "user_session", "api_client", "api_key", "sso_provider", "oauth_scope",
             "rate_limit_policy", "api_request_log");

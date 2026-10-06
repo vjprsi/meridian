@@ -17,7 +17,8 @@ import java.util.Map;
  * {@link CanonicalJson} (nested state documents have sorted keys); {@code occurred_at} is UTC ISO-8601 with exactly
  * six fractional digits; uuids are lower-case; absent values are JSON null. The event hash is
  * {@code hex(SHA-256(UTF-8(canonical)))} and {@code prev_hash} (part of the canonical form) links it to the previous
- * event; the first event of a tenant links to {@link #GENESIS}.
+ * event; the first event of a tenant links to {@link #GENESIS}. {@code source_event_id} (the consumed CloudEvents id)
+ * follows {@code service_name} only when present, so events recorded without it keep their original hashes.
  */
 public final class HashChain {
     public static final String GENESIS = "0".repeat(64);
@@ -53,6 +54,9 @@ public final class HashChain {
         m.put("request_id", r.requestId());
         m.put("trace_id", r.traceId());
         m.put("service_name", r.serviceName());
+        if (r.sourceEventId() != null) {
+            m.put("source_event_id", r.sourceEventId());
+        }
         m.put("prev_hash", r.prevHash());
         // Fixed order: serialise the top level by hand (CanonicalJson would sort the keys).
         StringBuilder sb = new StringBuilder("{");

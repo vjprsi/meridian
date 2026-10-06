@@ -45,7 +45,8 @@ public class AuditRecorder {
                                 String impersonatorId, String action, String resourceType, String resourceId,
                                 String outcome, String reason, JsonNode beforeState, JsonNode afterState,
                                 UUID legalEntityId, UUID approvalRequestId, String ipAddress, String userAgent,
-                                String sessionId, String requestId, String traceId, String serviceName) {}
+                                String sessionId, String requestId, String traceId, String serviceName,
+                                String sourceEventId) {}
 
     /** Records the event and returns the stored row (JSON). */
     @Transactional
@@ -54,8 +55,8 @@ public class AuditRecorder {
     }
 
     /**
-     * Records the event unless one with the same request id already exists (at-least-once consumers).
-     * Empty when it was a duplicate.
+     * Records the event unless one with the same source event id (consumed CloudEvents id) already exists
+     * (at-least-once consumers). Empty when it was a duplicate.
      */
     @Transactional
     public Optional<String> recordOnce(NewAuditEvent e) {
@@ -66,7 +67,7 @@ public class AuditRecorder {
         UUID tenant = TenantContext.require();
         validate(e);
         store.lockTenantChain(tenant);
-        if (dedupe && e.requestId() != null && store.existsByRequestId(e.requestId())) {
+        if (dedupe && e.sourceEventId() != null && store.existsBySourceEventId(e.sourceEventId())) {
             return Optional.empty();
         }
         String before = store.normaliseJson(e.beforeState() == null || e.beforeState().isNull()
@@ -78,7 +79,7 @@ public class AuditRecorder {
                 e.occurredAt() == null ? Instant.now() : e.occurredAt(), e.actorType(), e.actorId(),
                 e.actorDisplay(), e.impersonatorId(), e.action(), e.resourceType(), e.resourceId(), e.outcome(),
                 e.reason(), store.parse(before), store.parse(after), e.legalEntityId(), e.approvalRequestId(), ip,
-                e.userAgent(), e.sessionId(), e.requestId(), e.traceId(), e.serviceName(), null, null);
+                e.userAgent(), e.sessionId(), e.requestId(), e.traceId(), e.serviceName(), e.sourceEventId(), null, null);
         Optional<AuditEventStore.Head> head = store.head();
         AuditRecord linked = HashChain.link(rec, head.map(h -> h.sequenceNo() + 1).orElse(1L),
                 head.map(AuditEventStore.Head::hash).orElse(HashChain.GENESIS));
@@ -110,6 +111,7 @@ public class AuditRecorder {
         v.put("request_id", linked.requestId());
         v.put("trace_id", linked.traceId());
         v.put("service_name", linked.serviceName());
+        v.put("source_event_id", linked.sourceEventId());
         v.put("prev_hash", linked.prevHash());
         v.put("hash", linked.hash());
         String row = crud.insert("audit_event", v);

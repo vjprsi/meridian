@@ -9,6 +9,7 @@ import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -45,7 +46,7 @@ public class SettingsService {
         }
         validateValue(v.path("value_type").asString(), v.get("value"));
         ObjectNode row = store.insert("tenant_setting", v);
-        events.publish("platform.tenant_setting.changed", "tenant_setting", id(row), masked(row, "CREATED"));
+        events.publish("platform.tenant_setting.changed", "tenant_setting", id(row), masked(row));
         return row;
     }
 
@@ -63,7 +64,7 @@ public class SettingsService {
         }
         ResponseEntity<T> r = crud.update("tenant_setting", type, body, ifMatch, Crud.params().with("id", id));
         events.publish("platform.tenant_setting.changed", "tenant_setting", id,
-                masked((ObjectNode) json.valueToTree(r.getBody()), "UPDATED"));
+                masked((ObjectNode) json.valueToTree(r.getBody())));
         return r;
     }
 
@@ -71,7 +72,7 @@ public class SettingsService {
     public ResponseEntity<Void> deleteSetting(UUID id) {
         ObjectNode current = store.lock("tenant_setting", id);
         ResponseEntity<Void> r = crud.delete("tenant_setting", Crud.params().with("id", id));
-        events.publish("platform.tenant_setting.changed", "tenant_setting", id, masked(current, "DELETED"));
+        events.publish("platform.tenant_setting.deleted", "tenant_setting", id, masked(current));
         return r;
     }
 
@@ -81,12 +82,12 @@ public class SettingsService {
         });
     }
 
-    private ObjectNode masked(ObjectNode row, String change) {
+    /** Event payload: the setting with its value masked when sensitive. */
+    private static ObjectNode masked(ObjectNode row) {
         ObjectNode p = row.deepCopy();
         if (p.path("is_sensitive").asBoolean()) {
             p.put("value", MASK);
         }
-        p.put("change_type", change);
         return p;
     }
 
@@ -100,7 +101,7 @@ public class SettingsService {
         }
         validateFlag(v);
         ObjectNode row = store.insert("feature_flag", v);
-        events.publish("platform.feature_flag.changed", "feature_flag", id(row), withChange(row, "CREATED"));
+        events.publish("platform.feature_flag.changed", "feature_flag", id(row), row);
         return row;
     }
 
@@ -114,7 +115,7 @@ public class SettingsService {
         validateFlag(v);
         ResponseEntity<T> r = crud.update("feature_flag", type, body, ifMatch, Crud.params().with("id", id));
         events.publish("platform.feature_flag.changed", "feature_flag", id,
-                withChange((ObjectNode) json.valueToTree(r.getBody()), "UPDATED"));
+                json.valueToTree(r.getBody()));
         return r;
     }
 
@@ -122,7 +123,7 @@ public class SettingsService {
     public ResponseEntity<Void> deleteFlag(UUID id) {
         ObjectNode current = store.lock("feature_flag", id);
         ResponseEntity<Void> r = crud.delete("feature_flag", Crud.params().with("id", id));
-        events.publish("platform.feature_flag.changed", "feature_flag", id, withChange(current, "DELETED"));
+        events.publish("platform.feature_flag.deleted", "feature_flag", id, current);
         return r;
     }
 
@@ -143,10 +144,8 @@ public class SettingsService {
     }
 
     /** Evaluates every flag of the tenant for one subject. */
-    public JsonNode evaluate(JsonNode req) {
-        String subjectType = req.path("subject_type").asString();
-        String subjectId = req.path("subject_id").asString();
-        JsonNode context = req.get("context");
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> evaluate(String subjectType, String subjectId, JsonNode context) {
         Instant now = Instant.now();
         ObjectNode out = json.createObjectNode();
         out.put("subject_type", subjectType);
@@ -169,13 +168,7 @@ public class SettingsService {
                 e.put("expired", true);
             }
         }
-        return out;
-    }
-
-    private static ObjectNode withChange(ObjectNode row, String change) {
-        ObjectNode p = row.deepCopy();
-        p.put("change_type", change);
-        return p;
+        return json.convertValue(out, Map.class);
     }
 
     private static UUID id(JsonNode row) {

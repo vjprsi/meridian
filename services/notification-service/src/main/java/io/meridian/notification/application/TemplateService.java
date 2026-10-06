@@ -56,18 +56,12 @@ public class TemplateService {
         return crud.insert("notification_template", values);
     }
 
-    /** Checks the update is allowed (DRAFT only, no status change) and returns the cleaned body. */
+    /** Checks the update is allowed (DRAFT only; status and version are read-only) and returns the column values. */
     @Transactional(readOnly = true)
     public ObjectNode prepareUpdate(UUID id, Object body) {
         JsonNode current = json.readTree(store.json("notification_template", id)
                 .orElseThrow(() -> ApiException.notFound("notification template", id)));
         ObjectNode values = crud.toColumns("notification_template", body);
-        if (values.hasNonNull("status") && !values.get("status").asString().equals(current.get("status").asString())) {
-            throw ApiException.conflict("invalid_transition",
-                    "Template status changes only through /publish and approval; PATCH cannot set status");
-        }
-        values.remove("status");
-        values.remove("version");
         if (!"DRAFT".equals(current.get("status").asString())) {
             throw ApiException.conflict("template_not_editable",
                     "Only DRAFT templates can be edited; create a new version instead (template is "
@@ -135,7 +129,8 @@ public class TemplateService {
 
     /**
      * Applies a maker-checker outcome for a template (from platform.approval_request.* events). Approved or executed
-     * activates the template and retires the previous active version; rejected, cancelled or expired returns it to
+     * activates the template and retires the previous active version; rejected, changes requested, cancelled or
+     * expired returns it to
      * DRAFT. Ignored unless the template is PENDING_APPROVAL (events are delivered at least once).
      */
     @Transactional
@@ -155,7 +150,7 @@ public class TemplateService {
                         t.get("locale").asString());
                 store.setTemplateStatus(templateId, "ACTIVE");
             }
-            case "REJECTED", "CANCELLED", "EXPIRED" -> store.setTemplateStatus(templateId, "DRAFT");
+            case "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED" -> store.setTemplateStatus(templateId, "DRAFT");
             default -> { }
         }
     }

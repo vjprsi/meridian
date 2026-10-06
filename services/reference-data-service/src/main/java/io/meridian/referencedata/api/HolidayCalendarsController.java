@@ -9,30 +9,29 @@ import io.meridian.referencedata.api.generated.model.HolidayCalendarsImportReque
 import io.meridian.referencedata.application.CalendarService;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
-import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Holiday calendars: maintenance, business-day queries and holiday import. The contract omits the query
- * parameters of the GET actions (?date=, ?days=), so they are read from the request.
- */
+/** Holiday calendars: maintenance, business-day queries and holiday import. */
 @RestController
 public class HolidayCalendarsController implements HolidayCalendarsApi {
     private final CalendarService calendars;
     private final CrudEngine crud;
     private final Idempotency idempotency;
-    private final HttpServletRequest request;
+    private final JsonMapper json;
 
     public HolidayCalendarsController(CalendarService calendars, CrudEngine crud, Idempotency idempotency,
-                                      HttpServletRequest request) {
+                                      JsonMapper json) {
         this.calendars = calendars;
         this.crud = crud;
         this.idempotency = idempotency;
-        this.request = request;
+        this.json = json;
     }
 
     @Override
@@ -49,22 +48,22 @@ public class HolidayCalendarsController implements HolidayCalendarsApi {
     }
 
     @Override
-    public ResponseEntity<Void> holidayCalendarsIsBusinessDay(UUID id) {
+    public ResponseEntity<Map<String, Object>> holidayCalendarsIsBusinessDay(UUID id, LocalDate date) {
         TenantContext.require();
-        return Responses.ok(calendars.isBusinessDay(id, Responses.date(request.getParameter("date"), "date")));
+        return Responses.ok(json, calendars.isBusinessDay(id, date));
     }
 
     @Override
-    public ResponseEntity<Void> holidayCalendarsNextBusinessDay(UUID id) {
+    public ResponseEntity<Map<String, Object>> holidayCalendarsNextBusinessDay(UUID id, LocalDate date, Integer days) {
         TenantContext.require();
-        return Responses.ok(calendars.nextBusinessDay(id, Responses.date(request.getParameter("date"), "date"),
-                Responses.integer(request.getParameter("days"), "days", 1)));
+        return Responses.ok(json, calendars.nextBusinessDay(id, date, days == null ? 1 : days));
     }
 
     @Override
-    public ResponseEntity<Void> holidayCalendarsImport(UUID id, String idempotencyKey, HolidayCalendarsImportRequest body) {
+    public ResponseEntity<Map<String, Object>> holidayCalendarsImport(UUID id, String idempotencyKey,
+                                                                      HolidayCalendarsImportRequest body) {
         TenantContext.require();
-        return Responses.body(idempotency.execute(idempotencyKey, body, JsonNode.class, () -> ResponseEntity.ok(
+        return Responses.object(json, idempotency.execute(idempotencyKey, body, JsonNode.class, () -> ResponseEntity.ok(
                 calendars.importHolidays(id, body.getYear(), body.getSource()))));
     }
 }

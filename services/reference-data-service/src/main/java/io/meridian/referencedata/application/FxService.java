@@ -65,36 +65,30 @@ public class FxService {
         return publish(v);
     }
 
+    /**
+     * Loads a batch of rates all-or-nothing. {@code defaults} (fx_rate_source_id, rate_type, as_of_date, valid_from,
+     * valid_to) apply to every rate that does not set the field itself.
+     */
     @Transactional
-    public JsonNode bulk(JsonNode rates) {
-        if (rates == null || !rates.isObject()) {
-            throw ApiException.badRequest("invalid_rates", "rates must be an object with an items array");
+    public JsonNode bulk(JsonNode rates, JsonNode defaults) {
+        if (rates == null || !rates.isArray() || rates.isEmpty()) {
+            throw ApiException.unprocessable("invalid_rates", "rates must be a non-empty array");
         }
-        JsonNode items = rates.get("items");
-        if (items == null || !items.isArray() || items.isEmpty()) {
-            throw ApiException.unprocessable("invalid_rates", "rates.items must be a non-empty array");
-        }
-        if (items.size() > MAX_BULK) {
+        if (rates.size() > MAX_BULK) {
             throw ApiException.unprocessable("too_many_rates", "At most " + MAX_BULK + " rates per bulk load");
         }
-        String sourceId = sourceIdFromDefaults(rates);
         List<ObjectNode> rows = new ArrayList<>();
         List<FieldError> errors = new ArrayList<>();
-        for (int i = 0; i < items.size(); i++) {
-            JsonNode item = items.get(i);
-            String prefix = "rates.items[" + i + "].";
+        for (int i = 0; i < rates.size(); i++) {
+            JsonNode item = rates.get(i);
+            String prefix = "rates[" + i + "].";
             if (!item.isObject()) {
-                errors.add(new FieldError(prefix.substring(0, prefix.length() - 1), "invalid_rate", "each item must be an object"));
+                errors.add(new FieldError("rates[" + i + "]", "invalid_rate", "each rate must be an object"));
                 continue;
             }
             ObjectNode v = json.createObjectNode();
-            for (String f : List.of("rate_type", "as_of_date", "valid_from", "valid_to")) {
-                if (rates.hasNonNull(f)) {
-                    v.set(f, rates.get(f));
-                }
-            }
-            if (sourceId != null) {
-                v.put("fx_rate_source_id", sourceId);
+            if (defaults != null) {
+                defaults.propertyNames().forEach(name -> v.set(name, defaults.get(name)));
             }
             item.propertyNames().forEach(name -> v.set(name, item.get(name)));
             errors.addAll(validate(v, prefix));
@@ -122,14 +116,10 @@ public class FxService {
         return row;
     }
 
-    private String sourceIdFromDefaults(JsonNode rates) {
-        if (rates.hasNonNull("fx_rate_source_id")) {
-            return rates.get("fx_rate_source_id").asString();
-        }
-        return null;
-    }
-
-    /** Validates and completes one rate (defaults inverse_rate, valid_from, as_of_date). */
+    /**
+     * Validates and completes one rate: inverse_rate is always computed as 1 / rate (read-only in the contract; a
+     * client value is ignored); rate_type defaults to MID, valid_from to now and as_of_date to valid_from's date.
+     */
     List<FieldError> validate(ObjectNode v, String p) {
         List<FieldError> errors = new ArrayList<>();
         String base = text(v, "base_currency");
@@ -161,15 +151,13 @@ public class FxService {
         } catch (IllegalArgumentException e) {
             errors.add(new FieldError(p + "fx_rate_source_id", "invalid_uuid", "fx_rate_source_id must be a UUID"));
         }
+        v.remove("inverse_rate");
         BigDecimal rate = decimal(v, "rate", p, errors);
-        BigDecimal inverse = decimal(v, "inverse_rate", p, errors);
         if (rate != null) {
             if (rate.signum() <= 0) {
                 errors.add(new FieldError(p + "rate", "invalid_rate", "rate must be positive"));
-            } else if (inverse == null && !v.hasNonNull("inverse_rate")) {
+            } else {
                 v.put("inverse_rate", FxMath.inverse(rate).toPlainString());
-            } else if (inverse != null && (inverse.signum() <= 0 || !FxMath.consistent(rate, inverse))) {
-                errors.add(new FieldError(p + "inverse_rate", "inverse_rate_mismatch", "inverse_rate must equal 1 / rate"));
             }
         } else if (!v.hasNonNull("rate")) {
             errors.add(new FieldError(p + "rate", "required", "rate is required"));
@@ -217,14 +205,11 @@ public class FxService {
     }
 
     @Transactional(readOnly = true)
-    public JsonNode convert(JsonNode req) {
-        BigDecimal amount = new BigDecimal(req.get("amount").asString());
+    public JsonNode convert(BigDecimal amount, String from, String to, String rateType) {
         if (amount.signum() < 0) {
             throw ApiException.unprocessable("invalid_amount", "amount must not be negative");
         }
-        String from = req.get("from_currency").asString();
-        String to = req.get("to_currency").asString();
-        String type = rateType(req.hasNonNull("rate_type") ? req.get("rate_type").asString() : null);
+        String type = rateType(rateType);
         int minor = minorUnits(to);
         for (String c : List.of(from, to)) {
             if (store.currency(c).isEmpty()) {

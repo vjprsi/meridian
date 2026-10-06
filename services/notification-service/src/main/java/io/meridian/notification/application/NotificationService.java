@@ -34,8 +34,6 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     /** Channel order used when a templated send does not name a channel. */
     static final List<String> DEFAULT_CHANNEL_ORDER = List.of("PUSH", "IN_APP", "SMS", "EMAIL", "WHATSAPP", "USSD", "VOICE");
-    private static final List<String> SERVER_COLUMNS = List.of("status", "sent_at", "delivered_at", "read_at",
-            "failure_reason", "provider_message_id", "cost", "cost_currency");
 
     private final NotificationStore store;
     private final CrudEngine crud;
@@ -62,7 +60,6 @@ public class NotificationService {
     /** POST /v1/notifications: an already-rendered message. */
     public Submitted create(Object body) {
         ObjectNode values = crud.toColumns("notification", body);
-        SERVER_COLUMNS.forEach(values::remove);
         if (values.hasNonNull("notification_template_id")
                 && store.json("notification_template", UUID.fromString(values.get("notification_template_id").asString())).isEmpty()) {
             throw ApiException.unprocessable("template_not_found", "notification_template_id does not exist");
@@ -133,10 +130,23 @@ public class NotificationService {
         return stored;
     }
 
-    /** A request to render an ACTIVE template and send it. */
+    /**
+     * A request to render an ACTIVE template and send it. Optional fields left null fall back to the template
+     * (category, locale), the recipient's preferences (locale) or the variables (destination lookup).
+     */
     public record TemplatedSend(String templateCode, String recipientType, UUID recipientId, String channel,
                                 Map<String, Object> variables, String category, String sourceEventType,
-                                String sourceEventId, String locale) {}
+                                String sourceEventId, String locale, String destination, String priority,
+                                OffsetDateTime scheduledAt, OffsetDateTime expiresAt, Map<String, Object> data) {
+
+        /** A rule- or event-driven send (no explicit destination, scheduling or payload data). */
+        public static TemplatedSend fromEvent(String templateCode, String recipientType, UUID recipientId, String channel,
+                                              Map<String, Object> variables, String category, String sourceEventType,
+                                              String sourceEventId) {
+            return new TemplatedSend(templateCode, recipientType, recipientId, channel, variables, category,
+                    sourceEventType, sourceEventId, null, null, null, null, null, null);
+        }
+    }
 
     public Submitted sendTemplated(TemplatedSend req) {
         Map<String, Object> vars = req.variables() == null ? Map.of() : req.variables();
@@ -167,7 +177,14 @@ public class NotificationService {
                 continue;
             }
             JsonNode template = json.readTree(t.get());
-            String destination = resolveDestination(ch, vars, req.recipientId());
+            String destination;
+            if (req.destination() != null && !req.destination().isBlank()) {
+                // An explicit destination applies to the named channel, or to the channels whose format it fits.
+                destination = req.channel() != null || DeliveryPolicy.destinationProblem(ch, req.destination()) == null
+                        ? req.destination() : null;
+            } else {
+                destination = resolveDestination(ch, vars, req.recipientId());
+            }
             if (destination == null) {
                 problems.add(ch + ": no destination");
                 continue;
@@ -182,7 +199,7 @@ public class NotificationService {
             boolean noTemplate = problems.stream().allMatch(p -> p.endsWith("no ACTIVE template"));
             throw ApiException.unprocessable(noTemplate ? "template_not_found" : "destination_required",
                     "Cannot send " + req.templateCode() + ": " + String.join("; ", problems)
-                            + (noTemplate ? "" : " (pass variables.destination or variables.destinations.<CHANNEL>)"));
+                            + (noTemplate ? "" : " (pass destination, or variables.destinations.<CHANNEL>)"));
         }
         Candidate c = candidates.stream().filter(x -> !x.optedOut()).findFirst().orElse(candidates.getFirst());
         String ch = c.channel();
@@ -209,11 +226,21 @@ public class NotificationService {
             values.put("subject", subject.length() > 255 ? subject.substring(0, 255) : subject);
         }
         values.put("body", body);
-        if (vars.get("data") instanceof Map<?, ?> data) {
+        if (req.data() != null) {
+            values.set("data", json.valueToTree(req.data()));
+        } else if (vars.get("data") instanceof Map<?, ?> data) {
             values.set("data", json.valueToTree(data));
         }
-        if (vars.get("priority") instanceof String p) {
+        if (req.priority() != null) {
+            values.put("priority", req.priority());
+        } else if (vars.get("priority") instanceof String p) {
             values.put("priority", p);
+        }
+        if (req.scheduledAt() != null) {
+            values.put("scheduled_at", req.scheduledAt().toString());
+        }
+        if (req.expiresAt() != null) {
+            values.put("expires_at", req.expiresAt().toString());
         }
         if (req.sourceEventType() != null) {
             values.put("source_event_type", req.sourceEventType());
@@ -276,8 +303,10 @@ public class NotificationService {
                 throw ApiException.conflict("invalid_transition",
                         "Only QUEUED or SCHEDULED notifications can be cancelled; this one is " + status);
             }
-            store.update(id, "SUPPRESSED", "failure_reason = 'cancelled'");
-            return row(id);
+            store.update(id, "CANCELLED", "");
+            String row = row(id);
+            outbox.publish("platform.notification.cancelled", "notification", id, json.readTree(row));
+            return row;
         });
     }
 
@@ -300,7 +329,7 @@ public class NotificationService {
     }
 
     /**
-     * Delivery receipt from a provider. Payload: {@code provider_message_id} (or {@code message_id}), {@code status}
+     * Delivery receipt from a provider, for the tenant bound by the caller (signature already verified). Payload: {@code provider_message_id} (or {@code message_id}), {@code status}
      * (provider vocabulary, e.g. delivered/undelivered/read) and optional {@code error}. Out-of-order or repeated
      * receipts that would move the status backwards are ignored.
      */

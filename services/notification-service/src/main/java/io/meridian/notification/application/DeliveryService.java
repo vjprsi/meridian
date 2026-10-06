@@ -144,9 +144,8 @@ public class DeliveryService {
         a.put("notification_provider_id", provider.id().toString());
         a.put("attempt_no", attemptNo);
         a.put("status", result.status());
-        ObjectNode response = json.valueToTree(result.response());
-        response.put("cycle", cycle);
-        a.set("provider_response", response);
+        a.put("cycle", cycle);
+        a.set("provider_response", json.valueToTree(result.response()));
         if (result.errorCode() != null) {
             a.put("error_code", truncate(result.errorCode(), 64));
         }

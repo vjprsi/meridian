@@ -31,7 +31,6 @@ import tools.jackson.databind.node.ObjectNode;
 public class InstanceService {
     static final String TABLE = "workflow_instance";
     private static final int MAX_STEPS_PER_RUN = 100;
-    private static final String ENGINE_KEY = "_engine";
     private static final Pattern PATH_VAR = Pattern.compile("\\{([A-Za-z0-9_]+)}");
 
     private final WorkflowStore store;
@@ -48,9 +47,6 @@ public class InstanceService {
 
     @Transactional
     public ObjectNode start(ObjectNode values) {
-        for (String ro : new String[] {"status", "current_step", "engine_run_id", "started_at", "completed_at", "error"}) {
-            values.remove(ro);
-        }
         UUID defId = UUID.fromString(values.get("workflow_definition_id").asString());
         ObjectNode def = store.find(DefinitionService.TABLE, defId)
                 .orElseThrow(() -> ApiException.unprocessable("unknown_definition", "Workflow definition " + defId + " does not exist"));
@@ -80,6 +76,7 @@ public class InstanceService {
         values.put("engine_run_id", "meridian-local:" + id);
         values.put("started_at", now().toString());
         values.set("variables", vars);
+        values.set("engine_state", json.createObjectNode());
         ObjectNode inst = store.insert(TABLE, values);
         return run(inst, graph, graph.start());
     }
@@ -149,7 +146,9 @@ public class InstanceService {
         values.put("status", "CANCELLED");
         values.put("completed_at", now().toString());
         values.put("error", "Cancelled: " + reason);
-        return store.update(TABLE, id, values);
+        ObjectNode row = store.update(TABLE, id, values);
+        outbox.publish("platform.workflow_instance.cancelled", TABLE, id, row);
+        return row;
     }
 
     @Transactional
@@ -169,23 +168,24 @@ public class InstanceService {
     private ObjectNode run(ObjectNode inst, WorkflowGraph graph, String stepId) {
         UUID id = UUID.fromString(inst.get("id").asString());
         ObjectNode vars = vars(inst);
+        ObjectNode engine = engineState(inst);
         ObjectNode values = json.createObjectNode();
         values.put("status", "RUNNING");
         values.putNull("error");
+        values.set("variables", vars);
+        values.set("engine_state", engine);
         String current = stepId;
         for (int i = 0; ; i++) {
             if (i >= MAX_STEPS_PER_RUN) {
-                return fail(id, values, vars, current, "Step limit exceeded; the definition probably loops without waiting");
+                return fail(id, values, current, "Step limit exceeded; the definition probably loops without waiting");
             }
             WorkflowGraph.Step step = graph.step(current);
             values.put("current_step", current);
             switch (step.type()) {
                 case "END" -> {
-                    String outcome = step.config().path("outcome").asString("COMPLETED");
-                    engine(vars).put("outcome", outcome);
+                    values.put("outcome", step.config().path("outcome").asString("COMPLETED"));
                     values.put("status", "COMPLETED");
                     values.put("completed_at", now().toString());
-                    values.set("variables", vars);
                     ObjectNode row = store.update(TABLE, id, values);
                     outbox.publish("platform.workflow_instance.completed", TABLE, id, row);
                     return row;
@@ -193,12 +193,10 @@ public class InstanceService {
                 case "TASK" -> {
                     createTask(inst, step);
                     values.put("status", "WAITING");
-                    values.set("variables", vars);
                     return store.update(TABLE, id, values);
                 }
                 case "WAIT" -> {
                     values.put("status", "WAITING");
-                    values.set("variables", vars);
                     return store.update(TABLE, id, values);
                 }
                 case "DECISION" -> {
@@ -206,19 +204,19 @@ public class InstanceService {
                     String value = vars.path(variable).asString("");
                     String next = step.target(value);
                     if (next == null) {
-                        return fail(id, values, vars, current,
+                        return fail(id, values, current,
                                 "Decision " + step.id() + " has no transition for " + variable + "='" + value + "'");
                     }
                     current = next;
                 }
                 case "SERVICE" -> {
                     try {
-                        JsonNode response = call(id, step, vars);
+                        JsonNode response = call(id, step, vars, engine);
                         vars.set(step.id(), response);
                     } catch (ApiException e) {
-                        return fail(id, values, vars, current, "Step " + step.id() + " failed: " + e.code() + ": " + e.getMessage());
+                        return fail(id, values, current, "Step " + step.id() + " failed: " + e.code() + ": " + e.getMessage());
                     } catch (RuntimeException e) {
-                        return fail(id, values, vars, current, "Step " + step.id() + " failed: " + e);
+                        return fail(id, values, current, "Step " + step.id() + " failed: " + e);
                     }
                     current = step.target("next");
                 }
@@ -227,37 +225,36 @@ public class InstanceService {
         }
     }
 
-    private ObjectNode fail(UUID id, ObjectNode values, ObjectNode vars, String step, String error) {
+    private ObjectNode fail(UUID id, ObjectNode values, String step, String error) {
         values.put("status", "FAILED");
         values.put("current_step", step);
         values.put("error", error.length() > 4000 ? error.substring(0, 4000) : error);
-        values.set("variables", vars);
         ObjectNode row = store.update(TABLE, id, values);
         outbox.publish("platform.workflow_instance.failed", TABLE, id, row);
         return row;
     }
 
-    private JsonNode call(UUID instanceId, WorkflowGraph.Step step, ObjectNode vars) {
+    private JsonNode call(UUID instanceId, WorkflowGraph.Step step, ObjectNode vars, ObjectNode engine) {
         JsonNode call = step.config().get("call");
         String service = call.get("service").asString();
         String method = call.path("method").asString("POST");
         String path = expand(call.get("path").asString(), vars);
-        ObjectNode visits = engine(vars).has("visits") ? (ObjectNode) engine(vars).get("visits") : engine(vars).putObject("visits");
+        ObjectNode visits = engine.path("visits").isObject() ? (ObjectNode) engine.get("visits") : engine.putObject("visits");
         // A retry repeats the same visit (same key) so the downstream de-duplicates a call that actually succeeded.
         int visit = visits.path(step.id()).asInt(0);
-        if (!engine(vars).path("failed_step").asString("").equals(step.id())) {
+        if (!engine.path("failed_step").asString("").equals(step.id())) {
             visit++;
             visits.put(step.id(), visit);
         }
-        engine(vars).put("failed_step", step.id());
+        engine.put("failed_step", step.id());
         String key = ("wf:" + instanceId + ":" + step.id() + ":" + visit);
-        JsonNode body = call.has("body") ? call.get("body") : stripEngine(vars);
+        JsonNode body = call.has("body") ? call.get("body") : vars;
         JsonNode out = switch (method) {
             case "GET" -> services.get(service, path);
             case "PATCH" -> services.patch(service, path, body, call.path("if_match").asString(null));
             default -> services.post(service, path, body, key.length() > 128 ? key.substring(0, 128) : key);
         };
-        engine(vars).remove("failed_step");
+        engine.remove("failed_step");
         return out == null ? json.createObjectNode() : out;
     }
 
@@ -280,8 +277,7 @@ public class InstanceService {
         }
         t.put("queue", cfg.get("queue").asString());
         if (cfg.path("candidate_roles").isArray()) {
-            ObjectNode roles = t.putObject("candidate_roles");
-            roles.set("roles", cfg.get("candidate_roles"));
+            t.set("candidate_roles", cfg.get("candidate_roles"));
         }
         t.put("priority", cfg.path("priority").asString("NORMAL"));
         t.put("status", "OPEN");
@@ -317,14 +313,12 @@ public class InstanceService {
         return (ObjectNode) inst.get("variables");
     }
 
-    private ObjectNode engine(ObjectNode vars) {
-        return vars.path(ENGINE_KEY).isObject() ? (ObjectNode) vars.get(ENGINE_KEY) : vars.putObject(ENGINE_KEY);
-    }
-
-    private JsonNode stripEngine(ObjectNode vars) {
-        ObjectNode copy = vars.deepCopy();
-        copy.remove(ENGINE_KEY);
-        return copy;
+    /** Engine bookkeeping (step visits, failed step), kept in the non-API {@code engine_state} column. */
+    private ObjectNode engineState(ObjectNode inst) {
+        if (!inst.path("engine_state").isObject()) {
+            inst.set("engine_state", json.createObjectNode());
+        }
+        return (ObjectNode) inst.get("engine_state");
     }
 
     private static String expand(String path, JsonNode vars) {

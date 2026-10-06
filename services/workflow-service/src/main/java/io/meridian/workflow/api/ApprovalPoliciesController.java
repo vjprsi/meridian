@@ -30,9 +30,8 @@ public class ApprovalPoliciesController implements ApprovalPoliciesApi {
 
     @Override
     public ResponseEntity<ApprovalPolicy> approvalPoliciesCreate(String idempotencyKey, ApprovalPolicyCreate body) {
-        JsonNode req = json.valueToTree(body);
-        approvals.validatePolicy(req.get("approval_levels"), intOrNull(req, "required_approvals"),
-                intOrNull(req, "expires_after_hours"));
+        approvals.validatePolicy(json.valueToTree(body.getApprovalLevels()), body.getRequiredApprovals(),
+                body.getExpiresAfterHours());
         return crud.create("approval_policy", ApprovalPolicy.class, body, idempotencyKey, Crud.params());
     }
 
@@ -45,12 +44,8 @@ public class ApprovalPoliciesController implements ApprovalPoliciesApi {
             JsonNode levels = changes.has("approval_levels") ? changes.get("approval_levels") : current.get("approval_levels");
             Integer required = changes.has("required_approvals") ? changes.get("required_approvals").asInt()
                     : current.path("required_approvals").asInt(1);
-            approvals.validatePolicy(levels, required, intOrNull(changes, "expires_after_hours"));
+            approvals.validatePolicy(levels, required, body.getExpiresAfterHours());
         }
         return crud.update("approval_policy", ApprovalPolicy.class, body, ifMatch, Crud.params().with("id", id));
-    }
-
-    private static Integer intOrNull(JsonNode n, String f) {
-        return n.hasNonNull(f) ? n.get(f).asInt() : null;
     }
 }

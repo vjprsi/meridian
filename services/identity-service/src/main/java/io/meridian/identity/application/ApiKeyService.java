@@ -46,12 +46,6 @@ public class ApiKeyService {
         if (v.hasNonNull("api_client_id") && !clientId.toString().equals(v.get("api_client_id").asString())) {
             throw ApiException.unprocessable("client_mismatch", "api_client_id in the body must match the path");
         }
-        if (v.hasNonNull("status") && !"ACTIVE".equals(v.get("status").asString())) {
-            throw ApiException.unprocessable("invalid_initial_status", "A new key starts ACTIVE");
-        }
-        if (v.hasNonNull("rotated_from_id")) {
-            throw ApiException.unprocessable("rotated_from_not_allowed", "Use POST .../{id}/rotate to replace a key");
-        }
         JsonNode client = activeClient(clientId);
         List<String> allowed = JsonItems.of(client.get("allowed_scopes"));
         List<String> scopes = v.hasNonNull("scopes") ? JsonItems.of(v.get("scopes")) : allowed;
@@ -88,10 +82,11 @@ public class ApiKeyService {
                     returning row_to_json(t)::text""", keyId);
             outbox.publish("platform.api_key.revoked", "api_key", keyId, store.publicView(oldRow));
         } else {
-            store.updateReturning("""
+            oldRow = store.updateReturning("""
                     update api_key t set status = 'ROTATING',
                            expires_at = case when t.expires_at is null or t.expires_at > ? then ? else t.expires_at end
                     where t.id = ? returning row_to_json(t)::text""", graceEnd, graceEnd, keyId);
+            outbox.publish("platform.api_key.rotated", "api_key", keyId, store.publicView(oldRow));
         }
         ObjectNode v = json.createObjectNode();
         v.put("api_client_id", clientId.toString());

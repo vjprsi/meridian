@@ -67,10 +67,6 @@ public class ApprovalService {
 
     @Transactional
     public ObjectNode create(ObjectNode values, Caller caller) {
-        for (String ro : List.of("status", "maker", "required_approvals", "approvals_received", "current_level",
-                "expires_at", "decided_at", "executed_at", "execution_result")) {
-            values.remove(ro);
-        }
         String resourceType = values.path("resource_type").asString("");
         String action = values.path("action").asString("");
         if (resourceType.isBlank() || action.isBlank()) {
@@ -128,9 +124,7 @@ public class ApprovalService {
         values.put("approvals_received", 0);
         values.put("current_level", 1);
         values.put("expires_at", now().plusHours(expiryHours).toString());
-        ObjectNode result = json.createObjectNode();
-        result.set("approval_route", route.toJson());
-        values.set("execution_result", result);
+        values.set("approval_route", route.toJson());
         ObjectNode row = store.insert(TABLE, values);
         outbox.publish("platform.approval_request.created", TABLE, id, row);
         return row;
@@ -163,7 +157,7 @@ public class ApprovalService {
         ObjectNode r = lockPending(id);
         ObjectNode policy = policyOf(r);
         checkChecker(r, policy, caller, true);
-        ApprovalRoute route = ApprovalRoute.fromJson(r.path("execution_result").get("approval_route"));
+        ApprovalRoute route = ApprovalRoute.fromJson(r.get("approval_route"));
         int position = r.path("current_level").asInt(1);
         ApprovalRoute.Level level = route.at(position);
         if (!level.allows(caller.roles())) {
@@ -204,16 +198,17 @@ public class ApprovalService {
 
     @Transactional
     public ObjectNode reject(UUID id, String comment, Caller caller) {
-        return close(id, comment, caller, "REJECT");
+        return close(id, comment, caller, "REJECT", "REJECTED", "platform.approval_request.rejected");
     }
 
     /**
-     * Sends the request back to the maker. The status model has no "changes requested" state, so the request is
-     * closed as REJECTED with a REQUEST_CHANGES decision; the maker raises a new request with the corrections.
+     * Sends the request back to the maker (CHANGES_REQUESTED, a final state for this request); the maker raises a
+     * new request with the corrections.
      */
     @Transactional
     public ObjectNode requestChanges(UUID id, String comment, Caller caller) {
-        return close(id, comment, caller, "REQUEST_CHANGES");
+        return close(id, comment, caller, "REQUEST_CHANGES", "CHANGES_REQUESTED",
+                "platform.approval_request.changes_requested");
     }
 
     @Transactional
@@ -226,12 +221,11 @@ public class ApprovalService {
         ObjectNode values = json.createObjectNode();
         values.put("status", "CANCELLED");
         values.put("decided_at", now().toString());
-        ObjectNode result = ((ObjectNode) r.path("execution_result")).deepCopy();
-        if (reason != null) {
-            result.put("cancel_reason", reason);
+        if (reason != null && !reason.isBlank()) {
+            values.put("cancel_reason", reason);
         }
-        values.set("execution_result", result);
         ObjectNode row = store.update(TABLE, id, values);
+        outbox.publish("platform.approval_request.cancelled", TABLE, id, row);
         abandoned(row);
         return row;
     }
@@ -268,26 +262,26 @@ public class ApprovalService {
 
     // ------------------------------------------------------------------ internals
 
-    private ObjectNode close(UUID id, String comment, Caller caller, String decision) {
+    private ObjectNode close(UUID id, String comment, Caller caller, String decision, String status, String event) {
         if (comment == null || comment.isBlank()) {
             throw ApiException.unprocessable("comment_required", "A comment is required to " + decision.toLowerCase().replace('_', ' '));
         }
         ObjectNode r = lockPending(id);
         ObjectNode policy = policyOf(r);
         checkChecker(r, policy, caller, false);
-        ApprovalRoute route = ApprovalRoute.fromJson(r.path("execution_result").get("approval_route"));
+        ApprovalRoute route = ApprovalRoute.fromJson(r.get("approval_route"));
         int position = r.path("current_level").asInt(1);
         if (!route.at(position).allows(caller.roles())) {
             throw new ApiException(403, "not_authorized_approver",
                     "Level " + position + " can only be decided by one of " + route.at(position).approverRoles());
         }
         decide(id, caller, position, decision, comment);
-        StateMachine.APPROVAL_REQUEST.require("PENDING", "REJECTED");
+        StateMachine.APPROVAL_REQUEST.require("PENDING", status);
         ObjectNode values = json.createObjectNode();
-        values.put("status", "REJECTED");
+        values.put("status", status);
         values.put("decided_at", now().toString());
         ObjectNode row = store.update(TABLE, id, values);
-        outbox.publish("platform.approval_request.rejected", TABLE, id, row);
+        outbox.publish(event, TABLE, id, row);
         abandoned(row);
         return row;
     }
@@ -333,7 +327,8 @@ public class ApprovalService {
 
     private ObjectNode execute(ObjectNode approved, ApprovalExecutor executor) {
         UUID id = UUID.fromString(approved.get("id").asString());
-        ObjectNode result = ((ObjectNode) approved.path("execution_result")).deepCopy();
+        ObjectNode result = approved.path("execution_result").isObject()
+                ? ((ObjectNode) approved.get("execution_result")).deepCopy() : json.createObjectNode();
         String status;
         try {
             JsonNode out = nested.execute(s -> executor.execute(approved));

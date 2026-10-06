@@ -125,14 +125,17 @@ class IdentityFlowIT {
         assertThat(replay.statusCode()).isEqualTo(201);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
         assertThat(json.readTree(replay.body()).get("id")).isEqualTo(json.readTree(first.body()).get("id"));
-        // validation: missing required fields -> 400; status cannot be set to anything but INVITED
+        // validation: missing required fields -> 400; status is read-only (ignored), new users start INVITED
         assertThat(send("POST", "/v1/users", "{\"username\":\"x\"}", key(), TENANT, null).statusCode()).isEqualTo(400);
-        JsonNode bad = post("/v1/users", """
-                {"username":"dave","email":"dave@bank.example","first_name":"D","last_name":"K","status":"ACTIVE"}""", 422);
-        assertThat(bad.get("code").asString()).isEqualTo("invalid_initial_status");
-        // PATCH must not change status
-        HttpResponse<String> patch = send("PATCH", "/v1/users/" + alice, "{\"status\":\"ACTIVE\"}", null, TENANT, "1");
-        assertThat(patch.statusCode()).isEqualTo(422);
+        JsonNode dave = post("/v1/users", """
+                {"username":"dave","email":"dave@bank.example","first_name":"D","last_name":"K","status":"ACTIVE"}""", 201);
+        assertThat(dave.get("status").asString()).isEqualTo("INVITED");
+        // PATCH cannot change the status (read-only field is ignored)
+        HttpResponse<String> patch = send("PATCH", "/v1/users/" + dave.get("id").asString(),
+                "{\"status\":\"ACTIVE\",\"job_title\":\"Teller\"}", null, TENANT, "1");
+        assertThat(patch.statusCode()).as(patch.body()).isEqualTo(200);
+        assertThat(json.readTree(patch.body()).get("status").asString()).isEqualTo("INVITED");
+        assertThat(json.readTree(patch.body()).get("job_title").asString()).isEqualTo("Teller");
         // /me resolves the calling principal
         HttpResponse<String> me = send("GET", "/v1/users/me", null, null, TENANT, null, "alice");
         assertThat(json.readTree(me.body()).get("id").asString()).isEqualTo(alice);
@@ -163,6 +166,8 @@ class IdentityFlowIT {
         JsonNode ok = post(verify, "{\"code\":\"" + good + "\"}", 200);
         assertThat(ok.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(ok.get("is_primary").asBoolean()).isTrue();
+        assertThat(ok.has("totp_secret")).isFalse();
+        assertThat(outboxCount("platform.mfa_factor.verified", totpFactor)).isEqualTo(1);
         assertThat(post(verify, "{\"code\":\"" + good + "\"}", 409).get("code").asString()).isEqualTo("factor_already_verified");
         JsonNode user = get("/v1/users/" + alice, TENANT);
         assertThat(user.get("status").asString()).isEqualTo("ACTIVE");
@@ -197,7 +202,7 @@ class IdentityFlowIT {
     void permissionGrantIsMakerCheckerAndCloneCopiesGrants() throws Exception {
         teller = post("/v1/roles", "{\"code\":\"TELLER\",\"name\":\"Teller\"}", 201).get("id").asString();
         JsonNode apr = postAs("/v1/roles/" + teller + "/permissions",
-                "{\"permission_ids\":{\"items\":[\"" + permApprove + "\",\"" + permRead + "\"]}}", 200, "maker1");
+                "{\"permission_ids\":[\"" + permApprove + "\",\"" + permRead + "\"]}", 200, "maker1");
         assertThat(apr.get("status").asString()).isEqualTo("PENDING");
         assertThat(apr.get("resource_type").asString()).isEqualTo("role");
         assertThat(apr.get("action").asString()).isEqualTo("add_permissions");
@@ -211,9 +216,9 @@ class IdentityFlowIT {
         assertThat(exec(approval, "checker1")).isEqualTo("ok"); // idempotent
         assertThat(get("/v1/roles/" + teller + "/permissions", TENANT).get("data")).hasSize(2);
         assertThat(post("/v1/roles/" + teller + "/permissions",
-                "{\"permission_ids\":{\"items\":[\"" + permRead + "\"]}}", 422).get("code").asString()).isEqualTo("already_granted");
+                "{\"permission_ids\":[\"" + permRead + "\"]}", 422).get("code").asString()).isEqualTo("already_granted");
         assertThat(post("/v1/roles/" + teller + "/permissions",
-                "{\"permission_ids\":{\"items\":[\"" + UUID.randomUUID() + "\"]}}", 422).get("code").asString())
+                "{\"permission_ids\":[\"" + UUID.randomUUID() + "\"]}", 422).get("code").asString())
                 .isEqualTo("unknown_permission");
 
         JsonNode clone = post("/v1/roles/" + teller + "/clone", "{\"code\":\"TELLER_2\",\"name\":\"Teller copy\"}", 200);
@@ -221,8 +226,9 @@ class IdentityFlowIT {
         assertThat(get("/v1/roles/" + clone.get("id").asString() + "/permissions", TENANT).get("data")).hasSize(2);
         assertThat(send("POST", "/v1/roles/" + teller + "/clone", "{\"code\":\"TELLER_2\",\"name\":\"dup\"}", key(), TENANT, null)
                 .statusCode()).isEqualTo(409);
-        assertThat(post("/v1/roles", "{\"code\":\"SYS\",\"name\":\"Sys\",\"role_type\":\"SYSTEM\"}", 422).get("code").asString())
-                .isEqualTo("system_role_readonly");
+        // role_type is read-only: a client cannot create a SYSTEM role
+        assertThat(post("/v1/roles", "{\"code\":\"SYS\",\"name\":\"Sys\",\"role_type\":\"SYSTEM\"}", 201)
+                .get("role_type").asString()).isEqualTo("CUSTOM");
     }
 
     @Test
@@ -231,8 +237,8 @@ class IdentityFlowIT {
         post("/v1/user-roles", "{\"user_id\":\"" + alice + "\",\"role_id\":\"" + teller + "\"}", 201);
         assertThat(post("/v1/user-roles", "{\"user_id\":\"" + alice + "\",\"role_id\":\"" + teller + "\"}", 409)
                 .get("code").asString()).isEqualTo("duplicate_assignment");
-        String auditor = post("/v1/roles", "{\"code\":\"AUDITOR\",\"name\":\"Auditor\",\"incompatible_role_ids\":{\"items\":[\""
-                + teller + "\"]}}", 201).get("id").asString();
+        String auditor = post("/v1/roles", "{\"code\":\"AUDITOR\",\"name\":\"Auditor\",\"incompatible_role_ids\":[\""
+                + teller + "\"]}", 201).get("id").asString();
         assertThat(post("/v1/user-roles", "{\"user_id\":\"" + alice + "\",\"role_id\":\"" + auditor + "\"}", 422)
                 .get("code").asString()).isEqualTo("sod_conflict");
         assertThat(post("/v1/user-roles", "{\"user_id\":\"" + alice + "\",\"role_id\":\"" + teller
@@ -250,7 +256,7 @@ class IdentityFlowIT {
     void justInTimeElevationForPrivilegedRole() throws Exception {
         String admin = post("/v1/roles", "{\"code\":\"CONFIG_ADMIN\",\"name\":\"Config admin\",\"is_privileged\":true,"
                 + "\"max_session_minutes\":60}", 201).get("id").asString();
-        post("/v1/roles/" + admin + "/permissions", "{\"permission_ids\":{\"items\":[\"" + permAdmin + "\"]}}", 200);
+        post("/v1/roles/" + admin + "/permissions", "{\"permission_ids\":[\"" + permAdmin + "\"]}", 200);
         ObjectNode grant = lastApproval.get();
         grant.put("status", "APPROVED");
         assertThat(exec(grant, "checker1")).isEqualTo("ok");
@@ -283,12 +289,12 @@ class IdentityFlowIT {
     void accessSimulationAppliesAbacAfterRbac() throws Exception {
         post("/v1/access-policies", """
                 {"name":"deny-large-approvals","effect":"DENY","priority":10,"resource_pattern":"payments.payment.*",
-                 "actions":{"items":["approve"]},"condition_expression":"resource.amount > 10000"}""", 201);
+                 "actions":["approve"],"condition_expression":"resource.amount > 10000"}""", 201);
         post("/v1/access-policies", """
                 {"name":"own-branch","effect":"ALLOW","priority":20,"resource_pattern":"payments.*",
-                 "actions":{"items":["*"]},"condition_expression":"subject.branch_id == resource.branch_id"}""", 201);
+                 "actions":["*"],"condition_expression":"subject.branch_id == resource.branch_id"}""", 201);
         assertThat(post("/v1/access-policies", """
-                {"name":"broken","effect":"DENY","resource_pattern":"*","actions":{"items":["*"]},
+                {"name":"broken","effect":"DENY","resource_pattern":"*","actions":["*"],
                  "condition_expression":"resource.amount >"}""", 422).get("code").asString()).isEqualTo("invalid_condition");
 
         String branch = "0199a000-0000-7000-8000-00000000b001";
@@ -308,14 +314,14 @@ class IdentityFlowIT {
     @Order(8)
     void apiClientSecretsAreShownOnceAndStatusMachine() throws Exception {
         assertThat(post("/v1/api-clients", """
-                {"name":"bad","client_type":"SERVER","auth_method":"CLIENT_SECRET_BASIC","allowed_scopes":{"items":["nope:all"]}}""",
+                {"name":"bad","client_type":"SERVER","auth_method":"CLIENT_SECRET_BASIC","allowed_scopes":["nope:all"]}""",
                 422).get("code").asString()).isEqualTo("unknown_scope");
         assertThat(post("/v1/api-clients", """
-                {"name":"jwt","client_type":"SERVER","allowed_scopes":{"items":["payments:read"]}}""",
+                {"name":"jwt","client_type":"SERVER","allowed_scopes":["payments:read"]}""",
                 422).get("code").asString()).isEqualTo("jwks_uri_required");
         JsonNode c = post("/v1/api-clients", """
                 {"name":"erp","client_type":"SERVER","auth_method":"CLIENT_SECRET_BASIC","environment":"PRODUCTION",
-                 "allowed_scopes":{"items":["payments:read","payments:write"]}}""", 201);
+                 "allowed_scopes":["payments:read","payments:write"]}""", 201);
         String id = c.get("id").asString();
         assertThat(c.get("client_id").asString()).startsWith("cli_");
         String secret = c.get("client_secret").asString();
@@ -325,6 +331,8 @@ class IdentityFlowIT {
 
         JsonNode rotated = post("/v1/api-clients/" + id + "/rotate-secret", null, 200);
         assertThat(rotated.get("client_secret").asString()).isNotEqualTo(secret);
+        assertThat(rotated.get("client_id").asString()).isEqualTo(c.get("client_id").asString());
+        assertThat(outboxCount("platform.api_client.secret_rotated", id)).isEqualTo(1);
         assertThat(storedHash("api_client", "client_secret_hash", id)).isEqualTo(Secrets.sha256Hex(rotated.get("client_secret").asString()));
 
         assertThat(post("/v1/api-clients/" + id + "/suspend", "{\"reason\":\"breach\"}", 200).get("status").asString())
@@ -355,17 +363,17 @@ class IdentityFlowIT {
         assertThat(usage.get("request_count").asLong()).isEqualTo(4);
         assertThat(usage.get("error_count").asLong()).isEqualTo(1);
         assertThat(usage.get("error_rate").asString()).isEqualTo("0.2500");
-        assertThat(get("/v1/api-clients/" + id + "/usage?from=2020-01-01&to=2020-02-01", TENANT).get("request_count").asLong())
+        assertThat(get("/v1/api-clients/" + id + "/usage?from=2020-01-01T00:00:00Z&to=2020-02-01T00:00:00Z", TENANT).get("request_count").asLong())
                 .isZero();
         assertThat(send("GET", "/v1/api-clients/" + id + "/usage?from=yesterday", null, null, TENANT, null).statusCode())
                 .isEqualTo(400);
 
         // API keys
         assertThat(post("/v1/api-clients/" + id + "/keys", "{\"api_client_id\":\"" + id
-                + "\",\"name\":\"k\",\"scopes\":{\"items\":[\"cards:write\"]}}", 422).get("code").asString())
+                + "\",\"name\":\"k\",\"scopes\":[\"cards:write\"]}", 422).get("code").asString())
                 .isEqualTo("scope_not_allowed");
         JsonNode k = post("/v1/api-clients/" + id + "/keys", "{\"api_client_id\":\"" + id
-                + "\",\"name\":\"batch\",\"scopes\":{\"items\":[\"payments:read\"]}}", 201);
+                + "\",\"name\":\"batch\",\"scopes\":[\"payments:read\"]}", 201);
         String keyId = k.get("id").asString();
         String plain = k.get("api_key").asString();
         assertThat(plain).startsWith(k.get("key_prefix").asString() + ".");
@@ -375,6 +383,8 @@ class IdentityFlowIT {
         assertThat(rot.get("rotated_from_id").asString()).isEqualTo(keyId);
         assertThat(rot.get("api_key").asString()).isNotEqualTo(plain);
         assertThat(get("/v1/api-clients/" + id + "/keys/" + keyId, TENANT).get("status").asString()).isEqualTo("ROTATING");
+        assertThat(get("/v1/api-clients/" + id + "/keys/" + keyId, TENANT).has("api_key")).isFalse();
+        assertThat(outboxCount("platform.api_key.rotated", keyId)).isEqualTo(1);
         assertThat(post("/v1/api-clients/" + id + "/keys/" + keyId + "/rotate", "{}", 409).get("code").asString())
                 .isEqualTo("invalid_transition");
         assertThat(post("/v1/api-clients/" + id + "/keys/" + keyId + "/revoke", "{\"reason\":\"done\"}", 200)
@@ -386,11 +396,14 @@ class IdentityFlowIT {
     @Test
     @Order(9)
     void ssoProviderTestChecksConfiguration() throws Exception {
-        String good = post("/v1/sso-providers", """
-                {"name":"Entra","protocol":"OIDC","issuer_url":"https://login.example.com/tenant/v2.0","client_id":"abc"}""",
-                201).get("id").asString();
+        JsonNode entra = post("/v1/sso-providers", """
+                {"name":"Entra","protocol":"OIDC","issuer_url":"https://login.example.com/tenant/v2.0","client_id":"abc",
+                 "client_secret_ref":"vault://identity/sso/entra"}""", 201);
+        String good = entra.get("id").asString();
+        assertThat(entra.get("client_secret_ref").asString()).isEqualTo("vault://identity/sso/entra");
         JsonNode ok = post("/v1/sso-providers/" + good + "/test", null, 200);
         assertThat(ok.get("success").asBoolean()).isTrue();
+        assertThat(ok.get("checks").toString()).contains("client secret vault reference configured");
         String bad = post("/v1/sso-providers", """
                 {"name":"Legacy","protocol":"SAML2","issuer_url":"http://idp.example.com"}""", 201).get("id").asString();
         JsonNode fail = post("/v1/sso-providers/" + bad + "/test", null, 200);
@@ -410,6 +423,7 @@ class IdentityFlowIT {
         assertThat(get("/v1/users/" + alice + "/mfa-factors/" + totpFactor, TENANT).get("status").asString())
                 .isEqualTo("DISABLED");
         assertThat(get("/v1/users/" + alice, TENANT).get("mfa_enrolled").asBoolean()).isFalse();
+        assertThat(outboxCount("platform.app_user.mfa_reset", alice)).isEqualTo(1);
         assertThat(get("/v1/sessions/" + s1, TENANT).hasNonNull("revoked_at")).isTrue();
         assertThat(post("/v1/users/" + alice + "/reset-mfa", "{\"reason\":\"again\"}", 422).get("code").asString())
                 .isEqualTo("no_mfa_factors");
@@ -459,6 +473,12 @@ class IdentityFlowIT {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private long outboxCount(String eventType, String aggregateId) throws Exception {
+        return TenantContext.callAs(UUID.fromString(TENANT), "t", () -> jdbc.sql(
+                "select count(*) from outbox where event_type = ? and aggregate_id = ?::uuid")
+                .params(eventType, aggregateId).query(Long.class).single());
+    }
 
     private String exec(ObjectNode approval, String principal) throws Exception {
         try {

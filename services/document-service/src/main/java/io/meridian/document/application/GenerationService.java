@@ -51,8 +51,9 @@ public class GenerationService {
     }
 
     @Transactional
-    public String generate(Object body, JsonNode data) {
+    public String generate(Object body) {
         ObjectNode values = crud.toColumns("generated_document", body);
+        JsonNode data = values.get("data");
         UUID templateId = UUID.fromString(values.get("document_template_id").asString());
         JsonNode template = json.readTree(jdbc.sql("select row_to_json(t)::text from document_template t where id = ?")
                 .param(templateId).query(String.class).optional()
@@ -130,7 +131,9 @@ public class GenerationService {
             log.info("Generation {} failed: {}", id, e.getMessage());
             jdbc.sql("update generated_document set status = 'FAILED', error = ?, updated_by = ? where id = ?")
                     .params(e.getMessage(), TenantContext.principal(), id).update();
-            return store.row("generated_document", id);
+            String row = store.row("generated_document", id);
+            outbox.publish("platform.generated_document.failed", "generated_document", id, json.readTree(row));
+            return row;
         }
     }
 

@@ -18,7 +18,7 @@ public final class StateMachine {
     }
 
     public static final StateMachine APPROVAL_REQUEST = new StateMachine("approval request", Map.of(
-            "PENDING", Set.of("APPROVED", "REJECTED", "CANCELLED", "EXPIRED"),
+            "PENDING", Set.of("APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED"),
             "APPROVED", Set.of("EXECUTED", "EXECUTION_FAILED"),
             "EXECUTION_FAILED", Set.of("EXECUTED")));
 

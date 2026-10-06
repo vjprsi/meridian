@@ -114,7 +114,15 @@ class DocumentFlowIT {
         assertThat(code(send("GET", "/v1/documents/" + id + "/download-url", null, null, TENANT), 409))
                 .isEqualTo("document_not_downloadable");
 
-        JsonNode done = json.readTree(as(() -> documents.completeUpload(UUID.fromString(id), 2048, SHA, "CLEAN")));
+        assertThat(code(send("POST", "/v1/documents/" + id + "/complete-upload", "{\"size_bytes\":2048}", key(), TENANT), 400))
+                .isEqualTo("validation_failed");
+        JsonNode scanning = post("/v1/documents/" + id + "/complete-upload",
+                "{\"size_bytes\":2048,\"checksum\":\"" + SHA + "\"}", 200);
+        assertThat(scanning.get("status").asString()).isEqualTo("SCANNING");
+        assertThat(scanning.get("size_bytes").asLong()).isEqualTo(2048);
+        assertThat(code(send("POST", "/v1/documents/" + id + "/complete-upload",
+                "{\"size_bytes\":2048,\"checksum\":\"" + SHA + "\"}", key(), TENANT), 409)).isEqualTo("invalid_transition");
+        JsonNode done = json.readTree(as(() -> documents.recordScan(UUID.fromString(id), "CLEAN")));
         assertThat(done.get("status").asString()).isEqualTo("AVAILABLE");
         assertThat(done.get("checksum").asString()).isEqualTo(SHA);
         assertThat(events(id)).contains("platform.document.uploaded");
@@ -146,7 +154,7 @@ class DocumentFlowIT {
     @Order(3)
     void infectedUploadIsQuarantined() throws Exception {
         String id = post("/v1/documents", docBody("PROOF_OF_ADDRESS", "bill.png", "image/png", null, null), 201).get("id").asString();
-        as(() -> documents.completeUpload(UUID.fromString(id), 10, SHA, null));
+        post("/v1/documents/" + id + "/complete-upload", "{\"size_bytes\":10,\"checksum\":\"" + SHA + "\"}", 200);
         JsonNode q = json.readTree(as(() -> documents.recordScan(UUID.fromString(id), "INFECTED")));
         assertThat(q.get("status").asString()).isEqualTo("QUARANTINED");
         assertThat(q.get("virus_scan_result").asString()).isEqualTo("INFECTED");
@@ -162,25 +170,38 @@ class DocumentFlowIT {
         String id = availableDoc;
         JsonNode held = post("/v1/documents/" + id + "/legal-hold", "{\"legal_hold\":true,\"reason\":\"litigation 42\"}", 200);
         assertThat(held.get("legal_hold").asBoolean()).isTrue();
-        assertThat(held.get("metadata").get("legal_hold_history")).hasSize(1);
+        assertThat(held.get("legal_hold_reason").asString()).isEqualTo("litigation 42");
+        assertThat(held.get("legal_hold_changed_by").asString()).isEqualTo("dev-user");
+        assertThat(held.hasNonNull("legal_hold_changed_at")).isTrue();
+        assertThat(held.hasNonNull("metadata")).isFalse();
+        assertThat(events(id)).contains("platform.document.legal_hold_placed");
         assertThat(code(send("POST", "/v1/documents/" + id + "/legal-hold", "{\"legal_hold\":true,\"reason\":\"again\"}",
                 key(), TENANT), 409)).isEqualTo("invalid_transition");
         assertThat(code(send("DELETE", "/v1/documents/" + id, null, null, TENANT), 409)).isEqualTo("legal_hold_active");
         JsonNode cur = get("/v1/documents/" + id, TENANT);
-        HttpResponse<String> patch = sendPatch("/v1/documents/" + id, "{\"legal_hold\":false}", cur.get("row_version").asInt());
-        assertThat(code(patch, 422)).isEqualTo("legal_hold_requires_action");
+        // legal_hold is read-only (changed through /legal-hold): a client value is ignored
+        HttpResponse<String> patch = sendPatch("/v1/documents/" + id, "{\"legal_hold\":false,\"uploaded_via\":\"CONSOLE\"}",
+                cur.get("row_version").asInt());
+        assertThat(patch.statusCode()).as(patch.body()).isEqualTo(200);
+        assertThat(json.readTree(patch.body()).get("legal_hold").asBoolean()).isTrue();
+        cur = get("/v1/documents/" + id, TENANT);
         assertThat(code(sendPatch("/v1/documents/" + id, "{\"file_name\":\"renamed.pdf\"}", cur.get("row_version").asInt()), 409))
                 .isEqualTo("content_immutable");
 
         JsonNode archived = post("/v1/documents/" + id + "/archive", null, 200);
         assertThat(archived.get("status").asString()).isEqualTo("ARCHIVED");
+        assertThat(archived.hasNonNull("archived_at")).isTrue();
+        assertThat(archived.get("storage_class").asString()).isEqualTo("GLACIER_IR");
+        assertThat(events(id)).contains("platform.document.archived");
         assertThat(code(send("POST", "/v1/documents/" + id + "/archive", null, key(), TENANT), 409)).isEqualTo("invalid_transition");
         assertThat(send("GET", "/v1/documents/" + id + "/download-url", null, null, TENANT).statusCode()).isEqualTo(200);
 
         JsonNode lifted = post("/v1/documents/" + id + "/legal-hold", "{\"legal_hold\":false,\"reason\":\"case closed\"}", 200);
         assertThat(lifted.get("legal_hold").asBoolean()).isFalse();
-        assertThat(lifted.get("metadata").get("legal_hold_history")).hasSize(2);
+        assertThat(lifted.get("legal_hold_reason").asString()).isEqualTo("case closed");
+        assertThat(events(id)).contains("platform.document.legal_hold_lifted");
         assertThat(send("DELETE", "/v1/documents/" + id, null, null, TENANT).statusCode()).isEqualTo(204);
+        assertThat(events(id)).contains("platform.document.deleted");
         assertThat(get("/v1/documents/" + id, TENANT).get("status").asString()).isEqualTo("DELETED");
         assertThat(send("DELETE", "/v1/documents/" + id, null, null, TENANT).statusCode()).isEqualTo(404);
 
@@ -196,10 +217,11 @@ class DocumentFlowIT {
     void expiringIdentityDocumentsAreAnnouncedOnce() throws Exception {
         String id = post("/v1/documents", docBody("PASSPORT", "passport.jpg", "image/jpeg",
                 LocalDate.now().minusYears(9).toString(), LocalDate.now().plusDays(10).toString()), 201).get("id").asString();
-        as(() -> documents.completeUpload(UUID.fromString(id), 999, SHA, "CLEAN"));
+        uploadClean(id, 999);
         assertThat(as(() -> documents.notifyExpiring(LocalDate.now(), 30))).isEqualTo(1);
         assertThat(as(() -> documents.notifyExpiring(LocalDate.now(), 30))).isZero();
-        assertThat(events(id)).contains("platform.document.expiring");
+        assertThat(events(id)).containsOnlyOnce("platform.document.expiring");
+        assertThat(get("/v1/documents/" + id, TENANT).has("expiry_notified_on")).isFalse();
     }
 
     // ------------------------------------------------------------------ templates & generation
@@ -213,6 +235,10 @@ class DocumentFlowIT {
         assertThat(v1.get("version").asInt()).isEqualTo(1);
         assertThat(v1.get("status").asString()).isEqualTo("DRAFT");
         templateV1 = v1.get("id").asString();
+        // status is read-only: a client value on create is ignored
+        JsonNode ignored = post("/v1/document-templates", templateBody("IGNORED", "x").replace("\"locale\":\"en\"",
+                "\"locale\":\"en\",\"status\":\"ACTIVE\""), 201);
+        assertThat(ignored.get("status").asString()).isEqualTo("DRAFT");
 
         HttpResponse<String> prev = send("POST", "/v1/document-templates/" + templateV1 + "/preview",
                 "{\"data\":{\"customer\":{\"name\":\"<Ann & Bob>\"}}}", key(), TENANT);
@@ -241,6 +267,7 @@ class DocumentFlowIT {
 
         assertThat(as(() -> templates.onApprovalDecided(UUID.fromString(templateV1), "APPROVED"))).isTrue();
         assertThat(get("/v1/document-templates/" + templateV1, TENANT).get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(events(templateV1)).containsExactly("platform.document_template.activated");
         assertThat(as(() -> templates.onApprovalDecided(UUID.fromString(templateV1), "APPROVED"))).isFalse();
 
         JsonNode v2 = post("/v1/document-templates", templateBody("WELCOME", "<h1>Hi {{customer.name}}</h1>"), 201);
@@ -262,6 +289,13 @@ class DocumentFlowIT {
         assertThat(get("/v1/document-templates/" + rejected.get("id").asString(), TENANT).get("status").asString()).isEqualTo("DRAFT");
         assertThat(post("/v1/document-templates/" + rejected.get("id").asString() + "/retire", null, 200)
                 .get("status").asString()).isEqualTo("RETIRED");
+
+        for (String outcome : List.of("CHANGES_REQUESTED", "CANCELLED")) {
+            String t = post("/v1/document-templates", templateBody("NOTICE_" + outcome, "Notice {{x}}"), 201).get("id").asString();
+            post("/v1/document-templates/" + t + "/publish", null, 200);
+            assertThat(as(() -> templates.onApprovalDecided(UUID.fromString(t), outcome))).isTrue();
+            assertThat(get("/v1/document-templates/" + t, TENANT).get("status").asString()).isEqualTo("DRAFT");
+        }
     }
 
     @Test
@@ -283,6 +317,7 @@ class DocumentFlowIT {
         assertThat(doc.get("content_type").asString()).isEqualTo("text/html");
         assertThat(doc.get("size_bytes").asLong()).isEqualTo("<h1>Hi Ann &lt;3</h1>".length());
         assertThat(events(g.get("id").asString())).contains("platform.generated_document.completed");
+        assertThat(g.get("data").get("customer").get("name").asString()).isEqualTo("Ann <3");
 
         HttpResponse<String> replay = send("POST", "/v1/generated-documents", body, k, TENANT);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
@@ -294,6 +329,7 @@ class DocumentFlowIT {
                 {"document_template_id":"%s","owner_type":"CUSTOMER","owner_id":"%s","data":{}}""".formatted(templateV2, owner), 201);
         assertThat(failed.get("status").asString()).isEqualTo("FAILED");
         assertThat(failed.get("error").asString()).contains("customer.name");
+        assertThat(events(failed.get("id").asString())).containsExactly("platform.generated_document.failed");
     }
 
     // ------------------------------------------------------------------ e-signature
@@ -304,7 +340,7 @@ class DocumentFlowIT {
         String doc = post("/v1/documents", docBody("LOAN_AGREEMENT", "loan.pdf", "application/pdf", null, null), 201).get("id").asString();
         assertThat(code(send("POST", "/v1/esign-requests", esignBody(doc, "[{\"name\":\"Ann\",\"email\":\"ann@example.com\"}]"),
                 key(), TENANT), 422)).isEqualTo("document_not_available");
-        as(() -> documents.completeUpload(UUID.fromString(doc), 5000, SHA, "CLEAN"));
+        uploadClean(doc, 5000);
         assertThat(code(send("POST", "/v1/esign-requests", esignBody(doc, "[]"), key(), TENANT), 422)).isEqualTo("signers_required");
         assertThat(code(send("POST", "/v1/esign-requests", esignBody(doc, "[{\"name\":\"Ann\",\"email\":\"nope\"}]"), key(), TENANT), 422))
                 .isEqualTo("invalid_signer");
@@ -321,7 +357,10 @@ class DocumentFlowIT {
         assertThat(envelope).startsWith("docusign-env-");
         assertThat(code(send("POST", "/v1/esign-requests/" + id + "/send", null, key(), TENANT), 409)).isEqualTo("invalid_transition");
         JsonNode reminded = post("/v1/esign-requests/" + id + "/remind", null, 200);
-        assertThat(reminded.get("signers").get("reminder_count").asInt()).isEqualTo(1);
+        assertThat(reminded.get("reminder_count").asInt()).isEqualTo(1);
+        assertThat(reminded.hasNonNull("last_reminded_at")).isTrue();
+        assertThat(reminded.get("signers")).hasSize(2);
+        assertThat(reminded.get("signers").get(0).get("status").asString()).isEqualTo("PENDING");
 
         String viewed = callbackBody(envelope, "VIEWED", null);
         HttpResponse<String> unsigned = sendCallback("DOCUSIGN", viewed, "sha256=deadbeef");
@@ -333,7 +372,10 @@ class DocumentFlowIT {
                 .isEqualTo("SIGNED");
         JsonNode signed = get("/v1/esign-requests/" + id, TENANT);
         assertThat(signed.get("completed_at").isNull()).isFalse();
-        assertThat(events(id)).containsExactly("platform.esign_request.completed");
+        assertThat(events(id)).containsExactly("platform.esign_request.sent", "platform.esign_request.completed");
+        JsonNode duplicate = callback("DOCUSIGN", callbackBody(envelope, "SIGNED", "officer@bank.example"));
+        assertThat(duplicate.get("outcome").asString()).isEqualTo("DUPLICATE");
+        assertThat(events(id)).containsOnlyOnce("platform.esign_request.completed");
         assertThat(code(send("POST", "/v1/esign-requests/" + id + "/cancel", "{\"reason\":\"too late\"}", key(), TENANT), 409))
                 .isEqualTo("invalid_transition");
         assertThat(code(sendCallback("DOCUSIGN", callbackBody(envelope, "DECLINED", null),
@@ -343,18 +385,29 @@ class DocumentFlowIT {
         JsonNode env2 = post("/v1/esign-requests", esignBody(doc, "[{\"name\":\"Ann\",\"email\":\"ann@example.com\"}]"), 201);
         String envelope2 = post("/v1/esign-requests/" + env2.get("id").asString() + "/send", null, 200)
                 .get("provider_envelope_id").asString();
-        assertThat(code(sendCallback("ADOBE_SIGN", callbackBody(envelope2, "DECLINED", null),
-                esign.sign(callbackBody(envelope2, "DECLINED", null).getBytes(StandardCharsets.UTF_8))), 422))
-                .isEqualTo("provider_mismatch");
-        assertThat(callback("DOCUSIGN", callbackBody(envelope2, "DECLINED", null)).get("status").asString()).isEqualTo("DECLINED");
-        assertThat(events(env2.get("id").asString())).containsExactly("platform.esign_request.declined");
+        // the tenant is resolved from (provider, envelope): another provider's or an unknown envelope is not found
+        String declined = callbackBody(envelope2, "DECLINED", null).replace("}", ",\"reason\":\"terms\"}");
+        assertThat(sendCallback("ADOBE_SIGN", declined, esign.sign(declined.getBytes(StandardCharsets.UTF_8))).statusCode())
+                .isEqualTo(404);
+        String unknown = callbackBody("docusign-env-unknown", "VIEWED", null);
+        assertThat(sendCallback("DOCUSIGN", unknown, esign.sign(unknown.getBytes(StandardCharsets.UTF_8))).statusCode())
+                .isEqualTo(404);
+        assertThat(sendCallback("FAXSIGN", declined, esign.sign(declined.getBytes(StandardCharsets.UTF_8))).statusCode())
+                .isEqualTo(404);
+        assertThat(callback("DOCUSIGN", declined).get("status").asString()).isEqualTo("DECLINED");
+        assertThat(get("/v1/esign-requests/" + env2.get("id").asString(), TENANT).get("decline_reason").asString())
+                .isEqualTo("terms");
+        assertThat(events(env2.get("id").asString()))
+                .containsExactly("platform.esign_request.sent", "platform.esign_request.declined");
 
         JsonNode env3 = post("/v1/esign-requests", esignBody(doc, "[{\"name\":\"Ann\",\"phone\":\"+447700900123\"}]"), 201);
         assertThat(code(send("POST", "/v1/esign-requests/" + env3.get("id").asString() + "/cancel", "{}", key(), TENANT), 400))
                 .isEqualTo("validation_failed");
         JsonNode cancelled = post("/v1/esign-requests/" + env3.get("id").asString() + "/cancel", "{\"reason\":\"wrong document\"}", 200);
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
-        assertThat(cancelled.get("signers").get("cancel_reason").asString()).isEqualTo("wrong document");
+        assertThat(cancelled.get("cancellation_reason").asString()).isEqualTo("wrong document");
+        assertThat(cancelled.get("cancelled_by").asString()).isEqualTo("dev-user");
+        assertThat(events(env3.get("id").asString())).containsExactly("platform.esign_request.cancelled");
     }
 
     // ------------------------------------------------------------------ isolation & idempotency
@@ -379,7 +432,8 @@ class DocumentFlowIT {
         HttpResponse<String> replay = send("POST", "/v1/documents/" + id + "/legal-hold", "{\"legal_hold\":true,\"reason\":\"audit\"}", k, TENANT);
         assertThat(replay.statusCode()).isEqualTo(200);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
-        assertThat(get("/v1/documents/" + id, TENANT).get("metadata").get("legal_hold_history")).hasSize(1);
+        assertThat(get("/v1/documents/" + id, TENANT).get("legal_hold_reason").asString()).isEqualTo("audit");
+        assertThat(events(id)).containsOnlyOnce("platform.document.legal_hold_placed");
         assertThat(code(send("POST", "/v1/documents/" + availableDoc + "/legal-hold",
                 "{\"legal_hold\":true,\"reason\":\"audit\"}", k, TENANT), 422)).isEqualTo("idempotency_key_reused");
         assertThat(send("POST", "/v1/documents/" + id + "/archive", null, null, TENANT).statusCode()).isEqualTo(400);
@@ -414,13 +468,13 @@ class DocumentFlowIT {
 
     private String esignBody(String doc, String signers) {
         return """
-                {"document_id":"%s","owner_type":"LOAN_APPLICATION","owner_id":"%s","provider":"DOCUSIGN","signers":{"signers":%s}}"""
+                {"document_id":"%s","owner_type":"LOAN_APPLICATION","owner_id":"%s","provider":"DOCUSIGN","signers":%s}"""
                 .formatted(doc, owner, signers);
     }
 
     private static String callbackBody(String envelope, String event, String signer) {
-        return "{\"payload\":{\"envelope_id\":\"" + envelope + "\",\"event\":\"" + event + "\""
-                + (signer == null ? "" : ",\"signer_email\":\"" + signer + "\"") + "}}";
+        return "{\"envelope_id\":\"" + envelope + "\",\"event\":\"" + event + "\""
+                + (signer == null ? "" : ",\"signer_email\":\"" + signer + "\"") + "}";
     }
 
     private JsonNode callback(String provider, String body) throws Exception {
@@ -431,10 +485,16 @@ class DocumentFlowIT {
 
     private HttpResponse<String> sendCallback(String provider, String body, String signature) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/esign-requests/callbacks/" + provider + "/events"))
-                .header("X-Tenant-Id", TENANT).header("Content-Type", "application/json")
-                .header("Idempotency-Key", key()).header("X-Esign-Signature", signature)
+                // public: no bearer token, tenant header or Idempotency-Key; only the provider signature
+                .header("Content-Type", "application/json").header("X-Esign-Signature", signature)
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         return http.send(req, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Upload completion through the API, then the (internal) virus scanner reports CLEAN. */
+    private void uploadClean(String id, long size) throws Exception {
+        post("/v1/documents/" + id + "/complete-upload", "{\"size_bytes\":" + size + ",\"checksum\":\"" + SHA + "\"}", 200);
+        as(() -> documents.recordScan(UUID.fromString(id), "CLEAN"));
     }
 
     private List<String> events(String aggregateId) {

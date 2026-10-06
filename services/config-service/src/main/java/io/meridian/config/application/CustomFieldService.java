@@ -122,19 +122,11 @@ public class CustomFieldService {
 
     private static Definition definition(JsonNode v) {
         List<String> allowed = null;
-        if (v.hasNonNull("allowed_values")) {
+        JsonNode a = v.get("allowed_values");
+        if (a != null && a.isArray()) {
             allowed = new ArrayList<>();
-            JsonNode a = v.get("allowed_values");
-            if (a.isArray()) {
-                for (JsonNode x : a) {
-                    allowed.add(x.asString());
-                }
-            } else if (a.isObject() && a.get("values") != null && a.get("values").isArray()) {
-                for (JsonNode x : a.get("values")) {
-                    allowed.add(x.asString());
-                }
-            } else if (a.isObject()) {
-                allowed.addAll(a.propertyNames());
+            for (JsonNode x : a) {
+                allowed.add(x.asString());
             }
         }
         DataType type;

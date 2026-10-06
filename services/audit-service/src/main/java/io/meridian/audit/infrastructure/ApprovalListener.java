@@ -4,6 +4,7 @@ import io.meridian.audit.application.DataExportService;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
@@ -17,11 +18,15 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Executes data exports when workflow-service reports their approval request as approved
  * ({@code platform.approval_request.approved}). The approver (updated_by of the approval) is the executing
- * principal, so the four-eyes rule is enforced again locally.
+ * principal, so the four-eyes rule is enforced again locally. A rejected, changes-requested or cancelled approval
+ * cancels the queued export.
  */
 @Component
 public class ApprovalListener {
     private static final Logger log = LoggerFactory.getLogger(ApprovalListener.class);
+    static final String APPROVED = "platform.approval_request.approved";
+    static final Set<String> CLOSED = Set.of("platform.approval_request.rejected",
+            "platform.approval_request.changes_requested", "platform.approval_request.cancelled");
 
     private final DataExportService exports;
     private final JsonMapper json;
@@ -34,7 +39,8 @@ public class ApprovalListener {
     @KafkaListener(topics = "${meridian.events.topic:meridian.platform.v1}", groupId = "audit-service-approvals",
             autoStartup = "${meridian.approvals.listener-enabled:true}")
     public void onEvent(ConsumerRecord<String, String> rec) throws Exception {
-        if (!"platform.approval_request.approved".equals(header(rec, "ce_type")) || rec.value() == null) {
+        String type = header(rec, "ce_type");
+        if (type == null || rec.value() == null || !(APPROVED.equals(type) || CLOSED.contains(type))) {
             return;
         }
         JsonNode approval = json.readTree(rec.value());
@@ -44,6 +50,12 @@ public class ApprovalListener {
         String tenant = header(rec, "ce_tenantid");
         String approver = approval.hasNonNull("updated_by") ? approval.get("updated_by").asString() : "workflow-service";
         try {
+            if (CLOSED.contains(type)) {
+                String outcome = type.substring(type.lastIndexOf('.') + 1);
+                TenantContext.callAs(UUID.fromString(tenant), "workflow-service",
+                        () -> exports.closeUnapproved(approval, outcome));
+                return;
+            }
             TenantContext.callAs(UUID.fromString(tenant), approver, () -> exports.applyApproved(approval));
         } catch (ApiException e) {
             // Business rejections are final (not retried); they are visible on the export and in the logs.

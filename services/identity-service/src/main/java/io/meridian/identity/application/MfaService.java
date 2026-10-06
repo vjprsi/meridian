@@ -1,6 +1,7 @@
 package io.meridian.identity.application;
 
 import io.meridian.common.error.ApiException;
+import io.meridian.events.OutboxWriter;
 import io.meridian.identity.domain.Base32;
 import io.meridian.identity.domain.Secrets;
 import io.meridian.identity.domain.Totp;
@@ -25,13 +26,16 @@ public class MfaService {
     private final CrudEngine crud;
     private final UserService users;
     private final SessionService sessions;
+    private final OutboxWriter outbox;
     private final JsonMapper json;
 
-    public MfaService(IdentityStore store, CrudEngine crud, UserService users, SessionService sessions, JsonMapper json) {
+    public MfaService(IdentityStore store, CrudEngine crud, UserService users, SessionService sessions,
+                      OutboxWriter outbox, JsonMapper json) {
         this.store = store;
         this.crud = crud;
         this.users = users;
         this.sessions = sessions;
+        this.outbox = outbox;
         this.json = json;
     }
 
@@ -48,9 +52,6 @@ public class MfaService {
             throw ApiException.conflict("user_deactivated", "Cannot enrol MFA for a deactivated user");
         }
         String type = v.get("factor_type").asString();
-        if (v.hasNonNull("status") && !"PENDING_VERIFICATION".equals(v.get("status").asString())) {
-            throw ApiException.unprocessable("invalid_initial_status", "A new factor starts PENDING_VERIFICATION");
-        }
         switch (type) {
             case "SMS_OTP", "EMAIL_OTP" -> {
                 if (!v.hasNonNull("destination")) {
@@ -70,7 +71,7 @@ public class MfaService {
         Map<String, String> secrets = Map.of();
         if ("TOTP".equals(type)) {
             String secret = Base32.encode(Secrets.randomBytes(20));
-            v.put("totp_secret", secret);
+            v.put("totp_seed_enc", secret);
             secrets = Map.of("totp_secret", secret,
                     "otpauth_uri", Totp.otpauthUri(ISSUER, user.get("username").asString(), secret));
         }
@@ -93,7 +94,7 @@ public class MfaService {
                 if (code == null || code.isBlank()) {
                     throw ApiException.unprocessable("code_required", "A TOTP code is required");
                 }
-                OptionalLong step = Totp.verify(Base32.decode(f.get("totp_secret").asString()), code.trim(),
+                OptionalLong step = Totp.verify(Base32.decode(f.get("totp_seed_enc").asString()), code.trim(),
                         Instant.now(), Totp.DEFAULT_WINDOW);
                 if (step.isEmpty()) {
                     throw ApiException.unprocessable("invalid_code", "The code is not valid");
@@ -118,6 +119,7 @@ public class MfaService {
                 update mfa_factor t set status = 'ACTIVE', last_used_at = now(), is_primary = ?
                 where t.id = ? returning row_to_json(t)::text""", primaries == 0, factorId);
         store.jdbc().sql("update app_user set mfa_enrolled = true where id = ?").param(userId).update();
+        outbox.publish("platform.mfa_factor.verified", "mfa_factor", factorId, store.publicView(row));
         users.activateIfInvited(userId);
         return row;
     }
@@ -138,6 +140,10 @@ public class MfaService {
                 where user_id = ? and status <> 'DISABLED'""").param(userId).update();
         refreshEnrolled(userId);
         int revoked = sessions.revokeActive(userId, "MFA reset: " + (reason == null ? "approved" : reason));
+        if (disabled > 0) {
+            outbox.publish("platform.app_user.mfa_reset", "app_user", userId,
+                    store.publicView(store.find("app_user", userId).orElseThrow()));
+        }
         ObjectNode out = json.createObjectNode();
         out.put("user_id", userId.toString());
         out.put("factors_disabled", disabled);

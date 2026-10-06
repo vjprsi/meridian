@@ -36,6 +36,7 @@ enums:
   ApiKeyStatus: [ACTIVE, ROTATING, REVOKED, EXPIRED]
   RateLimitScope: [TENANT, CLIENT, IP, USER]
   ConfigEntryStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK]
+  ConfigChangeType: [CREATED, ACTIVATED, ROLLED_BACK, PROMOTED]
   CustomFieldDataType: [TEXT, NUMBER, DECIMAL, BOOLEAN, DATE, DATETIME, EMAIL, PHONE, URL, ENUM, REFERENCE]
   CountryPackStatus: [DRAFT, RELEASED, DEPRECATED]
   InstalledPackStatus: [INSTALLING, INSTALLED, UPGRADE_AVAILABLE, FAILED, UNINSTALLED]
@@ -53,7 +54,8 @@ enums:
   DocumentCategory: [STATEMENT, CONTRACT, LETTER, CERTIFICATE, RECEIPT, NOTICE, REPORT]
   PlatformTemplateStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, RETIRED]
   EsignStatus: [DRAFT, SENT, VIEWED, PARTIALLY_SIGNED, SIGNED, DECLINED, EXPIRED, CANCELLED]
-  ApprovalRequestStatus: [PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED, EXECUTED, EXECUTION_FAILED]
+  EsignProvider: [DOCUSIGN, ADOBE_SIGN, NATIVE_OTP]
+  ApprovalRequestStatus: [PENDING, APPROVED, REJECTED, CHANGES_REQUESTED, CANCELLED, EXPIRED, EXECUTED, EXECUTION_FAILED]
   ApprovalDecisionType: [APPROVE, REJECT, REQUEST_CHANGES]
   WorkTaskPriority: [LOW, NORMAL, HIGH, URGENT]
   WorkflowDefinitionStatus: [DRAFT, PUBLISHED, DEPRECATED]
@@ -62,7 +64,7 @@ enums:
   NotificationChannel: [PUSH, SMS, EMAIL, WHATSAPP, IN_APP, USSD, VOICE]
   NotificationCategory: [TRANSACTIONAL, SECURITY, SERVICE, MARKETING, REGULATORY, COLLECTIONS]
   NotificationRecipientType: [CUSTOMER, STAFF, AGENT, MERCHANT, EXTERNAL]
-  NotificationStatus: [QUEUED, SCHEDULED, SENT, DELIVERED, READ, FAILED, SUPPRESSED, EXPIRED]
+  NotificationStatus: [QUEUED, SCHEDULED, SENT, DELIVERED, READ, FAILED, SUPPRESSED, EXPIRED, CANCELLED]
   WebhookEndpointStatus: [ACTIVE, DISABLED, FAILING]
   WebhookDeliveryStatus: [PENDING, RETRYING, SUCCEEDED, FAILED, ABANDONED]
   AuditActorType: [STAFF_USER, CUSTOMER, API_CLIENT, SERVICE, SYSTEM, PLATFORM_OPERATOR, AGENT]
@@ -100,6 +102,8 @@ services:
           - "ledger_db_cluster string(128) | Ledger database cluster"
           - "kafka_cluster string(128) | Event backbone cluster"
           - "standby_region string(32) | Paired region for failover"
+          - "drain_reason string(255) ro | Why the cell is draining"
+          - "drain_requested_at ts ro | When draining started"
           - "metadata json | Operational metadata"
 
       - name: tenant
@@ -112,7 +116,7 @@ services:
           - "name string(160) nn | Display name"
           - "legal_name string(255) nn | Registered legal name"
           - "tenant_type enum:TenantType nn | Kind of organisation"
-          - "status enum:TenantStatus nn default=PROVISIONING | Lifecycle status"
+          - "status enum:TenantStatus nn default=PROVISIONING ro | Lifecycle status (changed by lifecycle actions)"
           - "deployment_model enum:DeploymentModel nn default=SAAS_MULTI_TENANT | How the tenant is deployed"
           - "cell_id uuid fk=cell idx | Home cell"
           - "home_region string(32) nn | Home region for data residency"
@@ -127,6 +131,9 @@ services:
           - "activated_at ts ro | Activation time"
           - "suspended_at ts ro | Suspension time"
           - "suspension_reason string(255) ro | Reason for suspension"
+          - "reinstatement_reason string(255) ro | Reason given on the last /reinstate"
+          - "reinstated_at ts ro | Last reinstatement time"
+          - "template_code string(64) ro | Template the tenant was provisioned from"
           - "metadata json | Operator metadata"
 
       - name: tenant_placement
@@ -141,16 +148,18 @@ services:
           - "effective_from ts nn | Start of placement"
           - "effective_to ts | End of placement"
           - "reason string(255) | Reason, e.g. initial placement, rebalancing, dedicated upgrade"
+          - "from_cell_id uuid fk=cell | Previous cell (migrations)"
 
       - name: tenant_module
         prefix: tmo
         description: Platform modules enabled for the tenant and their module-level configuration
         fr: [ADM-01]
         columns:
-          - "module enum:PlatformModule nn uq | Module"
-          - "is_enabled bool nn default=false | Whether the module is enabled"
+          - "module enum:PlatformModule nn uq ro | Module (seeded at provisioning)"
+          - "is_enabled bool nn default=false ro | Whether the module is enabled (changed via /enable, /disable)"
           - "enabled_at ts ro | When it was enabled"
           - "config json | Module-level configuration"
+          - "approval_request_id uuid ref=approval_request ro | Approval request that applied the last enable/disable"
 
       - name: legal_entity
         prefix: lge
@@ -204,7 +213,8 @@ services:
           - "manager_user_id uuid ref=app_user | Branch manager"
           - "status enum:BranchStatus nn default=ACTIVE | Status"
           - "opened_on date | Opening date"
-          - "closed_on date | Closing date"
+          - "closed_on date ro | Closing date (set by /close)"
+          - "close_reason string(255) ro | Reason given on /close"
 
       - name: tenant_setting
         prefix: tst
@@ -227,7 +237,7 @@ services:
           - "description string(500) | Purpose"
           - "is_enabled bool nn default=false | Master switch"
           - "rollout_percentage int nn default=0 | Percent of subjects that see the feature (0-100)"
-          - "targeting_rules json | Rules by legal entity, segment, user, app version"
+          - "targeting_rules json[] | Ordered targeting rules {attribute, operator, value|values, serve, variant}"
           - "variants json | Multivariate values"
           - "owner string(120) | Owning team"
           - "expires_at ts | When the flag should be removed"
@@ -248,7 +258,7 @@ services:
           - "font_family string(80) | Font family"
           - "theme_tokens json | Full design-token overrides (light and dark)"
           - "default_locale string(10) nn default=en | Default locale"
-          - "supported_locales json | Enabled locales"
+          - "supported_locales json[] | Enabled locales (BCP 47 tags)"
           - "custom_domain string(255) | Custom domain for web apps"
           - "support_email email | Support email"
           - "support_phone phone | Support phone"
@@ -312,27 +322,32 @@ services:
         ops: [list, get, create, update, delete]
         filters: [flag_key, is_enabled]
         actions:
-          - "POST /evaluate | Evaluate flags for a subject | subject_type string(40) nn, subject_id string(64) nn, context json | none"
+          - "POST /evaluate | Evaluate flags for a subject | subject_type string(40) nn, subject_id string(64) nn, context json | object"
       - resource: branding
         path: /v1/branding
         table: tenant_branding
         ops: [list, get, create, update]
         filters: [legal_entity_id, channel]
         actions:
-          - "GET /{id}/preview | Rendered preview of the branding on sample screens | | none"
+          - "GET /{id}/preview | Rendered preview of the branding on sample screens | | object"
 
     events:
       - "platform.tenant.provisioned | tenant | A tenant was provisioned"
       - "platform.tenant.activated | tenant | A tenant was activated"
       - "platform.tenant.suspended | tenant | A tenant was suspended"
+      - "platform.tenant.reinstated | tenant | A suspended tenant was reinstated"
+      - "platform.cell.drain_started | cell | A cell stopped accepting new tenants"
       - "platform.tenant.migrated | tenant_placement | A tenant moved to another cell"
       - "platform.tenant_module.changed | tenant_module | A module was enabled or disabled"
       - "platform.legal_entity.created | legal_entity | A legal entity was created"
       - "platform.legal_entity.updated | legal_entity | A legal entity was updated"
       - "platform.branch.created | branch | A branch was created"
-      - "platform.branch.updated | branch | A branch was updated or closed"
+      - "platform.branch.updated | branch | A branch was updated"
+      - "platform.branch.closed | branch | A branch was closed"
       - "platform.tenant_setting.changed | tenant_setting | A tenant setting changed"
+      - "platform.tenant_setting.deleted | tenant_setting | A tenant setting was deleted"
       - "platform.feature_flag.changed | feature_flag | A feature flag changed"
+      - "platform.feature_flag.deleted | feature_flag | A feature flag was deleted"
 
   # ------------------------------------------------------------------ identity-service
   - name: identity-service
@@ -352,10 +367,10 @@ services:
           - "issuer_url string(500) nn | Issuer / entity id"
           - "metadata_url string(500) | Discovery or SAML metadata URL"
           - "client_id string(255) | OIDC client id"
-          - "client_secret string(500) secret | OIDC client secret (vault reference)"
+          - "client_secret_ref string(500) | Vault path of the OIDC client secret (a reference, never the secret itself)"
           - "signing_certificate text | SAML IdP signing certificate (PEM)"
           - "attribute_mapping json | Maps IdP claims to user fields and roles"
-          - "email_domains json | Email domains that must use this provider"
+          - "email_domains json[] | Email domains that must use this provider"
           - "jit_provisioning bool nn default=true | Create users on first login"
           - "default_role_id uuid fk=role | Role assigned to just-in-time users"
           - "status enum:ProviderIntegrationStatus nn default=TESTING | Status"
@@ -368,11 +383,11 @@ services:
           - "code string(64) nn uq | Role code, e.g. OPS_PAYMENTS_MAKER"
           - "name string(120) nn | Display name"
           - "description string(500) | Purpose of the role"
-          - "role_type enum:RoleType nn default=CUSTOM | System roles cannot be edited"
+          - "role_type enum:RoleType nn default=CUSTOM ro | System roles cannot be edited"
           - "is_privileged bool nn default=false | Privileged roles need just-in-time elevation and approval"
           - "requires_mfa bool nn default=true | MFA required for sessions using this role"
           - "max_session_minutes int nn default=480 | Session lifetime"
-          - "incompatible_role_ids json | Segregation-of-duties conflicts"
+          - "incompatible_role_ids json[] | Segregation-of-duties conflicts (role ids)"
 
       - name: permission
         prefix: prm
@@ -410,7 +425,7 @@ services:
           - "display_name string(160) | Display name"
           - "phone phone pii | Work phone"
           - "user_type enum:StaffUserType nn default=STAFF | Kind of user"
-          - "status enum:StaffUserStatus nn default=INVITED | Status"
+          - "status enum:StaffUserStatus nn default=INVITED ro | Status (changed by lifecycle actions)"
           - "sso_provider_id uuid fk=sso_provider | SSO provider, if federated"
           - "external_subject string(255) idx | Subject id at the identity provider"
           - "legal_entity_id uuid ref=legal_entity | Home legal entity"
@@ -441,7 +456,7 @@ services:
           - "valid_from ts nn default=now | Start"
           - "valid_to ts | End (just-in-time elevation)"
           - "granted_by string(64) ro | Who granted it"
-          - "approval_request_id uuid ref=approval_request | Approval for privileged roles"
+          - "approval_request_id uuid ref=approval_request ro | Approval for privileged roles"
           - "justification string(500) | Business justification"
 
       - name: access_policy
@@ -454,7 +469,7 @@ services:
           - "effect enum:PolicyEffect nn | Allow or deny"
           - "priority int nn default=100 | Lower evaluates first; deny wins on tie"
           - "resource_pattern string(255) nn | Resource pattern, e.g. payments.payment.*"
-          - "actions json nn | Actions covered"
+          - "actions json[] nn | Actions covered"
           - "condition_expression text nn | CEL expression over subject, resource and context"
           - "is_active bool nn default=true | Active"
 
@@ -468,11 +483,14 @@ services:
           - "label string(120) | User-visible label, e.g. YubiKey 5C"
           - "credential_id string(512) | WebAuthn credential id"
           - "public_key text secret | WebAuthn public key"
-          - "totp_secret string(255) secret | Encrypted TOTP seed"
+          - "totp_seed_enc string(255) secret | Encrypted TOTP seed"
           - "destination string(320) pii | Phone or email for OTP factors"
-          - "is_primary bool nn default=false | Default factor"
-          - "status enum:MfaFactorStatus nn default=PENDING_VERIFICATION | Status"
+          - "is_primary bool nn default=false ro | Default factor"
+          - "status enum:MfaFactorStatus nn default=PENDING_VERIFICATION ro | Status (changed by /verify)"
           - "last_used_at ts ro | Last successful use"
+        response_only:
+          - "totp_secret string(64) | Base32 TOTP seed (TOTP enrolment only)"
+          - "otpauth_uri string(500) | otpauth:// provisioning URI for authenticator apps (TOTP enrolment only)"
 
       - name: user_session
         prefix: ses
@@ -518,17 +536,19 @@ services:
           - "auth_method enum:ClientAuthMethod nn default=PRIVATE_KEY_JWT | Token endpoint authentication"
           - "jwks_uri string(500) | JWKS URL for private_key_jwt"
           - "mtls_cert_thumbprint string(128) | Bound certificate (RFC 8705)"
-          - "redirect_uris json | Allowed redirect URIs"
-          - "allowed_scopes json nn | Scopes this client may request"
-          - "allowed_ip_ranges json | CIDR allow-list"
+          - "redirect_uris json[] | Allowed redirect URIs"
+          - "allowed_scopes json[] nn | Scopes this client may request"
+          - "allowed_ip_ranges json[] | CIDR allow-list"
           - "rate_limit_policy_id uuid fk=rate_limit_policy | Rate limits"
           - "environment enum:ApiEnvironment nn default=SANDBOX | Sandbox or production"
-          - "status enum:ApiClientStatus nn default=ACTIVE | Status"
+          - "status enum:ApiClientStatus nn default=ACTIVE ro | Status (changed by /suspend, /reactivate)"
           - "owner_email email | Technical owner"
           - "tpp_registration_id string(128) | Open banking TPP registration / eIDAS id"
           - "fapi_profile bool nn default=false | Enforce FAPI 2.0 security profile"
           - "last_used_at ts ro | Last token issued"
           - "expires_at ts | Expiry"
+        response_only:
+          - "client_secret string(128) | Plaintext client secret for CLIENT_SECRET_* clients (on create and rotate-secret)"
 
       - name: api_key
         prefix: key
@@ -539,13 +559,15 @@ services:
           - "name string(120) nn | Key label"
           - "key_prefix string(16) nn ro | Visible prefix, e.g. mk_live_4f9a"
           - "key_hash string(255) nn secret | SHA-256 of the key"
-          - "scopes json | Scopes (subset of the client's)"
-          - "status enum:ApiKeyStatus nn default=ACTIVE | Status"
-          - "rotated_from_id uuid fk=api_key | Key this one replaced"
+          - "scopes json[] | Scopes (subset of the client's)"
+          - "status enum:ApiKeyStatus nn default=ACTIVE ro | Status"
+          - "rotated_from_id uuid fk=api_key ro | Key this one replaced"
           - "expires_at ts | Expiry"
           - "last_used_at ts ro | Last use"
           - "last_used_ip inet ro | Last caller IP"
           - "revoked_at ts ro | Revocation time"
+        response_only:
+          - "api_key string(128) | Plaintext key (on create and rotate)"
 
       - name: oauth_scope
         prefix: scp
@@ -595,7 +617,7 @@ services:
           - "POST /{id}/deactivate | Deactivate a user and revoke sessions | reason string(255) nn"
           - "POST /{id}/reset-mfa | Remove all MFA factors (maker-checker) | reason string(255) nn | approval_request"
           - "GET /{id}/roles | Role assignments of a user | | user_role[]"
-          - "GET /{id}/effective-permissions | Permissions after RBAC and ABAC evaluation | | none"
+          - "GET /{id}/effective-permissions | Permissions after RBAC and ABAC evaluation | | object"
           - "GET /me | The calling user | | app_user"
       - resource: user-roles
         path: /v1/user-roles
@@ -611,7 +633,7 @@ services:
         filters: [role_type, is_privileged, code]
         actions:
           - "GET /{id}/permissions | Permissions granted to a role | | role_permission[]"
-          - "POST /{id}/permissions | Grant permissions to a role (maker-checker) | permission_ids json nn, conditions json | approval_request"
+          - "POST /{id}/permissions | Grant permissions to a role (maker-checker) | permission_ids json[] nn, conditions json | approval_request"
           - "POST /{id}/clone | Copy a role as a new custom role | code string(64) nn, name string(120) nn"
       - resource: role-permissions
         path: /v1/role-permissions
@@ -629,14 +651,14 @@ services:
         ops: [list, get, create, update, delete]
         filters: [effect, is_active]
         actions:
-          - "POST /simulate | Evaluate an access decision for a subject, action and resource | user_id uuid nn, action string(128) nn, resource json nn | none"
+          - "POST /simulate | Evaluate an access decision for a subject, action and resource | user_id uuid nn, action string(128) nn, resource json nn | object"
       - resource: sso-providers
         path: /v1/sso-providers
         table: sso_provider
         ops: [list, get, create, update, delete]
         filters: [protocol, status]
         actions:
-          - "POST /{id}/test | Run a test login against the provider | | none"
+          - "POST /{id}/test | Run a test login against the provider | | object"
       - resource: mfa-factors
         path: /v1/users/{user_id}/mfa-factors
         table: mfa_factor
@@ -651,17 +673,17 @@ services:
         filters: [user_id, mfa_verified]
         actions:
           - "POST /{id}/revoke | Revoke a session | reason string(255) nn"
-          - "POST /revoke-all | Revoke all sessions of a user | user_id uuid nn, reason string(255) nn | none"
+          - "POST /revoke-all | Revoke all sessions of a user (returns revoked_count) | user_id uuid nn, reason string(255) nn | object"
       - resource: api-clients
         path: /v1/api-clients
         table: api_client
         ops: [list, get, create, update]
         filters: [client_type, environment, status]
         actions:
-          - "POST /{id}/rotate-secret | Rotate the client secret (returned once) | | none"
+          - "POST /{id}/rotate-secret | Rotate the client secret (returned once) | | api_client"
           - "POST /{id}/suspend | Suspend a client | reason string(255) nn"
           - "POST /{id}/reactivate | Reactivate a suspended client"
-          - "GET /{id}/usage | Request counts, error rates and latency for a period (?from=&to=) | | none"
+          - "GET /{id}/usage?from:ts&to:ts | Request counts, error rates and latency for a period (default: last 30 days) | | object"
       - resource: api-keys
         path: /v1/api-clients/{api_client_id}/keys
         table: api_key
@@ -699,6 +721,10 @@ services:
       - "platform.api_client.status_changed | api_client | An API client was suspended or reactivated"
       - "platform.api_key.created | api_key | An API key was created"
       - "platform.api_key.revoked | api_key | An API key was revoked"
+      - "platform.api_key.rotated | api_key | A key entered its rotation grace period (replacement issued)"
+      - "platform.api_client.secret_rotated | api_client | The client secret was rotated"
+      - "platform.mfa_factor.verified | mfa_factor | An MFA factor was verified and activated"
+      - "platform.app_user.mfa_reset | app_user | All MFA factors of a user were disabled after approval"
 
   # ------------------------------------------------------------------ config-service
   - name: config-service
@@ -723,7 +749,7 @@ services:
           - "is_searchable bool nn default=true | Exposed as a list filter in the API and console"
           - "is_pii bool nn default=false | Encrypt and mask like other personal data"
           - "validation_regex string(500) | Optional pattern the value must match"
-          - "allowed_values json | Allowed values when data_type is ENUM"
+          - "allowed_values json[] | Allowed values when data_type is ENUM"
           - "min_value string(64) | Lower bound for NUMBER, DECIMAL, DATE"
           - "max_value string(64) | Upper bound for NUMBER, DECIMAL, DATE"
           - "default_value string(500) | Default applied on create"
@@ -741,11 +767,13 @@ services:
           - "version int nn default=1 ro | Version number"
           - "value json nn | Configuration document"
           - "value_schema json | JSON Schema the value must satisfy"
-          - "status enum:ConfigEntryStatus nn default=DRAFT | Status"
+          - "status enum:ConfigEntryStatus nn default=DRAFT ro | Status (changed by lifecycle actions)"
           - "effective_from ts | When the version takes effect"
           - "change_reason string(500) | Why it changed"
-          - "approval_request_id uuid ref=approval_request | Maker-checker approval"
-          - "promoted_from_environment string(32) | Source environment when promoted"
+          - "approval_request_id uuid ref=approval_request ro | Maker-checker approval"
+          - "promoted_from_environment string(32) ro | Source environment when promoted"
+          - "submitted_by string(64) ro | Maker who submitted the version for approval"
+          - "submitted_at ts ro | When the version was submitted"
         unique: [[tenant_id, namespace, config_key, version]]
 
       - name: config_change
@@ -759,8 +787,8 @@ services:
           - "config_key string(128) nn | Key"
           - "from_version int | Previous version"
           - "to_version int nn | New version"
-          - "change_type string(32) nn | CREATED, ACTIVATED, ROLLED_BACK, PROMOTED"
-          - "diff json | JSON patch from the previous version"
+          - "change_type enum:ConfigChangeType nn | Kind of change"
+          - "diff json[] | JSON Patch operations from the previous version"
           - "approved_by string(64) | Checker"
 
       - name: country_pack
@@ -785,8 +813,8 @@ services:
         description: A country pack installed for a tenant's legal entity, with local overrides
         fr: [REG-01]
         columns:
-          - "country_pack_id uuid nn fk=country_pack idx | Installed pack version"
-          - "legal_entity_id uuid nn ref=legal_entity | Legal entity"
+          - "country_pack_id uuid nn fk=country_pack idx ro | Installed pack version (changed by /upgrade)"
+          - "legal_entity_id uuid nn ref=legal_entity ro | Legal entity"
           - "status enum:InstalledPackStatus nn default=INSTALLING ro | Status"
           - "installed_at ts ro | Install time"
           - "overrides json | Tenant overrides of pack defaults"
@@ -818,7 +846,7 @@ services:
         ops: [list, get, create, update, delete]
         filters: [table_name, slot, field_key, is_active]
         actions:
-          - "POST /validate | Validate values against a table's custom field definitions | table_name string(64) nn, values json nn | none"
+          - "POST /validate | Validate values against a table's custom field definitions | table_name string(64) nn, values json nn | object"
       - resource: config-entries
         path: /v1/config/entries
         table: config_entry
@@ -829,9 +857,9 @@ services:
           - "POST /{id}/activate | Activate an approved version"
           - "POST /{id}/rollback | Roll back to this version | reason string(500) nn"
           - "GET /{id}/history | Change history of the key | | config_change[]"
-          - "POST /export | Export configuration for promotion to another environment | namespaces json | none"
-          - "POST /import | Import configuration exported from another environment | bundle json nn | none"
-          - "GET /resolve | Effective configuration for a namespace (?namespace=) | | none"
+          - "POST /export | Export configuration for promotion to another environment | namespaces json[], environment string(32) | object"
+          - "POST /import | Import configuration exported from another environment | bundle json nn | object"
+          - "GET /resolve?namespace:string(64)!&legal_entity_id:uuid&country:country | Effective configuration for a namespace | | object"
       - resource: config-changes
         path: /v1/config/changes
         table: config_change
@@ -858,7 +886,7 @@ services:
         ops: [list, get, create, update, delete]
         filters: [country, tax_type, legal_entity_id, applies_to]
         actions:
-          - "POST /calculate | Calculate tax for an amount and context | country country nn, applies_to string(64) nn, amount amount nn, currency currency nn, customer_segment string(64) | none"
+          - "POST /calculate | Calculate tax for an amount and context | country country nn, applies_to string(64) nn, amount amount nn, currency currency nn, customer_segment string(64), legal_entity_id uuid | object"
 
     events:
       - "platform.custom_field_definition.changed | custom_field_definition | A custom field definition was created, changed or retired"
@@ -866,7 +894,8 @@ services:
       - "platform.config_entry.rolled_back | config_entry | A configuration was rolled back"
       - "platform.country_pack.released | country_pack | A new country pack version was released"
       - "platform.country_pack.installed | tenant_country_pack | A country pack was installed or upgraded"
-      - "platform.tax_rule.changed | tax_rate_rule | A tax rule changed"
+      - "platform.country_pack.uninstalled | tenant_country_pack | A country pack was uninstalled"
+      - "platform.tax_rate_rule.changed | tax_rate_rule | A tax rule was created, changed or deleted"
 
   # ------------------------------------------------------------------ reference-data-service
   - name: reference-data-service
@@ -909,7 +938,7 @@ services:
           - "is_eea bool nn default=false | European Economic Area member"
           - "is_sanctioned bool nn default=false | Comprehensively sanctioned jurisdiction"
           - "fatf_status enum:FatfStatus nn default=NONE | FATF list status"
-          - "address_format json | Address fields and order"
+          - "address_format json[] | Address fields in display order"
           - "postal_code_regex string(255) | Postal code validation pattern"
 
       - name: language
@@ -936,7 +965,7 @@ services:
           - "calendar_type enum:CalendarType nn | Kind of calendar"
           - "country country | Country"
           - "timezone string(64) nn | IANA timezone"
-          - "weekend_days json nn | Non-business weekdays, e.g. [SATURDAY, SUNDAY]"
+          - "weekend_days json[] nn | Non-business weekdays, e.g. [SATURDAY, SUNDAY]"
           - "description string(500) | Notes"
 
       - name: holiday
@@ -973,11 +1002,11 @@ services:
           - "fx_rate_source_id uuid nn fk=fx_rate_source idx | Source"
           - "base_currency currency nn | Base currency"
           - "quote_currency currency nn | Quote currency"
-          - "rate_type enum:FxRateType nn | Mid, buy, sell, cash or revaluation"
+          - "rate_type enum:FxRateType nn default=MID | Mid, buy, sell, cash or revaluation"
           - "rate rate nn | Units of quote per 1 base"
-          - "inverse_rate rate nn | Units of base per 1 quote"
+          - "inverse_rate rate nn ro | Units of base per 1 quote (computed as 1 / rate)"
           - "as_of_date date nn | Business date"
-          - "valid_from ts nn | Valid from"
+          - "valid_from ts nn default=now | Valid from"
           - "valid_to ts | Valid to (empty = until superseded)"
         indexes: [[base_currency, quote_currency, rate_type, valid_from]]
 
@@ -995,7 +1024,7 @@ services:
           - "national_clearing_code string(35) idx | Routing / sort / IFSC code"
           - "city string(120) | City"
           - "address string(500) | Address"
-          - "rail_participation json | Rails the bank participates in (SEPA_INST, FEDNOW, PIX ...)"
+          - "rail_participation json[] | Rails the bank participates in (SEPA_INST, FEDNOW, PIX ...)"
           - "is_active bool nn default=true | Active"
           - "source string(64) | Directory source, e.g. SWIFTRef"
           - "source_updated_at ts | Last refresh from source"
@@ -1045,9 +1074,9 @@ services:
         ops: [list, get, create, update]
         filters: [calendar_type, country, owner_tenant_id]
         actions:
-          - "GET /{id}/is-business-day | Whether a date is a business day (?date=) | | none"
-          - "GET /{id}/next-business-day | Next business day after a date, with offset (?date=&days=) | | none"
-          - "POST /{id}/import | Import holidays from a file or provider feed | year int nn, source string(64) | none"
+          - "GET /{id}/is-business-day?date:date! | Whether a date is a business day | | object"
+          - "GET /{id}/next-business-day?date:date!&days:int | Business day at an offset of days (default 1) from a date | | object"
+          - "POST /{id}/import | Import holidays from a file or provider feed | year int nn, source string(64) | object"
       - resource: holidays
         path: /v1/reference/holidays
         table: holiday
@@ -1064,16 +1093,16 @@ services:
         ops: [list, get, create]
         filters: [base_currency, quote_currency, rate_type, as_of_date, fx_rate_source_id]
         actions:
-          - "GET /latest | Latest rate for a pair and type (?base=&quote=&type=) | | fx_rate"
-          - "POST /convert | Convert an amount using current rates | amount amount nn, from_currency currency nn, to_currency currency nn, rate_type enum:FxRateType | none"
-          - "POST /bulk | Load a batch of rates | rates json nn | none"
+          - "GET /latest?base:currency!&quote:currency!&type:enum:FxRateType | Latest rate for a pair and type (default MID) | | fx_rate"
+          - "POST /convert | Convert an amount using current rates | amount amount nn, from_currency currency nn, to_currency currency nn, rate_type enum:FxRateType | object"
+          - "POST /bulk | Load a batch of rates (defaults apply to every item) | rates json[] nn, fx_rate_source_id uuid, rate_type enum:FxRateType, as_of_date date, valid_from ts, valid_to ts | object"
       - resource: banks
         path: /v1/reference/banks
         table: bank_directory
         ops: [list, get]
         filters: [bic, country, national_clearing_code, clearing_system]
         actions:
-          - "POST /validate-account | Validate IBAN / account number and resolve the bank | account_number string(64) nn, country country nn, clearing_code string(35) | none"
+          - "POST /validate-account | Validate IBAN / account number and resolve the bank | account_number string(64) nn, country country nn, clearing_code string(35) | object"
       - resource: mcc-codes
         path: /v1/reference/mcc-codes
         table: mcc_code
@@ -1120,8 +1149,14 @@ services:
           - "issued_on date | Issue date"
           - "expires_on date | Expiry date"
           - "retention_until date | Earliest deletion date"
-          - "legal_hold bool nn default=false | Deletion blocked by legal hold"
+          - "legal_hold bool nn default=false ro | Deletion blocked by legal hold (set via /legal-hold)"
+          - "legal_hold_reason string(255) ro | Reason for the current legal hold"
+          - "legal_hold_changed_at ts ro | When the hold was last placed or lifted"
+          - "legal_hold_changed_by string(64) ro | Who last placed or lifted the hold"
           - "uploaded_via string(32) | API, CONSOLE, MOBILE_APP, AGENT_APP, SYSTEM"
+          - "archived_at ts ro | When the document moved to archive storage"
+          - "storage_class string(32) ro | Object storage class, e.g. STANDARD, GLACIER_IR"
+          - "expiry_notified_on date hide | Date the expiring-document event was published (sweep bookkeeping)"
           - "metadata json | Extra attributes (OCR fields, page count)"
         indexes: [[owner_type, owner_id]]
 
@@ -1140,7 +1175,7 @@ services:
           - "body_document_id uuid fk=document | Binary template file (e.g. DOCX)"
           - "variables_schema json | JSON Schema of the input data"
           - "legal_entity_id uuid ref=legal_entity | Legal entity (empty = all)"
-          - "status enum:PlatformTemplateStatus nn default=DRAFT | Status"
+          - "status enum:PlatformTemplateStatus nn default=DRAFT ro | Status (changes via /publish, /retire and approval)"
         unique: [[tenant_id, code, locale, version]]
 
       - name: generated_document
@@ -1149,9 +1184,10 @@ services:
         fr: [DEP-06]
         columns:
           - "document_template_id uuid nn fk=document_template idx | Template version used"
-          - "document_id uuid fk=document | Resulting document"
+          - "document_id uuid fk=document ro | Resulting document"
           - "owner_type string(40) nn | Owning object type"
           - "owner_id uuid nn | Owning object id"
+          - "data json pii | Template input data (variables); input_hash is its hash"
           - "input_hash string(64) nn ro | Hash of input data (reproducibility)"
           - "status enum:RunStatus nn default=QUEUED ro | Generation status"
           - "error text ro | Error details"
@@ -1165,14 +1201,31 @@ services:
           - "document_id uuid nn fk=document | Document to sign"
           - "owner_type string(40) nn | Owning object type, e.g. LOAN_APPLICATION"
           - "owner_id uuid nn | Owning object id"
-          - "provider string(32) nn | DOCUSIGN, ADOBE_SIGN, NATIVE_OTP"
+          - "provider enum:EsignProvider nn | E-signature provider"
           - "provider_envelope_id string(128) ro | Provider envelope id"
-          - "signers json nn | Signers: name, email/phone, order, auth method"
+          - "signers json[] nn | Signers: name, email/phone, order, auth_method; status and signed_at are maintained by the service"
           - "status enum:EsignStatus nn default=DRAFT ro | Status"
           - "signed_document_id uuid fk=document ro | Signed copy with audit certificate"
           - "sent_at ts ro | Sent time"
           - "completed_at ts ro | Completion time"
           - "expires_at ts | Expiry"
+          - "reminder_count int nn default=0 ro | Reminders sent"
+          - "last_reminded_at ts ro | Last reminder time"
+          - "cancellation_reason string(255) ro | Why the envelope was cancelled"
+          - "cancelled_by string(64) ro | Who cancelled it"
+          - "decline_reason string(500) ro | Reason given by the declining signer"
+
+      - name: esign_callback_route
+        prefix: ecr
+        description: Routes provider callbacks (which carry no tenant context) to the owning tenant's envelope
+        tenant: false
+        ext: false
+        columns:
+          - "provider enum:EsignProvider nn | Provider"
+          - "provider_envelope_id string(128) nn | Provider envelope id"
+          - "esign_request_id uuid nn | Envelope in the owning tenant"
+          - "owner_tenant_id uuid nn | Tenant owning the envelope"
+        unique: [[provider, provider_envelope_id]]
 
     apis:
       - resource: documents
@@ -1181,8 +1234,9 @@ services:
         ops: [list, get, create, update, delete]
         filters: [owner_type, owner_id, document_type, status, classification]
         actions:
-          - "POST /{id}/upload-url | Pre-signed URL to upload the file content | | none"
-          - "GET /{id}/download-url | Short-lived pre-signed URL to download the file | | none"
+          - "POST /{id}/upload-url | Pre-signed URL to upload the file content (method, url, headers, expires_at) | | object"
+          - "POST /{id}/complete-upload | Confirm the content upload; records size and checksum and starts virus scanning | size_bytes bigint nn, checksum string(64) nn"
+          - "GET /{id}/download-url | Short-lived pre-signed URL to download the file (method, url, expires_at) | | object"
           - "POST /{id}/legal-hold | Place or lift a legal hold | legal_hold bool nn, reason string(255) nn"
           - "POST /{id}/archive | Move to archive storage"
       - resource: document-templates
@@ -1191,7 +1245,7 @@ services:
         ops: [list, get, create, update]
         filters: [code, category, locale, status, legal_entity_id]
         actions:
-          - "POST /{id}/preview | Render the template with sample data | data json nn | none"
+          - "POST /{id}/preview | Render the template with sample data (rendered, content_type, missing_variables) | data json nn | object"
           - "POST /{id}/publish | Submit a template version for approval | | approval_request"
           - "POST /{id}/retire | Retire a template version"
       - resource: generated-documents
@@ -1208,7 +1262,7 @@ services:
           - "POST /{id}/send | Send to signers"
           - "POST /{id}/remind | Remind pending signers"
           - "POST /{id}/cancel | Cancel the envelope | reason string(255) nn"
-          - "POST /callbacks/{provider}/events | Provider status callback (signed) | payload json nn | none"
+          - "POST /callbacks/{provider}/events | [public] Provider status callback, HMAC-signed over the raw body; tenant resolved from the envelope | envelope_id string(128) nn, event string(32) nn, signer_email email, signed_document_id uuid, reason string(500) | object"
 
     events:
       - "platform.document.uploaded | document | A document finished uploading and scanning"
@@ -1217,6 +1271,15 @@ services:
       - "platform.generated_document.completed | generated_document | A document was generated"
       - "platform.esign_request.completed | esign_request | All signers signed"
       - "platform.esign_request.declined | esign_request | A signer declined"
+      - "platform.esign_request.sent | esign_request | An envelope was sent to signers"
+      - "platform.esign_request.cancelled | esign_request | An envelope was cancelled"
+      - "platform.esign_request.expired | esign_request | An envelope expired unsigned"
+      - "platform.document.archived | document | A document moved to archive storage"
+      - "platform.document.legal_hold_placed | document | A legal hold was placed"
+      - "platform.document.legal_hold_lifted | document | A legal hold was lifted"
+      - "platform.document.deleted | document | A document was deleted (content purge pending)"
+      - "platform.document_template.activated | document_template | A template version was approved and became ACTIVE"
+      - "platform.generated_document.failed | generated_document | Document generation failed"
 
   # ------------------------------------------------------------------ workflow-service
   - name: workflow-service
@@ -1235,7 +1298,7 @@ services:
           - "resource_type string(64) nn | Resource, e.g. product, payment, config_entry, user_role"
           - "action string(40) nn | Action, e.g. publish, release, update"
           - "required_approvals int nn default=1 | Approvals needed at each level"
-          - "approval_levels json nn | Levels with approver roles and amount thresholds"
+          - "approval_levels json[] nn | Levels in order: {level, approver_roles, min_amount, required_approvals}"
           - "allow_self_approval bool nn default=false | Maker may approve (never for money movement)"
           - "expires_after_hours int nn default=72 | Pending requests expire after this"
           - "auto_execute bool nn default=true | Execute the operation once approved"
@@ -1267,6 +1330,8 @@ services:
           - "decided_at ts ro | Final decision time"
           - "executed_at ts ro | Execution time"
           - "execution_result json ro | Result or error from executing the operation"
+          - "approval_route json[] ro | Snapshot of the applicable levels taken at creation (policy edits do not affect it)"
+          - "cancel_reason string(255) ro | Reason given by the maker when cancelling"
         indexes: [[resource_type, resource_id], [status, expires_at]]
 
       - name: approval_decision
@@ -1293,7 +1358,7 @@ services:
           - "engine string(32) nn default=TEMPORAL | Engine"
           - "definition json nn | Steps, transitions, SLAs, forms"
           - "input_schema json | JSON Schema of the input"
-          - "status enum:WorkflowDefinitionStatus nn default=DRAFT | Status"
+          - "status enum:WorkflowDefinitionStatus nn default=DRAFT ro | Status (changed by /publish, /deprecate)"
         unique: [[tenant_id, code, version]]
 
       - name: workflow_instance
@@ -1312,13 +1377,15 @@ services:
           - "started_at ts nn default=now ro | Start"
           - "completed_at ts ro | End"
           - "error text ro | Failure details"
+          - "outcome string(64) ro | Outcome of the END step reached, e.g. COMPLETED, DECLINED"
+          - "engine_state json hide | Engine bookkeeping (step visits, failed step); not exposed"
 
       - name: work_task
         prefix: tsk
         description: A human task in a work queue (review, approve, investigate) with SLA
         fr: [SRV-01, ONB-05, COL-02]
         columns:
-          - "workflow_instance_id uuid fk=workflow_instance idx | Owning workflow"
+          - "workflow_instance_id uuid fk=workflow_instance idx ro | Owning workflow (set by the engine)"
           - "task_type string(64) nn | Task type, e.g. KYC_REVIEW, PAYMENT_REPAIR"
           - "title string(255) nn | Title"
           - "description text | Instructions"
@@ -1326,14 +1393,15 @@ services:
           - "subject_id uuid idx | Subject id"
           - "queue string(64) nn idx | Work queue"
           - "assignee string(64) idx | Assigned user"
-          - "candidate_roles json | Roles that may claim the task"
+          - "candidate_roles json[] | Roles that may claim the task"
           - "priority enum:WorkTaskPriority nn default=NORMAL | Priority"
-          - "status enum:WorkTaskStatus nn default=OPEN | Status"
+          - "status enum:WorkTaskStatus nn default=OPEN ro | Status (changed by task actions)"
           - "due_at ts | SLA due time"
           - "sla_breached bool nn default=false ro | SLA breached"
           - "form_data json | Data captured by the task form"
-          - "outcome string(64) | Completion outcome"
+          - "outcome string(64) ro | Completion outcome (set by /complete)"
           - "completed_at ts ro | Completion time"
+          - "escalation_reason string(255) ro | Reason of the last escalation"
 
     apis:
       - resource: approval-policies
@@ -1373,7 +1441,7 @@ services:
       - resource: tasks
         path: /v1/tasks
         table: work_task
-        ops: [list, get, update]
+        ops: [list, get, create, update]
         filters: [queue, assignee, status, priority, task_type, subject_type, subject_id, sla_breached]
         actions:
           - "POST /{id}/claim | Claim a task"
@@ -1386,13 +1454,17 @@ services:
       - "platform.approval_request.created | approval_request | An approval was requested"
       - "platform.approval_request.approved | approval_request | A request was fully approved"
       - "platform.approval_request.rejected | approval_request | A request was rejected"
+      - "platform.approval_request.changes_requested | approval_request | The checker sent the request back to the maker"
+      - "platform.approval_request.cancelled | approval_request | The maker cancelled the request"
       - "platform.approval_request.executed | approval_request | An approved operation was executed"
       - "platform.approval_request.expired | approval_request | A request expired without decision"
       - "platform.workflow_instance.completed | workflow_instance | A workflow completed"
       - "platform.workflow_instance.failed | workflow_instance | A workflow failed"
+      - "platform.workflow_instance.cancelled | workflow_instance | A workflow was cancelled"
       - "platform.work_task.created | work_task | A human task was created"
       - "platform.work_task.sla_breached | work_task | A task breached its SLA"
       - "platform.work_task.completed | work_task | A task was completed"
+      - "platform.work_task.escalated | work_task | A task was escalated"
 
   # ------------------------------------------------------------------ notification-service
   - name: notification-service
@@ -1414,7 +1486,7 @@ services:
           - "body text nn | Body with placeholders"
           - "variables_schema json | Expected variables"
           - "version int nn default=1 ro | Version"
-          - "status enum:PlatformTemplateStatus nn default=DRAFT | Status"
+          - "status enum:PlatformTemplateStatus nn default=DRAFT ro | Status (changes via /publish and approval)"
         unique: [[tenant_id, code, channel, locale, version]]
 
       - name: notification_provider
@@ -1425,9 +1497,9 @@ services:
           - "channel enum:NotificationChannel nn | Channel"
           - "provider_name string(64) nn | TWILIO, INFOBIP, AFRICAS_TALKING, SES, SENDGRID, FCM, APNS, META_WHATSAPP"
           - "priority int nn default=1 | Lower is tried first"
-          - "credentials_ref string(255) nn secret | Vault path of credentials"
+          - "credentials_ref string(255) | Vault path of the credentials (a reference, never the secret); defaults to vault:notification/providers/<id>"
           - "sender_id string(64) | Sender id / from address"
-          - "country_scope json | Countries routed to this provider"
+          - "country_scope json[] | ISO country codes routed to this provider"
           - "config json | Provider options"
           - "status enum:ProviderIntegrationStatus nn default=TESTING | Status"
 
@@ -1438,7 +1510,7 @@ services:
         columns:
           - "event_type string(128) nn idx | Domain event, e.g. ledger.balance.changed"
           - "template_code string(64) nn | Template to use"
-          - "channels json nn | Channels in preference order"
+          - "channels json[] nn | Channels in preference order"
           - "recipient_expression string(255) nn | How to resolve the recipient from the event"
           - "conditions text | CEL condition on the event payload"
           - "category enum:NotificationCategory nn | Category"
@@ -1487,6 +1559,7 @@ services:
           - "provider_response json | Raw provider response"
           - "error_code string(64) | Provider error code"
           - "latency_ms int | Provider latency"
+          - "cycle int nn default=1 | Send cycle (a resend starts a new one)"
 
       - name: notification_preference
         prefix: npf
@@ -1515,24 +1588,24 @@ services:
           - "POST /{id}/cancel | Cancel a scheduled notification"
           - "POST /{id}/mark-read | Mark an in-app message as read"
           - "GET /{id}/attempts | Delivery attempts | | notification_delivery_attempt[]"
-          - "POST /send-templated | Render a template and send to a recipient | template_code string(64) nn, recipient_type enum:NotificationRecipientType nn, recipient_id uuid nn, channel enum:NotificationChannel, variables json | notification"
-          - "POST /provider-callbacks/{provider}/events | Delivery receipt webhook from a provider | payload json nn | none"
+          - "POST /send-templated | Render a template and send to a recipient | template_code string(64) nn, recipient_type enum:NotificationRecipientType nn, recipient_id uuid nn, channel enum:NotificationChannel, destination string(512), locale string(10), category enum:NotificationCategory, priority enum:WorkTaskPriority, scheduled_at ts, expires_at ts, data json, variables json | notification"
+          - "POST /provider-callbacks/{provider}/events?tenant_id:uuid! | [public] Delivery receipt webhook from a provider (HMAC-signed; tenant_id is part of the callback URL registered with the provider) | payload json nn | object"
       - resource: notification-templates
         path: /v1/notification-templates
         table: notification_template
         ops: [list, get, create, update]
         filters: [code, channel, locale, category, status]
         actions:
-          - "POST /{id}/preview | Render with sample variables | variables json nn | none"
+          - "POST /{id}/preview | Render with sample variables | variables json nn | object"
           - "POST /{id}/publish | Submit for approval | | approval_request"
-          - "POST /{id}/test-send | Send a test to the caller | destination string(320) nn | none"
+          - "POST /{id}/test-send | Send a test to the given destination | destination string(320) nn | notification"
       - resource: notification-providers
         path: /v1/notification-providers
         table: notification_provider
         ops: [list, get, create, update, delete]
         filters: [channel, status]
         actions:
-          - "POST /{id}/test | Send a test message through the provider | destination string(320) nn | none"
+          - "POST /{id}/test | Send a test message through the provider | destination string(320) nn | object"
       - resource: notification-rules
         path: /v1/notification-rules
         table: notification_rule
@@ -1548,6 +1621,7 @@ services:
       - "platform.notification.sent | notification | A notification was handed to a provider"
       - "platform.notification.delivered | notification | Delivery was confirmed"
       - "platform.notification.failed | notification | All delivery attempts failed"
+      - "platform.notification.cancelled | notification | A queued or scheduled notification was cancelled"
       - "platform.notification_preference.changed | notification_preference | A recipient changed preferences"
 
   # ------------------------------------------------------------------ webhook-service
@@ -1567,9 +1641,11 @@ services:
           - "api_client_id uuid ref=api_client idx | Owning API client"
           - "environment enum:ApiEnvironment nn default=SANDBOX | Sandbox or production"
           - "api_version string(16) nn default=v1 | Payload version"
-          - "signing_secret string(255) nn secret | HMAC secret (vault reference)"
+          - "signing_secret_enc string(255) nn secret | Current HMAC signing secret (encrypted at rest)"
           - "signing_secret_version int nn default=1 ro | Secret version (rotation)"
-          - "status enum:WebhookEndpointStatus nn default=ACTIVE | Status"
+          - "previous_signing_secret_enc string(255) secret | Previous HMAC secret, still used for signing until previous_secret_expires_at (encrypted)"
+          - "previous_secret_expires_at ts ro | End of the 24 h rotation grace period"
+          - "status enum:WebhookEndpointStatus nn default=ACTIVE ro | Status (changed by /enable, /disable and delivery health)"
           - "max_requests_per_second int nn default=50 | Delivery rate cap"
           - "mtls_enabled bool nn default=false | Present a client certificate"
           - "custom_headers json | Extra headers sent with each delivery"
@@ -1577,6 +1653,8 @@ services:
           - "last_success_at ts ro | Last successful delivery"
           - "last_failure_at ts ro | Last failed delivery"
           - "disabled_reason string(255) ro | Why it was disabled"
+        response_only:
+          - "signing_secret string(255) | Plaintext signing secret; returned only by create and rotate-secret"
 
       - name: webhook_subscription
         prefix: whs
@@ -1605,7 +1683,7 @@ services:
           - "last_status_code int ro | Last HTTP status"
           - "last_error string(500) ro | Last error"
           - "delivered_at ts ro | Success time"
-          - "replay_job_id uuid fk=webhook_replay_job | Replay job that produced it"
+          - "replay_job_id uuid fk=webhook_replay_job ro | Replay job that produced it"
         unique: [[webhook_endpoint_id, event_id, replay_job_id]]
 
       - name: webhook_delivery_attempt
@@ -1628,7 +1706,7 @@ services:
         fr: [API-01]
         columns:
           - "webhook_endpoint_id uuid nn fk=webhook_endpoint idx | Endpoint"
-          - "event_types json | Event types to replay (empty = subscribed types)"
+          - "event_types json[] | Event types or wildcards to replay (empty = subscribed types)"
           - "from_time ts nn | Range start"
           - "to_time ts nn | Range end"
           - "status enum:RunStatus nn default=QUEUED ro | Status"
@@ -1642,7 +1720,7 @@ services:
         ops: [list, get, create, update, delete]
         filters: [api_client_id, environment, status]
         actions:
-          - "POST /{id}/rotate-secret | Rotate the signing secret (old secret valid 24h) | | none"
+          - "POST /{id}/rotate-secret | Rotate the signing secret (old secret valid 24h; new secret returned once)"
           - "POST /{id}/enable | Re-enable a disabled endpoint"
           - "POST /{id}/disable | Disable an endpoint | reason string(255)"
           - "POST /{id}/test | Send a test event | event_type string(128) nn | webhook_delivery"
@@ -1655,7 +1733,7 @@ services:
         path: /v1/webhook-deliveries
         table: webhook_delivery
         ops: [list, get]
-        filters: [webhook_endpoint_id, event_id, event_type, status]
+        filters: [webhook_endpoint_id, event_id, event_type, status, replay_job_id]
         actions:
           - "POST /{id}/retry | Retry a failed delivery now"
           - "GET /{id}/attempts | HTTP attempts of a delivery | | webhook_delivery_attempt[]"
@@ -1669,8 +1747,11 @@ services:
 
     events:
       - "platform.webhook_endpoint.disabled | webhook_endpoint | An endpoint was disabled after repeated failures"
+      - "platform.webhook_endpoint.enabled | webhook_endpoint | An endpoint was re-enabled"
+      - "platform.webhook_endpoint.secret_rotated | webhook_endpoint | The signing secret was rotated (payload never contains secrets)"
       - "platform.webhook_delivery.abandoned | webhook_delivery | A delivery exhausted its retries"
       - "platform.webhook_replay_job.completed | webhook_replay_job | A replay finished"
+      - "platform.webhook_replay_job.cancelled | webhook_replay_job | A replay was cancelled"
 
   # ------------------------------------------------------------------ audit-service
   - name: audit-service
@@ -1706,9 +1787,10 @@ services:
           - "request_id string(64) | Request id"
           - "trace_id string(32) | Trace id"
           - "service_name string(64) nn | Service that emitted the event"
+          - "source_event_id string(64) ro | CloudEvents id of the consumed domain event (de-duplication)"
           - "hash string(64) nn ro | SHA-256 over this event and prev_hash"
           - "prev_hash string(64) nn ro | Hash of the previous event"
-        unique: [[tenant_id, sequence_no]]
+        unique: [[tenant_id, sequence_no], [tenant_id, source_event_id]]
         indexes: [[resource_type, resource_id, occurred_at], [actor_id, occurred_at]]
 
       - name: audit_retention_policy
@@ -1735,11 +1817,11 @@ services:
           - "from_time ts | Range start"
           - "to_time ts | Range end"
           - "filters json | Additional filters"
-          - "approval_request_id uuid ref=approval_request | Approval (four-eyes)"
+          - "approval_request_id uuid ref=approval_request ro | Approval (four-eyes)"
           - "status enum:RunStatus nn default=QUEUED ro | Status"
           - "row_count int ro | Rows exported"
           - "document_id uuid ref=document ro | Export file"
-          - "expires_at ts | Download link expiry"
+          - "expires_at ts ro | Download link expiry"
           - "due_date date | Legal deadline (e.g. 30 days for DSAR)"
 
     apis:
@@ -1749,7 +1831,7 @@ services:
         ops: [list, get]
         filters: [actor_type, actor_id, action, resource_type, resource_id, outcome, legal_entity_id, request_id]
         actions:
-          - "POST /verify-chain | Verify the hash chain for a range | from_sequence bigint nn, to_sequence bigint nn | none"
+          - "POST /verify-chain | Verify the hash chain for a range | from_sequence bigint nn, to_sequence bigint nn | object"
           - "POST /search | Full-text and structured search over audit events | query json nn | audit_event[]"
       - resource: audit-retention-policies
         path: /v1/audit-retention-policies
@@ -1762,13 +1844,14 @@ services:
         ops: [list, get, create]
         filters: [export_type, subject_type, subject_id, status]
         actions:
-          - "GET /{id}/download-url | Signed download URL once approved and complete | | none"
+          - "GET /{id}/download-url | Signed download URL once approved and complete (url, expires_at) | | object"
           - "POST /{id}/cancel | Cancel a pending export | reason string(255) nn"
 
     events:
       - "platform.audit_event.recorded | audit_event | An audit event was recorded (for SIEM streaming)"
       - "platform.audit_chain.broken | audit_event | Hash-chain verification failed"
       - "platform.data_export_request.completed | data_export_request | A data export is ready"
+      - "platform.data_export_request.cancelled | data_export_request | A data export was cancelled"
 
   # ------------------------------------------------------------------ billing-service
   - name: billing-service
@@ -1791,9 +1874,11 @@ services:
           - "included_active_accounts int nn default=0 | Active accounts included"
           - "price_per_active_account amount nn default=0 | Price per extra active account"
           - "metric_prices json nn | Tiered prices per usage metric"
-          - "status enum:PricePlanStatus nn default=DRAFT | Status"
+          - "status enum:PricePlanStatus nn default=DRAFT ro | Status (changed by /publish, /retire)"
           - "valid_from date nn | Available from"
           - "valid_to date | Available to"
+          - "retire_reason string(255) ro | Reason given on /retire"
+          - "retired_at ts ro | Retirement time"
 
       - name: tenant_subscription
         prefix: sub
@@ -1811,6 +1896,9 @@ services:
           - "billing_email email nn | Invoice recipient"
           - "payment_terms_days int nn default=30 | Payment terms"
           - "external_customer_ref string(64) | Customer id in the finance system"
+          - "proration_adjustments json[] ro | Plan-change prorations (server-managed): effective_date, period_start, period_end, from_plan_id, to_plan_id, amount, description"
+          - "cancellation_reason string(255) ro | Reason given on /cancel"
+          - "cancelled_at ts ro | When the cancellation was requested"
 
       - name: usage_record
         prefix: use
@@ -1845,6 +1933,8 @@ services:
           - "issued_at ts ro | Issue time"
           - "due_date date | Due date"
           - "paid_at ts ro | Fully paid time"
+          - "void_reason string(255) ro | Reason given on /void"
+          - "voided_at ts ro | Void time"
           - "document_id uuid ref=document ro | PDF invoice"
 
       - name: tenant_invoice_line
@@ -1862,12 +1952,27 @@ services:
           - "amount amount nn | Line amount"
           - "tier string(64) | Pricing tier applied"
 
+      - name: tenant_invoice_payment
+        prefix: ipm
+        description: A payment recorded against a tenant invoice. Append-only.
+        immutable: true
+        fr: [ADM-05]
+        columns:
+          - "tenant_invoice_id uuid nn fk=tenant_invoice idx | Invoice"
+          - "amount amount nn | Amount paid"
+          - "currency currency nn | Currency"
+          - "paid_at ts nn | When the payment was made"
+          - "reference string(64) | Payment reference (e.g. wire id)"
+
     apis:
       - resource: price-plans
         path: /v1/billing/price-plans
         table: price_plan
         ops: [list, get, create, update]
         filters: [status, currency, billing_period]
+        actions:
+          - "POST /{id}/publish | Make a draft plan available for subscriptions"
+          - "POST /{id}/retire | Withdraw a plan from new subscriptions | reason string(255) nn"
       - resource: subscriptions
         path: /v1/billing/subscriptions
         table: tenant_subscription
@@ -1882,7 +1987,7 @@ services:
         ops: [list, get, create]
         filters: [metric, period_date, service_name]
         actions:
-          - "GET /summary | Usage totals per metric for a period (?from=&to=) | | none"
+          - "GET /summary?from:date!&to:date!&service_name:string | Usage totals per metric for a period | | object"
       - resource: invoices
         path: /v1/billing/invoices
         table: tenant_invoice
@@ -1893,10 +1998,20 @@ services:
           - "POST /{id}/void | Void an invoice | reason string(255) nn"
           - "POST /{id}/record-payment | Record a payment against the invoice | amount amount nn, paid_at ts nn, reference string(64)"
           - "GET /{id}/lines | Invoice lines | | tenant_invoice_line[]"
-          - "POST /generate | Generate draft invoices for a period | period_start date nn, period_end date nn | none"
+          - "GET /{id}/payments | Payments recorded against the invoice | | tenant_invoice_payment[]"
+          - "POST /generate | Generate draft invoices for a period ({data: invoices, skipped_subscription_ids}) | period_start date nn, period_end date nn | object"
 
     events:
       - "platform.usage_record.recorded | usage_record | Usage was recorded"
       - "platform.tenant_invoice.issued | tenant_invoice | An invoice was issued"
       - "platform.tenant_invoice.paid | tenant_invoice | An invoice was paid"
-      - "platform.tenant_subscription.changed | tenant_subscription | A subscription changed plan or status"
+      - "platform.tenant_invoice.generated | tenant_invoice | A draft invoice was generated"
+      - "platform.tenant_invoice.voided | tenant_invoice | An invoice was voided"
+      - "platform.tenant_invoice.marked_overdue | tenant_invoice | An issued invoice passed its due date"
+      - "platform.tenant_invoice_payment.recorded | tenant_invoice_payment | A payment was recorded against an invoice"
+      - "platform.price_plan.published | price_plan | A price plan was published"
+      - "platform.price_plan.retired | price_plan | A price plan was retired"
+      - "platform.tenant_subscription.changed | tenant_subscription | A subscription changed status"
+      - "platform.tenant_subscription.created | tenant_subscription | A subscription was created"
+      - "platform.tenant_subscription.plan_changed | tenant_subscription | A subscription moved to another plan"
+      - "platform.tenant_subscription.cancelled | tenant_subscription | A subscription was cancelled"

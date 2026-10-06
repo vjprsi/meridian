@@ -8,11 +8,11 @@ import io.meridian.tenant.api.generated.model.FeatureFlagUpdate;
 import io.meridian.tenant.api.generated.model.FeatureFlagsEvaluateRequest;
 import io.meridian.tenant.application.SettingsService;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Feature flags with targeting rules and percentage rollout; evaluation for a subject. */
@@ -47,12 +47,13 @@ public class FeatureFlagsController implements FeatureFlagsApi {
         return settings.deleteFlag(id);
     }
 
-    /** Contract declares no response schema; returns {subject_type, subject_id, flags: {key: {enabled, variant, reason}}}. */
+    /** Returns {subject_type, subject_id, evaluated_at, flags: {key: {enabled, variant, reason}}}. */
     @Override
-    public ResponseEntity<Void> featureFlagsEvaluate(String idempotencyKey, FeatureFlagsEvaluateRequest body) {
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<Map<String, Object>> featureFlagsEvaluate(String idempotencyKey, FeatureFlagsEvaluateRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        return Responses.untyped(idempotency.execute(idempotencyKey, req, JsonNode.class,
-                () -> ResponseEntity.ok(settings.evaluate(req))));
+        return idempotency.execute(idempotencyKey, body, (Class<Map<String, Object>>) (Class<?>) Map.class,
+                () -> ResponseEntity.ok(settings.evaluate(body.getSubjectType(), body.getSubjectId(),
+                        body.getContext() == null ? null : json.valueToTree(body.getContext()))));
     }
 }

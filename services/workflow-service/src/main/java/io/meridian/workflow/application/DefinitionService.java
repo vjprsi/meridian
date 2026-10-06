@@ -37,10 +37,6 @@ public class DefinitionService implements ApprovalExecutor {
 
     @Transactional
     public ObjectNode create(ObjectNode values) {
-        if (values.has("status") && !"DRAFT".equals(values.get("status").asString())) {
-            throw ApiException.unprocessable("status_change_requires_action",
-                    "New definitions start as DRAFT; use /publish to publish them");
-        }
         WorkflowGraph.parse(values.get("definition"));
         validateInputSchema(values.get("input_schema"));
         values.put("id", Ids.newId().toString());
@@ -52,16 +48,13 @@ public class DefinitionService implements ApprovalExecutor {
         return store.insert(TABLE, values);
     }
 
-    /** Validates a PATCH: only DRAFT versions are editable and status changes go through actions. */
+    /** Validates a PATCH: only DRAFT versions are editable (status is read-only; it changes through the actions). */
     @Transactional
     public void checkUpdate(UUID id, ObjectNode changes) {
         ObjectNode d = store.lock(TABLE, id);
         if (!"DRAFT".equals(d.path("status").asString())) {
             throw ApiException.conflict("definition_not_editable",
                     "Definition version is " + d.path("status").asString() + "; create a new version instead");
-        }
-        if (changes.has("status") && !"DRAFT".equals(changes.get("status").asString())) {
-            throw ApiException.unprocessable("status_change_requires_action", "Use /publish or /deprecate to change status");
         }
         if (changes.has("code") && !changes.get("code").asString().equals(d.path("code").asString())) {
             throw ApiException.unprocessable("code_immutable", "The code of a definition cannot change");

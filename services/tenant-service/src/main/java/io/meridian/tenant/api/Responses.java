@@ -19,14 +19,6 @@ final class Responses {
         return b.body(json.treeToValue(row, type));
     }
 
-    /**
-     * Contract defect workaround: some operations are declared with no response schema (generated as
-     * {@code ResponseEntity<Void>}) although they return a JSON document. The body is passed through untyped.
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> untyped(ResponseEntity<?> r) {
-        return (ResponseEntity) r;
-    }
 
     static String text(JsonNode n, String field) {
         return n.hasNonNull(field) ? n.get(field).asString() : null;

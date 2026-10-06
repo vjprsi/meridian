@@ -271,7 +271,7 @@ public class DeliveryService {
                 nowDisabled ? "Disabled automatically after " + failures + " consecutive failed deliveries" : null);
         if (nowDisabled) {
             outbox.publish("platform.webhook_endpoint.disabled", "webhook_endpoint", e.id(),
-                    json.readTree(store.endpointJson(e.id())));
+                    json.readTree(store.endpointEventJson(e.id())));
         }
     }
 

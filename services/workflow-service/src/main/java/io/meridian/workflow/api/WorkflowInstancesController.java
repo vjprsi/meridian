@@ -40,17 +40,16 @@ public class WorkflowInstancesController implements WorkflowInstancesApi {
     @Override
     public ResponseEntity<WorkflowInstance> workflowInstancesSignal(UUID id, String idempotencyKey,
                                                                     WorkflowInstancesSignalRequest body) {
-        JsonNode req = json.valueToTree(body);
+        JsonNode data = body.getData() == null ? null : json.valueToTree(body.getData());
         return idempotency.execute(idempotencyKey, Actions.fingerprint("signal", id, body), WorkflowInstance.class,
-                () -> ResponseEntity.ok(model(instances.signal(id, req.path("signal").asString(null), req.get("data")))));
+                () -> ResponseEntity.ok(model(instances.signal(id, body.getSignal(), data))));
     }
 
     @Override
     public ResponseEntity<WorkflowInstance> workflowInstancesCancel(UUID id, String idempotencyKey,
                                                                     WorkflowInstancesCancelRequest body) {
-        JsonNode req = json.valueToTree(body);
         return idempotency.execute(idempotencyKey, Actions.fingerprint("cancel-instance", id, body), WorkflowInstance.class,
-                () -> ResponseEntity.ok(model(instances.cancel(id, req.path("reason").asString(null)))));
+                () -> ResponseEntity.ok(model(instances.cancel(id, body.getReason()))));
     }
 
     @Override

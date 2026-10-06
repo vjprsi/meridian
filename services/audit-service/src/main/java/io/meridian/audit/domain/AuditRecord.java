@@ -32,6 +32,7 @@ public record AuditRecord(
         String requestId,
         String traceId,
         String serviceName,
+        String sourceEventId,
         String prevHash,
         String hash) {
 
@@ -43,6 +44,6 @@ public record AuditRecord(
     public AuditRecord withChain(long seq, String prev, String h) {
         return new AuditRecord(id, tenantId, seq, occurredAt, actorType, actorId, actorDisplay, impersonatorId,
                 action, resourceType, resourceId, outcome, reason, beforeState, afterState, legalEntityId,
-                approvalRequestId, ipAddress, userAgent, sessionId, requestId, traceId, serviceName, prev, h);
+                approvalRequestId, ipAddress, userAgent, sessionId, requestId, traceId, serviceName, sourceEventId, prev, h);
     }
 }

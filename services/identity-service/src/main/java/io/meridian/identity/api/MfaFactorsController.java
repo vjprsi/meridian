@@ -32,10 +32,13 @@ public class MfaFactorsController implements MfaFactorsApi {
 
     @Override
     public ResponseEntity<MfaFactor> mfaFactorsCreate(UUID userId, String idempotencyKey, MfaFactorCreate body) {
-        return Responses.secretOnce(idempotency, idempotencyKey, Map.of("user_id", userId, "body", json.valueToTree(body)),
-                HttpStatus.CREATED, () -> {
+        return Responses.secretOnce(idempotency, json, idempotencyKey,
+                Map.of("user_id", userId, "body", json.valueToTree(body)), HttpStatus.CREATED, MfaFactor.class, () -> {
                     MfaService.Enrolment e = mfa.enrol(userId, body);
                     return new Responses.WithSecrets(e.factor(), e.secrets());
+                }, (f, s) -> {
+                    f.setTotpSecret(s.get("totp_secret"));
+                    f.setOtpauthUri(s.get("otpauth_uri"));
                 });
     }
 
@@ -44,7 +47,7 @@ public class MfaFactorsController implements MfaFactorsApi {
                                                      MfaFactorsVerifyRequest body) {
         JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
         return idempotency.execute(idempotencyKey, Map.of("op", "verify", "id", id, "body", req), MfaFactor.class,
-                () -> ResponseEntity.ok(crud.read(mfa.verify(userId, id, req.path("code").asString(null),
+                () -> ResponseEntity.ok(crud.read(mfa.verify(userId, id, body == null ? null : body.getCode(),
                         req.get("assertion")), MfaFactor.class)));
     }
 

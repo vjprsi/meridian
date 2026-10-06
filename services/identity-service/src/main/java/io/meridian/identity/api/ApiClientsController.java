@@ -8,8 +8,7 @@ import io.meridian.identity.api.generated.model.ModelApiClient;
 import io.meridian.identity.application.ApiClientService;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
-import jakarta.servlet.http.HttpServletRequest;
-import java.util.HashMap;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -25,23 +24,21 @@ public class ApiClientsController implements ApiClientsApi {
     private final CrudEngine crud;
     private final Idempotency idempotency;
     private final JsonMapper json;
-    private final HttpServletRequest request;
 
-    public ApiClientsController(ApiClientService clients, CrudEngine crud, Idempotency idempotency, JsonMapper json,
-                                HttpServletRequest request) {
+    public ApiClientsController(ApiClientService clients, CrudEngine crud, Idempotency idempotency, JsonMapper json) {
         this.clients = clients;
         this.crud = crud;
         this.idempotency = idempotency;
         this.json = json;
-        this.request = request;
     }
 
     @Override
     public ResponseEntity<ModelApiClient> apiClientsCreate(String idempotencyKey, ApiClientCreate body) {
-        return Responses.secretOnce(idempotency, idempotencyKey, body, HttpStatus.CREATED, () -> {
-            ApiClientService.Issued i = clients.register(body);
-            return new Responses.WithSecrets(i.body(), i.secrets());
-        });
+        return Responses.secretOnce(idempotency, json, idempotencyKey, body, HttpStatus.CREATED, ModelApiClient.class,
+                () -> {
+                    ApiClientService.Issued i = clients.register(body);
+                    return new Responses.WithSecrets(i.body(), i.secrets());
+                }, ApiClientsController::reveal);
     }
 
     @Override
@@ -50,13 +47,16 @@ public class ApiClientsController implements ApiClientsApi {
     }
 
     @Override
-    public ResponseEntity<Void> apiClientsRotateSecret(UUID id, String idempotencyKey) {
-        return Responses.secretOnce(idempotency, idempotencyKey, Map.of("op", "rotate-secret", "id", id), HttpStatus.OK,
-                () -> {
-                    Map<String, String> secrets = new HashMap<>();
-                    JsonNode b = clients.rotateSecret(id, secrets);
-                    return new Responses.WithSecrets(b, secrets);
-                });
+    public ResponseEntity<ModelApiClient> apiClientsRotateSecret(UUID id, String idempotencyKey) {
+        return Responses.secretOnce(idempotency, json, idempotencyKey, Map.of("op", "rotate-secret", "id", id),
+                HttpStatus.OK, ModelApiClient.class, () -> {
+                    ApiClientService.Issued i = clients.rotateSecret(id);
+                    return new Responses.WithSecrets(i.body(), i.secrets());
+                }, ApiClientsController::reveal);
+    }
+
+    private static void reveal(ModelApiClient c, Map<String, String> secrets) {
+        c.setClientSecret(secrets.get("client_secret"));
     }
 
     @Override
@@ -72,9 +72,8 @@ public class ApiClientsController implements ApiClientsApi {
                 () -> ResponseEntity.ok(crud.read(clients.reactivate(id), ModelApiClient.class)));
     }
 
-    /** Contract defect: ?from=&to= are not declared on the operation, so they are read from the request. */
     @Override
-    public ResponseEntity<Void> apiClientsUsage(UUID id) {
-        return Responses.body(ResponseEntity.ok(clients.usage(id, request.getParameter("from"), request.getParameter("to"))));
+    public ResponseEntity<Map<String, Object>> apiClientsUsage(UUID id, OffsetDateTime from, OffsetDateTime to) {
+        return ResponseEntity.ok(Responses.object(json, clients.usage(id, from, to)));
     }
 }

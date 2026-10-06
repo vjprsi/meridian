@@ -17,7 +17,7 @@ import tools.jackson.databind.node.ObjectNode;
 /** Tax rules (validated, evented) and tax calculation. */
 @Service
 public class TaxService {
-    static final String EVENT = "platform.tax_rule.changed";
+    static final String EVENT = "platform.tax_rate_rule.changed";
     private final EventedCrud evented;
     private final ConfigStore store;
     private final JsonMapper json;

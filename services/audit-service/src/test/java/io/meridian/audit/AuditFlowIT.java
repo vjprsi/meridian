@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import io.meridian.audit.application.AuditRecorder;
 import io.meridian.audit.application.DataExportService;
+import io.meridian.audit.infrastructure.ApprovalListener;
+import io.meridian.audit.infrastructure.DomainEventAuditListener;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.test.MeridianTestContainers;
@@ -27,6 +29,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
@@ -58,6 +61,7 @@ import tools.jackson.databind.node.ObjectNode;
 class AuditFlowIT {
     static final String TENANT = "0199a000-0000-7000-8000-0000000000c1";
     static final String OTHER_TENANT = "0199a000-0000-7000-8000-0000000000c2";
+    static final String THIRD_TENANT = "0199a000-0000-7000-8000-0000000000c3";
 
     @Value("${local.server.port}")
     int port;
@@ -73,6 +77,12 @@ class AuditFlowIT {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    DomainEventAuditListener domainEvents;
+
+    @Autowired
+    ApprovalListener approvals;
 
     @Autowired
     Environment env;
@@ -95,13 +105,13 @@ class AuditFlowIT {
                     start.plusSeconds(n * 60L), "STAFF_USER", "alice", "Alice Admin", null,
                     n % 2 == 0 ? "platform.tenant.updated" : "payments.payment.approve",
                     n % 2 == 0 ? "tenant" : "payment", "res-" + n, "SUCCESS", "change " + n, before, after,
-                    null, null, "10.1.2." + n, "JUnit", "sess-1", "req-" + n, null, "test-service")));
+                    null, null, "10.1.2." + n, "JUnit", "sess-1", "req-" + n, null, "test-service", null)));
         }
         for (int i = 1; i <= 2; i++) {
             int n = i;
             as(OTHER_TENANT, "svc", () -> recorder.record(new AuditRecorder.NewAuditEvent(
                     null, "SYSTEM", "system", null, null, "platform.cell.drained", "cell", "c-" + n, "SUCCESS",
-                    null, null, null, null, null, null, null, null, null, null, "tenant-service")));
+                    null, null, null, null, null, null, null, null, null, null, "tenant-service", null)));
         }
     }
 
@@ -311,6 +321,7 @@ class AuditFlowIT {
         String id = dsar.get("id").asString();
         JsonNode cancelled = post("/v1/data-exports/" + id + "/cancel", "{\"reason\":\"withdrawn by customer\"}", 200, TENANT);
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(outboxCount("platform.data_export_request.cancelled", id)).isEqualTo(1L);
         assertThat(code(send("POST", "/v1/data-exports/" + id + "/cancel", "{\"reason\":\"again\"}", key(), TENANT, null),
                 409)).isEqualTo("invalid_transition");
         ObjectNode approval = json.createObjectNode().put("id", dsar.get("approval_request_id").asString())
@@ -349,7 +360,67 @@ class AuditFlowIT {
         assertThat(t).hasMessageContaining("append-only");
     }
 
+    @Test
+    @Order(9)
+    void consumedEventsAreDeduplicatedOnSourceEventId() throws Exception {
+        String ceId = UUID.randomUUID().toString();
+        String aggregate = UUID.randomUUID().toString();
+        ConsumerRecord<String, String> rec = cloudEvent("meridian.payments.v1", aggregate, "payments.payment.completed",
+                ceId, THIRD_TENANT, "{\"id\":\"" + aggregate + "\",\"updated_by\":\"bob\"}");
+        domainEvents.onEvent(rec);
+        domainEvents.onEvent(rec); // at-least-once redelivery
+        JsonNode list = get("/v1/audit-events", THIRD_TENANT).get("data");
+        assertThat(list).hasSize(1);
+        JsonNode e = list.get(0);
+        assertThat(e.get("source_event_id").asString()).isEqualTo(ceId);
+        assertThat(e.has("request_id")).isFalse();
+        assertThat(e.get("actor_id").asString()).isEqualTo("bob");
+        assertThat(e.get("action").asString()).isEqualTo("payments.payment.completed");
+        assertThat(post("/v1/audit-events/verify-chain", "{\"from_sequence\":1,\"to_sequence\":1}", 200, THIRD_TENANT)
+                .get("valid").asBoolean()).isTrue();
+        // The same source event id is unique per tenant at database level too.
+        Throwable t = catchThrowable(() -> as(THIRD_TENANT, "svc", () -> recorder.record(new AuditRecorder.NewAuditEvent(
+                null, "SYSTEM", "system", null, null, "x.y.z", "y", null, "SUCCESS", null, null, null, null, null,
+                null, null, null, null, null, "test-service", ceId))));
+        assertThat(t).isNotNull();
+    }
+
+    @Test
+    @Order(10)
+    void rejectedOrSentBackApprovalCancelsTheQueuedExport() throws Exception {
+        for (String outcome : new String[] {"rejected", "changes_requested", "cancelled"}) {
+            JsonNode export = post("/v1/data-exports", """
+                    {"export_type":"REGULATOR_EXTRACT","requested_for":"Inspection %s"}""".formatted(outcome), 201, TENANT);
+            String id = export.get("id").asString();
+            String approval = json.createObjectNode().put("id", export.get("approval_request_id").asString())
+                    .put("resource_type", "data_export_request").put("resource_id", id)
+                    .put("status", outcome.toUpperCase()).toString();
+            ConsumerRecord<String, String> rec = cloudEvent("meridian.platform.v1", id,
+                    "platform.approval_request." + outcome, UUID.randomUUID().toString(), TENANT, approval);
+            approvals.onEvent(rec);
+            approvals.onEvent(rec); // idempotent
+            assertThat(get("/v1/data-exports/" + id, TENANT).get("status").asString()).isEqualTo("CANCELLED");
+            assertThat(outboxCount("platform.data_export_request.cancelled", id)).isEqualTo(1L);
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private ConsumerRecord<String, String> cloudEvent(String topic, String key, String type, String id, String tenant,
+                                                      String value) {
+        ConsumerRecord<String, String> rec = new ConsumerRecord<>(topic, 0, 0L, key, value);
+        rec.headers().add("ce_type", type.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        rec.headers().add("ce_id", id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        rec.headers().add("ce_tenantid", tenant.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        rec.headers().add("ce_source", "test-service".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        rec.headers().add("ce_time", Instant.now().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return rec;
+    }
+
+    private long outboxCount(String type, String aggregateId) {
+        return jdbc.sql("select count(*) from outbox where event_type = ? and aggregate_id = ?::uuid")
+                .params(type, aggregateId).query(Long.class).single();
+    }
 
     private <T> T as(String tenant, String user, Callable<T> body) throws Exception {
         return TenantContext.callAs(UUID.fromString(tenant), user, body);

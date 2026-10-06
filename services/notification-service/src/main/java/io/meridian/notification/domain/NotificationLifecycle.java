@@ -10,25 +10,25 @@ import java.util.Set;
  * QUEUED ──dispatch──> SENT ──receipt──> DELIVERED ──read──> READ
  *   │  └─all providers failed, budget left──> QUEUED (retry with backoff)
  *   ├──> FAILED (permanent / retries exhausted) ──resend──> QUEUED
- *   ├──> SUPPRESSED (opted out, or cancelled)
+ *   ├──> SUPPRESSED (recipient opted out)
+ *   ├──> CANCELLED (cancel action)
  *   └──> EXPIRED (past expires_at) ──resend──> QUEUED
- * SCHEDULED ──due──> QUEUED / ──cancel──> SUPPRESSED / ──> EXPIRED
+ * SCHEDULED ──due──> QUEUED / ──cancel──> CANCELLED / ──> EXPIRED
  * </pre>
- * The contract has no CANCELLED status, so a cancelled notification becomes SUPPRESSED with failure_reason
- * {@code cancelled}.
  */
 public final class NotificationLifecycle {
     private NotificationLifecycle() {}
 
     private static final Map<String, Set<String>> ALLOWED = Map.of(
-            "QUEUED", Set.of("QUEUED", "SENT", "DELIVERED", "FAILED", "SUPPRESSED", "EXPIRED", "SCHEDULED"),
-            "SCHEDULED", Set.of("QUEUED", "SENT", "DELIVERED", "FAILED", "SUPPRESSED", "EXPIRED"),
+            "QUEUED", Set.of("QUEUED", "SENT", "DELIVERED", "FAILED", "SUPPRESSED", "CANCELLED", "EXPIRED", "SCHEDULED"),
+            "SCHEDULED", Set.of("QUEUED", "SENT", "DELIVERED", "FAILED", "SUPPRESSED", "CANCELLED", "EXPIRED"),
             "SENT", Set.of("DELIVERED", "FAILED", "READ"),
             "DELIVERED", Set.of("READ"),
             "READ", Set.of(),
             "FAILED", Set.of("QUEUED"),
             "EXPIRED", Set.of("QUEUED"),
-            "SUPPRESSED", Set.of());
+            "SUPPRESSED", Set.of(),
+            "CANCELLED", Set.of());
 
     public static boolean canMove(String from, String to) {
         return ALLOWED.getOrDefault(from, Set.of()).contains(to);

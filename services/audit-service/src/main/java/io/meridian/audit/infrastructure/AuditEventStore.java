@@ -19,7 +19,7 @@ public class AuditEventStore {
             id, tenant_id, sequence_no, occurred_at, actor_type, actor_id, actor_display, impersonator_id, action,
             resource_type, resource_id, outcome, reason, before_state::text, after_state::text, legal_entity_id,
             approval_request_id, ip_address::text, user_agent, session_id, request_id, trace_id, service_name,
-            prev_hash, hash""";
+            source_event_id, prev_hash, hash""";
 
     private final JdbcClient jdbc;
     private final JsonMapper json;
@@ -42,8 +42,8 @@ public class AuditEventStore {
                 .query((rs, i) -> new Head(rs.getLong(1), rs.getString(2))).optional();
     }
 
-    public boolean existsByRequestId(String requestId) {
-        return jdbc.sql("select exists(select 1 from audit_event where request_id = ?)").param(requestId)
+    public boolean existsBySourceEventId(String sourceEventId) {
+        return jdbc.sql("select exists(select 1 from audit_event where source_event_id = ?)").param(sourceEventId)
                 .query(Boolean.class).single();
     }
 
@@ -100,7 +100,7 @@ public class AuditEventStore {
                 rs.getString(8), rs.getString(9), rs.getString(10), rs.getString(11), rs.getString(12),
                 rs.getString(13), parse(rs.getString(14)), parse(rs.getString(15)), rs.getObject(16, UUID.class),
                 rs.getObject(17, UUID.class), rs.getString(18), rs.getString(19), rs.getString(20), rs.getString(21),
-                rs.getString(22), rs.getString(23), rs.getString(24), rs.getString(25));
+                rs.getString(22), rs.getString(23), rs.getString(24), rs.getString(25), rs.getString(26));
     }
 
     public Object parse(String jsonText) {

@@ -26,7 +26,7 @@ public class SsoService {
         JsonNode p = store.require("sso_provider", id);
         Instant now = Instant.now();
         List<SsoConfigCheck.Check> checks = SsoConfigCheck.run(p.get("protocol").asString(), text(p, "issuer_url"),
-                text(p, "metadata_url"), text(p, "client_id"), p.hasNonNull("client_secret"),
+                text(p, "metadata_url"), text(p, "client_id"), p.hasNonNull("client_secret_ref"),
                 text(p, "signing_certificate"), now);
         ObjectNode out = json.createObjectNode();
         out.put("provider_id", id.toString());

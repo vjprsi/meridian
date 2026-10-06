@@ -9,19 +9,12 @@ import org.springframework.http.ResponseEntity;
 final class Responses {
     private Responses() {}
 
-    /**
-     * The contract declares {@code 204 No Content} for operations that must return data (presigned URLs, previews,
-     * callback acknowledgements). They answer 200 with a JSON body instead; the generic type is erased at runtime.
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> body(Object body) {
-        return (ResponseEntity) ResponseEntity.ok(body);
-    }
+    /** Response type of operations returning a free-form JSON object (contract response {@code object}). */
+    static final Class<Map<String, Object>> JSON_OBJECT = jsonObjectType();
 
-    /** Same as {@link #body(Object)} for an already built response (keeps status and headers, e.g. replays). */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> erase(ResponseEntity<?> response) {
-        return (ResponseEntity) response;
+    @SuppressWarnings("unchecked")
+    private static Class<Map<String, Object>> jsonObjectType() {
+        return (Class<Map<String, Object>>) (Class<?>) Map.class;
     }
 
     static <T> ResponseEntity<T> created(T body) {

@@ -10,14 +10,6 @@ import org.springframework.http.ResponseEntity;
 final class Responses {
     private Responses() {}
 
-    /**
-     * The contract declares some data-returning operations as 204 No Content ({@code ResponseEntity<Void>}); they
-     * return their JSON body with a real status instead (spec defect).
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> untyped(ResponseEntity<?> r) {
-        return (ResponseEntity) r;
-    }
 
     static <T> ResponseEntity<T> withEtag(HttpStatus status, T body, Integer rowVersion) {
         ResponseEntity.BodyBuilder b = ResponseEntity.status(status);

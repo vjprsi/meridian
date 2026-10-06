@@ -11,6 +11,7 @@ import io.meridian.document.application.TemplateService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,11 +51,12 @@ public class DocumentTemplatesController implements DocumentTemplatesApi {
     }
 
     @Override
-    public ResponseEntity<Void> documentTemplatesPreview(UUID id, String idempotencyKey, DocumentTemplatesPreviewRequest body) {
+    public ResponseEntity<Map<String, Object>> documentTemplatesPreview(UUID id, String idempotencyKey,
+                                                                        DocumentTemplatesPreviewRequest body) {
         TenantContext.require();
-        JsonNode data = json.valueToTree(body).get("data");
-        return Responses.erase(idempotency.execute(idempotencyKey, Responses.op("preview", id, body), JsonNode.class,
-                () -> ResponseEntity.ok(json.valueToTree(templates.preview(id, data)))));
+        JsonNode data = json.valueToTree(body.getData());
+        return idempotency.execute(idempotencyKey, Responses.op("preview", id, body), Responses.JSON_OBJECT,
+                () -> ResponseEntity.ok(templates.preview(id, data)));
     }
 
     @Override

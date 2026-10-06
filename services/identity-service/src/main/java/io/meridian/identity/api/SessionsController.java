@@ -31,16 +31,13 @@ public class SessionsController implements SessionsApi {
 
     @Override
     public ResponseEntity<UserSession> sessionsRevoke(UUID id, String idempotencyKey, SessionsRevokeRequest body) {
-        JsonNode req = json.valueToTree(body);
-        return idempotency.execute(idempotencyKey, Map.of("op", "revoke", "id", id, "body", req), UserSession.class,
-                () -> ResponseEntity.ok(crud.read(sessions.revoke(id, req.path("reason").asString(null)), UserSession.class)));
+        return idempotency.execute(idempotencyKey, Map.of("op", "revoke", "id", id, "body", json.valueToTree(body)),
+                UserSession.class, () -> ResponseEntity.ok(crud.read(sessions.revoke(id, body.getReason()), UserSession.class)));
     }
 
     @Override
-    public ResponseEntity<Void> sessionsRevokeAll(String idempotencyKey, SessionsRevokeAllRequest body) {
-        JsonNode req = json.valueToTree(body);
-        return Responses.body(idempotency.execute(idempotencyKey, body, JsonNode.class,
-                () -> ResponseEntity.ok(sessions.revokeAll(UUID.fromString(req.get("user_id").asString()),
-                        req.path("reason").asString(null)))));
+    public ResponseEntity<Map<String, Object>> sessionsRevokeAll(String idempotencyKey, SessionsRevokeAllRequest body) {
+        return Responses.object(json, idempotency.execute(idempotencyKey, body, JsonNode.class,
+                () -> ResponseEntity.ok(sessions.revokeAll(body.getUserId(), body.getReason()))));
     }
 }

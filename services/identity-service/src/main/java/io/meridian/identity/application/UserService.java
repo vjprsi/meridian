@@ -41,10 +41,6 @@ public class UserService {
         ObjectNode v = crud.toColumns("app_user", body);
         String type = v.hasNonNull("user_type") ? v.get("user_type").asString() : "STAFF";
         String initial = "SERVICE_ACCOUNT".equals(type) ? "ACTIVE" : "INVITED";
-        if (v.hasNonNull("status") && !initial.equals(v.get("status").asString())) {
-            throw ApiException.unprocessable("invalid_initial_status",
-                    "A new " + type + " user starts in status " + initial + "; use the lifecycle actions afterwards");
-        }
         if (v.hasNonNull("sso_provider_id")) {
             JsonNode sso = store.find("sso_provider", UUID.fromString(v.get("sso_provider_id").asString()))
                     .map(json::readTree)
@@ -61,15 +57,6 @@ public class UserService {
         ObjectNode pub = store.publicView(row);
         outbox.publish("platform.app_user.created", "app_user", UUID.fromString(pub.get("id").asString()), pub);
         return row;
-    }
-
-    /** PATCH must not change the status: status changes go through the lifecycle actions. */
-    public void checkUpdate(Object body) {
-        JsonNode v = json.valueToTree(body);
-        if (v.hasNonNull("status")) {
-            throw ApiException.unprocessable("status_change_not_allowed",
-                    "status cannot be changed with PATCH; use invite, lock, unlock or deactivate");
-        }
     }
 
     @Transactional

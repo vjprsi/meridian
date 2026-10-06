@@ -18,8 +18,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -60,7 +62,8 @@ public class InvoiceService {
      * non-void invoice overlapping the period are skipped; if nothing could be generated the call fails with 409.
      */
     @Transactional
-    public ObjectNode generate(LocalDate from, LocalDate to) {
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> generate(LocalDate from, LocalDate to) {
         if (to.isBefore(from)) {
             throw ApiException.unprocessable("invalid_period", "period_end must not be before period_start");
         }
@@ -89,13 +92,13 @@ public class InvoiceService {
             throw ApiException.conflict("invoice_exists",
                     "Every billable subscription already has an invoice overlapping " + from + " to " + to);
         }
-        return out;
+        return json.convertValue(out, Map.class);
     }
 
     private String createInvoice(JsonNode sub, LocalDate from, LocalDate to) {
         BillingPeriods.Period period = new BillingPeriods.Period(from, to);
         List<JsonNode> adjustments = new ArrayList<>();
-        sub.path("custom_prices").path("proration_adjustments").forEach(adjustments::add);
+        sub.path("proration_adjustments").forEach(adjustments::add);
         JsonNode planAtStart = planAt(sub, adjustments, from);
         JsonNode planAtEnd = planAt(sub, adjustments, to);
         JsonNode custom = sub.path("custom_prices");
@@ -169,6 +172,7 @@ public class InvoiceService {
             }
             crud.insert("tenant_invoice_line", line);
         }
+        outbox.publish("platform.tenant_invoice.generated", "tenant_invoice", UUID.fromString(invoiceId), json.readTree(row));
         return row;
     }
 
@@ -215,15 +219,19 @@ public class InvoiceService {
             throw ApiException.conflict("invoice_has_payments", "An invoice with recorded payments cannot be voided; issue a credit instead");
         }
         transition(inv, "VOID");
-        ObjectNode changes = json.createObjectNode().put("status", "VOID");
+        ObjectNode changes = json.createObjectNode();
+        changes.put("status", "VOID");
+        changes.put("void_reason", reason);
+        changes.put("voided_at", OffsetDateTime.now().toString());
         String row = crud.updateRow("tenant_invoice", Map.of("id", id), changes, null).orElseThrow();
+        outbox.publish("platform.tenant_invoice.voided", "tenant_invoice", id, json.readTree(row));
         UUID subId = Rows.uuid(inv, "tenant_subscription_id");
         subscriptions.reactivateIfSettled(subId);
         return row;
     }
 
     @Transactional
-    public String recordPayment(UUID id, BigDecimal amount, OffsetDateTime paidAt) {
+    public String recordPayment(UUID id, BigDecimal amount, OffsetDateTime paidAt, String reference) {
         JsonNode inv = json.readTree(store.lockInvoice(id));
         String status = Rows.text(inv, "status");
         if (!List.of("ISSUED", "PARTIALLY_PAID", "OVERDUE").contains(status)) {
@@ -258,6 +266,18 @@ public class InvoiceService {
             changes.put("paid_at", paidAt.toString());
         }
         String row = crud.updateRow("tenant_invoice", Map.of("id", id), changes, null).orElseThrow();
+        ObjectNode payment = json.createObjectNode();
+        payment.put("tenant_invoice_id", id.toString());
+        payment.put("amount", amount.toPlainString());
+        payment.put("currency", Rows.text(inv, "currency"));
+        payment.put("paid_at", paidAt.toString());
+        if (reference != null) {
+            payment.put("reference", reference);
+        }
+        String paymentRow = crud.insert("tenant_invoice_payment", payment);
+        JsonNode p = json.readTree(paymentRow);
+        outbox.publish("platform.tenant_invoice_payment.recorded", "tenant_invoice_payment",
+                UUID.fromString(p.get("id").asString()), p);
         if (full) {
             outbox.publish("platform.tenant_invoice.paid", "tenant_invoice", id, json.readTree(row));
             subscriptions.reactivateIfSettled(Rows.uuid(inv, "tenant_subscription_id"));
@@ -268,7 +288,12 @@ public class InvoiceService {
     /** Marks issued invoices past due as OVERDUE and their subscriptions PAST_DUE (current tenant). */
     @Transactional
     public int markOverdue(LocalDate today) {
-        List<UUID> subs = store.markOverdue(today);
+        Set<UUID> subs = new LinkedHashSet<>();
+        for (String row : store.markOverdue(today)) {
+            JsonNode inv = json.readTree(row);
+            outbox.publish("platform.tenant_invoice.marked_overdue", "tenant_invoice", Rows.uuid(inv, "id"), inv);
+            subs.add(Rows.uuid(inv, "tenant_subscription_id"));
+        }
         subs.forEach(subscriptions::markPastDue);
         return subs.size();
     }

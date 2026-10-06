@@ -37,7 +37,9 @@ public class ConfigEntryService {
     static final String BUNDLE_FORMAT = "meridian.config.bundle/v1";
     private static final Pattern NAME = Pattern.compile("^[a-z][a-z0-9_.-]{0,127}$");
     private static final Set<String> GRANTED = Set.of("APPROVED", "EXECUTED");
-    private static final Set<String> REFUSED = Set.of("REJECTED", "CANCELLED", "EXPIRED", "EXECUTION_FAILED");
+    /** Approval outcomes that end the request without granting it (sent back for changes counts as refused). */
+    private static final Set<String> REFUSED = Set.of("REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED",
+            "EXECUTION_FAILED");
 
     private final CrudEngine crud;
     private final ConfigStore store;
@@ -74,7 +76,6 @@ public class ConfigEntryService {
     private String insertDraft(String namespace, String key, JsonNode value, ObjectNode values, String changeReason) {
         store.lockKey(namespace, key);
         int version = store.maxVersion(namespace, key) + 1;
-        values.remove(List.of("approval_request_id", "status", "version"));
         values.put("id", Ids.newId().toString());
         values.put("version", version);
         values.put("status", Status.DRAFT.name());
@@ -117,7 +118,8 @@ public class ConfigEntryService {
         payload.put("config_key", key);
         payload.put("version", entry.get("version").asInt());
         payload.set("value", entry.get("value"));
-        req.set("diff", diffDocument(JsonDiff.diff(json, active == null ? null : active.get("value"), entry.get("value"))));
+        // approval_request.diff is a JSON object, so the patch operations are wrapped for workflow-service
+        req.set("diff", approvalDiff(JsonDiff.diff(json, active == null ? null : active.get("value"), entry.get("value"))));
         JsonNode approval = workflow.requestApproval(req, "config-service:" + idempotencyKey);
         String approvalId = approval == null ? null : approval.path("id").asString(null);
         if (approvalId == null) {
@@ -131,6 +133,8 @@ public class ConfigEntryService {
             upd.put("status", Status.PENDING_APPROVAL.name());
             upd.put("approval_request_id", approvalId);
             upd.put("change_reason", changeReason);
+            upd.put("submitted_by", TenantContext.principal());
+            upd.put("submitted_at", OffsetDateTime.now().toString());
             crud.updateRow("config_entry", java.util.Map.of("id", id), upd, null);
         });
         return approval;
@@ -140,13 +144,14 @@ public class ConfigEntryService {
 
     /**
      * Activates a PENDING_APPROVAL version once workflow-service reports the approval as granted. The activating
-     * principal (checker) must differ from the maker who created or submitted the version.
+     * principal (checker) must differ from the maker who created or submitted the version. A rejected, cancelled or
+     * sent-back (CHANGES_REQUESTED) approval cannot be activated; the maker creates a new version instead.
      */
     public String activate(UUID id) {
         JsonNode entry = json.readTree(store.entry(id, false).orElseThrow(() -> ApiException.notFound("config entry", id)));
         ConfigLifecycle.require(entry.get("status").asString(), Status.ACTIVE);
         String principal = TenantContext.principal();
-        if (principal.equals(entry.path("created_by").asString(null)) || principal.equals(entry.path("updated_by").asString(null))) {
+        if (principal.equals(entry.path("created_by").asString(null)) || principal.equals(entry.path("submitted_by").asString(null))) {
             throw ApiException.unprocessable("four_eyes_violation",
                     "The maker of a configuration change cannot activate it; another user must act as checker");
         }
@@ -380,15 +385,15 @@ public class ConfigEntryService {
         }
         c.put("to_version", entry.get("version").asInt());
         c.put("change_type", type);
-        c.set("diff", diffDocument(diff));
+        c.set("diff", diff);
         if (approvedBy != null) {
             c.put("approved_by", approvedBy);
         }
         crud.insert("config_change", c);
     }
 
-    /** The contract types diff as a JSON object, so the operation list is wrapped as {"operations": [...]}. */
-    private ObjectNode diffDocument(JsonNode operations) {
+    /** Approval-request diff document (workflow-service types it as an object): {"format", "operations"}. */
+    private ObjectNode approvalDiff(JsonNode operations) {
         ObjectNode d = json.createObjectNode();
         d.put("format", "json-patch");
         d.set("operations", operations);

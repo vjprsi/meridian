@@ -125,8 +125,10 @@ class WebhookFlowIT {
         assertThat(ep.get("signing_secret_version").asInt()).isEqualTo(1);
 
         JsonNode fetched = get("/v1/webhook-endpoints/" + okEndpoint, TENANT);
-        assertThat(fetched.has("signing_secret")).isFalse();
-        String stored = asTenant(() -> jdbc.sql("select signing_secret from webhook_endpoint where id = ?::uuid")
+        assertThat(fetched.hasNonNull("signing_secret")).isFalse();
+        assertThat(fetched.has("signing_secret_enc")).isFalse();
+        assertThat(fetched.hasNonNull("previous_secret_expires_at")).isFalse();
+        String stored = asTenant(() -> jdbc.sql("select signing_secret_enc from webhook_endpoint where id = ?::uuid")
                 .param(okEndpoint).query(String.class).single());
         assertThat(stored).startsWith("v1:").doesNotContain(okSecret.substring(6));
 
@@ -135,7 +137,7 @@ class WebhookFlowIT {
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
         JsonNode replayed = json.readTree(replay.body());
         assertThat(replayed.get("id").asString()).isEqualTo(okEndpoint);
-        assertThat(replayed.has("signing_secret")).isFalse();
+        assertThat(replayed.hasNonNull("signing_secret")).isFalse();
 
         JsonNode fail = post("/v1/webhook-endpoints", """
                 {"url":"%s"}""".formatted(hookUrl("/fail")), 201);
@@ -153,12 +155,13 @@ class WebhookFlowIT {
         assertCode(send("POST", "/v1/webhook-endpoints",
                 "{\"url\":\"https://hooks.example.com\",\"custom_headers\":{\"Meridian-Signature\":\"x\"}}", key(), TENANT),
                 422, "invalid_custom_headers");
-        HttpResponse<String> patch = send("PATCH", "/v1/webhook-endpoints/" + okEndpoint, "{\"status\":\"DISABLED\"}",
-                null, TENANT, "1");
-        assertCode(patch, 409, "invalid_transition");
-        HttpResponse<String> ok = send("PATCH", "/v1/webhook-endpoints/" + okEndpoint,
-                "{\"description\":\"payments (prod)\"}", null, TENANT, "1");
-        assertThat(ok.statusCode()).as(ok.body()).isEqualTo(200);
+        // status is read-only (changed through /enable and /disable): a client value is ignored
+        HttpResponse<String> patch = send("PATCH", "/v1/webhook-endpoints/" + okEndpoint,
+                "{\"status\":\"DISABLED\",\"description\":\"payments (prod)\"}", null, TENANT, "1");
+        assertThat(patch.statusCode()).as(patch.body()).isEqualTo(200);
+        JsonNode patched = json.readTree(patch.body());
+        assertThat(patched.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(patched.get("description").asString()).isEqualTo("payments (prod)");
     }
 
     @Test
@@ -256,6 +259,7 @@ class WebhookFlowIT {
         JsonNode enabled = post("/v1/webhook-endpoints/" + failEndpoint + "/enable", null, 200);
         assertThat(enabled.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(enabled.get("consecutive_failures").asInt()).isZero();
+        assertThat(outboxEvents()).contains("platform.webhook_endpoint.enabled");
         assertCode(send("POST", "/v1/webhook-endpoints/" + failEndpoint + "/enable", null, key(), TENANT),
                 409, "invalid_transition");
     }
@@ -312,10 +316,19 @@ class WebhookFlowIT {
         String newSecret = rotated.get("signing_secret").asString();
         assertThat(newSecret).startsWith("whsec_").isNotEqualTo(okSecret);
         assertThat(rotated.get("signing_secret_version").asInt()).isEqualTo(2);
+        assertThat(OffsetDateTime.parse(rotated.get("previous_secret_expires_at").asString()))
+                .isBetween(OffsetDateTime.now().plusHours(23), OffsetDateTime.now().plusHours(25));
         HttpResponse<String> again = send("POST", "/v1/webhook-endpoints/" + okEndpoint + "/rotate-secret", null, "rot-1", TENANT);
         assertThat(again.headers().firstValue("Idempotent-Replayed")).contains("true");
-        assertThat(json.readTree(again.body()).has("signing_secret")).isFalse();
-        assertThat(get("/v1/webhook-endpoints/" + okEndpoint, TENANT).get("signing_secret_version").asInt()).isEqualTo(2);
+        assertThat(json.readTree(again.body()).hasNonNull("signing_secret")).isFalse();
+        JsonNode fetched = get("/v1/webhook-endpoints/" + okEndpoint, TENANT);
+        assertThat(fetched.get("signing_secret_version").asInt()).isEqualTo(2);
+        assertThat(fetched.hasNonNull("previous_secret_expires_at")).isTrue();
+        String previousStored = asTenant(() -> jdbc.sql(
+                "select previous_signing_secret_enc from webhook_endpoint where id = ?::uuid")
+                .param(okEndpoint).query(String.class).single());
+        assertThat(previousStored).startsWith("v1:").doesNotContain(okSecret.substring(6));
+        assertThat(outboxEvents()).contains("platform.webhook_endpoint.secret_rotated");
 
         int before = received.size();
         post("/v1/webhook-endpoints/" + okEndpoint + "/test", "{\"event_type\":\"platform.test.ping\"}", 200);
@@ -337,11 +350,11 @@ class WebhookFlowIT {
                 {"webhook_endpoint_id":"%s","from_time":"%s","to_time":"%s"}""".formatted(okEndpoint, to, from),
                 key(), TENANT), 422, "invalid_time_range");
         assertCode(send("POST", "/v1/event-replays", """
-                {"webhook_endpoint_id":"%s","from_time":"%s","to_time":"%s","event_types":{"types":"x"}}"""
+                {"webhook_endpoint_id":"%s","from_time":"%s","to_time":"%s","event_types":["not a pattern!"]}"""
                 .formatted(okEndpoint, from, to), key(), TENANT), 422, "invalid_event_types");
 
         JsonNode job = post("/v1/event-replays", """
-                {"webhook_endpoint_id":"%s","from_time":"%s","to_time":"%s","event_types":{"event_types":["payments.*"]}}"""
+                {"webhook_endpoint_id":"%s","from_time":"%s","to_time":"%s","event_types":["payments.*"]}"""
                 .formatted(okEndpoint, from, to), 201);
         assertThat(job.get("status").asString()).isEqualTo("QUEUED");
         String jobId = job.get("id").asString();
@@ -353,6 +366,8 @@ class WebhookFlowIT {
         assertThat(outboxEvents()).contains("platform.webhook_replay_job.completed");
         assertThat(get("/v1/webhook-deliveries?event_id=evt-1&webhook_endpoint_id=" + okEndpoint, TENANT).get("data"))
                 .hasSize(2);
+        assertThat(get("/v1/webhook-deliveries?replay_job_id=" + jobId, TENANT).get("data")).hasSize(3);
+        assertThat(done.get("event_types").get(0).asString()).isEqualTo("payments.*");
         int before = received.size();
         assertThat(asTenant(() -> deliveries.processDue())).isEqualTo(3);
         assertThat(received.size() - before).isEqualTo(3);
@@ -362,6 +377,7 @@ class WebhookFlowIT {
                 {"webhook_endpoint_id":"%s","from_time":"%s","to_time":"%s"}""".formatted(okEndpoint, from, to), 201);
         JsonNode cancelled = post("/v1/event-replays/" + second.get("id").asString() + "/cancel", null, 200);
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(outboxEvents()).contains("platform.webhook_replay_job.cancelled");
         assertThat(asTenant(() -> replays.processQueued())).isZero();
     }
 

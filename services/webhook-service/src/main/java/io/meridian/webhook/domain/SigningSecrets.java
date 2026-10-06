@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * The endpoint's signing secrets: the current one and, during the 24 h rotation grace period, the previous one.
- * Serialised as plain text ({@code current \n previous \n previousExpiresEpochSeconds}) before encryption at rest.
+ * Stored encrypted in {@code signing_secret_enc} / {@code previous_signing_secret_enc}; the grace end is {@code previous_secret_expires_at}.
  */
 public record SigningSecrets(String current, String previous, Instant previousExpiresAt) {
     public static final Duration ROTATION_GRACE = Duration.ofHours(24);
@@ -37,17 +37,5 @@ public record SigningSecrets(String current, String previous, Instant previousEx
             out.add(previous);
         }
         return out;
-    }
-
-    public String serialise() {
-        return current + "\n" + (previous == null ? "" : previous) + "\n"
-                + (previousExpiresAt == null ? "" : Long.toString(previousExpiresAt.getEpochSecond()));
-    }
-
-    public static SigningSecrets parse(String text) {
-        String[] p = text.split("\n", -1);
-        String prev = p.length > 1 && !p[1].isEmpty() ? p[1] : null;
-        Instant exp = p.length > 2 && !p[2].isEmpty() ? Instant.ofEpochSecond(Long.parseLong(p[2])) : null;
-        return new SigningSecrets(p[0], prev, exp);
     }
 }

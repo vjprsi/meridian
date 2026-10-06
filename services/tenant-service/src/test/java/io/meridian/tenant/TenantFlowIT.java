@@ -114,6 +114,8 @@ class TenantFlowIT {
         assertThat(t.get("status").asString()).isEqualTo("PROVISIONING");
         assertThat(t.get("cell_id").asString()).isEqualTo(cell1);
         assertThat(t.get("home_region").asString()).isEqualTo("eu-west-1");
+        assertThat(t.get("template_code").asString()).isEqualTo("RETAIL_BANK");
+        assertThat(t.has("metadata")).isFalse();
 
         HttpResponse<String> replay = send("POST", "/v1/platform/tenants/provision-from-template",
                 provisionBody("RETAIL_BANK", "acme"), "prov-acme", OPERATOR, null);
@@ -144,8 +146,9 @@ class TenantFlowIT {
         assertThat(get("/v1/platform/cells/" + cell1, OPERATOR).get("tenant_count").asInt()).isEqualTo(2);
         JsonNode full = post("/v1/platform/tenants", tenantBody("gamma", cell1, null), 422, OPERATOR);
         assertThat(full.get("code").asString()).isEqualTo("cell_capacity_exhausted");
-        JsonNode active = post("/v1/platform/tenants", tenantBody("delta", null, "ACTIVE"), 422, OPERATOR);
-        assertThat(active.get("code").asString()).isEqualTo("invalid_initial_status");
+        // status is read-only: a client-sent status is ignored and the tenant starts PROVISIONING
+        JsonNode active = post("/v1/platform/tenants", tenantBody("delta", null, "ACTIVE"), 201, OPERATOR);
+        assertThat(active.get("status").asString()).isEqualTo("PROVISIONING");
         JsonNode unplaced = post("/v1/platform/tenants", tenantBody("epsilon", null, null), 201, OPERATOR);
         assertThat(post("/v1/platform/tenants/" + unplaced.get("id").asString() + "/activate", null, 422, OPERATOR)
                 .get("code").asString()).isEqualTo("tenant_not_placed");
@@ -167,14 +170,21 @@ class TenantFlowIT {
         post("/v1/platform/tenants/" + bank + "/suspend", "{\"reason\":\"again\"}", 409, OPERATOR);
         JsonNode reinstated = post("/v1/platform/tenants/" + bank + "/reinstate", "{\"reason\":\"paid\"}", 200, OPERATOR);
         assertThat(reinstated.get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(reinstated.get("reinstatement_reason").asString()).isEqualTo("paid");
+        assertThat(reinstated.hasNonNull("reinstated_at")).isTrue();
         assertThat(reinstated.has("suspension_reason")).isFalse();
-        assertThat(outbox("platform.tenant.activated", bank)).isEqualTo(2);
+        assertThat(outbox("platform.tenant.activated", bank)).isEqualTo(1);
+        assertThat(outbox("platform.tenant.reinstated", bank)).isEqualTo(1);
         assertThat(outbox("platform.tenant.suspended", bank)).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from outbox where aggregate_id = ?::uuid and (jsonb_exists(payload::jsonb, 'reinstate_reason') or jsonb_exists(payload::jsonb, 'reinstated'))")
+                .param(bank).query(Long.class).single()).isZero();
 
-        HttpResponse<String> patch = send("PATCH", "/v1/platform/tenants/" + bank, "{\"status\":\"TERMINATED\"}", null,
+        // status is read-only: PATCHing it is ignored, lifecycle goes through the actions
+        HttpResponse<String> patch = send("PATCH", "/v1/platform/tenants/" + bank,
+                "{\"status\":\"TERMINATED\",\"billing_email\":\"billing@acme.example\"}", null,
                 OPERATOR, reinstated.get("row_version").asString());
-        assertThat(patch.statusCode()).isEqualTo(409);
-        assertThat(json.readTree(patch.body()).get("code").asString()).isEqualTo("status_change_requires_action");
+        assertThat(patch.statusCode()).as(patch.body()).isEqualTo(200);
+        assertThat(json.readTree(patch.body()).get("status").asString()).isEqualTo("ACTIVE");
     }
 
     @Test
@@ -190,6 +200,7 @@ class TenantFlowIT {
         JsonNode placement = post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell2 + "\"}", 200, OPERATOR);
         assertThat(placement.get("status").asString()).isEqualTo("ACTIVE");
         assertThat(placement.get("cell_id").asString()).isEqualTo(cell2);
+        assertThat(placement.get("from_cell_id").asString()).isEqualTo(cell1);
         assertThat(get("/v1/platform/tenants/" + bank, OPERATOR).get("cell_id").asString()).isEqualTo(cell2);
         JsonNode history = get("/v1/platform/tenants/" + bank + "/placements", OPERATOR).get("data");
         assertThat(history).hasSize(2);
@@ -207,7 +218,10 @@ class TenantFlowIT {
 
         JsonNode drained = post("/v1/platform/cells/" + cell1 + "/drain", "{\"reason\":\"kernel upgrade\"}", 200, OPERATOR);
         assertThat(drained.get("status").asString()).isEqualTo("DRAINING");
-        assertThat(drained.get("metadata").get("drain").get("reason").asString()).isEqualTo("kernel upgrade");
+        assertThat(drained.get("drain_reason").asString()).isEqualTo("kernel upgrade");
+        assertThat(drained.hasNonNull("drain_requested_at")).isTrue();
+        assertThat(drained.has("metadata")).isFalse();
+        assertThat(outbox("platform.cell.drain_started", cell1)).isEqualTo(1);
         assertThat(post("/v1/platform/cells/" + cell1 + "/drain", "{\"reason\":\"again\"}", 409, OPERATOR)
                 .get("code").asString()).isEqualTo("invalid_transition");
         assertThat(post("/v1/platform/tenants/" + bank + "/migrate", "{\"cell_id\":\"" + cell1 + "\"}", 422, OPERATOR)
@@ -239,10 +253,11 @@ class TenantFlowIT {
         assertThat(module(get("/v1/modules?limit=50", bank).get("data"), "ANALYTICS").get("is_enabled").asBoolean()).isFalse();
 
         JsonNode current = get("/v1/modules/" + analytics, bank);
-        HttpResponse<String> patch = send("PATCH", "/v1/modules/" + analytics, "{\"is_enabled\":true}", null, bank,
-                current.get("row_version").asString());
-        assertThat(patch.statusCode()).isEqualTo(409);
-        assertThat(json.readTree(patch.body()).get("code").asString()).isEqualTo("maker_checker_required");
+        // is_enabled is read-only: PATCHing it is ignored (enable/disable is maker-checker)
+        HttpResponse<String> patch = send("PATCH", "/v1/modules/" + analytics,
+                "{\"is_enabled\":true,\"config\":{\"retention_days\":30}}", null, bank, current.get("row_version").asString());
+        assertThat(patch.statusCode()).as(patch.body()).isEqualTo(200);
+        assertThat(json.readTree(patch.body()).get("is_enabled").asBoolean()).isFalse();
 
         ObjectNode pending = (ObjectNode) approval.deepCopy();
         assertThatThrownBy(() -> applyAs(bank, "checker-1", pending))
@@ -256,6 +271,7 @@ class TenantFlowIT {
         JsonNode enabled = get("/v1/modules/" + analytics, bank);
         assertThat(enabled.get("is_enabled").asBoolean()).isTrue();
         assertThat(enabled.get("config").get("retention_days").asInt()).isEqualTo(90);
+        assertThat(enabled.get("approval_request_id").asString()).isEqualTo(approval.get("id").asString());
         assertThat(jdbc.sql("select count(*) from outbox where event_type = 'platform.tenant_module.changed' and aggregate_id = ?::uuid")
                 .param(analytics).query(Long.class).single()).isEqualTo(1L);
         // AI now has its prerequisite
@@ -284,6 +300,8 @@ class TenantFlowIT {
         JsonNode closed = post("/v1/branches/" + childId + "/close", closeBody(LocalDate.now()), 200, bank);
         assertThat(closed.get("status").asString()).isEqualTo("CLOSED");
         assertThat(closed.get("closed_on").asString()).isEqualTo(LocalDate.now().toString());
+        assertThat(closed.get("close_reason").asString()).isEqualTo("consolidation");
+        assertThat(outbox("platform.branch.closed", childId)).isEqualTo(1);
         assertThat(post("/v1/branches/" + childId + "/close", closeBody(LocalDate.now()), 409, bank).get("code").asString())
                 .isEqualTo("invalid_transition");
         HttpResponse<String> patchClosed = send("PATCH", "/v1/branches/" + childId, "{\"name\":\"Reopened\"}", null, bank,
@@ -294,7 +312,8 @@ class TenantFlowIT {
         assertThat(json.readTree(patchStatus.body()).get("code").asString()).isEqualTo("status_change_requires_action");
         JsonNode closedHead = post("/v1/branches/" + headId + "/close", closeBody(LocalDate.now()), 200, bank);
         assertThat(closedHead.get("status").asString()).isEqualTo("CLOSED");
-        assertThat(outbox("platform.branch.updated", headId)).isEqualTo(1);
+        assertThat(outbox("platform.branch.updated", headId)).isZero();
+        assertThat(outbox("platform.branch.closed", headId)).isEqualTo(1);
     }
 
     @Test
@@ -307,13 +326,18 @@ class TenantFlowIT {
                 {"setting_key":"limits.daily_max","value":{"value":5000},"value_type":"NUMBER","is_sensitive":true}""", 201, bank);
         assertThat(jdbc.sql("select payload->>'value' from outbox where event_type = 'platform.tenant_setting.changed' and aggregate_id = ?::uuid")
                 .param(s.get("id").asString()).query(String.class).single()).isEqualTo("***");
+        HttpResponse<String> del = send("DELETE", "/v1/settings/" + s.get("id").asString(), null, null, bank, null);
+        assertThat(del.statusCode()).as(del.body()).isEqualTo(204);
+        assertThat(outbox("platform.tenant_setting.deleted", s.get("id").asString())).isEqualTo(1);
+        assertThat(jdbc.sql("select count(*) from outbox where aggregate_id = ?::uuid and jsonb_exists(payload::jsonb, 'change_type')")
+                .param(s.get("id").asString()).query(Long.class).single()).isZero();
 
         assertThat(post("/v1/feature-flags", """
                 {"flag_key":"bad-rollout","is_enabled":true,"rollout_percentage":150}""", 422, bank)
                 .get("code").asString()).isEqualTo("invalid_rollout_percentage");
         post("/v1/feature-flags", """
                 {"flag_key":"new-dashboard","is_enabled":true,"rollout_percentage":0,
-                 "targeting_rules":{"rules":[{"attribute":"legal_entity_id","operator":"eq","value":"%s","variant":"v2"}]}}"""
+                 "targeting_rules":[{"attribute":"legal_entity_id","operator":"eq","value":"%s","variant":"v2"}]}"""
                 .formatted(legalEntity), 201, bank);
         JsonNode match = post("/v1/feature-flags/evaluate", """
                 {"subject_type":"staff_user","subject_id":"u-1","context":{"legal_entity_id":"%s"}}""".formatted(legalEntity),
@@ -329,7 +353,7 @@ class TenantFlowIT {
         assertThat(post("/v1/branding", """
                 {"app_name":"Acme","primary_color":"blue"}""", 422, bank).get("code").asString()).isEqualTo("invalid_color");
         JsonNode b = post("/v1/branding", """
-                {"app_name":"Acme Mobile","primary_color":"#FFE000","channel":"MOBILE","supported_locales":{"locales":["en","sw"]},
+                {"app_name":"Acme Mobile","primary_color":"#FFE000","channel":"MOBILE","supported_locales":["en","sw"],
                  "default_locale":"sw"}""", 201, bank);
         JsonNode preview = get("/v1/branding/" + b.get("id").asString() + "/preview", bank);
         assertThat(preview.get("tokens").get("color.primary").asString()).isEqualTo("#FFE000");

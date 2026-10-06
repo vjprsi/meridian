@@ -8,6 +8,7 @@ import io.meridian.tenant.api.generated.model.TenantBrandingUpdate;
 import io.meridian.tenant.application.BrandingService;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,10 +38,10 @@ public class BrandingController implements BrandingApi {
         return crud.update("tenant_branding", TenantBranding.class, body, ifMatch, Crud.params().with("id", id));
     }
 
-    /** Contract declares no response schema; returns tokens, sample screens and accessibility warnings. */
+    /** Resolved design tokens, sample screens and accessibility warnings. */
     @Override
-    public ResponseEntity<Void> brandingPreview(UUID id) {
+    public ResponseEntity<Map<String, Object>> brandingPreview(UUID id) {
         TenantContext.require();
-        return Responses.untyped(ResponseEntity.ok(branding.preview(id)));
+        return ResponseEntity.ok(branding.preview(id));
     }
 }

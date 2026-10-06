@@ -6,6 +6,7 @@ import io.meridian.billing.api.generated.model.InvoicesRecordPaymentRequest;
 import io.meridian.billing.api.generated.model.InvoicesVoidRequest;
 import io.meridian.billing.api.generated.model.TenantInvoice;
 import io.meridian.billing.api.generated.model.TenantInvoiceLinePage;
+import io.meridian.billing.api.generated.model.TenantInvoicePaymentPage;
 import io.meridian.billing.application.InvoiceService;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
@@ -16,12 +17,10 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 
-/** Tenant invoices: generate drafts, issue, void, record payments, list lines. */
+/** Tenant invoices: generate drafts, issue, void, record payments, list lines and payments. */
 @RestController
 public class InvoicesController implements InvoicesApi {
     private final InvoiceService invoices;
@@ -34,13 +33,14 @@ public class InvoicesController implements InvoicesApi {
         this.idempotency = idempotency;
     }
 
-    /** Returns 201 with {"data":[invoices],"skipped_subscription_ids":[...]} (contract says 204; spec defect). */
+    /** Returns {"data":[draft invoices],"skipped_subscription_ids":[...]}. */
     @Override
-    public ResponseEntity<Void> invoicesGenerate(String idempotencyKey, InvoicesGenerateRequest body) {
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<Map<String, Object>> invoicesGenerate(String idempotencyKey, InvoicesGenerateRequest body) {
         TenantContext.require();
-        return Responses.untyped(idempotency.execute(idempotencyKey, Responses.fingerprint("op", "generate", "body", body),
-                JsonNode.class, () -> ResponseEntity.status(HttpStatus.CREATED)
-                        .body((JsonNode) invoices.generate(body.getPeriodStart(), body.getPeriodEnd()))));
+        return idempotency.execute(idempotencyKey, Responses.fingerprint("op", "generate", "body", body),
+                (Class<Map<String, Object>>) (Class<?>) Map.class,
+                () -> ResponseEntity.ok(invoices.generate(body.getPeriodStart(), body.getPeriodEnd())));
     }
 
     @Override
@@ -64,7 +64,15 @@ public class InvoicesController implements InvoicesApi {
         TenantContext.require();
         return idempotency.execute(idempotencyKey, Responses.fingerprint("op", "record-payment", "id", id.toString(), "body", body),
                 TenantInvoice.class, () -> ResponseEntity.ok(crud.read(
-                        invoices.recordPayment(id, body.getAmount(), body.getPaidAt()), TenantInvoice.class)));
+                        invoices.recordPayment(id, body.getAmount(), body.getPaidAt(), body.getReference()), TenantInvoice.class)));
+    }
+
+    @Override
+    public ResponseEntity<TenantInvoicePaymentPage> invoicesPayments(UUID id, Integer limit, String cursor) {
+        TenantContext.require();
+        crud.findOne("tenant_invoice", Map.of("id", id)).orElseThrow(() -> ApiException.notFound("invoice", id));
+        return crud.list("tenant_invoice_payment", TenantInvoicePaymentPage.class,
+                Crud.params().with("tenant_invoice_id", id).with("limit", limit).with("cursor", cursor));
     }
 
     @Override

@@ -48,9 +48,6 @@ public class TenantLifecycleService {
     @Transactional
     public JsonNode create(Object body) {
         ObjectNode values = crud.toColumns("tenant", body);
-        if (values.hasNonNull("status") && !"PROVISIONING".equals(values.get("status").asString())) {
-            throw ApiException.unprocessable("invalid_initial_status", "A tenant is created in PROVISIONING; use the lifecycle actions");
-        }
         requireCurrency(values.path("default_currency").asString(null));
         UUID tenantId = Ids.newId();
         values.put("id", tenantId.toString());
@@ -64,11 +61,10 @@ public class TenantLifecycleService {
         }
         ObjectNode tenant = store.insert("tenant", values);
         if (cellId != null) {
-            placement(tenantId, cellId, "ACTIVE", OffsetDateTime.now(ZoneOffset.UTC), "initial placement");
+            placement(tenantId, cellId, null, "ACTIVE", OffsetDateTime.now(ZoneOffset.UTC), "initial placement");
         }
         seedTenant(tenantId, null, values.path("default_currency").asString());
-        ObjectNode payload = tenant.deepCopy();
-        events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, payload);
+        events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, tenant);
         return tenant;
     }
 
@@ -101,15 +97,11 @@ public class TenantLifecycleService {
         values.put("status", "PROVISIONING");
         values.put("cell_id", cellId.toString());
         values.put("home_region", cell.get("region").asString());
-        ObjectNode meta = json.createObjectNode();
-        meta.put("template_code", template.code());
-        values.set("metadata", meta);
+        values.put("template_code", template.code());
         ObjectNode tenant = store.insert("tenant", values);
-        placement(tenantId, cellId, "ACTIVE", OffsetDateTime.now(ZoneOffset.UTC), "initial placement (template " + template.code() + ")");
+        placement(tenantId, cellId, null, "ACTIVE", OffsetDateTime.now(ZoneOffset.UTC), "initial placement (template " + template.code() + ")");
         seedTenant(tenantId, template, req.get("default_currency").asString());
-        ObjectNode payload = tenant.deepCopy();
-        payload.put("template_code", template.code());
-        events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, payload);
+        events.publishForTenant(tenantId, "platform.tenant.provisioned", "tenant", tenantId, tenant);
         return tenant;
     }
 
@@ -163,22 +155,17 @@ public class TenantLifecycleService {
         values.put("status", "ACTIVE");
         values.putNull("suspended_at");
         values.putNull("suspension_reason");
+        values.put("reinstatement_reason", reason);
+        values.put("reinstated_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
         ObjectNode row = store.update("tenant", id, values);
-        ObjectNode payload = row.deepCopy();
-        payload.put("reinstated", true);
-        payload.put("reinstate_reason", reason);
-        events.publishForTenant(id, "platform.tenant.activated", "tenant", id, payload);
+        events.publishForTenant(id, "platform.tenant.reinstated", "tenant", id, row);
         return row;
     }
 
-    /** Rejects status / cell changes through PATCH: they go through the lifecycle actions and migrate. */
+    /** Rejects cell changes through PATCH: they go through /migrate (status is read-only). */
     public void checkTenantPatch(UUID id, Object body) {
         ObjectNode values = crud.toColumns("tenant", body);
         ObjectNode current = store.require("tenant", id);
-        if (values.hasNonNull("status") && !values.get("status").asString().equals(current.get("status").asString())) {
-            throw ApiException.conflict("status_change_requires_action",
-                    "Tenant status changes through /activate, /suspend or /reinstate");
-        }
         if (values.hasNonNull("cell_id") && !values.get("cell_id").asString().equals(current.path("cell_id").asString(""))) {
             throw ApiException.conflict("use_migrate_action", "Move a tenant between cells with /migrate");
         }
@@ -215,7 +202,7 @@ public class TenantLifecycleService {
         boolean scheduled = scheduledAt != null && scheduledAt.isAfter(now.plusMinutes(1));
         ObjectNode placement;
         if (scheduled) {
-            placement = placement(tenantId, targetCellId, "MIGRATING", scheduledAt, "scheduled migration");
+            placement = placement(tenantId, targetCellId, currentCell, "MIGRATING", scheduledAt, "scheduled migration");
         } else {
             store.execute("""
                     update tenant_placement set status = 'COMPLETED', effective_to = now()
@@ -223,19 +210,15 @@ public class TenantLifecycleService {
             if (currentCell != null) {
                 store.execute("update cell set tenant_count = greatest(tenant_count - 1, 0) where id = ?", currentCell);
             }
-            placement = placement(tenantId, targetCellId, "ACTIVE", now,
+            placement = placement(tenantId, targetCellId, currentCell, "ACTIVE", now,
                     currentCell == null ? "initial placement" : "migrated from cell " + currentCell);
             ObjectNode values = json.createObjectNode();
             values.put("cell_id", targetCellId.toString());
             values.put("home_region", target.get("region").asString());
             store.update("tenant", tenantId, values);
         }
-        ObjectNode payload = placement.deepCopy();
-        if (currentCell != null) {
-            payload.put("from_cell_id", currentCell.toString());
-        }
         events.publishForTenant(tenantId, "platform.tenant.migrated", "tenant_placement",
-                UUID.fromString(placement.get("id").asString()), payload);
+                UUID.fromString(placement.get("id").asString()), placement);
         return placement;
     }
 
@@ -249,17 +232,13 @@ public class TenantLifecycleService {
     public JsonNode drain(UUID cellId, String reason) {
         ObjectNode cell = store.lock("cell", cellId);
         Lifecycle.require(Lifecycle.CELL, "Cell", cell.get("status").asString(), "DRAINING");
-        ObjectNode meta = cell.hasNonNull("metadata") && cell.get("metadata").isObject()
-                ? (ObjectNode) cell.get("metadata").deepCopy() : json.createObjectNode();
-        ObjectNode drain = meta.putObject("drain");
-        drain.put("reason", reason);
-        drain.put("requested_by", TenantContext.principal());
-        drain.put("requested_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
-        drain.put("tenants_at_drain", cell.get("tenant_count").asInt());
         ObjectNode values = json.createObjectNode();
         values.put("status", "DRAINING");
-        values.set("metadata", meta);
-        return store.update("cell", cellId, values);
+        values.put("drain_reason", reason);
+        values.put("drain_requested_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        ObjectNode row = store.update("cell", cellId, values);
+        events.publish("platform.cell.drain_started", "cell", cellId, row);
+        return row;
     }
 
     public void checkCellCreate(Object body) {
@@ -311,10 +290,14 @@ public class TenantLifecycleService {
         return cell;
     }
 
-    private ObjectNode placement(UUID tenantId, UUID cellId, String status, OffsetDateTime from, String reason) {
+    private ObjectNode placement(UUID tenantId, UUID cellId, UUID fromCellId, String status, OffsetDateTime from,
+                                 String reason) {
         ObjectNode p = json.createObjectNode();
         p.put("subject_tenant_id", tenantId.toString());
         p.put("cell_id", cellId.toString());
+        if (fromCellId != null) {
+            p.put("from_cell_id", fromCellId.toString());
+        }
         p.put("status", status);
         p.put("effective_from", from.toString());
         p.put("reason", reason);
