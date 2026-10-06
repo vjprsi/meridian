@@ -1,0 +1,9 @@
+Meridian {{ .Chart.AppVersion }} installed as "{{ .Release.Name }}" in namespace {{ .Release.Namespace }}.
+
+Components: {{ len .Values.services }}
+API: {{ if .Values.ingress.enabled }}https://{{ .Values.ingress.host }}{{ else }}kubectl port-forward svc/edge-gateway 18000:80{{ end }}
+
+Required secrets in the namespace (not created by this chart):
+  {{ .Values.global.postgres.appSecret }}        username/password of the runtime role (RLS-bound, no DDL)
+  {{ .Values.global.postgres.migrationSecret }}  username/password of the schema owner used by Flyway
+  {{ .Values.global.auth.serviceClientSecret }}  client-id/client-secret of the service account (scope meridian:internal)

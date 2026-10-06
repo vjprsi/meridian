@@ -1,0 +1,23 @@
+{{- $g := .Values.global -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meridian-common
+  labels:
+    app.kubernetes.io/part-of: meridian
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  # every component: JWT security, cluster DNS for service-to-service calls, central approvals
+  MERIDIAN_SECURITY_MODE: "jwt"
+  MERIDIAN_SERVICES_URL_TEMPLATE: "http://{name}"
+  MERIDIAN_GATEWAY_URL_TEMPLATE: "http://{name}"
+  MERIDIAN_APPROVALS_MODE: {{ $g.approvalsMode | quote }}
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: {{ $g.kafka.bootstrapServers | quote }}
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: {{ $g.auth.issuerUri | quote }}
+  MERIDIAN_SERVICE_AUTH_TOKEN_URI: {{ printf "%s/protocol/openid-connect/token" $g.auth.issuerUri | quote }}
+  MANAGEMENT_OTLP_METRICS_EXPORT_URL: {{ printf "%s/v1/metrics" $g.otel.endpoint | quote }}
+  MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: {{ printf "%s/v1/traces" $g.otel.endpoint | quote }}
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: {{ $g.otel.samplingProbability | quote }}
+  {{- range $k, $v := $g.env }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

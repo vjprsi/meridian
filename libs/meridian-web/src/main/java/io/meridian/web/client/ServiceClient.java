@@ -20,8 +20,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Calls another Meridian service by name, propagating the caller's tenant, user and bearer token.
- * Base URLs come from {@code meridian.services.<name>.url}, else http://localhost:<port> from the generated
- * services manifest. Downstream problem responses are re-thrown as {@link ApiException} with the same code;
+ * Base URLs come from {@code meridian.services.<name>.url}, else {@code meridian.services.url-template} ({@code {name}},
+ * {@code {port}} placeholders), else http://localhost:<port> from the generated services manifest. Downstream problem responses are re-thrown as {@link ApiException} with the same code;
  * 5xx / connection failures become 502 {@code upstream_error}.
  */
 public class ServiceClient {
@@ -109,6 +109,14 @@ public class ServiceClient {
         String configured = env.getProperty("meridian.services." + service + ".url");
         if (configured != null) {
             return configured;
+        }
+        // Cluster deployments: e.g. http://{name}.meridian.svc.cluster.local (Kubernetes service per Meridian service)
+        String template = env.getProperty("meridian.services.url-template");
+        if (template != null && !template.isBlank()) {
+            if (!ports.containsKey(service)) {
+                throw new IllegalArgumentException("unknown service " + service);
+            }
+            return template.replace("{name}", service).replace("{port}", String.valueOf(ports.get(service)));
         }
         Integer port = ports.get(service);
         if (port == null) {

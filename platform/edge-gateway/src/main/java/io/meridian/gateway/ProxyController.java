@@ -35,9 +35,13 @@ public class ProxyController {
             "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length",
             "expect");
 
-    /** {@code meridian.gateway.services.<name>=http://host:port} overrides; default is http://localhost:<port>. */
+    /**
+     * Upstream of a service: {@code meridian.gateway.services.<name>} override, else {@code url-template} with
+     * {@code {name}} / {@code {port}} placeholders (e.g. {@code http://{name}} in Kubernetes), else
+     * http://localhost:<port>.
+     */
     @ConfigurationProperties(prefix = "meridian.gateway")
-    public record GatewayProperties(Map<String, String> services, Duration timeout) {
+    public record GatewayProperties(Map<String, String> services, Duration timeout, String urlTemplate) {
         public GatewayProperties {
             services = services == null ? Map.of() : services;
             timeout = timeout == null ? Duration.ofSeconds(30) : timeout;
@@ -80,7 +84,11 @@ public class ProxyController {
             return;
         }
         RouteTable.Route r = route.get();
-        String base = props.services().getOrDefault(r.service(), "http://localhost:" + r.port());
+        String base = props.services().get(r.service());
+        if (base == null) {
+            base = props.urlTemplate() == null || props.urlTemplate().isBlank() ? "http://localhost:" + r.port()
+                    : props.urlTemplate().replace("{name}", r.service()).replace("{port}", String.valueOf(r.port()));
+        }
         String target = base + path + (req.getQueryString() == null ? "" : "?" + req.getQueryString());
 
         HttpRequest.Builder out = HttpRequest.newBuilder(URI.create(target)).timeout(props.timeout());

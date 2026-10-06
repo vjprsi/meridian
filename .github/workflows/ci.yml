@@ -77,3 +77,28 @@ jobs:
         with:
           name: test-reports
           path: "**/build/reports/tests/"
+
+  deploy-artifacts:
+    name: Helm chart and container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - uses: azure/setup-helm@v4
+      - name: Chart is up to date with the services manifest
+        run: |
+          python tools/helm_chart.py
+          git diff --exit-code -- infra/helm || (echo "::error::Run tools/helm_chart.py and commit" && exit 1)
+      - name: Lint, render and validate against Kubernetes schemas
+        run: |
+          helm lint infra/helm/meridian
+          helm template ci infra/helm/meridian > rendered.yaml
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          ./kubeconform -strict -summary -kubernetes-version 1.33.0 rendered.yaml
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "25" }
+      - name: Build one service image (Dockerfile smoke test)
+        run: |
+          ./gradlew :services:ledger-service:bootJar --console=plain -q
+          docker build -f infra/docker/Dockerfile             --build-arg JAR=$(ls services/ledger-service/build/libs/*.jar | grep -v plain) -t meridian/ledger-service:ci .

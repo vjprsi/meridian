@@ -1,0 +1,204 @@
+{{- $root := . -}}
+{{- $g := .Values.global -}}
+{{- range $svc := .Values.services }}
+{{- if $svc.enabled }}
+{{- $ctx := dict "root" $root "name" $svc.name "domain" $svc.domain }}
+{{- $replicas := $svc.replicas | default $g.replicas }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {{- include "meridian.selector" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $g.autoscaling.enabled }}
+  replicas: {{ $replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "meridian.labels" $ctx | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/config.yaml") $root | sha256sum }}
+    spec:
+      serviceAccountName: {{ $svc.name }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      {{- with $g.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "meridian.selector" $ctx | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "meridian.selector" $ctx | nindent 14 }}
+      containers:
+        - name: app
+          image: {{ include "meridian.image" $ctx }}
+          imagePullPolicy: {{ $g.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: meridian-common
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            {{- if $svc.database }}
+            - name: SPRING_DATASOURCE_URL
+              value: {{ printf "jdbc:postgresql://%s:%v/%s?currentSchema=%s&sslmode=%s" $g.postgres.host $g.postgres.port $svc.database $svc.schema $g.postgres.sslMode | quote }}
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: username}}
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.appSecret }}, key: password}}
+            - name: SPRING_FLYWAY_USER
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: username}}
+            - name: SPRING_FLYWAY_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $g.postgres.migrationSecret }}, key: password}}
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              value: {{ $svc.dbPool | default $g.postgres.poolSize | quote }}
+            {{- end }}
+            - name: MERIDIAN_SERVICE_AUTH_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-id}}
+            - name: MERIDIAN_SERVICE_AUTH_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: {{ $g.auth.serviceClientSecret }}, key: client-secret}}
+            - name: MANAGEMENT_OPENTELEMETRY_RESOURCE_ATTRIBUTES_SERVICE_NAME
+              value: {{ $svc.name }}
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          resources:
+            requests: {cpu: {{ $svc.cpu | default $g.resources.cpu | quote }}, memory: {{ $svc.memory | default $g.resources.memory | quote }}}
+            limits: {memory: {{ $svc.memory | default $g.resources.memory | quote }}}
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: http}
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              sleep: {seconds: 5}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+{{- if $g.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: {{ $svc.name }}}
+  minReplicas: {{ $replicas }}
+  maxReplicas: {{ $svc.maxReplicas | default $g.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: {{ $g.autoscaling.targetCpu }}}
+{{- end }}
+{{- if gt (int $replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
+{{- end }}
+{{- if $g.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # only other Meridian components (gateway, services, jobs) and the metrics scraper
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: meridian
+        {{- with $g.networkPolicy.monitoringNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+        {{- end }}
+      ports:
+        - {port: http, protocol: TCP}
+{{- end }}
+{{- if $g.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $svc.name }}
+  labels: {{- include "meridian.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "meridian.selector" $ctx | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 30s
+{{- end }}
+{{- end }}
+{{- end }}
