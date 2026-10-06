@@ -6,6 +6,8 @@ import static io.meridian.carddispute.infrastructure.Rows.dec;
 import static io.meridian.carddispute.infrastructure.Rows.str;
 import static io.meridian.carddispute.infrastructure.Rows.uuid;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.carddispute.domain.DisputeDeadlines;
 import io.meridian.carddispute.domain.DisputeStateMachine;
 import io.meridian.carddispute.domain.DisputeStateMachine.Action;
@@ -25,7 +27,10 @@ import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -51,16 +56,24 @@ public class DisputeService {
     static final Set<String> UPDATABLE = Set.of("customer_description", "scheme_case_id", "reason_code",
             "transaction_date", "custom_field_1", "custom_field_2", "custom_field_3", "custom_field_4", "custom_field_5");
 
+    /** Resource type / action of issuer write-off approvals in workflow-service (G11). */
+    public static final String WRITE_OFF_RESOURCE = "card_dispute";
+    static final String WRITE_OFF_ACTION = "write_off";
+    static final String CLOSE = "close";
+    static final String ACCEPT_REPRESENTMENT = "accept_representment";
+
     private final Rows rows;
     private final Downstream downstream;
     private final Events events;
     private final TransactionTemplate tx;
+    private final Approvals approvals;
 
-    public DisputeService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx) {
+    public DisputeService(Rows rows, Downstream downstream, Events events, TransactionTemplate tx, Approvals approvals) {
         this.rows = rows;
         this.downstream = downstream;
         this.events = events;
         this.tx = tx;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ intake
@@ -262,15 +275,36 @@ public class DisputeService {
 
     @Transactional
     public ObjectNode acceptRepresentment(UUID id, String note, Boolean customerLiable) {
+        return acceptRepresentment(id, note, customerLiable, Origin.USER);
+    }
+
+    /** {@link #acceptRepresentment} for a write-off approved in workflow-service (the approver is the principal). */
+    @Transactional
+    public ObjectNode acceptRepresentmentApproved(UUID id, String note, Boolean customerLiable) {
+        return acceptRepresentment(id, note, customerLiable, Origin.WORKFLOW);
+    }
+
+    private ObjectNode acceptRepresentment(UUID id, String note, Boolean customerLiable, Origin origin) {
         ObjectNode d = rows.lock(T, id);
         DisputeStateMachine.next(state(d), Action.ACCEPT_REPRESENTMENT);
         timeline(d, "REPRESENTMENT_ACCEPTED", stage(d), stage(d), dec(d, "representment_amount"), null, note);
         return finish(d, Action.ACCEPT_REPRESENTMENT, Outcome.LOST, BigDecimal.ZERO,
-                customerLiable == null || customerLiable, note, false);
+                customerLiable == null || customerLiable, note, origin);
     }
 
     @Transactional
     public ObjectNode close(UUID id, Outcome outcome, BigDecimal recovered, Boolean customerLiable, String note) {
+        return close(id, outcome, recovered, customerLiable, note, Origin.USER);
+    }
+
+    /** {@link #close} for a write-off approved in workflow-service (the approver is the principal). */
+    @Transactional
+    public ObjectNode closeApproved(UUID id, Outcome outcome, BigDecimal recovered, Boolean customerLiable, String note) {
+        return close(id, outcome, recovered, customerLiable, note, Origin.WORKFLOW);
+    }
+
+    private ObjectNode close(UUID id, Outcome outcome, BigDecimal recovered, Boolean customerLiable, String note,
+                             Origin origin) {
         Action action = DisputeStateMachine.closeAction(outcome);
         ObjectNode d = rows.lock(T, id);
         DisputeStateMachine.next(state(d), action);
@@ -299,7 +333,7 @@ public class DisputeService {
             }
         };
         boolean liable = outcome == Outcome.WITHDRAWN || customerLiable == null || customerLiable;
-        return finish(d, action, outcome, r, liable, note, false);
+        return finish(d, action, outcome, r, liable, note, origin);
     }
 
     @Transactional
@@ -409,7 +443,7 @@ public class DisputeService {
                 || status == Status.AWAITING_MERCHANT;
         if (DisputeDeadlines.passed(deadline, day) && issuerToAct) {
             finish(d, Action.EXPIRE, Outcome.EXPIRED, BigDecimal.ZERO, false,
-                    "Expired: stage deadline " + deadline + " passed", true);
+                    "Expired: stage deadline " + deadline + " passed", Origin.SYSTEM);
             return "expired";
         }
         if (DisputeDeadlines.approaching(deadline, day)) {
@@ -428,17 +462,24 @@ public class DisputeService {
 
     // ------------------------------------------------------------------ internals
 
+    /** Who closes: a user call, the deadline scan (no four-eyes), or a write-off approved in workflow-service. */
+    private enum Origin { USER, SYSTEM, WORKFLOW }
+
     /** Closes the dispute with an outcome and posts the money (see {@link Settlement}). */
     private ObjectNode finish(ObjectNode d, Action action, Outcome outcome, BigDecimal recovered, boolean customerLiable,
-                              String note, boolean system) {
+                              String note, Origin origin) {
         UUID id = uuid(d, "id");
         State to = DisputeStateMachine.next(state(d), action);
         BigDecimal provisional = bool(d, "provisional_credit_reversed") ? BigDecimal.ZERO : dec(d, "provisional_credit_amount");
         BigDecimal customerTotal = customerLiable ? recovered : recovered.max(provisional);
         Settlement s = new Settlement(provisional, recovered, customerTotal);
-        if (!system && s.writeOff().signum() > 0 && TenantContext.principal().equals(str(d, "created_by"))) {
+        if (origin != Origin.SYSTEM && s.writeOff().signum() > 0
+                && TenantContext.principal().equals(str(d, "created_by"))) {
+            // the creator's own close is submitted for approval; a workflow approval by the creator is just refused
+            UUID request = origin == Origin.USER ? requestWriteOff(d, action, outcome, s, customerLiable, note) : null;
             throw ApiException.unprocessable("four_eyes_violation",
-                    "an issuer write-off must be approved by someone other than the dispute creator");
+                    "an issuer write-off must be approved by someone other than the dispute creator"
+                            + (request == null ? "" : "; sent for approval as workflow request " + request));
         }
         ObjectNode v = rows.object();
         UUID entry = null;
@@ -476,7 +517,70 @@ public class DisputeService {
         timeline(out, outcome.name(), stage(d), Stage.CLOSED, s.recovered(), entry, note);
         events.publish("cards.card_dispute.stage_changed", out);
         events.publish("cards.card_dispute.closed", out);
+        // any write-off proposal still waiting in the workflow inbox is moot once the dispute is closed
+        approvals.cancelOpen(WRITE_OFF_RESOURCE, id, null, "dispute closed");
         return out;
+    }
+
+    /**
+     * Central maker-checker (G11): the creator's close that would write off a loss is submitted to workflow-service
+     * (the direct call is still refused); the checker decides in the inbox and {@link WriteOffApprovalHandler}
+     * replays the same close with the approver as principal. row_version fingerprints the dispute as proposed.
+     * Returns the approval request id, or null in local mode.
+     */
+    private UUID requestWriteOff(ObjectNode d, Action action, Outcome outcome, Settlement s, boolean customerLiable,
+                                 String note) {
+        if (!approvals.centralised()) {
+            return null;
+        }
+        UUID id = uuid(d, "id");
+        int rowVersion = d.get("row_version").asInt();
+        String closeAction = action == Action.ACCEPT_REPRESENTMENT ? ACCEPT_REPRESENTMENT : CLOSE;
+        String currency = str(d, "currency");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("row_version", rowVersion);
+        payload.put("close_action", closeAction);
+        payload.put("outcome", outcome.name());
+        payload.put("recovered_amount", s.recovered().toPlainString());
+        payload.put("customer_liable", customerLiable);
+        payload.put("write_off_amount", s.writeOff().toPlainString());
+        payload.put("provisional_credit_amount", s.provisional().toPlainString());
+        payload.put("disputed_amount", str(d, "disputed_amount"));
+        payload.put("chargeback_amount", str(d, "chargeback_amount"));
+        payload.put("currency", currency);
+        payload.put("scheme", str(d, "scheme"));
+        payload.put("category", str(d, "category"));
+        payload.put("reason_code", str(d, "reason_code"));
+        payload.put("stage", str(d, "stage"));
+        payload.put("note", note);
+        String key = "write-off:" + id + ":" + rowVersion + ":" + closeAction + ":" + outcome + ":"
+                + s.recovered().toPlainString() + ":" + customerLiable + ":" + Objects.hashCode(note);
+        ApprovalSpec spec = ApprovalSpec.of(WRITE_OFF_RESOURCE, id, WRITE_OFF_ACTION,
+                        "Dispute " + id + " issuer write-off " + s.writeOff().toPlainString() + " " + currency, payload)
+                .withAmount(s.writeOff(), currency)
+                .withSummary(outcome + " " + str(d, "scheme") + " " + str(d, "category") + " dispute: recovered "
+                        + s.recovered().toPlainString() + ", issuer loss " + s.writeOff().toPlainString());
+        return Approvals.idOf(approvals.request(spec, key));
+    }
+
+    /** True while the dispute is open and unchanged (row_version) since the write-off was proposed. */
+    @Transactional(readOnly = true)
+    public boolean awaitsWriteOff(UUID id, Integer rowVersion) {
+        return rows.find(T, id)
+                .filter(d -> stage(d) != Stage.CLOSED)
+                .filter(d -> rowVersion != null && rowVersion == d.get("row_version").asInt())
+                .isPresent();
+    }
+
+    /** The checker declined the creator's write-off: the dispute stays open; noted once on its timeline. */
+    @Transactional
+    public void writeOffRejected(UUID id, UUID approvalRequestId) {
+        ObjectNode d = rows.lock(T, id);
+        String note = "Issuer write-off rejected in workflow request " + approvalRequestId;
+        if (rows.scalar("select count(*) from card_dispute_event where card_dispute_id = ? and event_type = 'NOTE' "
+                + "and note = ?", Long.class, id, note) == 0) {
+            timeline(d, "NOTE", null, null, null, null, note);
+        }
     }
 
     private ObjectNode transition(ObjectNode d, Action action, ObjectNode extra, String eventType, BigDecimal amount,

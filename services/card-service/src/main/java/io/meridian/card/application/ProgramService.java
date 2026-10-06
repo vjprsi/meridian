@@ -1,10 +1,14 @@
 package io.meridian.card.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.card.domain.ControlRules;
 import io.meridian.card.domain.ProgramRules;
 import io.meridian.card.infrastructure.Rows;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -19,12 +23,18 @@ public class ProgramService {
     static final Set<String> FROZEN_WHEN_LIVE = Set.of("bin", "bin_range_start", "bin_range_end", "pan_length",
             "scheme", "funding_model", "currency");
 
+    /** Resource type of program go-live approvals in workflow-service (G11). */
+    public static final String GO_LIVE_RESOURCE = "card_program";
+    static final String GO_LIVE_ACTION = "go_live";
+
     private final Rows rows;
     private final Events events;
+    private final Approvals approvals;
 
-    public ProgramService(Rows rows, Events events) {
+    public ProgramService(Rows rows, Events events, Approvals approvals) {
         this.rows = rows;
         this.events = events;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ programs
@@ -65,6 +75,50 @@ public class ProgramService {
                 + "where id = ?", to, TenantContext.principal(), id);
         ObjectNode row = rows.get("card_program", id);
         events.publish("cards.card_program.status_changed", "card_program", row);
+        requestGoLive(row);
+        return row;
+    }
+
+    /**
+     * Central maker-checker (G11): certification submits the program for go-live; the checker decides in the
+     * workflow inbox and {@link ProgramGoLiveApprovalHandler} applies it. row_version fingerprints the certified
+     * content (any later PATCH makes the decision stale). BIN and range only, never a PAN.
+     */
+    private void requestGoLive(JsonNode p) {
+        Integer rowVersion = Rows.integer(p, "row_version");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        for (String f : new String[] {"code", "name", "scheme", "program_type", "funding_model", "currency", "country",
+                "bin", "bin_range_start", "bin_range_end", "sponsor_bank", "legal_entity_id"}) {
+            payload.put(f, Rows.str(p, f));
+        }
+        payload.put("row_version", rowVersion);
+        UUID id = Rows.uuid(p, "id");
+        approvals.request(ApprovalSpec.of(GO_LIVE_RESOURCE, id, GO_LIVE_ACTION,
+                        "Card program " + Rows.str(p, "code") + " go-live", payload)
+                        .withSummary(Rows.str(p, "name") + " (" + Rows.str(p, "scheme") + " " + Rows.str(p, "funding_model")
+                                + ", BIN " + Rows.str(p, "bin") + ")"),
+                "go-live:" + id + ":" + rowVersion);
+    }
+
+    /** True while the program is in CERTIFICATION with the submitted content (row_version) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsGoLive(UUID id, Integer rowVersion) {
+        return rows.find("card_program", id)
+                .filter(p -> "CERTIFICATION".equals(Rows.str(p, "status")))
+                .filter(p -> rowVersion == null || rowVersion.equals(Rows.integer(p, "row_version")))
+                .isPresent();
+    }
+
+    /** Go-live declined by the checker: the program returns to DRAFT (to be reworked and re-certified). */
+    @Transactional
+    public JsonNode rejectGoLive(UUID id, String reason) {
+        ObjectNode p = rows.lock("card_program", id);
+        String to = ProgramRules.transition("reject_go_live", Rows.str(p, "status"));
+        rows.execute("update card_program set status = ?, status_reason = ?, certified_at = null, updated_by = ? "
+                + "where id = ?", to, reason, TenantContext.principal(), id);
+        ObjectNode row = rows.get("card_program", id);
+        events.publish("cards.card_program.status_changed", "card_program", row);
+        approvals.cancelOpen(GO_LIVE_RESOURCE, id, null, "go-live rejected");
         return row;
     }
 
@@ -81,6 +135,9 @@ public class ProgramService {
                 + "activated_by = ?, updated_by = ? where id = ?", to, reason, principal, principal, id);
         ObjectNode row = rows.get("card_program", id);
         events.publish("cards.card_program.activated", "card_program", row);
+        if ("CERTIFICATION".equals(Rows.str(p, "status"))) {
+            approvals.cancelOpen(GO_LIVE_RESOURCE, id, null, "activated directly");
+        }
         return row;
     }
 
