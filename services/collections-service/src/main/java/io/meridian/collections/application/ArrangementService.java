@@ -1,5 +1,7 @@
 package io.meridian.collections.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
 import io.meridian.collections.config.CollectionsProperties;
 import io.meridian.collections.domain.ArrangementTracker;
 import io.meridian.collections.domain.Currencies;
@@ -11,7 +13,9 @@ import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,16 +26,22 @@ import tools.jackson.databind.node.ObjectNode;
 /** Promises to pay and payment plans: recording, activation (four-eyes outside policy), cancellation, tracking. */
 @Service
 public class ArrangementService {
+    /** Approval resource type for payment plans outside policy (activation) in workflow-service (G11). */
+    public static final String PLAN_APPROVAL_RESOURCE = "payment_plan";
+
     private final Rows rows;
     private final Events events;
     private final CaseService cases;
     private final CollectionsProperties props;
+    private final Approvals approvals;
 
-    public ArrangementService(Rows rows, Events events, CaseService cases, CollectionsProperties props) {
+    public ArrangementService(Rows rows, Events events, CaseService cases, CollectionsProperties props,
+                              Approvals approvals) {
         this.rows = rows;
         this.events = events;
         this.cases = cases;
         this.props = props;
+        this.approvals = approvals;
     }
 
     // ------------------------------------------------------------------ promises
@@ -170,6 +180,28 @@ public class ArrangementService {
         row.put("requires_approval", PaymentPlanCalculator.outsidePolicy(count, amount, overdue));
         ObjectNode out = rows.insert("payment_plan", row);
         events.publish("lending.payment_plan.proposed", "payment_plan", out);
+        if (Rows.bool(out, "requires_approval")) {
+            // Outside policy: a second user activates it, from the workflow inbox (PaymentPlanApprovalHandler).
+            UUID id = Rows.uuid(out, "id");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("collection_case_id", caseId.toString());
+            payload.put("customer_id", Rows.str(c, "customer_id"));
+            payload.put("exposure_type", Rows.str(c, "exposure_type"));
+            payload.put("exposure_id", Rows.str(c, "exposure_id"));
+            BigDecimal planTotal = Currencies.round(Rows.dec(out, "total_amount"), currency);
+            payload.put("overdue_amount", Currencies.round(overdue, currency).toPlainString());
+            payload.put("total_outstanding", Currencies.round(Rows.dec(c, "total_outstanding"), currency).toPlainString());
+            payload.put("total_amount", planTotal.toPlainString());
+            payload.put("currency", currency);
+            payload.put("installment_count", count);
+            payload.put("frequency", frequency);
+            payload.put("start_date", start.toString());
+            payload.put("interest_frozen", Rows.bool(out, "interest_frozen"));
+            approvals.request(ApprovalSpec.of(PLAN_APPROVAL_RESOURCE, id, "activate",
+                            "Payment plan outside policy on case " + Rows.str(c, "case_number"), payload)
+                            .withAmount(planTotal, currency),
+                    "propose-plan:" + id);
+        }
         return out;
     }
 
@@ -204,7 +236,23 @@ public class ArrangementService {
         cases.setStatus(caseId, caseStatus, "PLAN_ACTIVE");
         cases.updatePriority(rows.get(CaseService.TABLE, caseId));
         events.publish("lending.payment_plan.activated", "payment_plan", out);
+        approvals.cancelOpen(PLAN_APPROVAL_RESOURCE, id, null, "activated directly");
         return out;
+    }
+
+    /**
+     * True while the plan is PROPOSED, outside policy, with the submitted terms (amount, instalment count, start
+     * date) unchanged.
+     */
+    @Transactional(readOnly = true)
+    public boolean planAwaitsApproval(UUID id, JsonNode submitted) {
+        return rows.find("payment_plan", id)
+                .filter(p -> "PROPOSED".equals(Rows.str(p, "status")) && Rows.bool(p, "requires_approval"))
+                .filter(p -> submitted == null || !submitted.hasNonNull("total_amount")
+                        || new BigDecimal(submitted.get("total_amount").asString()).compareTo(Rows.dec(p, "total_amount")) == 0
+                        && submitted.path("installment_count").asInt() == Rows.integer(p, "installment_count")
+                        && submitted.path("start_date").asString("").equals(String.valueOf(Rows.date(p, "start_date"))))
+                .isPresent();
     }
 
     @Transactional
@@ -219,6 +267,7 @@ public class ArrangementService {
             reopenAfterArrangement(Rows.uuid(p, "collection_case_id"), "PLAN_ACTIVE");
         }
         events.publish("lending.payment_plan.cancelled", "payment_plan", out);
+        approvals.cancelOpen(PLAN_APPROVAL_RESOURCE, id, null, "cancelled directly");
         return out;
     }
 

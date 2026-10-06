@@ -1,10 +1,15 @@
 package io.meridian.collections.application;
 
+import io.meridian.approvals.ApprovalSpec;
+import io.meridian.approvals.Approvals;
+import io.meridian.collections.domain.Currencies;
 import io.meridian.collections.domain.Lifecycles;
 import io.meridian.collections.infrastructure.Rows;
 import io.meridian.common.error.ApiException;
 import io.meridian.common.tenancy.TenantContext;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,14 +21,19 @@ import tools.jackson.databind.node.ObjectNode;
 public class LegalService {
     static final String TABLE = "legal_proceeding";
 
+    /** Approval resource type for legal proceedings (approval to litigate) in workflow-service (G11). */
+    public static final String APPROVAL_RESOURCE = "legal_proceeding";
+
     private final Rows rows;
     private final Events events;
     private final CaseService cases;
+    private final Approvals approvals;
 
-    public LegalService(Rows rows, Events events, CaseService cases) {
+    public LegalService(Rows rows, Events events, CaseService cases, Approvals approvals) {
         this.rows = rows;
         this.events = events;
         this.cases = cases;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -58,6 +68,25 @@ public class LegalService {
         }
         ObjectNode out = rows.insert(TABLE, row);
         events.publish("lending.legal_proceeding.requested", TABLE, out);
+        // Central maker-checker: the checker decides in the workflow inbox; LegalProceedingApprovalHandler applies it.
+        UUID id = Rows.uuid(out, "id");
+        String ccy = Rows.str(out, "currency");
+        BigDecimal amount = Currencies.round(Rows.dec(out, "claim_amount"), ccy);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("collection_case_id", caseId.toString());
+        payload.put("customer_id", Rows.str(c, "customer_id"));
+        payload.put("exposure_type", Rows.str(c, "exposure_type"));
+        payload.put("exposure_id", Rows.str(c, "exposure_id"));
+        payload.put("days_past_due", Rows.integer(c, "days_past_due"));
+        payload.put("total_outstanding", Currencies.round(Rows.dec(c, "total_outstanding"), ccy).toPlainString());
+        payload.put("claim_amount", amount.toPlainString());
+        payload.put("currency", ccy);
+        payload.put("law_firm", lawFirm);
+        payload.put("notes", notes);
+        approvals.request(ApprovalSpec.of(APPROVAL_RESOURCE, id, "approve",
+                        "Legal proceedings on case " + Rows.str(c, "case_number"), payload)
+                        .withAmount(amount, ccy),
+                "start-legal:" + id);
         return out;
     }
 
@@ -81,7 +110,18 @@ public class LegalService {
         ObjectNode out = rows.update(TABLE, id, v);
         cases.setStatus(caseId, Rows.str(c, "status"), "LEGAL");
         events.publish("lending.legal_proceeding.started", TABLE, out);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "approved directly");
         return out;
+    }
+
+    /** True while the proceeding is PENDING_APPROVAL with the submitted claim (fingerprint) unchanged. */
+    @Transactional(readOnly = true)
+    public boolean awaitsApproval(UUID id, String claimAmount) {
+        return rows.find(TABLE, id)
+                .filter(l -> "PENDING_APPROVAL".equals(Rows.str(l, "status")))
+                .filter(l -> claimAmount == null
+                        || new BigDecimal(claimAmount).compareTo(Rows.dec(l, "claim_amount")) == 0)
+                .isPresent();
     }
 
     @Transactional
@@ -97,6 +137,7 @@ public class LegalService {
         v.put("notes", append(Rows.str(l, "notes"), "Rejected: " + reason));
         ObjectNode out = rows.update(TABLE, id, v);
         events.publish("lending.legal_proceeding.status_changed", TABLE, out);
+        approvals.cancelOpen(APPROVAL_RESOURCE, id, null, "rejected directly");
         return out;
     }
 
