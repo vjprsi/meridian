@@ -30,10 +30,9 @@ public class CountryPacksController implements CountryPacksApi {
     public ResponseEntity<TenantCountryPack> countryPacksInstall(UUID id, String idempotencyKey,
                                                                  CountryPacksInstallRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        UUID legalEntityId = req.hasNonNull("legal_entity_id") ? UUID.fromString(req.get("legal_entity_id").asString()) : null;
+        JsonNode overrides = body.getOverrides() == null ? null : json.valueToTree(body.getOverrides());
         return idempotency.execute(idempotencyKey, Responses.request("install", id, body), TenantCountryPack.class,
-                () -> Responses.row(json, HttpStatus.CREATED, packs.install(id, legalEntityId, req.get("overrides")),
+                () -> Responses.row(json, HttpStatus.CREATED, packs.install(id, body.getLegalEntityId(), overrides),
                         TenantCountryPack.class));
     }
 }

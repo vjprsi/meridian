@@ -1,48 +1,25 @@
 package io.meridian.referencedata.api;
 
-import io.meridian.common.error.ApiException;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
-/** Response helpers for contract operations the generator typed as {@code ResponseEntity<Void>}. */
+/** Response helpers shared by the controllers. */
 final class Responses {
+    private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() {};
+
     private Responses() {}
 
-    /**
-     * Contract defect workaround: actions documented with response "none" are generated as
-     * {@code ResponseEntity<Void>} although they return a JSON result. Generics are erased, so the body is
-     * still serialised by Spring MVC.
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> body(ResponseEntity<?> r) {
-        return (ResponseEntity) r;
+    /** Free-form JSON object result (contract {@code object}); keeps status and headers (e.g. Idempotent-Replayed). */
+    static ResponseEntity<Map<String, Object>> object(JsonMapper json, ResponseEntity<JsonNode> r) {
+        JsonNode body = r.getBody();
+        return ResponseEntity.status(r.getStatusCode()).headers(r.getHeaders())
+                .body(body == null ? null : json.convertValue(body, OBJECT));
     }
 
-    static ResponseEntity<Void> ok(JsonNode node) {
-        return body(ResponseEntity.ok(node));
-    }
-
-    static LocalDate date(String value, String param) {
-        if (value == null || value.isBlank()) {
-            throw ApiException.badRequest("missing_parameter", "Query parameter '" + param + "' (YYYY-MM-DD) is required");
-        }
-        try {
-            return LocalDate.parse(value.trim());
-        } catch (DateTimeParseException e) {
-            throw ApiException.badRequest("invalid_parameter", "Query parameter '" + param + "' must be YYYY-MM-DD");
-        }
-    }
-
-    static int integer(String value, String param, int dflt) {
-        if (value == null || value.isBlank()) {
-            return dflt;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException e) {
-            throw ApiException.badRequest("invalid_parameter", "Query parameter '" + param + "' must be an integer");
-        }
+    static ResponseEntity<Map<String, Object>> ok(JsonMapper json, JsonNode body) {
+        return object(json, ResponseEntity.ok(body));
     }
 }

@@ -11,7 +11,6 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Installed country packs: upgrade to a newer version of the same country, uninstall. */
@@ -31,8 +30,7 @@ public class InstalledCountryPacksController implements InstalledCountryPacksApi
     public ResponseEntity<TenantCountryPack> installedCountryPacksUpgrade(UUID id, String idempotencyKey,
                                                                           InstalledCountryPacksUpgradeRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        UUID target = req.hasNonNull("country_pack_id") ? UUID.fromString(req.get("country_pack_id").asString()) : null;
+        UUID target = body.getCountryPackId();
         return idempotency.execute(idempotencyKey, Responses.request("upgrade", id, body), TenantCountryPack.class,
                 () -> Responses.row(json, HttpStatus.OK, packs.upgrade(id, target), TenantCountryPack.class));
     }
@@ -41,7 +39,7 @@ public class InstalledCountryPacksController implements InstalledCountryPacksApi
     public ResponseEntity<TenantCountryPack> installedCountryPacksUninstall(UUID id, String idempotencyKey,
                                                                             InstalledCountryPacksUninstallRequest body) {
         TenantContext.require();
-        String reason = json.valueToTree(body).path("reason").asString(null);
+        String reason = body.getReason();
         return idempotency.execute(idempotencyKey, Responses.request("uninstall", id, body), TenantCountryPack.class,
                 () -> Responses.row(json, HttpStatus.OK, packs.uninstall(id, reason), TenantCountryPack.class));
     }

@@ -40,9 +40,6 @@ public class RoleService {
     @Transactional
     public String create(Object body) {
         ObjectNode v = crud.toColumns("role", body);
-        if (v.hasNonNull("role_type") && "SYSTEM".equals(v.get("role_type").asString())) {
-            throw ApiException.unprocessable("system_role_readonly", "SYSTEM roles are provisioned by the platform");
-        }
         validate(v, null);
         String row = crud.insert("role", v);
         changed(row);
@@ -54,9 +51,6 @@ public class RoleService {
         JsonNode role = store.require("role", id);
         requireCustom(role);
         ObjectNode v = crud.toColumns("role", body);
-        if (v.hasNonNull("role_type") && "SYSTEM".equals(v.get("role_type").asString())) {
-            throw ApiException.unprocessable("system_role_readonly", "A role cannot be turned into a SYSTEM role");
-        }
         validate(v, id);
         ResponseEntity<T> r = crud.update("role", type, body, ifMatch, Crud.params().with("id", id));
         changed(store.find("role", id).orElseThrow());
@@ -216,7 +210,7 @@ public class RoleService {
         List<String> raw = JsonItems.of(node);
         if (raw.isEmpty()) {
             throw ApiException.unprocessable("permission_ids_required",
-                    "permission_ids must list at least one permission id, e.g. {\"items\": [\"<uuid>\"]}");
+                    "permission_ids must list at least one permission id");
         }
         List<UUID> out = new ArrayList<>();
         for (String s : new LinkedHashSet<>(raw)) {

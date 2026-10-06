@@ -72,7 +72,9 @@ public class ReplayService {
         WebhookStore.ReplayRow job = store.replay(id, true).orElseThrow(() -> ApiException.notFound("event replay", id));
         WebhookRules.requireCancellable(job.status());
         store.setReplayStatus(id, "CANCELLED", null, null);
-        return store.replayJson(id);
+        String row = store.replayJson(id);
+        outbox.publish("platform.webhook_replay_job.cancelled", "webhook_replay_job", id, json.readTree(row));
+        return row;
     }
 
     /** Runs every QUEUED replay job of the current tenant (one transaction per job). */
@@ -115,16 +117,14 @@ public class ReplayService {
         return true;
     }
 
-    /** event_types is a JSON object {"event_types": ["payments.*", ...]} (the contract types json columns as objects). */
-    private static List<String> eventTypes(JsonNode node) {
+    /** event_types is a JSON array of event types or wildcards, e.g. ["payments.*"]. */
+    private static List<String> eventTypes(JsonNode list) {
         List<String> out = new ArrayList<>();
-        if (node == null || node.isNull()) {
+        if (list == null || list.isNull()) {
             return out;
         }
-        JsonNode list = node.get("event_types");
-        if (list == null || !list.isArray()) {
-            throw ApiException.unprocessable("invalid_event_types",
-                    "event_types must be an object of the form {\"event_types\": [\"payments.*\"]}");
+        if (!list.isArray()) {
+            throw ApiException.unprocessable("invalid_event_types", "event_types must be an array of event types");
         }
         for (JsonNode t : list) {
             if (!t.isString() || !EventTypePattern.isValid(t.asString())) {

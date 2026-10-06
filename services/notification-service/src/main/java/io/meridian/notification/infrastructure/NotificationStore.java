@@ -120,7 +120,7 @@ public class NotificationStore {
     public int attemptCount(UUID notificationId, int cycle) {
         return jdbc.sql("""
                 select count(*) from notification_delivery_attempt
-                where notification_id = ? and coalesce((provider_response->>'cycle')::int, 1) = ?""")
+                where notification_id = ? and cycle = ?""")
                 .params(notificationId, cycle).query(Integer.class).single();
     }
 
@@ -131,7 +131,7 @@ public class NotificationStore {
 
     public int currentCycle(UUID notificationId) {
         return jdbc.sql("""
-                select coalesce(max((provider_response->>'cycle')::int), 1) from notification_delivery_attempt
+                select coalesce(max(cycle), 1) from notification_delivery_attempt
                 where notification_id = ?""")
                 .param(notificationId).query(Integer.class).single();
     }

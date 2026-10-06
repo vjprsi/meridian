@@ -204,7 +204,7 @@ public class AuthorizationService {
         }
         if (v.has("actions") && JsonItems.of(v.get("actions")).isEmpty()) {
             throw ApiException.unprocessable("invalid_actions",
-                    "actions must list at least one action, e.g. {\"items\": [\"approve\"]}");
+                    "actions must list at least one action, e.g. [\"approve\"]");
         }
         if (v.has("priority") && v.get("priority").asInt() < 0) {
             throw ApiException.unprocessable("invalid_priority", "priority must be >= 0");

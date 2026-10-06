@@ -105,9 +105,9 @@ public class WorkflowStore {
                   and not exists (select 1 from approval_decision d
                                   where d.approval_request_id = r.id and d.approver = ?)
                   and (coalesce(jsonb_array_length(
-                           r.execution_result -> 'approval_route' -> (r.current_level - 1) -> 'approver_roles'), 0) = 0
+                           r.approval_route -> (r.current_level - 1) -> 'approver_roles'), 0) = 0
                        or exists (select 1 from jsonb_array_elements_text(
-                           r.execution_result -> 'approval_route' -> (r.current_level - 1) -> 'approver_roles') role
+                           r.approval_route -> (r.current_level - 1) -> 'approver_roles') role
                            where role = any(?)))""");
         List<Object> args = new ArrayList<>(List.of(principal, principal, roles.toArray(String[]::new)));
         if (cursor != null && !cursor.isBlank()) {

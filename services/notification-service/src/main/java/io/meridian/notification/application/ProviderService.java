@@ -28,9 +28,8 @@ public class ProviderService {
     }
 
     /**
-     * Creates a provider. {@code credentials_ref} is a {@code secret} column, so the contract omits it from every
-     * payload (spec defect: it is also NOT NULL). It is taken from {@code config.credentials_ref} (and removed from
-     * the stored config) or defaults to the conventional vault path {@code vault:notification/providers/<id>}.
+     * Creates a provider. {@code credentials_ref} (a vault path, not the secret itself) defaults to the
+     * conventional path {@code vault:notification/providers/<id>} when not given.
      */
     @org.springframework.transaction.annotation.Transactional
     public String create(Object body) {
@@ -38,12 +37,9 @@ public class ProviderService {
         validate(values);
         String id = io.meridian.common.id.Ids.newId().toString();
         values.put("id", id);
-        String ref = "vault:notification/providers/" + id;
-        if (values.get("config") instanceof ObjectNode config && config.hasNonNull("credentials_ref")) {
-            ref = config.get("credentials_ref").asString();
-            config.remove("credentials_ref");
+        if (values.path("credentials_ref").asString("").isBlank()) {
+            values.put("credentials_ref", "vault:notification/providers/" + id);
         }
-        values.put("credentials_ref", ref);
         return crud.insert("notification_provider", values);
     }
 
@@ -56,6 +52,15 @@ public class ProviderService {
         if (config != null && config.has("smtp_port")
                 && (config.get("smtp_port").asInt() < 1 || config.get("smtp_port").asInt() > 65535)) {
             throw ApiException.unprocessable("invalid_config", "config.smtp_port must be a TCP port");
+        }
+        JsonNode scope = p.get("country_scope");
+        if (scope != null && !scope.isNull()) {
+            for (JsonNode c : scope) {
+                if (!c.asString("").matches("[A-Z]{2}")) {
+                    throw ApiException.unprocessable("invalid_country_scope",
+                            "country_scope must be ISO 3166-1 alpha-2 codes, e.g. [\"KE\",\"UG\"]");
+                }
+            }
         }
     }
 

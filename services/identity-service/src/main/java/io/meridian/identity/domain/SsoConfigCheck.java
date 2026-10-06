@@ -31,7 +31,7 @@ public final class SsoConfigCheck {
     private SsoConfigCheck() {}
 
     public static List<Check> run(String protocol, String issuerUrl, String metadataUrl, String clientId,
-                                  boolean hasClientSecret, String signingCertificate, Instant now) {
+                                  boolean hasClientSecretRef, String signingCertificate, Instant now) {
         List<Check> checks = new ArrayList<>();
         checks.add(httpsUrl("issuer_url", issuerUrl, true));
         if (metadataUrl != null && !metadataUrl.isBlank()) {
@@ -40,8 +40,9 @@ public final class SsoConfigCheck {
         if ("OIDC".equals(protocol)) {
             boolean ok = clientId != null && !clientId.isBlank();
             checks.add(new Check("client_id", ok, ok ? "client id configured" : "OIDC requires a client_id"));
-            checks.add(new Check("client_credentials", hasClientSecret || ok,
-                    hasClientSecret ? "client secret configured" : "no client secret: PKCE / private_key_jwt assumed"));
+            checks.add(new Check("client_credentials", hasClientSecretRef || ok,
+                    hasClientSecretRef ? "client secret vault reference configured"
+                            : "no client_secret_ref: PKCE / private_key_jwt assumed"));
         } else if ("SAML2".equals(protocol)) {
             checks.add(certificate(signingCertificate, now));
             boolean ok = metadataUrl != null && !metadataUrl.isBlank();

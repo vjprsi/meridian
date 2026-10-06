@@ -36,16 +36,15 @@ public class ModulesController implements ModulesApi {
     @Override
     public ResponseEntity<TenantModule> modulesUpdate(UUID id, String ifMatch, TenantModuleUpdate body) {
         TenantContext.require();
-        modules.checkPatch(id, body);
         return crud.update("tenant_module", TenantModule.class, body, ifMatch, Crud.params().with("id", id));
     }
 
     @Override
     public ResponseEntity<ApprovalRequest> modulesEnable(UUID id, String idempotencyKey, ModulesEnableRequest body) {
         TenantContext.require();
-        JsonNode req = body == null ? json.createObjectNode() : json.valueToTree(body);
-        return idempotency.execute(idempotencyKey, req, ApprovalRequest.class,
-                () -> Responses.of(HttpStatus.OK, modules.requestEnable(id, req.get("config"), idempotencyKey),
+        JsonNode config = body == null || body.getConfig() == null ? null : json.valueToTree(body.getConfig());
+        return idempotency.execute(idempotencyKey, body == null ? "enable:" + id : body, ApprovalRequest.class,
+                () -> Responses.of(HttpStatus.OK, modules.requestEnable(id, config, idempotencyKey),
                         ApprovalRequest.class, json));
     }
 

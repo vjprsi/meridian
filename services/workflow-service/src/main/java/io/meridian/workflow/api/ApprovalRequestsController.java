@@ -52,7 +52,7 @@ public class ApprovalRequestsController implements ApprovalRequestsApi {
     public ResponseEntity<ApprovalRequest> approvalRequestsApprove(UUID id, String idempotencyKey,
                                                                    ApprovalRequestsApproveRequest body) {
         var caller = callers.current();
-        String comment = text(body, "comment");
+        String comment = body == null ? null : body.getComment();
         return idempotency.execute(idempotencyKey, Actions.fingerprint("approve", id, body), ApprovalRequest.class,
                 () -> ResponseEntity.ok(model(approvals.approve(id, comment, caller))));
     }
@@ -61,7 +61,7 @@ public class ApprovalRequestsController implements ApprovalRequestsApi {
     public ResponseEntity<ApprovalRequest> approvalRequestsReject(UUID id, String idempotencyKey,
                                                                   ApprovalRequestsRejectRequest body) {
         var caller = callers.current();
-        String comment = text(body, "comment");
+        String comment = body == null ? null : body.getComment();
         return idempotency.execute(idempotencyKey, Actions.fingerprint("reject", id, body), ApprovalRequest.class,
                 () -> ResponseEntity.ok(model(approvals.reject(id, comment, caller))));
     }
@@ -70,7 +70,7 @@ public class ApprovalRequestsController implements ApprovalRequestsApi {
     public ResponseEntity<ApprovalRequest> approvalRequestsRequestChanges(UUID id, String idempotencyKey,
                                                                           ApprovalRequestsRequestChangesRequest body) {
         var caller = callers.current();
-        String comment = text(body, "comment");
+        String comment = body == null ? null : body.getComment();
         return idempotency.execute(idempotencyKey, Actions.fingerprint("request-changes", id, body), ApprovalRequest.class,
                 () -> ResponseEntity.ok(model(approvals.requestChanges(id, comment, caller))));
     }
@@ -79,7 +79,7 @@ public class ApprovalRequestsController implements ApprovalRequestsApi {
     public ResponseEntity<ApprovalRequest> approvalRequestsCancel(UUID id, String idempotencyKey,
                                                                   ApprovalRequestsCancelRequest body) {
         var caller = callers.current();
-        String reason = text(body, "reason");
+        String reason = body == null ? null : body.getReason();
         return idempotency.execute(idempotencyKey, Actions.fingerprint("cancel", id, body), ApprovalRequest.class,
                 () -> ResponseEntity.ok(model(approvals.cancel(id, reason, caller))));
     }
@@ -99,13 +99,5 @@ public class ApprovalRequestsController implements ApprovalRequestsApi {
 
     private ApprovalRequest model(JsonNode row) {
         return crud.read(row.toString(), ApprovalRequest.class);
-    }
-
-    private String text(Object body, String field) {
-        if (body == null) {
-            return null;
-        }
-        JsonNode n = json.valueToTree(body);
-        return n.hasNonNull(field) ? n.get(field).asString() : null;
     }
 }

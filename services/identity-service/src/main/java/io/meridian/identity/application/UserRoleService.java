@@ -55,7 +55,6 @@ public class UserRoleService {
             throw ApiException.unprocessable("privileged_role_requires_elevation",
                     "Privileged role " + role.get("code").asString() + " is granted only via POST /v1/user-roles/elevate");
         }
-        v.remove("approval_request_id");
         String scopeType = v.hasNonNull("scope_type") ? v.get("scope_type").asString() : "TENANT";
         if ("TENANT".equals(scopeType) == v.hasNonNull("scope_id")) {
             throw ApiException.unprocessable("invalid_scope",

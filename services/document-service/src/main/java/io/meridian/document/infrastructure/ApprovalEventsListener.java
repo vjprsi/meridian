@@ -25,7 +25,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class ApprovalEventsListener {
     private static final Logger log = LoggerFactory.getLogger(ApprovalEventsListener.class);
     private static final Set<String> TYPES = Set.of("platform.approval_request.approved", "platform.approval_request.rejected",
-            "platform.approval_request.executed", "platform.approval_request.expired");
+            "platform.approval_request.executed", "platform.approval_request.expired",
+            "platform.approval_request.changes_requested", "platform.approval_request.cancelled");
 
     private final TemplateService templates;
     private final JsonMapper json;

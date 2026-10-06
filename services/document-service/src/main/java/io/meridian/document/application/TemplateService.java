@@ -5,6 +5,7 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.document.domain.Lifecycles;
 import io.meridian.document.domain.TemplateRenderer;
 import io.meridian.document.infrastructure.DocumentStore;
+import io.meridian.events.OutboxWriter;
 import io.meridian.web.client.ServiceClient;
 import io.meridian.web.crud.CrudEngine;
 import java.util.ArrayList;
@@ -31,8 +32,11 @@ public class TemplateService {
     private final ServiceClient services;
     private final JdbcClient jdbc;
     private final JsonMapper json;
+    private final OutboxWriter outbox;
 
-    public TemplateService(CrudEngine crud, DocumentStore store, ServiceClient services, JdbcClient jdbc, JsonMapper json) {
+    public TemplateService(CrudEngine crud, DocumentStore store, ServiceClient services, JdbcClient jdbc, JsonMapper json,
+                           OutboxWriter outbox) {
+        this.outbox = outbox;
         this.crud = crud;
         this.store = store;
         this.services = services;
@@ -43,10 +47,6 @@ public class TemplateService {
     @Transactional
     public String create(Object body) {
         ObjectNode values = crud.toColumns("document_template", body);
-        if (values.hasNonNull("status") && !"DRAFT".equals(values.get("status").asString())) {
-            throw ApiException.unprocessable("invalid_initial_status",
-                    "Templates are created as DRAFT; use /publish and /retire to change status");
-        }
         if (!values.hasNonNull("body") && !values.hasNonNull("body_document_id")) {
             throw ApiException.unprocessable("template_body_required", "Either body or body_document_id is required");
         }
@@ -71,9 +71,6 @@ public class TemplateService {
             throw ApiException.conflict("template_not_editable",
                     "Only DRAFT templates can be edited; create a new version instead (status is "
                             + current.get("status").asString() + ")");
-        }
-        if (changes.has("status") && !"DRAFT".equals(changes.get("status").asString())) {
-            throw ApiException.unprocessable("status_change_requires_action", "Use /publish or /retire to change status");
         }
         for (String f : List.of("code", "locale")) {
             if (changes.has(f) && !changes.get(f).asString().equals(current.get(f).asString())) {
@@ -127,7 +124,8 @@ public class TemplateService {
 
     /**
      * Outcome of the publish approval (from {@code platform.approval_request.*} events). Approved activates the
-     * version and retires the previously active one; rejected / expired / cancelled returns it to DRAFT.
+     * version and retires the previously active one; rejected / expired / cancelled / changes requested returns it
+     * to DRAFT.
      *
      * @return true when the template changed
      */
@@ -150,9 +148,11 @@ public class TemplateService {
                         .params(TenantContext.principal(), t.get("code").asString(), t.get("locale").asString(), templateId)
                         .update();
                 setStatus(templateId, "ACTIVE");
+                outbox.publish("platform.document_template.activated", "document_template", templateId,
+                        json.readTree(store.row("document_template", templateId)));
                 return true;
             }
-            case "REJECTED", "EXPIRED", "CANCELLED" -> {
+            case "REJECTED", "EXPIRED", "CANCELLED", "CHANGES_REQUESTED" -> {
                 setStatus(templateId, "DRAFT");
                 return true;
             }

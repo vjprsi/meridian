@@ -61,10 +61,6 @@ public class DataExportService {
     public String create(Object body, String idempotencyKey) {
         TenantContext.require();
         ObjectNode v = crud.toColumns(RESOURCE_TYPE, body);
-        // Server-controlled fields.
-        for (String f : new String[] {"approval_request_id", "status", "row_count", "document_id", "expires_at"}) {
-            v.remove(f);
-        }
         String type = v.path("export_type").asString(null);
         if (type == null) {
             throw ApiException.badRequest("validation_failed", "export_type is required");
@@ -173,6 +169,7 @@ public class DataExportService {
                     + " and can no longer be cancelled");
         }
         setStatus(id, "CANCELLED");
+        outbox.publish("platform.data_export_request.cancelled", RESOURCE_TYPE, id, json.readTree(row(id)));
         if (e.approvalRequestId() != null) {
             try {
                 services.post("workflow-service", "/v1/approval-requests/" + e.approvalRequestId() + "/cancel",
@@ -184,6 +181,29 @@ public class DataExportService {
             }
         }
         return row(id);
+    }
+
+    /**
+     * The export's approval request was rejected, sent back for changes or cancelled in workflow-service: a queued
+     * export can never run (an export request cannot be amended), so it is cancelled. Idempotent.
+     */
+    @Transactional
+    public String closeUnapproved(JsonNode approval, String outcome) {
+        TenantContext.require();
+        UUID exportId = UUID.fromString(approval.path("resource_id").asString());
+        ExportRow e = lock(exportId);
+        if (e.approvalRequestId() == null
+                || !e.approvalRequestId().toString().equals(approval.path("id").asString())) {
+            throw ApiException.conflict("approval_mismatch", "Approval does not belong to export " + exportId);
+        }
+        if (!"QUEUED".equals(e.status())) {
+            return row(exportId);
+        }
+        setStatus(exportId, "CANCELLED");
+        String row = row(exportId);
+        outbox.publish("platform.data_export_request.cancelled", RESOURCE_TYPE, exportId, json.readTree(row));
+        log.info("Export {} cancelled: approval {} {}", exportId, approval.path("id").asString(), outcome);
+        return row;
     }
 
     @Transactional(readOnly = true)

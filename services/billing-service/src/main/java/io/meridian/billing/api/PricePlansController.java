@@ -4,6 +4,7 @@ import io.meridian.billing.api.generated.PricePlansApi;
 import io.meridian.billing.api.generated.model.PricePlan;
 import io.meridian.billing.api.generated.model.PricePlanCreate;
 import io.meridian.billing.api.generated.model.PricePlanUpdate;
+import io.meridian.billing.api.generated.model.PricePlansRetireRequest;
 import io.meridian.billing.application.PricePlanService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
@@ -13,7 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Price plans: validated create; status lifecycle DRAFT -> ACTIVE -> RETIRED through PATCH. */
+/** Price plans: validated create and PATCH; lifecycle DRAFT -> ACTIVE (/publish) -> RETIRED (/retire). */
 @RestController
 public class PricePlansController implements PricePlansApi {
     private final PricePlanService plans;
@@ -40,5 +41,25 @@ public class PricePlansController implements PricePlansApi {
         TenantContext.require();
         PricePlan p = crud.read(plans.update(id, Responses.version(ifMatch), body), PricePlan.class);
         return Responses.withEtag(HttpStatus.OK, p, p.getRowVersion());
+    }
+
+    @Override
+    public ResponseEntity<PricePlan> pricePlansPublish(UUID id, String idempotencyKey) {
+        TenantContext.require();
+        return idempotency.execute(idempotencyKey, Responses.fingerprint("op", "publish", "id", id.toString()), PricePlan.class,
+                () -> {
+                    PricePlan p = crud.read(plans.publish(id), PricePlan.class);
+                    return Responses.withEtag(HttpStatus.OK, p, p.getRowVersion());
+                });
+    }
+
+    @Override
+    public ResponseEntity<PricePlan> pricePlansRetire(UUID id, String idempotencyKey, PricePlansRetireRequest body) {
+        TenantContext.require();
+        return idempotency.execute(idempotencyKey, Responses.fingerprint("op", "retire", "id", id.toString(), "body", body),
+                PricePlan.class, () -> {
+                    PricePlan p = crud.read(plans.retire(id, body.getReason()), PricePlan.class);
+                    return Responses.withEtag(HttpStatus.OK, p, p.getRowVersion());
+                });
     }
 }

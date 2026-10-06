@@ -128,7 +128,7 @@ public class OrganizationService {
     public JsonNode createBranch(Object body) {
         ObjectNode v = crud.toColumns("branch", body);
         String status = v.path("status").asString("ACTIVE");
-        if (!Set.of("ACTIVE", "TEMPORARILY_CLOSED").contains(status) || v.hasNonNull("closed_on")) {
+        if (!Set.of("ACTIVE", "TEMPORARILY_CLOSED").contains(status)) {
             throw ApiException.unprocessable("invalid_initial_status", "A branch is created ACTIVE or TEMPORARILY_CLOSED; close it with /close");
         }
         UUID legalEntityId = UUID.fromString(v.get("legal_entity_id").asString());
@@ -153,9 +153,6 @@ public class OrganizationService {
                 throw ApiException.conflict("status_change_requires_action", "Close a branch with /close");
             }
             Lifecycle.require(Lifecycle.BRANCH, "Branch", from, to);
-        }
-        if (v.hasNonNull("closed_on")) {
-            throw ApiException.unprocessable("invalid_field", "closed_on is set by /close");
         }
         UUID legalEntityId = v.hasNonNull("legal_entity_id") ? UUID.fromString(v.get("legal_entity_id").asString())
                 : UUID.fromString(current.get("legal_entity_id").asString());
@@ -186,10 +183,9 @@ public class OrganizationService {
         ObjectNode values = json.createObjectNode();
         values.put("status", "CLOSED");
         values.put("closed_on", closedOn.toString());
+        values.put("close_reason", reason);
         ObjectNode row = store.update("branch", id, values);
-        ObjectNode payload = row.deepCopy();
-        payload.put("close_reason", reason);
-        events.publish("platform.branch.updated", "branch", id, payload);
+        events.publish("platform.branch.closed", "branch", id, row);
         return row;
     }
 

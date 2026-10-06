@@ -33,6 +33,8 @@ import tools.jackson.databind.node.ObjectNode;
 public class DocumentService {
     private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
     private static final Pattern COUNTRY = Pattern.compile("[A-Z]{2}");
+    /** Object storage class of archived content. */
+    static final String ARCHIVE_STORAGE_CLASS = "GLACIER_IR";
 
     private final CrudEngine crud;
     private final DocumentStore store;
@@ -65,10 +67,6 @@ public class DocumentService {
         validateContentType(values.path("content_type").asString(null));
         validateDates(values);
         normaliseCountry(values);
-        if (values.path("legal_hold").asBoolean(false)) {
-            throw ApiException.unprocessable("legal_hold_requires_action",
-                    "Place a legal hold with POST /v1/documents/{id}/legal-hold so that a reason is recorded");
-        }
         UUID id = Ids.newId();
         String key = TenantContext.require() + "/" + id + "/" + Lifecycles.safeFileName(values.get("file_name").asString());
         values.put("id", id.toString());
@@ -76,8 +74,6 @@ public class DocumentService {
         values.put("status", "UPLOADING");
         values.put("size_bytes", 0);
         values.put("checksum", "");
-        values.put("legal_hold", false);
-        values.remove("virus_scan_result");
         if (!values.hasNonNull("uploaded_via")) {
             values.put("uploaded_via", "API");
         }
@@ -92,10 +88,6 @@ public class DocumentService {
         String status = current.get("status").asString();
         if ("DELETED".equals(status)) {
             throw ApiException.conflict("document_deleted", "Document " + id + " is deleted");
-        }
-        if (changes.has("legal_hold")) {
-            throw ApiException.unprocessable("legal_hold_requires_action",
-                    "Use POST /v1/documents/{id}/legal-hold to place or lift a legal hold");
         }
         if ((changes.has("file_name") || changes.has("content_type")) && !"UPLOADING".equals(status)) {
             throw ApiException.conflict("content_immutable", "File name and content type are fixed once content is uploaded");
@@ -135,6 +127,7 @@ public class DocumentService {
                     "Document " + id + " must be retained until " + retention);
         }
         transition(id, status, "DELETED");
+        outbox.publish("platform.document.deleted", "document", id, event(store.row("document", id)));
     }
 
     // ------------------------------------------------------------------ content
@@ -250,21 +243,15 @@ public class DocumentService {
             throw ApiException.conflict("invalid_transition",
                     hold ? "Document is already under legal hold" : "Document is not under legal hold");
         }
-        ObjectNode entry = json.createObjectNode();
-        entry.put("action", hold ? "PLACED" : "LIFTED");
-        entry.put("reason", reason);
-        entry.put("by", TenantContext.principal());
-        entry.put("at", Instant.now().toString());
         jdbc.sql("""
-                update document set legal_hold = ?, updated_by = ?,
-                       metadata = coalesce(metadata, '{}'::jsonb)
-                           || jsonb_build_object('legal_hold_reason', ?::text,
-                                                 'legal_hold_history',
-                                                 coalesce(metadata->'legal_hold_history', '[]'::jsonb) || jsonb_build_array(?::jsonb))
+                update document set legal_hold = ?, legal_hold_reason = ?, legal_hold_changed_at = now(),
+                       legal_hold_changed_by = ?, updated_by = ?
                 where id = ?""")
-                .params(hold, TenantContext.principal(), hold ? reason : null, json.writeValueAsString(entry), id)
-                .update();
-        return store.row("document", id);
+                .params(hold, reason, TenantContext.principal(), TenantContext.principal(), id).update();
+        String row = store.row("document", id);
+        outbox.publish(hold ? "platform.document.legal_hold_placed" : "platform.document.legal_hold_lifted",
+                "document", id, event(row));
+        return row;
     }
 
     @Transactional
@@ -272,11 +259,11 @@ public class DocumentService {
         JsonNode d = store.lock("document", id);
         String status = d.get("status").asString();
         transition(id, status, "ARCHIVED");
-        jdbc.sql("""
-                update document set metadata = coalesce(metadata, '{}'::jsonb)
-                    || jsonb_build_object('archived_at', now(), 'storage_class', 'GLACIER_IR') where id = ?""")
-                .param(id).update();
-        return store.row("document", id);
+        jdbc.sql("update document set archived_at = now(), storage_class = ? where id = ?")
+                .params(ARCHIVE_STORAGE_CLASS, id).update();
+        String row = store.row("document", id);
+        outbox.publish("platform.document.archived", "document", id, event(row));
+        return row;
     }
 
     /** Publishes {@code platform.document.expiring} once per identity document expiring within the window. */
@@ -285,16 +272,13 @@ public class DocumentService {
         List<String> rows = jdbc.sql("""
                 select row_to_json(d)::text from document d
                 where status = 'AVAILABLE' and document_type = any(?) and expires_on is not null
-                  and expires_on between ? and ? and (metadata is null or metadata->>'expiry_notified_on' is null)
+                  and expires_on between ? and ? and expiry_notified_on is null
                 for update skip locked""")
                 .params(Lifecycles.IDENTITY_TYPES.toArray(String[]::new), today, today.plusDays(daysAhead))
                 .query(String.class).list();
         for (String row : rows) {
             UUID id = UUID.fromString(json.readTree(row).get("id").asString());
-            jdbc.sql("""
-                    update document set metadata = coalesce(metadata, '{}'::jsonb)
-                        || jsonb_build_object('expiry_notified_on', ?::text) where id = ?""")
-                    .params(today.toString(), id).update();
+            jdbc.sql("update document set expiry_notified_on = ? where id = ?").params(today, id).update();
             outbox.publish("platform.document.expiring", "document", id, event(store.row("document", id)));
         }
         return rows.size();
@@ -302,10 +286,10 @@ public class DocumentService {
 
     // ------------------------------------------------------------------ helpers
 
-    /** Event payload: the API representation (hidden storage columns removed). */
+    /** Event payload: the API representation (hidden storage and bookkeeping columns removed). */
     public JsonNode event(String row) {
         ObjectNode n = (ObjectNode) json.readTree(row);
-        n.remove(Set.of("storage_uri", "encryption_key_id", "tenant_id"));
+        n.remove(Set.of("storage_uri", "encryption_key_id", "expiry_notified_on", "tenant_id"));
         return n;
     }
 

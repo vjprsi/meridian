@@ -7,6 +7,7 @@ import io.meridian.identity.api.generated.model.AccessPolicyCreate;
 import io.meridian.identity.api.generated.model.AccessPolicyUpdate;
 import io.meridian.identity.application.AuthorizationService;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,10 +40,10 @@ public class AccessPoliciesController implements AccessPoliciesApi {
     }
 
     @Override
-    public ResponseEntity<Void> accessPoliciesSimulate(String idempotencyKey, AccessPoliciesSimulateRequest body) {
-        JsonNode req = json.valueToTree(body);
-        return Responses.body(idempotency.execute(idempotencyKey, body, JsonNode.class,
-                () -> ResponseEntity.ok(authz.simulate(UUID.fromString(req.get("user_id").asString()),
-                        req.path("action").asString(null), req.get("resource")))));
+    public ResponseEntity<Map<String, Object>> accessPoliciesSimulate(String idempotencyKey,
+                                                                      AccessPoliciesSimulateRequest body) {
+        return Responses.object(json, idempotency.execute(idempotencyKey, body, JsonNode.class,
+                () -> ResponseEntity.ok(authz.simulate(body.getUserId(), body.getAction(),
+                        json.valueToTree(body.getResource())))));
     }
 }

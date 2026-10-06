@@ -8,10 +8,12 @@ import io.meridian.notification.api.generated.model.NotificationDeliveryAttemptP
 import io.meridian.notification.api.generated.model.NotificationsProviderCallbacksEventsRequest;
 import io.meridian.notification.api.generated.model.NotificationsSendTemplatedRequest;
 import io.meridian.notification.application.NotificationService;
+import io.meridian.notification.application.ProviderCallbackService;
+import io.meridian.notification.domain.CallbackSignature;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
-import java.util.LinkedHashMap;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -24,16 +26,20 @@ import tools.jackson.databind.json.JsonMapper;
 @RestController
 public class NotificationsController implements NotificationsApi {
     private final NotificationService notifications;
+    private final ProviderCallbackService callbacks;
     private final CrudEngine crud;
     private final Idempotency idempotency;
     private final JsonMapper json;
+    private final HttpServletRequest request;
 
-    public NotificationsController(NotificationService notifications, CrudEngine crud, Idempotency idempotency,
-                                   JsonMapper json) {
+    public NotificationsController(NotificationService notifications, ProviderCallbackService callbacks, CrudEngine crud,
+                                   Idempotency idempotency, JsonMapper json, HttpServletRequest request) {
         this.notifications = notifications;
+        this.callbacks = callbacks;
         this.crud = crud;
         this.idempotency = idempotency;
         this.json = json;
+        this.request = request;
     }
 
     @Override
@@ -43,17 +49,17 @@ public class NotificationsController implements NotificationsApi {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public ResponseEntity<Notification> notificationsSendTemplated(String idempotencyKey,
                                                                    NotificationsSendTemplatedRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        Map<String, Object> vars = req.hasNonNull("variables")
-                ? json.convertValue(req.get("variables"), LinkedHashMap.class) : Map.of();
-        return idempotency.execute(idempotencyKey, body, Notification.class, () -> submitted(notifications.sendTemplated(
-                new NotificationService.TemplatedSend(req.get("template_code").asString(),
-                        req.get("recipient_type").asString(), UUID.fromString(req.get("recipient_id").asString()),
-                        req.hasNonNull("channel") ? req.get("channel").asString() : null, vars, null, null, null, null))));
+        var send = new NotificationService.TemplatedSend(body.getTemplateCode(), body.getRecipientType().getValue(),
+                body.getRecipientId(), body.getChannel() == null ? null : body.getChannel().getValue(),
+                body.getVariables() == null ? Map.of() : body.getVariables(),
+                body.getCategory() == null ? null : body.getCategory().getValue(), null, null, body.getLocale(),
+                body.getDestination(), body.getPriority() == null ? null : body.getPriority().getValue(),
+                body.getScheduledAt(), body.getExpiresAt(), body.getData());
+        return idempotency.execute(idempotencyKey, body, Notification.class,
+                () -> submitted(notifications.sendTemplated(send)));
     }
 
     @Override
@@ -84,16 +90,12 @@ public class NotificationsController implements NotificationsApi {
                 Crud.params().with("notification_id", id).with("limit", limit).with("cursor", cursor));
     }
 
+    /** Public, signature-verified delivery receipt; the tenant comes from the registered callback URL. */
     @Override
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public ResponseEntity<Void> notificationsProviderCallbacksEvents(String provider, String idempotencyKey,
-                                                                     NotificationsProviderCallbacksEventsRequest body) {
-        TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        Map<String, Object> payload = json.convertValue(req.get("payload"), LinkedHashMap.class);
-        ResponseEntity<Map> r = idempotency.execute(idempotencyKey, Map.of("provider", provider, "body", req), Map.class,
-                () -> ResponseEntity.ok(notifications.providerCallback(provider, payload)));
-        return (ResponseEntity) r;
+    public ResponseEntity<Map<String, Object>> notificationsProviderCallbacksEvents(
+            String provider, UUID tenantId, NotificationsProviderCallbacksEventsRequest body) {
+        return ResponseEntity.ok(callbacks.handle(provider, tenantId, body.getPayload(),
+                request.getHeader(CallbackSignature.HEADER)));
     }
 
     private ResponseEntity<Notification> submitted(NotificationService.Submitted s) {

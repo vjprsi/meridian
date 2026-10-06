@@ -77,9 +77,9 @@ class WorkflowFlowIT {
     void setUp() throws Exception {
         paymentPolicy = post("/v1/approval-policies", """
                 {"code":"PAY-RELEASE","name":"Payment release","resource_type":"payment","action":"release",
-                 "approval_levels":{"levels":[
+                 "approval_levels":[
                    {"level":1,"approver_roles":["CHECKER"],"required_approvals":1},
-                   {"level":2,"approver_roles":["MANAGER"],"min_amount":"10000","required_approvals":1}]}}""",
+                   {"level":2,"approver_roles":["MANAGER"],"min_amount":"10000","required_approvals":1}]}""",
                 "admin", "", 201).get("id").asString();
     }
 
@@ -90,12 +90,19 @@ class WorkflowFlowIT {
     void policyLevelsAreValidated() throws Exception {
         JsonNode bad = post("/v1/approval-policies", """
                 {"code":"BAD","name":"Bad","resource_type":"loan","action":"disburse",
-                 "approval_levels":{"levels":[{"level":2,"approver_roles":["X"]}]}}""", "admin", "", 422);
+                 "approval_levels":[{"level":2,"approver_roles":["X"]}]}""", "admin", "", 422);
         assertThat(bad.get("code").asString()).isEqualTo("invalid_approval_levels");
         JsonNode descending = post("/v1/approval-policies", """
                 {"code":"BAD2","name":"Bad","resource_type":"loan","action":"disburse",
-                 "approval_levels":{"levels":[{"min_amount":"500"},{"min_amount":"100"}]}}""", "admin", "", 422);
+                 "approval_levels":[{"min_amount":"500"},{"min_amount":"100"}]}""", "admin", "", 422);
         assertThat(descending.get("code").asString()).isEqualTo("invalid_approval_levels");
+        JsonNode empty = post("/v1/approval-policies", """
+                {"code":"BAD4","name":"Bad","resource_type":"loan","action":"disburse","approval_levels":[]}""",
+                "admin", "", 422);
+        assertThat(empty.get("code").asString()).isEqualTo("invalid_approval_levels");
+        JsonNode policy = get("/v1/approval-policies/" + paymentPolicy, TENANT, "admin", "");
+        assertThat(policy.get("approval_levels").isArray()).isTrue();
+        assertThat(policy.get("approval_levels")).hasSize(2);
         JsonNode missing = post("/v1/approval-policies", """
                 {"code":"BAD3","name":"Bad","resource_type":"loan","action":"disburse"}""", "admin", "", 400);
         assertThat(missing.get("code").asString()).isEqualTo("validation_failed");
@@ -114,6 +121,10 @@ class WorkflowFlowIT {
         assertThat(req.get("required_approvals").asInt()).isEqualTo(2);
         assertThat(req.get("approval_policy_id").asString()).isEqualTo(paymentPolicy);
         assertThat(req.get("expires_at").isNull()).isFalse();
+        assertThat(req.get("approval_route").isArray()).isTrue();
+        assertThat(req.get("approval_route")).hasSize(2);
+        assertThat(req.get("approval_route").get(1).get("approver_roles").get(0).asString()).isEqualTo("MANAGER");
+        assertThat(req.hasNonNull("execution_result")).isFalse();
 
         JsonNode self = post("/v1/approval-requests/" + bigPayment + "/approve", "{}", "alice", "CHECKER", 422);
         assertThat(self.get("code").asString()).isEqualTo("four_eyes_violation");
@@ -184,14 +195,20 @@ class WorkflowFlowIT {
         assertThat(notMaker.get("code").asString()).isEqualTo("not_maker");
         JsonNode cancelled = post("/v1/approval-requests/" + r2 + "/cancel", "{\"reason\":\"duplicate\"}", "alice", "", 200);
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(cancelled.get("cancel_reason").asString()).isEqualTo("duplicate");
+        assertThat(events(r2)).containsExactly("platform.approval_request.created", "platform.approval_request.cancelled");
 
         String r3 = newRequest("alice");
         JsonNode changes = post("/v1/approval-requests/" + r3 + "/request-changes", "{\"comment\":\"attach invoice\"}",
                 "bob", "CHECKER", 200);
-        assertThat(changes.get("status").asString()).isEqualTo("REJECTED");
+        assertThat(changes.get("status").asString()).isEqualTo("CHANGES_REQUESTED");
+        assertThat(changes.get("decided_at").isNull()).isFalse();
         JsonNode d = get("/v1/approval-requests/" + r3 + "/decisions", TENANT, "bob", "").get("data").get(0);
         assertThat(d.get("decision").asString()).isEqualTo("REQUEST_CHANGES");
+        post("/v1/approval-requests/" + r3 + "/approve", "{}", "carol", "CHECKER", 409);
         assertThat(events(r1)).contains("platform.approval_request.rejected");
+        assertThat(events(r3)).containsExactly("platform.approval_request.created",
+                "platform.approval_request.changes_requested");
     }
 
     @Test
@@ -247,9 +264,13 @@ class WorkflowFlowIT {
         definitionV1 = v1.get("id").asString();
         assertThat(v1.get("version").asInt()).isEqualTo(1);
         assertThat(v1.get("status").asString()).isEqualTo("DRAFT");
-        JsonNode v2 = post("/v1/workflows/definitions", DEFINITION, "alice", "", 201);
+        // status is read-only: a client-supplied value is ignored
+        JsonNode v2 = post("/v1/workflows/definitions",
+                DEFINITION.replace("\"name\":\"Retail onboarding\",", "\"name\":\"Retail onboarding\",\"status\":\"PUBLISHED\","),
+                "alice", "", 201);
         definitionV2 = v2.get("id").asString();
         assertThat(v2.get("version").asInt()).isEqualTo(2);
+        assertThat(v2.get("status").asString()).isEqualTo("DRAFT");
 
         JsonNode notPublished = post("/v1/workflows/instances", """
                 {"workflow_definition_id":"%s","variables":{"account_ref":"ACC-1"}}""".formatted(definitionV1), "alice", "", 422);
@@ -303,6 +324,8 @@ class WorkflowFlowIT {
         assertThat(task.get("workflow_instance_id").asString()).isEqualTo(onboarding);
         assertThat(task.get("priority").asString()).isEqualTo("HIGH");
         assertThat(task.get("due_at").isNull()).isFalse();
+        assertThat(task.get("candidate_roles").isArray()).isTrue();
+        assertThat(task.get("candidate_roles").get(0).asString()).isEqualTo("KYC_OFFICER");
 
         JsonNode notCandidate = post("/v1/tasks/" + reviewTask + "/claim", null, "dave", "TELLER", 403);
         assertThat(notCandidate.get("code").asString()).isEqualTo("not_candidate");
@@ -337,6 +360,9 @@ class WorkflowFlowIT {
         assertThat(retried.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(retried.get("completed_at").isNull()).isFalse();
         assertThat(retried.get("variables").get("book").get("status").asString()).isEqualTo("ACTIVE");
+        assertThat(retried.get("outcome").asString()).isEqualTo("COMPLETED");
+        assertThat(retried.get("variables").has("_engine")).isFalse();
+        assertThat(retried.has("engine_state")).isFalse();
         JsonNode retryAgain = post("/v1/workflows/instances/" + onboarding + "/retry", null, "alice", "", 409);
         assertThat(retryAgain.get("code").asString()).isEqualTo("invalid_transition");
 
@@ -377,6 +403,7 @@ class WorkflowFlowIT {
         JsonNode tasks = get("/v1/tasks?status=CANCELLED", TENANT, "alice", "").get("data");
         assertThat(tasks).anySatisfy(t -> assertThat(t.get("workflow_instance_id").asString()).isEqualTo(toCancel));
         post("/v1/workflows/instances/" + toCancel + "/cancel", "{\"reason\":\"again\"}", "alice", "", 409);
+        assertThat(events(toCancel)).containsExactly("platform.workflow_instance.cancelled");
     }
 
     @Test
@@ -399,20 +426,55 @@ class WorkflowFlowIT {
         JsonNode escalated = post("/v1/tasks/" + id + "/escalate", "{\"reason\":\"VIP customer waiting\"}", "frank", "", 200);
         assertThat(escalated.get("status").asString()).isEqualTo("ESCALATED");
         assertThat(escalated.get("priority").asString()).isEqualTo("URGENT");
+        assertThat(escalated.get("escalation_reason").asString()).isEqualTo("VIP customer waiting");
+        assertThat(events(id)).contains("platform.work_task.escalated");
         post("/v1/tasks/" + id + "/escalate", "{\"reason\":\"again\"}", "frank", "", 409);
 
         int version = get("/v1/tasks/" + id, TENANT, "alice", "").get("row_version").asInt();
-        HttpResponse<String> patchStatus = raw("PATCH", "/v1/tasks/" + id, "{\"status\":\"COMPLETED\"}", null, TENANT,
+        // status and outcome are read-only: a PATCH silently ignores them
+        HttpResponse<String> patchStatus = raw("PATCH", "/v1/tasks/" + id,
+                "{\"status\":\"COMPLETED\",\"outcome\":\"APPROVED\",\"due_at\":\"2020-01-01T00:00:00Z\"}", null, TENANT,
                 "alice", "", String.valueOf(version));
-        assertThat(patchStatus.statusCode()).isEqualTo(422);
-        HttpResponse<String> patchDue = raw("PATCH", "/v1/tasks/" + id, "{\"due_at\":\"2020-01-01T00:00:00Z\"}", null,
-                TENANT, "alice", "", String.valueOf(version));
-        assertThat(patchDue.statusCode()).as(patchDue.body()).isEqualTo(200);
+        assertThat(patchStatus.statusCode()).as(patchStatus.body()).isEqualTo(200);
+        JsonNode patched = json.readTree(patchStatus.body());
+        assertThat(patched.get("status").asString()).isEqualTo("ESCALATED");
+        assertThat(patched.hasNonNull("outcome")).isFalse();
+        HttpResponse<String> patchAssignee = raw("PATCH", "/v1/tasks/" + id, "{\"assignee\":\"zed\"}", null,
+                TENANT, "alice", "", String.valueOf(patched.get("row_version").asInt()));
+        assertThat(patchAssignee.statusCode()).isEqualTo(422);
 
         SweepService.Result r = TenantContext.callAs(UUID.fromString(TENANT), "system", sweep::processDue);
         assertThat(r.breachedTasks()).isGreaterThanOrEqualTo(1);
         assertThat(get("/v1/tasks/" + id, TENANT, "alice", "").get("sla_breached").asBoolean()).isTrue();
         assertThat(events(id)).contains("platform.work_task.sla_breached");
+    }
+
+    @Test
+    @Order(15)
+    void tasksCanBeCreatedDirectly() throws Exception {
+        JsonNode task = post("/v1/tasks", """
+                {"task_type":"PAYMENT_REPAIR","title":"Repair payment","queue":"payments-ops",
+                 "candidate_roles":["OPS"],"priority":"HIGH","status":"COMPLETED","outcome":"DONE",
+                 "workflow_instance_id":"%s"}""".formatted(UUID.randomUUID()), "alice", "", 201);
+        String id = task.get("id").asString();
+        assertThat(task.get("status").asString()).isEqualTo("OPEN");
+        assertThat(task.hasNonNull("outcome")).isFalse();
+        assertThat(task.hasNonNull("workflow_instance_id")).isFalse();
+        assertThat(task.get("candidate_roles").get(0).asString()).isEqualTo("OPS");
+        assertThat(events(id)).containsExactly("platform.work_task.created");
+
+        JsonNode notCandidate = post("/v1/tasks/" + id + "/claim", null, "gus", "TELLER", 403);
+        assertThat(notCandidate.get("code").asString()).isEqualTo("not_candidate");
+        post("/v1/tasks/" + id + "/claim", null, "gus", "OPS", 200);
+        JsonNode done = post("/v1/tasks/" + id + "/complete", "{\"outcome\":\"REPAIRED\"}", "gus", "OPS", 200);
+        assertThat(done.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(done.get("outcome").asString()).isEqualTo("REPAIRED");
+
+        JsonNode assigned = post("/v1/tasks", """
+                {"task_type":"REVIEW","title":"Review","queue":"ops","assignee":"hank"}""", "alice", "", 201);
+        assertThat(assigned.get("status").asString()).isEqualTo("CLAIMED");
+        JsonNode missing = post("/v1/tasks", "{\"title\":\"x\"}", "alice", "", 400);
+        assertThat(missing.get("code").asString()).isEqualTo("validation_failed");
     }
 
     @Test

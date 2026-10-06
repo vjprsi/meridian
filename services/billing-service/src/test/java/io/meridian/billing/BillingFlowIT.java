@@ -94,16 +94,28 @@ class BillingFlowIT {
         JsonNode missing = expect(send("POST", "/v1/billing/price-plans", "{\"code\":\"X\"}", key(), TENANT), 400);
         assertThat(missing.get("code").asString()).isEqualTo("validation_failed");
 
-        JsonNode active = patch("/v1/billing/price-plans/" + basic, "{\"status\":\"ACTIVE\"}", 1, 200);
+        // status is read-only: a PATCHed status is ignored; the lifecycle goes through /publish and /retire
+        JsonNode ignored = patch("/v1/billing/price-plans/" + basic, "{\"status\":\"ACTIVE\",\"name\":\"Basic\"}", 1, 200);
+        assertThat(ignored.get("status").asString()).isEqualTo("DRAFT");
+        JsonNode active = post("/v1/billing/price-plans/" + basic + "/publish", null, 200);
         assertThat(active.get("status").asString()).isEqualTo("ACTIVE");
-        patch("/v1/billing/price-plans/" + pro, "{\"status\":\"ACTIVE\"}", 1, 200);
-        JsonNode locked = patch("/v1/billing/price-plans/" + basic, "{\"platform_fee\":\"1.00\"}", 2, 409);
+        assertThat(expect(send("POST", "/v1/billing/price-plans/" + basic + "/publish", null, key(), TENANT), 409)
+                .get("code").asString()).isEqualTo("invalid_transition");
+        post("/v1/billing/price-plans/" + pro + "/publish", null, 200);
+        JsonNode locked = patch("/v1/billing/price-plans/" + basic, "{\"platform_fee\":\"1.00\"}", 3, 409);
         assertThat(locked.get("code").asString()).isEqualTo("plan_not_editable");
 
         String retired = createPlan("OLD", "USD", "5.00", "{}").get("id").asString();
-        patch("/v1/billing/price-plans/" + retired, "{\"status\":\"RETIRED\"}", 1, 200);
-        JsonNode back = patch("/v1/billing/price-plans/" + retired, "{\"status\":\"ACTIVE\"}", 2, 409);
+        assertThat(expect(send("POST", "/v1/billing/price-plans/" + retired + "/retire", "{}", key(), TENANT), 400)
+                .get("code").asString()).isEqualTo("validation_failed");
+        JsonNode retiredPlan = post("/v1/billing/price-plans/" + retired + "/retire", "{\"reason\":\"superseded\"}", 200);
+        assertThat(retiredPlan.get("status").asString()).isEqualTo("RETIRED");
+        assertThat(retiredPlan.get("retire_reason").asString()).isEqualTo("superseded");
+        assertThat(retiredPlan.hasNonNull("retired_at")).isTrue();
+        JsonNode back = expect(send("POST", "/v1/billing/price-plans/" + retired + "/publish", null, key(), TENANT), 409);
         assertThat(back.get("code").asString()).isEqualTo("invalid_transition");
+        assertThat(events("platform.price_plan.published")).isEqualTo(2);
+        assertThat(events("platform.price_plan.retired")).isEqualTo(1);
     }
 
     @Test
@@ -111,7 +123,7 @@ class BillingFlowIT {
     void subscriptionRequiresActivePlanAndIsUnique() throws Exception {
         String draft = createPlan("DRAFT", "USD", "1.00", "{}").get("id").asString();
         String eur = createPlan("EUR", "EUR", "1.00", "{}").get("id").asString();
-        patch("/v1/billing/price-plans/" + eur, "{\"status\":\"ACTIVE\"}", 1, 200);
+        post("/v1/billing/price-plans/" + eur + "/publish", null, 200);
 
         assertThat(expect(send("POST", "/v1/billing/subscriptions", subBody(draft, "USD"), key(), TENANT), 422)
                 .get("code").asString()).isEqualTo("plan_not_active");
@@ -127,7 +139,8 @@ class BillingFlowIT {
         JsonNode immutable = patch("/v1/billing/subscriptions/" + subscription,
                 "{\"price_plan_id\":\"" + pro + "\"}", 1, 422);
         assertThat(immutable.get("code").asString()).isEqualTo("immutable_field");
-        assertThat(events("platform.tenant_subscription.changed")).isEqualTo(1);
+        assertThat(events("platform.tenant_subscription.created")).isEqualTo(1);
+        assertThat(events("platform.tenant_subscription.changed")).isZero();
     }
 
     @Test
@@ -153,7 +166,9 @@ class BillingFlowIT {
         assertThat(metric(summary, "ACTIVE_ACCOUNT").get("billable_quantity").asLong()).isEqualTo(150);
         assertThat(metric(summary, "PAYMENT").get("total_quantity").asLong()).isEqualTo(30);
         assertThat(expect(send("GET", "/v1/billing/usage/summary?to=" + p0, null, null, TENANT), 400)
-                .get("code").asString()).isEqualTo("missing_parameter");
+                .get("code").asString()).isEqualTo("malformed_request");
+        assertThat(expect(send("GET", "/v1/billing/usage/summary?from=bad&to=" + p0, null, null, TENANT), 400)
+                .get("code").asString()).isEqualTo("malformed_request");
         assertThat(events("platform.usage_record.recorded")).isEqualTo(5);
     }
 
@@ -162,7 +177,7 @@ class BillingFlowIT {
     void generatesTieredInvoiceOncePerPeriod() throws Exception {
         String body = periodBody(p0, p0.plusMonths(1).minusDays(1));
         HttpResponse<String> r = send("POST", "/v1/billing/invoices/generate", body, "gen-0", TENANT);
-        JsonNode gen = expect(r, 201);
+        JsonNode gen = expect(r, 200);
         assertThat(gen.get("data")).hasSize(1);
         JsonNode inv = gen.get("data").get(0);
         invoice0 = inv.get("id").asString();
@@ -183,13 +198,14 @@ class BillingFlowIT {
         assertThat(tiers).contains("tier 1 (1-1000)", "tier 2 (1001+)");
 
         HttpResponse<String> replay = send("POST", "/v1/billing/invoices/generate", body, "gen-0", TENANT);
-        assertThat(replay.statusCode()).isEqualTo(201);
+        assertThat(replay.statusCode()).isEqualTo(200);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
         assertThat(expect(send("POST", "/v1/billing/invoices/generate", body, key(), TENANT), 409)
                 .get("code").asString()).isEqualTo("invoice_exists");
         assertThat(expect(send("POST", "/v1/billing/invoices/generate", periodBody(p1, p0), key(), TENANT), 422)
                 .get("code").asString()).isEqualTo("invalid_period");
         assertThat(get("/v1/billing/invoices", TENANT).get("data")).hasSize(1);
+        assertThat(events("platform.tenant_invoice.generated")).isEqualTo(1);
     }
 
     @Test
@@ -221,6 +237,15 @@ class BillingFlowIT {
                 .get("code").asString()).isEqualTo("invoice_not_payable");
         assertThat(events("platform.tenant_invoice.issued")).isEqualTo(1);
         assertThat(events("platform.tenant_invoice.paid")).isEqualTo(1);
+        JsonNode payments = get(base + "/payments", TENANT).get("data");
+        assertThat(payments).hasSize(2);
+        payments.forEach(pm -> {
+            assertThat(pm.get("reference").asString()).isEqualTo("WIRE-1");
+            assertThat(pm.get("currency").asString()).isEqualTo("USD");
+        });
+        assertThat(events("platform.tenant_invoice_payment.recorded")).isEqualTo(2);
+        assertThat(send("GET", "/v1/billing/invoices/" + UUID.randomUUID() + "/payments", null, null, TENANT).statusCode())
+                .isEqualTo(404);
     }
 
     @Test
@@ -233,7 +258,9 @@ class BillingFlowIT {
         LocalDate effective = p1.plusDays(10);
         JsonNode changed = post(base + "/change-plan", changeBody(pro, effective), 200);
         assertThat(changed.get("price_plan_id").asString()).isEqualTo(pro);
-        JsonNode adj = changed.get("custom_prices").get("proration_adjustments").get(0);
+        JsonNode adj = changed.get("proration_adjustments").get(0);
+        assertThat(changed.path("custom_prices").has("proration_adjustments")).isFalse();
+        assertThat(events("platform.tenant_subscription.plan_changed")).isEqualTo(1);
         long periodDays = ChronoUnit.DAYS.between(p1, p1.plusMonths(1));
         long remaining = ChronoUnit.DAYS.between(effective, p1.plusMonths(1));
         BigDecimal expected = new BigDecimal("2000").multiply(BigDecimal.valueOf(remaining))
@@ -242,7 +269,7 @@ class BillingFlowIT {
         assertThat(expect(send("POST", base + "/change-plan", changeBody(pro, effective.plusDays(1)), key(), TENANT), 422)
                 .get("code").asString()).isEqualTo("same_plan");
 
-        JsonNode gen = post("/v1/billing/invoices/generate", periodBody(p1, p1.plusMonths(1).minusDays(1)), 201);
+        JsonNode gen = post("/v1/billing/invoices/generate", periodBody(p1, p1.plusMonths(1).minusDays(1)), 200);
         JsonNode inv = gen.get("data").get(0);
         invoice1 = inv.get("id").asString();
         // BASIC fee 1000 for the period start, -10% discount, plus the undiscounted proration charge
@@ -264,6 +291,7 @@ class BillingFlowIT {
         assertThat(n).isEqualTo(1);
         assertThat(get(base, TENANT).get("status").asString()).isEqualTo("OVERDUE");
         assertThat(get("/v1/billing/subscriptions/" + subscription, TENANT).get("status").asString()).isEqualTo("PAST_DUE");
+        assertThat(events("platform.tenant_invoice.marked_overdue")).isEqualTo(1);
 
         String total = get(base, TENANT).get("total").asString();
         assertThat(post(base + "/record-payment", payment(total), 200).get("status").asString()).isEqualTo("PAID");
@@ -274,16 +302,23 @@ class BillingFlowIT {
     @Order(8)
     void voidDraftAndCancelSubscription() throws Exception {
         LocalDate p2 = p1.plusMonths(1);
-        JsonNode inv = post("/v1/billing/invoices/generate", periodBody(p2, p2.plusMonths(1).minusDays(1)), 201)
+        JsonNode inv = post("/v1/billing/invoices/generate", periodBody(p2, p2.plusMonths(1).minusDays(1)), 200)
                 .get("data").get(0);
         String base = "/v1/billing/invoices/" + inv.get("id").asString();
-        assertThat(post(base + "/void", "{\"reason\":\"wrong period\"}", 200).get("status").asString()).isEqualTo("VOID");
+        JsonNode voided = post(base + "/void", "{\"reason\":\"wrong period\"}", 200);
+        assertThat(voided.get("status").asString()).isEqualTo("VOID");
+        assertThat(voided.get("void_reason").asString()).isEqualTo("wrong period");
+        assertThat(voided.hasNonNull("voided_at")).isTrue();
+        assertThat(events("platform.tenant_invoice.voided")).isEqualTo(1);
         assertThat(expect(send("POST", base + "/issue", null, key(), TENANT), 409).get("code").asString())
                 .isEqualTo("invalid_transition");
 
         String sub = "/v1/billing/subscriptions/" + subscription;
         JsonNode cancelled = post(sub + "/cancel", "{\"reason\":\"moving to competitor\"}", 200);
         assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(cancelled.get("cancellation_reason").asString()).isEqualTo("moving to competitor");
+        assertThat(cancelled.hasNonNull("cancelled_at")).isTrue();
+        assertThat(events("platform.tenant_subscription.cancelled")).isEqualTo(1);
         assertThat(cancelled.get("end_date").asString())
                 .isEqualTo(today.withDayOfMonth(1).plusMonths(1).minusDays(1).toString());
         assertThat(expect(send("POST", sub + "/cancel", "{\"reason\":\"again\"}", key(), TENANT), 409)

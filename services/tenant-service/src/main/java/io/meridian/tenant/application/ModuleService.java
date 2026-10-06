@@ -5,7 +5,6 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.tenant.domain.Modules;
 import io.meridian.tenant.infrastructure.TenantStore;
 import io.meridian.tenant.infrastructure.WorkflowApprovals;
-import io.meridian.web.crud.CrudEngine;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashSet;
@@ -28,14 +27,12 @@ public class ModuleService {
     public static final String RESOURCE_TYPE = "tenant_module";
 
     private final TenantStore store;
-    private final CrudEngine crud;
     private final WorkflowApprovals approvals;
     private final Events events;
     private final JsonMapper json;
 
-    public ModuleService(TenantStore store, CrudEngine crud, WorkflowApprovals approvals, Events events, JsonMapper json) {
+    public ModuleService(TenantStore store, WorkflowApprovals approvals, Events events, JsonMapper json) {
         this.store = store;
-        this.crud = crud;
         this.approvals = approvals;
         this.events = events;
         this.json = json;
@@ -127,6 +124,9 @@ public class ModuleService {
         }
         ObjectNode values = json.createObjectNode();
         values.put("is_enabled", enable);
+        if (approval.hasNonNull("id")) {
+            values.put("approval_request_id", approval.get("id").asString());
+        }
         if (enable) {
             values.put("enabled_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
             if (payload.hasNonNull("config")) {
@@ -136,24 +136,8 @@ public class ModuleService {
             values.putNull("enabled_at");
         }
         ObjectNode row = store.update("tenant_module", moduleId, values);
-        ObjectNode event = row.deepCopy();
-        if (approval.hasNonNull("id")) {
-            event.put("approval_request_id", approval.get("id").asString());
-        }
-        events.publish("platform.tenant_module.changed", "tenant_module", moduleId, event);
+        events.publish("platform.tenant_module.changed", "tenant_module", moduleId, row);
         return row;
-    }
-
-    /** PATCH may change config only; enabling/disabling goes through maker-checker. */
-    public void checkPatch(UUID moduleId, Object body) {
-        ObjectNode v = crud.toColumns("tenant_module", body);
-        ObjectNode module = store.require("tenant_module", moduleId);
-        if (v.hasNonNull("is_enabled") && v.get("is_enabled").asBoolean() != module.get("is_enabled").asBoolean()) {
-            throw ApiException.conflict("maker_checker_required", "Enable or disable a module with /enable or /disable");
-        }
-        if (v.hasNonNull("module") && !v.get("module").asString().equals(module.get("module").asString())) {
-            throw ApiException.unprocessable("immutable_field", "module cannot be changed");
-        }
     }
 
     private Set<String> enabledModules() {

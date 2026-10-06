@@ -13,10 +13,10 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Multi-level approval routing. A policy's {@code approval_levels} is
- * {@code {"levels":[{"level":1,"approver_roles":["CHECKER"],"min_amount":"0","required_approvals":1}, ...]}}.
+ * Multi-level approval routing. A policy's {@code approval_levels} is the ordered list
+ * {@code [{"level":1,"approver_roles":["CHECKER"],"min_amount":"0","required_approvals":1}, ...]}.
  * A level applies to a request when it has no {@code min_amount} or the request amount reaches it; the applicable
- * levels, in order, form the request's route, which is snapshotted on the request so later policy edits do not
+ * levels, in order, form the request's route, which is snapshotted on the request ({@code approval_route}) so later policy edits do not
  * change an in-flight approval.
  */
 public final class ApprovalRoute {
@@ -67,10 +67,10 @@ public final class ApprovalRoute {
         if (defaultRequired < 1) {
             throw ApiException.unprocessable("invalid_approval_levels", "required_approvals must be at least 1");
         }
-        JsonNode arr = approvalLevels == null ? null : approvalLevels.get("levels");
+        JsonNode arr = approvalLevels;
         if (arr == null || !arr.isArray() || arr.isEmpty()) {
             throw ApiException.unprocessable("invalid_approval_levels",
-                    "approval_levels must be {\"levels\":[...]} with at least one level");
+                    "approval_levels must be a non-empty array of levels");
         }
         List<Level> out = new ArrayList<>();
         BigDecimal previousMin = null;

@@ -15,11 +15,9 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
- * E-signature envelopes: create, send, remind, cancel, and the signed provider callback.
+ * E-signature envelopes: create, send, remind, cancel, and the public, HMAC-signed provider callback.
  * Contract: generated/openapi/services/document-service.openapi.yaml
  */
 @RestController
@@ -27,15 +25,13 @@ public class EsignRequestsController implements EsignRequestsApi {
     private final EsignService esign;
     private final CrudEngine crud;
     private final Idempotency idempotency;
-    private final JsonMapper json;
     private final HttpServletRequest request;
 
-    public EsignRequestsController(EsignService esign, CrudEngine crud, Idempotency idempotency, JsonMapper json,
+    public EsignRequestsController(EsignService esign, CrudEngine crud, Idempotency idempotency,
                                    HttpServletRequest request) {
         this.esign = esign;
         this.crud = crud;
         this.idempotency = idempotency;
-        this.json = json;
         this.request = request;
     }
 
@@ -63,21 +59,29 @@ public class EsignRequestsController implements EsignRequestsApi {
     @Override
     public ResponseEntity<EsignRequest> esignRequestsCancel(UUID id, String idempotencyKey, EsignRequestsCancelRequest body) {
         TenantContext.require();
-        String reason = json.valueToTree(body).path("reason").asString(null);
         return idempotency.execute(idempotencyKey, Responses.op("cancel", id, body), EsignRequest.class,
-                () -> ResponseEntity.ok(crud.read(esign.cancel(id, reason), EsignRequest.class)));
+                () -> ResponseEntity.ok(crud.read(esign.cancel(id, body.getReason()), EsignRequest.class)));
     }
 
+    /**
+     * Public provider callback (no token, no tenant header, no Idempotency-Key): the HMAC over the exact raw bytes
+     * is verified first, then the owning tenant is resolved from the envelope and the event applied as that tenant.
+     * Redelivered events are absorbed by the state machine (outcome IGNORED / DUPLICATE).
+     */
     @Override
-    public ResponseEntity<Void> esignRequestsCallbacksEvents(String provider, String idempotencyKey,
-                                                             EsignRequestsCallbacksEventsRequest body) {
-        TenantContext.require();
-        byte[] raw = RawBodyConfig.currentBody();
-        String signature = request.getHeader(EsignService.SIGNATURE_HEADER);
-        esign.verifySignature(raw, signature);
-        JsonNode payload = json.valueToTree(body).get("payload");
-        return Responses.erase(idempotency.execute(idempotencyKey,
-                Map.of("op", "esign-callback", "provider", provider, "body", body), JsonNode.class,
-                () -> ResponseEntity.ok(json.valueToTree(esign.callback(provider, raw, signature, payload)))));
+    public ResponseEntity<Map<String, Object>> esignRequestsCallbacksEvents(String provider,
+                                                                           EsignRequestsCallbacksEventsRequest body) {
+        esign.verifySignature(RawBodyConfig.currentBody(), request.getHeader(EsignService.SIGNATURE_HEADER));
+        EsignService.CallbackRoute route = esign.route(provider, body.getEnvelopeId());
+        EsignService.CallbackEvent event = new EsignService.CallbackEvent(body.getEnvelopeId(), body.getEvent(),
+                body.getSignerEmail(), body.getSignedDocumentId(), body.getReason());
+        try {
+            return ResponseEntity.ok(TenantContext.callAs(route.tenantId(), "esign-callback:" + provider,
+                    () -> esign.callback(provider, route.esignRequestId(), event)));
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

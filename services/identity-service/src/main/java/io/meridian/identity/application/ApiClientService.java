@@ -6,10 +6,8 @@ import io.meridian.identity.domain.Secrets;
 import io.meridian.identity.infrastructure.IdentityStore;
 import io.meridian.web.crud.Crud;
 import io.meridian.web.crud.CrudEngine;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,9 +42,6 @@ public class ApiClientService {
     @Transactional
     public Issued register(Object body) {
         ObjectNode v = crud.toColumns("api_client", body);
-        if (v.hasNonNull("status") && !"ACTIVE".equals(v.get("status").asString())) {
-            throw ApiException.unprocessable("invalid_initial_status", "A new client starts ACTIVE");
-        }
         if (!v.hasNonNull("auth_method")) {
             v.put("auth_method", "PRIVATE_KEY_JWT");
         }
@@ -68,17 +63,15 @@ public class ApiClientService {
     @Transactional
     public <T> ResponseEntity<T> update(UUID id, String ifMatch, Object body, Class<T> type) {
         ObjectNode v = crud.toColumns("api_client", body);
-        if (v.hasNonNull("status")) {
-            throw ApiException.unprocessable("status_change_not_allowed", "Use suspend / reactivate to change status");
-        }
         ObjectNode merged = (ObjectNode) store.require("api_client", id);
         merged.setAll(v);
         validate(merged);
         return crud.update("api_client", type, body, ifMatch, Crud.params().with("id", id));
     }
 
+    /** Issues a new client secret (returned once) and publishes {@code platform.api_client.secret_rotated}. */
     @Transactional
-    public JsonNode rotateSecret(UUID id, Map<String, String> secretSink) {
+    public Issued rotateSecret(UUID id) {
         JsonNode c = store.lock("api_client", id);
         requireStatus(c, "ACTIVE");
         if (!SECRET_METHODS.contains(c.get("auth_method").asString())) {
@@ -86,14 +79,11 @@ public class ApiClientService {
                     "Client authenticates with " + c.get("auth_method").asString() + " and has no secret");
         }
         String secret = Secrets.clientSecret();
-        store.jdbc().sql("update api_client set client_secret_hash = ? where id = ?")
-                .params(Secrets.sha256Hex(secret), id).update();
-        secretSink.put("client_secret", secret);
-        ObjectNode out = json.createObjectNode();
-        out.put("id", id.toString());
-        out.put("client_id", c.get("client_id").asString());
-        out.put("rotated_at", OffsetDateTime.now(ZoneOffset.UTC).toString());
-        return out;
+        ObjectNode pub = store.publicView(store.updateReturning("""
+                update api_client t set client_secret_hash = ? where t.id = ? returning row_to_json(t)::text""",
+                Secrets.sha256Hex(secret), id));
+        outbox.publish("platform.api_client.secret_rotated", "api_client", id, pub);
+        return new Issued(pub, Map.of("client_secret", secret));
     }
 
     @Transactional
@@ -117,10 +107,10 @@ public class ApiClientService {
     }
 
     /** Request counts, error rate and latency from the gateway request log for [from, to). Default: last 30 days. */
-    public JsonNode usage(UUID id, String fromParam, String toParam) {
+    public JsonNode usage(UUID id, OffsetDateTime fromParam, OffsetDateTime toParam) {
         store.require("api_client", id);
-        OffsetDateTime to = toParam == null ? OffsetDateTime.now(ZoneOffset.UTC) : time(toParam, "to");
-        OffsetDateTime from = fromParam == null ? to.minusDays(30) : time(fromParam, "from");
+        OffsetDateTime to = toParam == null ? OffsetDateTime.now(ZoneOffset.UTC) : toParam;
+        OffsetDateTime from = fromParam == null ? to.minusDays(30) : fromParam;
         if (!from.isBefore(to)) {
             throw ApiException.badRequest("invalid_period", "from must be before to");
         }
@@ -162,19 +152,11 @@ public class ApiClientService {
         return out;
     }
 
-    private static OffsetDateTime time(String s, String name) {
-        try {
-            return s.length() == 10 ? LocalDate.parse(s).atStartOfDay().atOffset(ZoneOffset.UTC) : OffsetDateTime.parse(s);
-        } catch (DateTimeParseException e) {
-            throw ApiException.badRequest("invalid_" + name, name + " must be an ISO date or date-time");
-        }
-    }
-
     private void validate(ObjectNode v) {
         List<String> scopes = JsonItems.of(v.get("allowed_scopes"));
         if (scopes.isEmpty()) {
             throw ApiException.unprocessable("scopes_required",
-                    "allowed_scopes must list at least one scope, e.g. {\"items\": [\"payments:read\"]}");
+                    "allowed_scopes must list at least one scope, e.g. [\"payments:read\"]");
         }
         for (String s : scopes) {
             Integer n = store.jdbc().sql("select count(*) from oauth_scope where scope = ?").param(s)

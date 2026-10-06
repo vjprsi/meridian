@@ -10,15 +10,6 @@ import tools.jackson.databind.JsonNode;
 final class Responses {
     private Responses() {}
 
-    /**
-     * The contract declares {@code 204 No Content} for some actions that must return data (preview, test-send,
-     * provider test). Until the contract is fixed they answer 200 with a JSON body through the Void-typed method.
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    static ResponseEntity<Void> body(Object body) {
-        return (ResponseEntity) ResponseEntity.ok(body);
-    }
-
     static <T> ResponseEntity<T> created(T body, JsonNode row) {
         ResponseEntity.BodyBuilder b = ResponseEntity.status(HttpStatus.CREATED);
         if (row.hasNonNull("row_version")) {

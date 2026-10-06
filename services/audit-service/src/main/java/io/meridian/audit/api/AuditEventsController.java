@@ -7,8 +7,10 @@ import io.meridian.audit.api.generated.model.AuditEventsVerifyChainRequest;
 import io.meridian.audit.application.AuditQueryService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -19,6 +21,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @RestController
 public class AuditEventsController implements AuditEventsApi {
+    static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() {};
     private final AuditQueryService queries;
     private final Idempotency idempotency;
     private final JsonMapper json;
@@ -30,10 +33,13 @@ public class AuditEventsController implements AuditEventsApi {
     }
 
     @Override
-    public ResponseEntity<Void> auditEventsVerifyChain(String idempotencyKey, AuditEventsVerifyChainRequest body) {
+    public ResponseEntity<Map<String, Object>> auditEventsVerifyChain(String idempotencyKey,
+                                                                      AuditEventsVerifyChainRequest body) {
         TenantContext.require();
-        return Responses.body(idempotency.execute(idempotencyKey, body, JsonNode.class,
-                () -> ResponseEntity.ok(queries.verifyChain(body.getFromSequence(), body.getToSequence()))));
+        ResponseEntity<JsonNode> r = idempotency.execute(idempotencyKey, body, JsonNode.class,
+                () -> ResponseEntity.ok(queries.verifyChain(body.getFromSequence(), body.getToSequence())));
+        return ResponseEntity.status(r.getStatusCode()).headers(r.getHeaders())
+                .body(r.getBody() == null ? null : json.convertValue(r.getBody(), OBJECT));
     }
 
     @Override

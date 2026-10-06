@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.notification.application.NotificationService;
 import io.meridian.notification.application.RuleService;
+import io.meridian.notification.domain.CallbackSignature;
 import io.meridian.test.MeridianTestContainers;
 import io.meridian.web.client.ServiceClient;
 import java.net.URI;
@@ -45,7 +46,8 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"meridian.events.relay-enabled=false", "meridian.security-mode=dev",
-                "meridian.notifications.scheduler-enabled=false", "meridian.notifications.consumer-enabled=false"})
+                "meridian.notifications.scheduler-enabled=false", "meridian.notifications.consumer-enabled=false",
+                "meridian.notifications.callback-secrets.twilio=" + NotificationFlowIT.TWILIO_SECRET})
 @Import(MeridianTestContainers.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -53,6 +55,7 @@ class NotificationFlowIT {
     static final String TENANT = "0199a000-0000-7000-8000-0000000000c1";
     static final String OTHER_TENANT = "0199a000-0000-7000-8000-0000000000c2";
     static final String CUSTOMER = "0199a000-0000-7000-8000-00000000cafe";
+    static final String TWILIO_SECRET = "twilio-callback-secret";
 
     @Value("${local.server.port}")
     int port;
@@ -103,9 +106,12 @@ class NotificationFlowIT {
         post("/v1/notification-providers", """
                 {"channel":"EMAIL","provider_name":"SES","priority":2,"credentials_ref":"vault:ses","status":"ACTIVE",
                  "config":{"sandbox":true}}""", 201);
-        smsProvider = post("/v1/notification-providers", """
-                {"channel":"SMS","provider_name":"TWILIO","priority":1,"credentials_ref":"vault:twilio","status":"ACTIVE"}""",
-                201).get("id").asString();
+        JsonNode twilio = post("/v1/notification-providers", """
+                {"channel":"SMS","provider_name":"TWILIO","priority":1,"credentials_ref":"vault:twilio","status":"ACTIVE",
+                 "country_scope":["KE","UG"]}""", 201);
+        smsProvider = twilio.get("id").asString();
+        assertThat(twilio.get("credentials_ref").asString()).isEqualTo("vault:twilio");
+        assertThat(twilio.get("country_scope").isArray()).isTrue();
         pushProvider = post("/v1/notification-providers", """
                 {"channel":"PUSH","provider_name":"FCM","priority":1,"credentials_ref":"vault:fcm","status":"ACTIVE",
                  "config":{"simulate":"ERROR"}}""", 201).get("id").asString();
@@ -159,6 +165,18 @@ class NotificationFlowIT {
         approvalOutcome(v2Id, "rejected", "REJECTED");
         assertThat(get("/v1/notification-templates/" + v2Id, TENANT).get("status").asString()).isEqualTo("DRAFT");
         assertThat(get("/v1/notification-templates/" + welcomeV1, TENANT).get("status").asString()).isEqualTo("ACTIVE");
+        // Changes requested by the checker also return the template to DRAFT.
+        post("/v1/notification-templates/" + v2Id + "/publish", null, 200);
+        assertThat(get("/v1/notification-templates/" + v2Id, TENANT).get("status").asString()).isEqualTo("PENDING_APPROVAL");
+        approvalOutcome(v2Id, "changes_requested", "CHANGES_REQUESTED");
+        assertThat(get("/v1/notification-templates/" + v2Id, TENANT).get("status").asString()).isEqualTo("DRAFT");
+
+        JsonNode noProvider = post("/v1/notification-providers", """
+                {"channel":"VOICE","provider_name":"AFRICAS_TALKING","priority":1,"country_scope":["kenya"]}""", 422);
+        assertThat(noProvider.get("code").asString()).isEqualTo("invalid_country_scope");
+        JsonNode defaulted = post("/v1/notification-providers", """
+                {"channel":"VOICE","provider_name":"AFRICAS_TALKING","priority":1,"status":"INACTIVE"}""", 201);
+        assertThat(defaulted.get("credentials_ref").asString()).startsWith("vault:notification/providers/");
     }
 
     @Test
@@ -190,6 +208,19 @@ class NotificationFlowIT {
         JsonNode noTemplate = post("/v1/notifications/send-templated", """
                 {"template_code":"NOPE","recipient_type":"CUSTOMER","recipient_id":"%s"}""".formatted(CUSTOMER), 422);
         assertThat(noTemplate.get("code").asString()).isEqualTo("template_not_found");
+
+        // Destination, priority, data and scheduling are first-class body fields (no channel: picked by template).
+        String sendAt = OffsetDateTime.now(ZoneOffset.UTC).plusHours(3).toString();
+        JsonNode explicit = post("/v1/notifications/send-templated", """
+                {"template_code":"WELCOME","recipient_type":"CUSTOMER","recipient_id":"%s",
+                 "destination":"bob@example.com","priority":"HIGH","data":{"deep_link":"app://welcome"},
+                 "scheduled_at":"%s","variables":{"name":"Bob","account":{"last4":"0002"}}}"""
+                .formatted(CUSTOMER, sendAt), 201);
+        assertThat(explicit.get("channel").asString()).isEqualTo("EMAIL");
+        assertThat(explicit.get("destination").asString()).isEqualTo("bob@example.com");
+        assertThat(explicit.get("priority").asString()).isEqualTo("HIGH");
+        assertThat(explicit.get("data").get("deep_link").asString()).isEqualTo("app://welcome");
+        assertThat(explicit.get("status").asString()).isEqualTo("SCHEDULED");
     }
 
     @Test
@@ -198,21 +229,36 @@ class NotificationFlowIT {
         JsonNode sms = post("/v1/notifications", sms("+254700000001", "TRANSACTIONAL", null), 201);
         sentSms = sms.get("id").asString();
         assertThat(sms.get("status").asString()).isEqualTo("SENT");
-        JsonNode receipt = post("/v1/notifications/provider-callbacks/twilio/events", """
-                {"payload":{"provider_message_id":"%s","status":"delivered"}}"""
-                .formatted(sms.get("provider_message_id").asString()), 200);
+        String mid = sms.get("provider_message_id").asString();
+        String delivered = "{\"provider_message_id\":\"%s\",\"status\":\"delivered\"}".formatted(mid);
+
+        // Public callback: no token, tenant header or Idempotency-Key; tenant from the URL, HMAC-signed payload.
+        HttpResponse<String> unsigned = callback("twilio", TENANT, delivered, null);
+        assertThat(unsigned.statusCode()).isEqualTo(401);
+        assertThat(json.readTree(unsigned.body()).get("code").asString()).isEqualTo("invalid_signature");
+        assertThat(callback("twilio", TENANT, delivered, "wrong-secret").statusCode()).isEqualTo(401);
+        assertThat(callback("infobip", TENANT, delivered, TWILIO_SECRET).statusCode()).isEqualTo(401); // no secret configured
+        HttpResponse<String> noTenant = callback("twilio", null, delivered, TWILIO_SECRET);
+        assertThat(noTenant.statusCode()).isEqualTo(400);
+        assertThat(json.readTree(noTenant.body()).get("code").asString()).isEqualTo("malformed_request");
+        assertThat(callback("twilio", OTHER_TENANT, delivered, TWILIO_SECRET).statusCode()).isEqualTo(404);
+        assertThat(get("/v1/notifications/" + sentSms, TENANT).get("status").asString()).isEqualTo("SENT");
+
+        HttpResponse<String> ok = callback("twilio", TENANT, delivered, TWILIO_SECRET);
+        assertThat(ok.statusCode()).as(ok.body()).isEqualTo(200);
+        JsonNode receipt = json.readTree(ok.body());
         assertThat(receipt.get("status").asString()).isEqualTo("DELIVERED");
         assertThat(receipt.get("applied").asBoolean()).isTrue();
         assertThat(get("/v1/notifications/" + sentSms, TENANT).get("delivered_at").isNull()).isFalse();
         assertThat(events(sentSms)).contains("platform.notification.sent", "platform.notification.delivered");
-        // A late "sent" receipt never moves the status backwards.
-        JsonNode late = post("/v1/notifications/provider-callbacks/twilio/events", """
-                {"payload":{"provider_message_id":"%s","status":"sent"}}"""
-                .formatted(sms.get("provider_message_id").asString()), 200);
+        // A late "sent" receipt (or a replay) never moves the status backwards.
+        JsonNode late = json.readTree(callback("twilio", TENANT,
+                "{\"provider_message_id\":\"%s\",\"status\":\"sent\"}".formatted(mid), TWILIO_SECRET).body());
         assertThat(late.get("applied").asBoolean()).isFalse();
-        assertThat(post("/v1/notifications/provider-callbacks/twilio/events",
-                "{\"payload\":{\"provider_message_id\":\"nope\",\"status\":\"delivered\"}}", 404).get("code").asString())
-                .isEqualTo("not_found");
+        HttpResponse<String> unknown = callback("twilio", TENANT,
+                "{\"provider_message_id\":\"nope\",\"status\":\"delivered\"}", TWILIO_SECRET);
+        assertThat(unknown.statusCode()).isEqualTo(404);
+        assertThat(json.readTree(unknown.body()).get("code").asString()).isEqualTo("not_found");
 
         assertThat(post("/v1/notifications/" + sentSms + "/resend", null, 409).get("code").asString()).isEqualTo("invalid_transition");
         assertThat(post("/v1/notifications/" + sentSms + "/cancel", null, 409).get("code").asString()).isEqualTo("invalid_transition");
@@ -275,9 +321,13 @@ class NotificationFlowIT {
 
         JsonNode later = post("/v1/notifications", sms("+254700000002", "SERVICE", null), 201);
         JsonNode cancelled = post("/v1/notifications/" + later.get("id").asString() + "/cancel", null, 200);
-        assertThat(cancelled.get("status").asString()).isEqualTo("SUPPRESSED");
-        assertThat(cancelled.get("failure_reason").asString()).isEqualTo("cancelled");
+        assertThat(cancelled.get("status").asString()).isEqualTo("CANCELLED");
+        assertThat(cancelled.hasNonNull("failure_reason")).isFalse();
+        assertThat(events(later.get("id").asString())).containsExactly("platform.notification.cancelled");
         post("/v1/notifications/" + later.get("id").asString() + "/cancel", null, 409);
+        callAs(() -> notifications.processDue(at.plus(1, ChronoUnit.HOURS)));
+        assertThat(get("/v1/notifications/" + later.get("id").asString(), TENANT).get("status").asString())
+                .isEqualTo("CANCELLED");
 
         JsonNode security = post("/v1/notifications", sms("+254700000003", "SECURITY", null), 201);
         assertThat(security.get("status").asString()).isEqualTo("SENT");
@@ -304,7 +354,10 @@ class NotificationFlowIT {
         JsonNode failed = get("/v1/notifications/" + id, TENANT);
         assertThat(failed.get("status").asString()).isEqualTo("FAILED");
         assertThat(failed.get("failure_reason").asString()).startsWith("retries_exhausted");
-        assertThat(get("/v1/notifications/" + id + "/attempts?limit=50", TENANT).get("data")).hasSize(5);
+        JsonNode firstCycle = get("/v1/notifications/" + id + "/attempts?limit=50", TENANT).get("data");
+        assertThat(firstCycle).hasSize(5);
+        firstCycle.forEach(a -> assertThat(a.get("cycle").asInt()).isEqualTo(1));
+        firstCycle.forEach(a -> assertThat(a.path("provider_response").has("cycle")).isFalse());
         assertThat(events(id)).contains("platform.notification.failed");
 
         // Fix the provider and resend: a new cycle succeeds.
@@ -314,7 +367,9 @@ class NotificationFlowIT {
         assertThat(fixed.statusCode()).as(fixed.body()).isEqualTo(200);
         JsonNode resent = post("/v1/notifications/" + id + "/resend", null, 200);
         assertThat(resent.get("status").asString()).isEqualTo("SENT");
-        assertThat(get("/v1/notifications/" + id + "/attempts?limit=50", TENANT).get("data")).hasSize(6);
+        JsonNode all = get("/v1/notifications/" + id + "/attempts?limit=50", TENANT).get("data");
+        assertThat(all).hasSize(6);
+        assertThat(all).anySatisfy(a -> assertThat(a.get("cycle").asInt()).isEqualTo(2));
     }
 
     @Test
@@ -329,11 +384,15 @@ class NotificationFlowIT {
                 {"recipient_type":"CUSTOMER","channel":"SMS","destination":"+254700000001","category":"SERVICE",
                  "body":"x","expires_at":"2020-01-01T00:00:00Z"}""", 422).get("code").asString()).isEqualTo("already_expired");
         assertThat(post("/v1/notification-rules", """
-                {"event_type":"x.y","template_code":"WELCOME","channels":{"channels":["FAX"]},
+                {"event_type":"x.y","template_code":"WELCOME","channels":["FAX"],
                  "recipient_expression":"CUSTOMER:customer_id","category":"SERVICE"}""", 422).get("code").asString())
                 .isEqualTo("invalid_channels");
         assertThat(post("/v1/notification-rules", """
-                {"event_type":"x.y","template_code":"WELCOME","channels":{"channels":["SMS"]},
+                {"event_type":"x.y","template_code":"WELCOME","channels":[],
+                 "recipient_expression":"CUSTOMER:customer_id","category":"SERVICE"}""", 422).get("code").asString())
+                .isEqualTo("invalid_channels");
+        assertThat(post("/v1/notification-rules", """
+                {"event_type":"x.y","template_code":"WELCOME","channels":["SMS"],
                  "recipient_expression":"CUSTOMER:customer_id","category":"SERVICE","conditions":"system('rm')"}""", 422)
                 .get("code").asString()).isEqualTo("invalid_conditions");
         HttpResponse<String> noKey = send("POST", "/v1/notifications/" + sentSms + "/cancel", null, null, TENANT, null);
@@ -364,7 +423,7 @@ class NotificationFlowIT {
     @Order(9)
     void rulesTurnDomainEventsIntoNotifications() throws Exception {
         post("/v1/notification-rules", """
-                {"event_type":"payments.payment.*","template_code":"WELCOME","channels":{"channels":["SMS","EMAIL"]},
+                {"event_type":"payments.payment.*","template_code":"WELCOME","channels":["SMS","EMAIL"],
                  "recipient_expression":"CUSTOMER:customer_id","category":"TRANSACTIONAL","conditions":"amount >= 100 && currency == 'KES'"}""",
                 201);
         String payload = """
@@ -413,6 +472,19 @@ class NotificationFlowIT {
         String payload = """
                 {"resource_type":"notification_template","resource_id":"%s","status":"%s"}""".formatted(templateId, status);
         callAs(() -> rules.onEvent(UUID.randomUUID().toString(), "platform.approval_request." + verb, json.readTree(payload)));
+    }
+
+    /** A provider callback as a provider sends it: no bearer token, tenant header or Idempotency-Key. */
+    private HttpResponse<String> callback(String provider, String tenant, String payload, String secret) throws Exception {
+        String path = "/v1/notifications/provider-callbacks/" + provider + "/events"
+                + (tenant == null ? "" : "?tenant_id=" + tenant);
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"payload\":" + payload + "}"));
+        if (secret != null) {
+            b.header(CallbackSignature.HEADER, CallbackSignature.sign(secret, json.readTree(payload)));
+        }
+        return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private <T> T callAs(java.util.concurrent.Callable<T> body) throws Exception {

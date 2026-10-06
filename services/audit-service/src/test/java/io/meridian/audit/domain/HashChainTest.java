@@ -17,7 +17,7 @@ class HashChainTest {
     private static AuditRecord event(String action, Object after) {
         return new AuditRecord(UUID.nameUUIDFromBytes(action.getBytes(java.nio.charset.StandardCharsets.UTF_8)), TENANT, 0, Instant.parse("2026-10-06T10:15:30.123456789Z"),
                 "STAFF_USER", "alice", "Alice", null, action, "payment", "p-1", "SUCCESS", null, null, after,
-                null, null, "10.0.0.1/32", null, null, null, null, "payment-service", null, null);
+                null, null, "10.0.0.1/32", null, null, null, null, "payment-service", null, null, null);
     }
 
     private static List<AuditRecord> chain(int n) {
@@ -46,6 +46,20 @@ class HashChainTest {
     }
 
     @Test
+    void sourceEventIdIsHashedOnlyWhenPresent() {
+        AuditRecord plain = event("x", null).withChain(1, HashChain.GENESIS, null);
+        assertThat(HashChain.canonical(plain)).doesNotContain("source_event_id");
+        AuditRecord consumed = new AuditRecord(plain.id(), plain.tenantId(), 1, plain.occurredAt(), plain.actorType(),
+                plain.actorId(), plain.actorDisplay(), null, plain.action(), plain.resourceType(), plain.resourceId(),
+                plain.outcome(), null, null, null, null, null, plain.ipAddress(), null, null, null, null,
+                plain.serviceName(), "ce-123", HashChain.GENESIS, null);
+        assertThat(HashChain.canonical(consumed)).contains("\"service_name\":\"payment-service\",\"source_event_id\":\"ce-123\"");
+        assertThat(HashChain.hash(consumed)).isNotEqualTo(HashChain.hash(plain));
+        AuditRecord linked = HashChain.link(consumed, 1, HashChain.GENESIS);
+        assertThat(HashChain.verify(List.of(linked), 1, 1, HashChain.GENESIS).valid()).isTrue();
+    }
+
+    @Test
     void timestampsAreTruncatedToMicroseconds() {
         assertThat(HashChain.canonical(event("x", null))).contains("\"occurred_at\":\"2026-10-06T10:15:30.123456Z\"");
     }
@@ -64,7 +78,7 @@ class HashChainTest {
         c.set(2, new AuditRecord(third.id(), third.tenantId(), 3, third.occurredAt(), third.actorType(), "mallory",
                 third.actorDisplay(), null, third.action(), third.resourceType(), third.resourceId(), third.outcome(),
                 null, null, third.afterState(), null, null, third.ipAddress(), null, null, null, null,
-                third.serviceName(), third.prevHash(), third.hash()));
+                third.serviceName(), third.sourceEventId(), third.prevHash(), third.hash()));
         HashChain.Verification v = HashChain.verify(c, 1, 5, HashChain.GENESIS);
         assertThat(v.valid()).isFalse();
         assertThat(v.firstBrokenSequence()).isEqualTo(3L);

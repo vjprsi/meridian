@@ -5,6 +5,7 @@ import io.meridian.billing.domain.PricingException;
 import io.meridian.billing.domain.UsageMetrics;
 import io.meridian.billing.infrastructure.BillingStore;
 import io.meridian.common.error.ApiException;
+import io.meridian.events.OutboxWriter;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -18,31 +19,31 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Price plans (platform-wide catalogue, not tenant scoped). Lifecycle DRAFT -> ACTIVE -> RETIRED via the status
- * field (the contract has no publish action). Only drafts can be edited; ACTIVE plans may only change status
- * and valid_to.
+ * Price plans (platform-wide catalogue, not tenant scoped). Lifecycle DRAFT -> ACTIVE (/publish) -> RETIRED
+ * (/retire); status is read-only in create/PATCH. Only drafts can be edited; published plans may only change
+ * valid_to.
  */
 @Service
 public class PricePlanService {
-    private static final Set<String> EDITABLE_WHEN_PUBLISHED = Set.of("status", "valid_to");
+    static final String EVENT_PUBLISHED = "platform.price_plan.published";
+    static final String EVENT_RETIRED = "platform.price_plan.retired";
+    private static final Set<String> EDITABLE_WHEN_PUBLISHED = Set.of("valid_to");
 
     private final CrudEngine crud;
     private final BillingStore store;
+    private final OutboxWriter outbox;
     private final JsonMapper json;
 
-    public PricePlanService(CrudEngine crud, BillingStore store, JsonMapper json) {
+    public PricePlanService(CrudEngine crud, BillingStore store, OutboxWriter outbox, JsonMapper json) {
         this.crud = crud;
         this.store = store;
+        this.outbox = outbox;
         this.json = json;
     }
 
     @Transactional
     public String create(Object body) {
         ObjectNode values = crud.toColumns("price_plan", body);
-        String status = Rows.text(values, "status");
-        if (status != null && !"DRAFT".equals(status)) {
-            throw ApiException.unprocessable("invalid_initial_status", "Price plans are created as DRAFT");
-        }
         values.put("status", "DRAFT");
         validate(values);
         return crud.insert("price_plan", values);
@@ -53,20 +54,12 @@ public class PricePlanService {
         JsonNode current = json.readTree(store.lockPlan(id));
         ObjectNode changes = crud.toColumns("price_plan", body);
         String from = Rows.text(current, "status");
-        String to = Rows.text(changes, "status");
         if (!"DRAFT".equals(from)) {
             for (String f : changes.propertyNames()) {
                 if (!EDITABLE_WHEN_PUBLISHED.contains(f) && !Rows.same(changes.get(f), current.get(f))) {
                     throw ApiException.conflict("plan_not_editable",
-                            "Price plan is " + from + "; only status and valid_to can change (create a new plan instead)");
+                            "Price plan is " + from + "; only valid_to can change (create a new plan instead)");
                 }
-            }
-        }
-        if (to != null && !to.equals(from)) {
-            try {
-                BillingStates.require(BillingStates.PRICE_PLAN, "Price plan", from, to);
-            } catch (BillingStates.TransitionException e) {
-                throw ApiException.conflict("invalid_transition", e.getMessage());
             }
         }
         ObjectNode merged = ((ObjectNode) current.deepCopy()).setAll(changes);
@@ -77,6 +70,38 @@ public class PricePlanService {
         }
         return crud.updateRow("price_plan", Map.of("id", id), changes, expectedVersion)
                 .orElseThrow(() -> ApiException.conflict("version_conflict", "Price plan changed concurrently"));
+    }
+
+    /** DRAFT -> ACTIVE: the plan becomes available for subscriptions. */
+    @Transactional
+    public String publish(UUID id) {
+        JsonNode current = json.readTree(store.lockPlan(id));
+        transition(current, "ACTIVE");
+        validate(current);
+        String row = crud.updateRow("price_plan", Map.of("id", id), json.createObjectNode().put("status", "ACTIVE"), null)
+                .orElseThrow();
+        outbox.publish(EVENT_PUBLISHED, "price_plan", id, json.readTree(row));
+        return row;
+    }
+
+    /** DRAFT/ACTIVE -> RETIRED: withdrawn from new subscriptions (existing subscriptions keep it). */
+    @Transactional
+    public String retire(UUID id, String reason) {
+        JsonNode current = json.readTree(store.lockPlan(id));
+        transition(current, "RETIRED");
+        String row = crud.updateRow("price_plan", Map.of("id", id), json.createObjectNode().put("status", "RETIRED").put("retire_reason", reason)
+                        .put("retired_at", java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()), null)
+                .orElseThrow();
+        outbox.publish(EVENT_RETIRED, "price_plan", id, json.readTree(row));
+        return row;
+    }
+
+    private static void transition(JsonNode plan, String to) {
+        try {
+            BillingStates.require(BillingStates.PRICE_PLAN, "Price plan", Rows.text(plan, "status"), to);
+        } catch (BillingStates.TransitionException e) {
+            throw ApiException.conflict("invalid_transition", e.getMessage());
+        }
     }
 
     private void validate(JsonNode plan) {

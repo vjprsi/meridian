@@ -20,7 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Event-driven notifications: domain events are matched against active rules (event type, optional condition) and
  * turned into templated sends. Also routes maker-checker outcomes for notification templates.
  *
- * <p>Rule fields: {@code channels} = {@code {"channels": ["PUSH","SMS"]}} (preference order; the first channel with an
+ * <p>Rule fields: {@code channels} = {@code ["PUSH","SMS"]} (preference order; the first channel with an
  * active template, a destination and no opt-out wins); {@code recipient_expression} = {@code TYPE:path} into the
  * event payload, e.g. {@code CUSTOMER:customer_id} (type defaults to CUSTOMER); {@code conditions} = the safe CEL
  * subset of {@link RuleConditions}. Destinations come from the payload (destinations map, destination, email,
@@ -46,10 +46,10 @@ public class RuleService {
 
     /** Validates rule fields on create/update (merged view). */
     public static void validate(JsonNode rule) {
-        JsonNode channels = rule.path("channels").path("channels");
+        JsonNode channels = rule.path("channels");
         if (rule.has("channels")) {
             if (!channels.isArray() || channels.isEmpty()) {
-                throw ApiException.unprocessable("invalid_channels", "channels must be {\"channels\": [\"EMAIL\", ...]}");
+                throw ApiException.unprocessable("invalid_channels", "channels must be a non-empty array, e.g. [\"EMAIL\"]");
             }
             for (JsonNode c : channels) {
                 if (!CHANNELS.contains(c.asString())) {
@@ -109,7 +109,7 @@ public class RuleService {
                 vars.put("event_type", eventType);
                 vars.put("event_id", eventId);
                 List<String> channels = new ArrayList<>();
-                rule.path("channels").path("channels").forEach(c -> channels.add(c.asString()));
+                rule.path("channels").forEach(c -> channels.add(c.asString()));
                 UUID id = sendFirstViable(rule, channels, type, recipientId, vars, eventType, eventId);
                 if (id != null) {
                     created.add(id);
@@ -136,9 +136,9 @@ public class RuleService {
                     continue;
                 }
                 try {
-                    NotificationService.Submitted s = notifications.sendTemplated(new NotificationService.TemplatedSend(
+                    NotificationService.Submitted s = notifications.sendTemplated(NotificationService.TemplatedSend.fromEvent(
                             rule.get("template_code").asString(), recipientType, recipientId, channel, vars, category,
-                            eventType, eventId, null));
+                            eventType, eventId));
                     return UUID.fromString(json.readTree(s.row()).get("id").asString());
                 } catch (ApiException e) {
                     last = e;

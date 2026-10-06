@@ -9,6 +9,7 @@ import io.meridian.events.OutboxWriter;
 import io.meridian.web.crud.CrudEngine;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -21,12 +22,15 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Tenant subscriptions: one open (non-cancelled) subscription per tenant, prorated plan changes, cancellation at
- * period end. Plan-change prorations are kept in {@code custom_prices.proration_adjustments} (server-managed) and
- * billed as invoice lines for the period they fall in.
+ * period end. Plan-change prorations are kept in the read-only {@code proration_adjustments} column and billed as
+ * invoice lines for the period they fall in.
  */
 @Service
 public class SubscriptionService {
+    static final String EVENT_CREATED = "platform.tenant_subscription.created";
     static final String EVENT_CHANGED = "platform.tenant_subscription.changed";
+    static final String EVENT_PLAN_CHANGED = "platform.tenant_subscription.plan_changed";
+    static final String EVENT_CANCELLED = "platform.tenant_subscription.cancelled";
     private static final Set<String> CUSTOM_PRICE_KEYS = Set.of("metric_prices", "platform_fee", "price_per_active_account");
 
     private final CrudEngine crud;
@@ -71,7 +75,7 @@ public class SubscriptionService {
             throw ApiException.conflict("subscription_exists", "The tenant already has an open subscription; change its plan instead");
         }
         String row = crud.insert("tenant_subscription", values);
-        publish(row, "CREATED", null);
+        publish(EVENT_CREATED, row);
         return row;
     }
 
@@ -102,15 +106,8 @@ public class SubscriptionService {
             }
         }
         validateTerms(((ObjectNode) current.deepCopy()).setAll(changes));
-        if (changes.has("custom_prices")) {
-            if (changes.get("custom_prices") instanceof ObjectNode cp) {
-                cp.remove("proration_adjustments"); // server-managed; the stored list is kept below
-            }
+        if (changes.hasNonNull("custom_prices")) {
             validateCustomPrices(changes.get("custom_prices"));
-            JsonNode adjustments = current.path("custom_prices").get("proration_adjustments");
-            if (adjustments != null) {
-                ((ObjectNode) changes.get("custom_prices")).set("proration_adjustments", adjustments);
-            }
         }
         if (Rows.int0(current, "row_version") != expectedVersion) {
             throw ApiException.conflict("version_conflict",
@@ -119,7 +116,7 @@ public class SubscriptionService {
         String row = crud.updateRow("tenant_subscription", Map.of("id", id), changes, expectedVersion)
                 .orElseThrow(() -> ApiException.conflict("version_conflict", "Subscription changed concurrently"));
         if (statusChange) {
-            publish(row, "STATUS_CHANGED", null);
+            publish(EVENT_CHANGED, row);
         }
         return row;
     }
@@ -180,14 +177,12 @@ public class SubscriptionService {
         adj.put("description", (amount.signum() >= 0 ? "Proration charge: " : "Proration credit: ")
                 + Rows.text(oldPlan, "code") + " -> " + Rows.text(newPlan, "code") + " from " + effective);
         adjustments.add(adj);
-        ObjectNode custom = sub.get("custom_prices") instanceof ObjectNode o ? o.deepCopy() : json.createObjectNode();
-        custom.set("proration_adjustments", adjustments);
 
         ObjectNode changes = json.createObjectNode();
         changes.put("price_plan_id", newPlanId.toString());
-        changes.set("custom_prices", custom);
+        changes.set("proration_adjustments", adjustments);
         String row = crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow();
-        publish(row, "PLAN_CHANGED", adj);
+        publish(EVENT_PLAN_CHANGED, row);
         return row;
     }
 
@@ -209,10 +204,10 @@ public class SubscriptionService {
         ObjectNode changes = json.createObjectNode();
         changes.put("status", "CANCELLED");
         changes.put("end_date", (currentEnd != null && currentEnd.isBefore(periodEnd) ? currentEnd : periodEnd).toString());
+        changes.put("cancellation_reason", reason);
+        changes.put("cancelled_at", OffsetDateTime.now().toString());
         String row = crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow();
-        ObjectNode detail = json.createObjectNode();
-        detail.put("reason", reason);
-        publish(row, "CANCELLED", detail);
+        publish(EVENT_CANCELLED, row);
         return row;
     }
 
@@ -221,7 +216,7 @@ public class SubscriptionService {
         JsonNode sub = json.readTree(store.lockSubscription(id));
         if ("ACTIVE".equals(Rows.text(sub, "status"))) {
             ObjectNode changes = json.createObjectNode().put("status", "PAST_DUE");
-            publish(crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow(), "PAST_DUE", null);
+            publish(EVENT_CHANGED, crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow());
         }
     }
 
@@ -229,12 +224,12 @@ public class SubscriptionService {
         JsonNode sub = json.readTree(store.lockSubscription(id));
         if ("PAST_DUE".equals(Rows.text(sub, "status")) && store.overdueInvoices(id) == 0) {
             ObjectNode changes = json.createObjectNode().put("status", "ACTIVE");
-            publish(crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow(), "REACTIVATED", null);
+            publish(EVENT_CHANGED, crud.updateRow("tenant_subscription", Map.of("id", id), changes, null).orElseThrow());
         }
     }
 
     private ArrayNode adjustments(JsonNode sub) {
-        JsonNode a = sub.path("custom_prices").get("proration_adjustments");
+        JsonNode a = sub.get("proration_adjustments");
         return a instanceof ArrayNode arr ? arr.deepCopy() : json.createArrayNode();
     }
 
@@ -291,12 +286,8 @@ public class SubscriptionService {
         PricePlanService.validateMetricPrices(custom.get("metric_prices"), json);
     }
 
-    private void publish(String row, String change, JsonNode detail) {
-        ObjectNode payload = (ObjectNode) json.readTree(row);
-        payload.put("change", change);
-        if (detail != null) {
-            payload.set("change_detail", detail);
-        }
-        outbox.publish(EVENT_CHANGED, "tenant_subscription", UUID.fromString(payload.get("id").asString()), payload);
+    private void publish(String type, String row) {
+        JsonNode payload = json.readTree(row);
+        outbox.publish(type, "tenant_subscription", UUID.fromString(payload.get("id").asString()), payload);
     }
 }

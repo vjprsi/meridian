@@ -4,7 +4,6 @@ import io.meridian.common.tenancy.TenantContext;
 import io.meridian.identity.api.generated.UsersApi;
 import io.meridian.identity.api.generated.model.AppUser;
 import io.meridian.identity.api.generated.model.AppUserCreate;
-import io.meridian.identity.api.generated.model.AppUserUpdate;
 import io.meridian.identity.api.generated.model.ApprovalRequest;
 import io.meridian.identity.api.generated.model.UserRolePage;
 import io.meridian.identity.api.generated.model.UsersDeactivateRequest;
@@ -49,12 +48,6 @@ public class UsersController implements UsersApi {
     }
 
     @Override
-    public ResponseEntity<AppUser> usersUpdate(UUID id, String ifMatch, AppUserUpdate body) {
-        users.checkUpdate(body);
-        return UsersApi.super.usersUpdate(id, ifMatch, body);
-    }
-
-    @Override
     public ResponseEntity<AppUser> usersInvite(UUID id, String idempotencyKey) {
         return action(idempotencyKey, Map.of("op", "invite", "id", id), () -> users.invite(id));
     }
@@ -89,9 +82,9 @@ public class UsersController implements UsersApi {
     }
 
     @Override
-    public ResponseEntity<Void> usersEffectivePermissions(UUID id) {
+    public ResponseEntity<Map<String, Object>> usersEffectivePermissions(UUID id) {
         TenantContext.require();
-        return Responses.body(ResponseEntity.ok(authz.effectivePermissions(id)));
+        return ResponseEntity.ok(Responses.object(json, authz.effectivePermissions(id)));
     }
 
     @Override

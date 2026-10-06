@@ -51,13 +51,14 @@ public class NotificationProvidersController implements NotificationProvidersApi
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public ResponseEntity<Void> notificationProvidersTest(UUID id, String idempotencyKey,
-                                                          NotificationProvidersTestRequest body) {
+    public ResponseEntity<Map<String, Object>> notificationProvidersTest(UUID id, String idempotencyKey,
+                                                                         NotificationProvidersTestRequest body) {
         TenantContext.require();
-        String destination = json.valueToTree(body).get("destination").asString();
+        String destination = body.getDestination();
+        // The idempotency store replays the stored JSON object as a (raw) Map; status and headers are kept.
         ResponseEntity<Map> r = idempotency.execute(idempotencyKey,
                 Map.of("op", "provider-test", "id", id.toString(), "destination", destination), Map.class,
                 () -> ResponseEntity.ok(providers.test(id, destination)));
-        return (ResponseEntity) r;
+        return ResponseEntity.status(r.getStatusCode()).headers(r.getHeaders()).body((Map<String, Object>) r.getBody());
     }
 }

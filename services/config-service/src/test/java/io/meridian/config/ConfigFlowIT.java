@@ -145,6 +145,17 @@ class ConfigFlowIT {
         assertThat(e.get("version").asInt()).isEqualTo(1);
         assertThat(e.get("status").asString()).isEqualTo("DRAFT");
 
+        // read-only fields sent by clients are ignored
+        JsonNode ro = post("/v1/config/entries", """
+                {"namespace":"misc","config_key":"ro_check","value":{"a":1},"status":"ACTIVE","version":9,
+                 "approval_request_id":"%s","promoted_from_environment":"prod","submitted_by":"mallory"}"""
+                .formatted(UUID.randomUUID()), ALICE, 201);
+        assertThat(ro.get("status").asString()).isEqualTo("DRAFT");
+        assertThat(ro.get("version").asInt()).isEqualTo(1);
+        assertThat(ro.path("approval_request_id").isNull() || ro.path("approval_request_id").isMissingNode()).isTrue();
+        assertThat(ro.path("promoted_from_environment").isNull() || ro.path("promoted_from_environment").isMissingNode()).isTrue();
+        assertThat(ro.path("submitted_by").isNull() || ro.path("submitted_by").isMissingNode()).isTrue();
+
         JsonNode early = post("/v1/config/entries/" + v1 + "/activate", null, BOB, 409);
         assertThat(early.get("code").asString()).isEqualTo("invalid_transition");
     }
@@ -162,6 +173,8 @@ class ConfigFlowIT {
         JsonNode entry = get("/v1/config/entries/" + v1, TENANT);
         assertThat(entry.get("status").asString()).isEqualTo("PENDING_APPROVAL");
         assertThat(entry.get("approval_request_id").asString()).isEqualTo(approval1);
+        assertThat(entry.get("submitted_by").asString()).isEqualTo(ALICE);
+        assertThat(entry.get("submitted_at")).isNotNull();
 
         JsonNode again = post("/v1/config/entries/" + v1 + "/submit", "{\"change_reason\":\"again\"}", ALICE, 409);
         assertThat(again.get("code").asString()).isEqualTo("invalid_transition");
@@ -189,6 +202,14 @@ class ConfigFlowIT {
         approvals.put(apr, "REJECTED");
         JsonNode r = post("/v1/config/entries/" + draft + "/activate", null, BOB, 409);
         assertThat(r.get("code").asString()).isEqualTo("approval_not_granted");
+
+        String sentBack = post("/v1/config/entries", """
+                {"namespace":"onboarding","config_key":"kyc_limits","value":{"max":5}}""", ALICE, 201).get("id").asString();
+        String apr2 = post("/v1/config/entries/" + sentBack + "/submit", "{\"change_reason\":\"limits\"}", ALICE, 200)
+                .get("id").asString();
+        approvals.put(apr2, "CHANGES_REQUESTED");
+        assertThat(post("/v1/config/entries/" + sentBack + "/activate", null, BOB, 409).get("code").asString())
+                .isEqualTo("approval_not_granted");
     }
 
     @Test
@@ -211,7 +232,7 @@ class ConfigFlowIT {
         }
         assertThat(activated2.get("from_version").asInt()).isEqualTo(1);
         assertThat(activated2.get("approved_by").asString()).isEqualTo(BOB);
-        assertThat(activated2.get("diff").get("operations").get(0).get("path").asString()).isEqualTo("/daily_limit");
+        assertThat(activated2.get("diff").get(0).get("path").asString()).isEqualTo("/daily_limit");
     }
 
     @Test
@@ -304,6 +325,7 @@ class ConfigFlowIT {
 
         JsonNode removed = post("/v1/config/installed-country-packs/" + install + "/uninstall", "{\"reason\":\"exit market\"}", ALICE, 200);
         assertThat(removed.get("status").asString()).isEqualTo("UNINSTALLED");
+        assertThat(outboxCount("platform.country_pack.uninstalled")).isEqualTo(1);
         JsonNode twice = post("/v1/config/installed-country-packs/" + install + "/uninstall", "{\"reason\":\"again\"}", ALICE, 409);
         assertThat(twice.get("code").asString()).isEqualTo("invalid_transition");
         assertThat(get("/v1/config/entries/resolve?namespace=payments", TENANT).get("values").has("max_txn_amount")).isFalse();
@@ -326,7 +348,7 @@ class ConfigFlowIT {
                 .get("id").asString();
         post("/v1/config/tax-rules", taxRule("WITHHOLDING", "WHT resident", "0.15", "INTEREST_PAID", null, "100.00"), ALICE, 201);
         post("/v1/config/tax-rules", taxRule("WITHHOLDING", "WHT non-resident", "0.20", "INTEREST_PAID", "NON_RESIDENT", null), ALICE, 201);
-        assertThat(outboxCount("platform.tax_rule.changed")).isEqualTo(3);
+        assertThat(outboxCount("platform.tax_rate_rule.changed")).isEqualTo(3);
 
         JsonNode fee = calc("FEE", "100.005", "KES", null, null);
         assertThat(fee.get("total_tax").asString()).isEqualTo("16.00");
@@ -353,7 +375,7 @@ class ConfigFlowIT {
                 current.get("row_version").asString());
         assertThat(stale.statusCode()).isEqualTo(409);
         assertThat(send("DELETE", "/v1/config/tax-rules/" + vat, null, null, TENANT, ALICE).statusCode()).isEqualTo(204);
-        assertThat(outboxCount("platform.tax_rule.changed")).isEqualTo(5);
+        assertThat(outboxCount("platform.tax_rate_rule.changed")).isEqualTo(5);
     }
 
     // ------------------------------------------------------------------ custom fields
@@ -376,7 +398,7 @@ class ConfigFlowIT {
                  "validation_regex":"^[A-Z0-9]{3,10}$"}""", ALICE, 201);
         post("/v1/config/custom-fields", """
                 {"table_name":"customer","slot":2,"field_key":"risk_band","label":"Risk band","data_type":"ENUM",
-                 "allowed_values":{"values":["LOW","HIGH"]},"default_value":"LOW"}""", ALICE, 201);
+                 "allowed_values":["LOW","HIGH"],"default_value":"LOW"}""", ALICE, 201);
         post("/v1/config/custom-fields", """
                 {"table_name":"customer","slot":3,"field_key":"income","label":"Income","data_type":"DECIMAL",
                  "min_value":"0","max_value":"1000000"}""", ALICE, 201);
@@ -405,9 +427,10 @@ class ConfigFlowIT {
     @Test
     @Order(40)
     void exportImportPromotesAsDrafts() throws Exception {
-        JsonNode bundle = post("/v1/config/entries/export", "{\"namespaces\":{\"names\":[\"payments\"]}}", ALICE, 200);
+        JsonNode bundle = post("/v1/config/entries/export", "{\"namespaces\":[\"payments\"],\"environment\":\"staging\"}", ALICE, 200);
         assertThat(bundle.get("entry_count").asInt()).isEqualTo(1);
         assertThat(bundle.get("checksum").asString()).hasSize(64);
+        assertThat(bundle.get("environment").asString()).isEqualTo("staging");
 
         ObjectNode tampered = (ObjectNode) bundle.deepCopy();
         ((ObjectNode) tampered.get("entries").get(0).get("value")).put("daily_limit", 999999);
@@ -423,6 +446,9 @@ class ConfigFlowIT {
         JsonNode result = json.readTree(imported.body());
         assertThat(result.get("imported").asInt()).isEqualTo(1);
         assertThat(result.get("created").get(0).get("status").asString()).isEqualTo("DRAFT");
+        String importedId = result.get("created").get(0).get("id").asString();
+        assertThat(json.readTree(send("GET", "/v1/config/entries/" + importedId, null, null, OTHER_TENANT, ALICE).body())
+                .get("promoted_from_environment").asString()).isEqualTo("staging");
 
         JsonNode again = json.readTree(send("POST", "/v1/config/entries/import", importBody, UUID.randomUUID().toString(),
                 OTHER_TENANT, ALICE).body());
@@ -475,9 +501,10 @@ class ConfigFlowIT {
 
     private JsonNode calc(String appliesTo, String amount, String ccy, String segment, String le) throws Exception {
         String body = """
-                {"country":"KE","applies_to":"%s","amount":"%s","currency":"%s"%s}""".formatted(appliesTo, amount, ccy,
-                segment == null ? "" : ",\"customer_segment\":\"" + segment + "\"");
-        return post("/v1/config/tax-rules/calculate" + (le == null ? "" : "?legal_entity_id=" + le), body, ALICE, 200);
+                {"country":"KE","applies_to":"%s","amount":"%s","currency":"%s"%s%s}""".formatted(appliesTo, amount, ccy,
+                segment == null ? "" : ",\"customer_segment\":\"" + segment + "\"",
+                le == null ? "" : ",\"legal_entity_id\":\"" + le + "\"");
+        return post("/v1/config/tax-rules/calculate", body, ALICE, 200);
     }
 
     private String seedPack(String code, String country, String version, String status, String contents) {

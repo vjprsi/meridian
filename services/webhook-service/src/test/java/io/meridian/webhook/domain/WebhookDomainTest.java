@@ -53,7 +53,7 @@ class WebhookDomainTest {
     void secretsRotateWithGracePeriod() {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         SigningSecrets s = SigningSecrets.fresh();
-        SigningSecrets r = SigningSecrets.parse(s.rotate(now).serialise());
+        SigningSecrets r = s.rotate(now);
         assertThat(r.previous()).isEqualTo(s.current());
         assertThat(r.active(now.plusSeconds(60))).containsExactly(r.current(), s.current());
         assertThat(r.active(now.plus(Duration.ofHours(25)))).containsExactly(r.current());

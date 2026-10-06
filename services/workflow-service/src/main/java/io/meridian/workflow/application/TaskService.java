@@ -1,6 +1,7 @@
 package io.meridian.workflow.application;
 
 import io.meridian.common.error.ApiException;
+import io.meridian.common.id.Ids;
 import io.meridian.events.OutboxWriter;
 import io.meridian.workflow.domain.Caller;
 import io.meridian.workflow.domain.StateMachine;
@@ -26,7 +27,6 @@ import tools.jackson.databind.node.ObjectNode;
 public class TaskService {
     static final String TABLE = "work_task";
     private static final List<String> PRIORITY_ORDER = List.of("LOW", "NORMAL", "HIGH", "URGENT");
-    private static final Set<String> ACTION_FIELDS = Set.of("status", "assignee", "outcome", "workflow_instance_id");
 
     private final WorkflowStore store;
     private final InstanceService instances;
@@ -38,6 +38,42 @@ public class TaskService {
         this.instances = instances;
         this.outbox = outbox;
         this.json = json;
+    }
+
+    /**
+     * Creates a stand-alone human task (not owned by a workflow instance). It starts OPEN in its queue, or CLAIMED
+     * when an assignee is given.
+     */
+    @Transactional
+    public ObjectNode create(ObjectNode values) {
+        if (values.path("task_type").asString("").isBlank() || values.path("title").asString("").isBlank()
+                || values.path("queue").asString("").isBlank()) {
+            throw ApiException.unprocessable("validation_failed", "task_type, title and queue are required");
+        }
+        JsonNode roles = values.get("candidate_roles");
+        if (roles != null && !roles.isNull()) {
+            if (!roles.isArray()) {
+                throw ApiException.unprocessable("invalid_candidate_roles", "candidate_roles must be an array of role names");
+            }
+            for (JsonNode r : roles) {
+                if (!r.isValueNode() || r.asString().isBlank()) {
+                    throw ApiException.unprocessable("invalid_candidate_roles", "candidate_roles must be non-blank strings");
+                }
+            }
+        }
+        String assignee = values.path("assignee").asString(null);
+        if (assignee != null && (assignee.isBlank() || assignee.length() > 64)) {
+            throw ApiException.unprocessable("invalid_assignee", "assignee must be 1-64 characters");
+        }
+        UUID id = Ids.newId();
+        values.put("id", id.toString());
+        values.put("status", assignee == null ? "OPEN" : "CLAIMED");
+        if (!values.hasNonNull("priority")) {
+            values.put("priority", "NORMAL");
+        }
+        ObjectNode row = store.insert(TABLE, values);
+        outbox.publish("platform.work_task.created", TABLE, id, row);
+        return row;
     }
 
     @Transactional
@@ -118,7 +154,7 @@ public class TaskService {
     }
 
     @Transactional
-    public ObjectNode escalate(UUID id, String reason, Caller caller) {
+    public ObjectNode escalate(UUID id, String reason) {
         if (reason == null || reason.isBlank()) {
             throw ApiException.unprocessable("reason_required", "reason is required");
         }
@@ -130,23 +166,25 @@ public class TaskService {
         v.put("status", "ESCALATED");
         v.put("priority", PRIORITY_ORDER.get(Math.max(idx, 0)));
         v.putNull("assignee");
-        String desc = t.path("description").asString("");
-        v.put("description", (desc.isEmpty() ? "" : desc + "\n") + "Escalated by " + caller.principal() + ": " + reason);
-        return store.update(TABLE, id, v);
+        v.put("escalation_reason", reason.length() > 255 ? reason.substring(0, 255) : reason);
+        ObjectNode row = store.update(TABLE, id, v);
+        outbox.publish("platform.work_task.escalated", TABLE, id, row);
+        return row;
     }
 
-    /** PATCH guard: closed tasks are immutable; status, assignee and outcome change only through actions. */
+    /**
+     * PATCH guard: closed tasks are immutable and the assignee changes only through the actions (status, outcome
+     * and workflow_instance_id are read-only in the contract).
+     */
     @Transactional
     public void checkUpdate(UUID id, ObjectNode changes) {
         ObjectNode t = store.lock(TABLE, id);
         if (StateMachine.WORK_TASK.isTerminal(t.path("status").asString())) {
             throw ApiException.conflict("task_closed", "Task is " + t.path("status").asString() + " and can no longer change");
         }
-        for (String f : ACTION_FIELDS) {
-            if (changes.has(f) && !changes.get(f).equals(t.get(f))) {
-                throw ApiException.unprocessable("field_requires_action",
-                        f + " can only be changed through the task actions (claim, assign, release, complete, escalate)");
-            }
+        if (changes.has("assignee") && !changes.get("assignee").equals(t.get("assignee"))) {
+            throw ApiException.unprocessable("field_requires_action",
+                    "assignee can only be changed through the task actions (claim, assign, release, escalate)");
         }
     }
 
@@ -169,7 +207,7 @@ public class TaskService {
 
     private static Set<String> candidateRoles(JsonNode t) {
         Set<String> roles = new HashSet<>();
-        t.path("candidate_roles").path("roles").forEach(r -> roles.add(r.asString()));
+        t.path("candidate_roles").forEach(r -> roles.add(r.asString()));
         return roles;
     }
 

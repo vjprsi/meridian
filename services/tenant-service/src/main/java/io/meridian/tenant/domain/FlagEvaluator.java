@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
  * rule's {@code serve} value, default true, and optional {@code variant}); otherwise percentage rollout using a
  * stable SHA-256 bucket of {@code flag_key:subject_type:subject_id} -> {@code ROLLOUT} / {@code DEFAULT}.
  *
- * <p>Targeting rules JSON: an array, or {@code {"rules":[...]}}; each rule is
+ * <p>Targeting rules JSON: an ordered array; each rule is
  * {@code {"attribute":"legal_entity_id","operator":"in","values":["..."],"serve":true,"variant":"beta"}}.
  * Attributes resolve from {@code subject_type}, {@code subject_id} or the request context (dotted paths allowed).
  * Operators: eq, neq, in, not_in, gt, gte, lt, lte, starts_with, ends_with, contains, exists, semver_gte, semver_lt.
@@ -62,8 +62,8 @@ public final class FlagEvaluator {
         if (rules == null || rules.isNull() || rules.isMissingNode()) {
             return Optional.empty();
         }
-        if (!rules.isArray() && !(rules.isObject() && (rules.path("rules").isArray() || !rules.has("rules")))) {
-            return Optional.of("targeting_rules must be an array of rules or {\"rules\":[...]}");
+        if (!rules.isArray()) {
+            return Optional.of("targeting_rules must be an array of rules");
         }
         for (JsonNode r : rules(rules)) {
             if (!r.isObject() || !r.hasNonNull("attribute") || !r.hasNonNull("operator")) {
@@ -84,9 +84,8 @@ public final class FlagEvaluator {
         if (node == null || node.isNull() || node.isMissingNode()) {
             return out;
         }
-        JsonNode arr = node.isArray() ? node : node.path("rules");
-        if (arr.isArray()) {
-            arr.forEach(out::add);
+        if (node.isArray()) {
+            node.forEach(out::add);
         }
         return out;
     }

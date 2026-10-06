@@ -7,9 +7,9 @@ import io.meridian.billing.application.UsageService;
 import io.meridian.common.tenancy.TenantContext;
 import io.meridian.web.crud.CrudEngine;
 import io.meridian.web.idempotency.Idempotency;
-import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,13 +20,11 @@ public class UsageController implements UsageApi {
     private final UsageService usage;
     private final CrudEngine crud;
     private final Idempotency idempotency;
-    private final HttpServletRequest request;
 
-    public UsageController(UsageService usage, CrudEngine crud, Idempotency idempotency, HttpServletRequest request) {
+    public UsageController(UsageService usage, CrudEngine crud, Idempotency idempotency) {
         this.usage = usage;
         this.crud = crud;
         this.idempotency = idempotency;
-        this.request = request;
     }
 
     @Override
@@ -41,11 +39,10 @@ public class UsageController implements UsageApi {
         });
     }
 
-    /** GET /v1/billing/usage/summary?from=&to=[&service_name=] (the contract omits these query parameters). */
+    /** Usage totals per metric for [from, to], optionally for one reporting service. */
     @Override
-    public ResponseEntity<Void> usageSummary() {
+    public ResponseEntity<Map<String, Object>> usageSummary(LocalDate from, LocalDate to, String serviceName) {
         TenantContext.require();
-        return Responses.untyped(ResponseEntity.ok(usage.summary(request.getParameter("from"),
-                request.getParameter("to"), request.getParameter("service_name"))));
+        return ResponseEntity.ok(usage.summary(from, to, serviceName));
     }
 }

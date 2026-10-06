@@ -5,6 +5,7 @@ import io.meridian.tenant.domain.Validators;
 import io.meridian.tenant.infrastructure.TenantStore;
 import io.meridian.web.crud.CrudEngine;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -39,15 +40,14 @@ public class BrandingService {
         }
         if (merged.hasNonNull("supported_locales")) {
             JsonNode locales = merged.get("supported_locales");
-            if (locales.isObject()) {
-                locales = locales.path("locales"); // contract types json columns as objects: {"locales":[...]}
-            }
             if (!locales.isArray()) {
-                throw ApiException.unprocessable("invalid_locales",
-                        "supported_locales must be {\"locales\":[BCP 47 tags]} or an array");
+                throw ApiException.unprocessable("invalid_locales", "supported_locales must be an array of BCP 47 tags");
             }
             boolean found = false;
             for (JsonNode l : locales) {
+                if (!l.isString()) {
+                    throw ApiException.unprocessable("invalid_locales", "supported_locales must contain BCP 47 tags");
+                }
                 if (l.asString().equals(merged.path("default_locale").asString("en"))) {
                     found = true;
                 }
@@ -71,7 +71,8 @@ public class BrandingService {
     }
 
     /** Resolved design tokens, sample screens and accessibility checks for a branding. */
-    public JsonNode preview(UUID id) {
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> preview(UUID id) {
         ObjectNode b = store.require("tenant_branding", id);
         String primary = b.get("primary_color").asString();
         String secondary = b.path("secondary_color").asString(primary);
@@ -126,7 +127,7 @@ public class BrandingService {
         if (!b.hasNonNull("privacy_url")) {
             warnings.add("No privacy policy URL configured");
         }
-        return out;
+        return json.convertValue(out, Map.class);
     }
 
     private ObjectNode screen(String name, String title, String background, String foreground, String font,

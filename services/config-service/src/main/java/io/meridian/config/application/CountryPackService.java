@@ -117,7 +117,9 @@ public class CountryPackService {
                 UUID.fromString(install.get("legal_entity_id").asString()));
         ObjectNode upd = json.createObjectNode();
         upd.put("status", "UNINSTALLED");
-        return crud.updateRow("tenant_country_pack", Map.of("id", installId), upd, null).orElseThrow();
+        String row = crud.updateRow("tenant_country_pack", Map.of("id", installId), upd, null).orElseThrow();
+        outbox.publish("platform.country_pack.uninstalled", "tenant_country_pack", installId, json.readTree(row));
+        return row;
     }
 
     private JsonNode releasedPack(UUID packId) {

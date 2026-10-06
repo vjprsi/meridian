@@ -64,7 +64,7 @@ class ReferenceDataFlowIT {
                        ('GB','GBR','826','United Kingdom','GBP',22,false)""").update();
         jdbc.sql("""
                 insert into bank_directory (bic, bank_name, country, clearing_system, national_clearing_code, city, rail_participation)
-                values ('COBADEFFXXX','Commerzbank','DE','DEBLZ','37040044','Koeln','{"rails":["SEPA_INST"]}'::jsonb),
+                values ('COBADEFFXXX','Commerzbank','DE','DEBLZ','37040044','Koeln','["SEPA_INST"]'::jsonb),
                        ('WESTGB2LXXX','Westminster Test Bank','GB','GBDSC','999999','London',null),
                        ('CHASUS33XXX','JPMorgan Chase','US','USABA','021000021','New York',null)""").update();
         ecb = post("/v1/reference/fx-rate-sources", """
@@ -121,7 +121,8 @@ class ReferenceDataFlowIT {
         assertThat(code(post("/v1/reference/holiday-calendars", calendar("BAD-TZ", "[\"SUNDAY\"]", "Mars/Olympus"), 422)))
                 .isEqualTo("invalid_timezone");
         JsonNode cal = post("/v1/reference/holiday-calendars", calendar("KE-PUBLIC", "[\"sat\",\"SUNDAY\"]", "Africa/Nairobi"), 201);
-        assertThat(cal.get("weekend_days").get("days")).hasSize(2);
+        assertThat(cal.get("weekend_days")).hasSize(2);
+        assertThat(cal.get("weekend_days").get(0).asString()).isEqualTo("SATURDAY");
         String id = cal.get("id").asString();
         post("/v1/reference/holidays", """
                 {"holiday_calendar_id":"%s","holiday_date":"2026-12-25","name":"Christmas Day"}""".formatted(id), 201);
@@ -185,10 +186,10 @@ class ReferenceDataFlowIT {
     @Order(5)
     void fxPublishLatestAndConvert() throws Exception {
         rate("EUR", "USD", "1.0850000000", "0.9216589862", 201);
-        JsonNode mismatch = rate("EUR", "GBP", "0.8500000000", "1.5000000000", 422);
-        assertThat(code(mismatch)).isEqualTo("inverse_rate_mismatch");
         assertThat(code(rate("USD", "USD", "1", "1", 422))).isEqualTo("same_currency");
-        rate("GBP", "USD", "1.2500000000", "0.8000000000", 201);
+        // inverse_rate is read-only: a client value is ignored and 1 / rate is stored
+        JsonNode gbp = rate("GBP", "USD", "1.2500000000", "1.5000000000", 201);
+        assertThat(new BigDecimal(gbp.get("inverse_rate").asString())).isEqualByComparingTo("0.8");
         rate("USD", "JPY", "150.1230000000", "0.0066612038", 201);
 
         JsonNode latest = get("/v1/reference/fx-rates/latest?base=EUR&quote=USD", TENANT);
@@ -225,20 +226,20 @@ class ReferenceDataFlowIT {
     void bulkLoadIsAllOrNothing() throws Exception {
         long before = rateCount();
         JsonNode bad = post("/v1/reference/fx-rates/bulk", """
-                {"rates":{"fx_rate_source_id":"%s","rate_type":"MID","items":[
+                {"fx_rate_source_id":"%s","rate_type":"MID","rates":[
                   {"base_currency":"USD","quote_currency":"KES","rate":"129.5"},
                   {"base_currency":"USD","quote_currency":"XXX","rate":"1"},
-                  {"base_currency":"EUR","quote_currency":"KES","rate":"-3"}]}}""".formatted(ecb), 422);
+                  {"base_currency":"EUR","quote_currency":"KES","rate":"-3"}]}""".formatted(ecb), 422);
         assertThat(code(bad)).isEqualTo("invalid_rates");
         List<String> fields = new ArrayList<>();
         bad.get("errors").forEach(e -> fields.add(e.get("field").asString()));
-        assertThat(fields).contains("rates.items[1].quote_currency", "rates.items[2].rate");
+        assertThat(fields).contains("rates[1].quote_currency", "rates[2].rate");
         assertThat(rateCount()).isEqualTo(before);
 
         JsonNode ok = post("/v1/reference/fx-rates/bulk", """
-                {"rates":{"fx_rate_source_id":"%s","items":[
+                {"fx_rate_source_id":"%s","rates":[
                   {"base_currency":"USD","quote_currency":"KES","rate":"129.5"},
-                  {"base_currency":"EUR","quote_currency":"KES","rate":"140.25","rate_type":"BUY"}]}}""".formatted(ecb), 201);
+                  {"base_currency":"EUR","quote_currency":"KES","rate":"140.25","rate_type":"BUY"}]}""".formatted(ecb), 201);
         assertThat(ok.get("loaded").asInt()).isEqualTo(2);
         assertThat(new BigDecimal(ok.get("rates").get(0).get("inverse_rate").asString()))
                 .isEqualByComparingTo("0.0077220077");
@@ -255,6 +256,7 @@ class ReferenceDataFlowIT {
         assertThat(de.get("account_type").asString()).isEqualTo("IBAN");
         assertThat(de.get("bank").get("bic").asString()).isEqualTo("COBADEFFXXX");
         assertThat(de.get("bank").get("bic_valid").asBoolean()).isTrue();
+        assertThat(de.get("bank").get("rail_participation").get(0).asString()).isEqualTo("SEPA_INST");
 
         JsonNode bad = post("/v1/reference/banks/validate-account",
                 "{\"account_number\":\"DE89370400440532013001\",\"country\":\"DE\"}", 200);
@@ -311,7 +313,7 @@ class ReferenceDataFlowIT {
 
     private static String calendar(String code, String weekend, String tz) {
         return """
-                {"code":"%s","name":"%s calendar","calendar_type":"COUNTRY","timezone":"%s","weekend_days":{"days":%s}}"""
+                {"code":"%s","name":"%s calendar","calendar_type":"COUNTRY","timezone":"%s","weekend_days":%s}"""
                 .formatted(code, code, tz, weekend);
     }
 

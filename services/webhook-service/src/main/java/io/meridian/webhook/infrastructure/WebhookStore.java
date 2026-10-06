@@ -18,7 +18,8 @@ public class WebhookStore {
     }
 
     public record EndpointRow(UUID id, String url, String status, String secretBlob, int secretVersion,
-                              String customHeaders, int consecutiveFailures, String apiVersion, int maxRps) {}
+                              String customHeaders, int consecutiveFailures, String apiVersion, int maxRps,
+                              String previousSecretBlob, OffsetDateTime previousSecretExpiresAt) {}
 
     public record DeliveryRow(UUID id, UUID endpointId, String eventId, String eventType, String orderingKey,
                               String payload, String status, int attemptCount, OffsetDateTime createdAt,
@@ -30,8 +31,8 @@ public class WebhookStore {
                             String status) {}
 
     private static final String ENDPOINT_COLS = """
-            id, url, status, signing_secret, signing_secret_version, custom_headers::text, consecutive_failures,
-            api_version, max_requests_per_second""";
+            id, url, status, signing_secret_enc, signing_secret_version, custom_headers::text, consecutive_failures,
+            api_version, max_requests_per_second, previous_signing_secret_enc, previous_secret_expires_at""";
 
     private static final String DELIVERY_COLS = """
             id, webhook_endpoint_id, event_id, event_type, ordering_key, payload::text, status, attempt_count,
@@ -43,7 +44,8 @@ public class WebhookStore {
         return jdbc.sql("select " + ENDPOINT_COLS + " from webhook_endpoint where id = ?" + (lock ? " for update" : ""))
                 .param(id)
                 .query((rs, i) -> new EndpointRow(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                        rs.getString(4), rs.getInt(5), rs.getString(6), rs.getInt(7), rs.getString(8), rs.getInt(9)))
+                        rs.getString(4), rs.getInt(5), rs.getString(6), rs.getInt(7), rs.getString(8), rs.getInt(9),
+                        rs.getString(10), rs.getObject(11, OffsetDateTime.class)))
                 .optional();
     }
 
@@ -56,6 +58,13 @@ public class WebhookStore {
                 .query(String.class).single();
     }
 
+    /** Event payload of an endpoint: its API representation (encrypted secrets and tenant removed). */
+    public String endpointEventJson(UUID id) {
+        return jdbc.sql("""
+                select (to_jsonb(t) - 'signing_secret_enc' - 'previous_signing_secret_enc' - 'tenant_id')::text
+                from webhook_endpoint t where id = ?""").param(id).query(String.class).single();
+    }
+
     public void setEndpointStatus(UUID id, String status, String disabledReason, boolean resetFailures) {
         jdbc.sql("""
                 update webhook_endpoint set status = ?, disabled_reason = ?,
@@ -64,9 +73,13 @@ public class WebhookStore {
                 .params(status, disabledReason, resetFailures, id).update();
     }
 
-    public void updateSecret(UUID id, String blob, int version) {
-        jdbc.sql("update webhook_endpoint set signing_secret = ?, signing_secret_version = ? where id = ?")
-                .params(blob, version, id).update();
+    public void updateSecret(UUID id, String currentBlob, int version, String previousBlob,
+                             OffsetDateTime previousExpiresAt) {
+        jdbc.sql("""
+                update webhook_endpoint set signing_secret_enc = ?, signing_secret_version = ?,
+                       previous_signing_secret_enc = ?, previous_secret_expires_at = ?
+                where id = ?""")
+                .params(currentBlob, version, previousBlob, previousExpiresAt, id).update();
     }
 
     public void recordEndpointSuccess(UUID id) {

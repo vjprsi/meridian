@@ -8,6 +8,7 @@ import io.meridian.config.api.generated.model.CustomFieldDefinitionUpdate;
 import io.meridian.config.api.generated.model.CustomFieldDefinitionsValidateRequest;
 import io.meridian.config.application.CustomFieldService;
 import io.meridian.web.idempotency.Idempotency;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Custom field definitions (validated, evented) and validation of custom field values. Contract defect:
- * allowed_values is declared as a JSON object; ENUM values are given as {@code {"values": ["A", "B"]}}.
- */
+/** Custom field definitions (validated, evented) and validation of custom field values. */
 @RestController
 public class CustomFieldDefinitionsController implements CustomFieldDefinitionsApi {
     private final CustomFieldService fields;
@@ -53,13 +51,12 @@ public class CustomFieldDefinitionsController implements CustomFieldDefinitionsA
         return ResponseEntity.noContent().build();
     }
 
-    /** Contract defect: no response schema is declared, so the generated method returns ResponseEntity&lt;Void&gt;. */
     @Override
-    public ResponseEntity<Void> customFieldDefinitionsValidate(String idempotencyKey,
-                                                               CustomFieldDefinitionsValidateRequest body) {
+    public ResponseEntity<Map<String, Object>> customFieldDefinitionsValidate(String idempotencyKey,
+                                                                              CustomFieldDefinitionsValidateRequest body) {
         TenantContext.require();
-        JsonNode req = json.valueToTree(body);
-        return Responses.body(idempotency.execute(idempotencyKey, body, JsonNode.class,
-                () -> ResponseEntity.ok(fields.validateValues(req.path("table_name").asString(null), req.get("values")))));
+        JsonNode values = body.getValues() == null ? null : json.valueToTree(body.getValues());
+        return Responses.object(json, idempotency.execute(idempotencyKey, body, JsonNode.class,
+                () -> ResponseEntity.ok(fields.validateValues(body.getTableName(), values))));
     }
 }

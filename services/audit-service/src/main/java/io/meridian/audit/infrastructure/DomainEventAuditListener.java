@@ -18,7 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Records every domain event published on the platform's Kafka topics (binary-mode CloudEvents from the outbox
  * relays) as an audit event of the emitting tenant. Delivery is at-least-once, so events are de-duplicated on
- * {@code ce_id} (stored as request_id {@code ce:<id>}). The audit service's own events are skipped.
+ * {@code ce_id} (stored as {@code source_event_id}). The audit service's own events are skipped.
  */
 @Component
 public class DomainEventAuditListener {
@@ -60,8 +60,8 @@ public class DomainEventAuditListener {
                 system ? "SYSTEM" : "STAFF_USER", truncate(system ? "system" : actor, 64), null, null,
                 truncate(type, 128), truncate(resourceType, 64), truncate(rec.key(), 64), "SUCCESS", null,
                 null, payload != null && payload.isObject() ? payload : null, legalEntity,
-                uuid(text(payload, "approval_request_id")), null, null, null, "ce:" + id, null,
-                truncate(source == null ? rec.topic() : source, 64));
+                uuid(text(payload, "approval_request_id")), null, null, null, null, null,
+                truncate(source == null ? rec.topic() : source, 64), truncate(id, 64));
         TenantContext.callAs(UUID.fromString(tenant), "audit-service", () -> recorder.recordOnce(event));
     }
 

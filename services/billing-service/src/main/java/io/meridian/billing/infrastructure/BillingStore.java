@@ -111,13 +111,16 @@ public class BillingStore {
                 .param(subscriptionId).query(Long.class).single();
     }
 
-    /** Marks issued invoices past their due date OVERDUE; returns the affected subscription ids. */
-    public List<UUID> markOverdue(LocalDate today) {
+    /** Marks issued invoices past their due date OVERDUE; returns the updated invoice rows. */
+    public List<String> markOverdue(LocalDate today) {
         return jdbc.sql("""
-                update tenant_invoice set status = 'OVERDUE', updated_by = 'system'
-                where status in ('ISSUED', 'PARTIALLY_PAID') and due_date < ?
-                returning tenant_subscription_id""")
-                .param(today).query(UUID.class).list().stream().distinct().toList();
+                with u as (
+                  update tenant_invoice set status = 'OVERDUE', updated_by = 'system', updated_at = now(),
+                         row_version = row_version + 1
+                  where status in ('ISSUED', 'PARTIALLY_PAID') and due_date < ?
+                  returning *)
+                select row_to_json(u)::text from u order by id""")
+                .param(today).query(String.class).list();
     }
 
     public List<UUID> tenantsWithActivity() {

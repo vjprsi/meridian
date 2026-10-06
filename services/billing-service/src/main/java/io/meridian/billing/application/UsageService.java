@@ -7,6 +7,7 @@ import io.meridian.events.OutboxWriter;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,9 +62,8 @@ public class UsageService {
     }
 
     @Transactional(readOnly = true)
-    public ObjectNode summary(String fromParam, String toParam, String serviceName) {
-        LocalDate from = parseDate("from", fromParam);
-        LocalDate to = parseDate("to", toParam);
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> summary(LocalDate from, LocalDate to, String serviceName) {
         if (to.isBefore(from)) {
             throw ApiException.unprocessable("invalid_period", "to must not be before from");
         }
@@ -86,17 +86,6 @@ public class UsageService {
             m.put("billable_quantity", UsageMetrics.isGauge(t.metric()) ? t.peakDaily() : t.total());
             m.put("aggregation", UsageMetrics.isGauge(t.metric()) ? "PEAK_DAILY" : "SUM");
         }
-        return out;
-    }
-
-    private static LocalDate parseDate(String name, String value) {
-        if (value == null || value.isBlank()) {
-            throw ApiException.badRequest("missing_parameter", "Query parameter '" + name + "' (YYYY-MM-DD) is required");
-        }
-        try {
-            return LocalDate.parse(value.trim());
-        } catch (java.time.format.DateTimeParseException e) {
-            throw ApiException.badRequest("invalid_parameter", "Query parameter '" + name + "' must be a date (YYYY-MM-DD)");
-        }
+        return json.convertValue(out, Map.class);
     }
 }

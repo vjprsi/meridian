@@ -15,8 +15,8 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.WebUtils;
 
 /**
- * Keeps the raw request body for endpoints that need it after JSON binding: HMAC verification of provider
- * callbacks and the free-form {@code data} of document generation (not part of the generated model).
+ * Keeps the raw request body of the public e-sign provider callback after JSON binding: its HMAC signature covers
+ * the exact bytes received, which re-serialising the bound model would not reproduce.
  */
 @Configuration(proxyBeanMethods = false)
 public class RawBodyConfig {
@@ -32,7 +32,7 @@ public class RawBodyConfig {
             }
         };
         FilterRegistrationBean<OncePerRequestFilter> reg = new FilterRegistrationBean<>(filter);
-        reg.addUrlPatterns("/v1/generated-documents", "/v1/esign-requests/callbacks/*");
+        reg.addUrlPatterns("/v1/esign-requests/callbacks/*");
         return reg;
     }
 

@@ -26,7 +26,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Holiday calendars and holidays: maintenance with change events, business-day arithmetic and holiday import.
- * weekend_days is stored canonically as {"days": ["SATURDAY", "SUNDAY"]} (the contract types it as an object).
+ * weekend_days is stored canonically as an array of upper-case weekday names, e.g. ["SATURDAY", "SUNDAY"].
  */
 @Service
 public class CalendarService {
@@ -231,15 +231,14 @@ public class CalendarService {
         }
     }
 
-    /** Accepts {"days":[...]}, {"SATURDAY":true,...} or a bare array; returns {"days":[canonical names]}. */
-    ObjectNode canonicalWeekend(JsonNode raw) {
+    /** Accepts weekday names (full or 3-letter, any case); returns the canonical array of names. */
+    ArrayNode canonicalWeekend(JsonNode raw) {
         if (raw == null || raw.isNull()) {
-            throw ApiException.unprocessable("invalid_weekend_days", "weekend_days is required, e.g. {\"days\":[\"SATURDAY\",\"SUNDAY\"]}");
+            throw ApiException.unprocessable("invalid_weekend_days", "weekend_days is required, e.g. [\"SATURDAY\",\"SUNDAY\"]");
         }
         Set<DayOfWeek> days = BusinessCalendar.parseWeekend(weekendNames(raw));
-        ObjectNode out = json.createObjectNode();
-        ArrayNode arr = out.putArray("days");
-        BusinessCalendar.names(days).forEach(arr::add);
+        ArrayNode out = json.createArrayNode();
+        BusinessCalendar.names(days).forEach(out::add);
         return out;
     }
 
@@ -248,19 +247,10 @@ public class CalendarService {
         if (raw == null || raw.isNull()) {
             return names;
         }
-        JsonNode list = raw.isArray() ? raw : raw.get("days");
-        if (list != null && list.isArray()) {
-            list.forEach(n -> names.add(n.asString()));
-        } else if (raw.isObject()) {
-            raw.propertyNames().forEach(k -> {
-                JsonNode val = raw.get(k);
-                if (val.isBoolean() ? val.asBoolean() : true) {
-                    names.add(k);
-                }
-            });
-        } else {
-            throw ApiException.unprocessable("invalid_weekend_days", "weekend_days must list weekday names");
+        if (!raw.isArray()) {
+            throw ApiException.unprocessable("invalid_weekend_days", "weekend_days must be an array of weekday names");
         }
+        raw.forEach(n -> names.add(n.asString()));
         return names;
     }
 }
