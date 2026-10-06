@@ -6,7 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -23,7 +23,8 @@ public class MeridianApprovalsAutoConfiguration {
 
     @Bean
     @ConditionalOnBean(ApprovalOutcomeHandler.class)
-    @ConditionalOnProperty(name = "meridian.approvals.listener-enabled", havingValue = "true", matchIfMissing = true)
+    // only in workflow mode: in local mode no decisions arrive, so no consumer group is started
+    @ConditionalOnExpression("'${meridian.approvals.mode:local}' == 'workflow' && '${meridian.approvals.listener-enabled:true}' == 'true'")
     ApprovalEventsDispatcher approvalEventsDispatcher(List<ApprovalOutcomeHandler> handlers, JsonMapper json) {
         return new ApprovalEventsDispatcher(handlers, json);
     }
