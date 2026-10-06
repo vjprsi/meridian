@@ -31,13 +31,20 @@ CREATE TABLE secure_message_thread (
   subject                      varchar(200) NOT NULL,
   topic                        varchar(64),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'AWAITING_CUSTOMER', 'AWAITING_BANK', 'CLOSED')),
+  opened_by                    varchar(40) NOT NULL DEFAULT 'CUSTOMER' CHECK (opened_by IN ('CUSTOMER', 'STAFF', 'SYSTEM', 'BOT')),
+  work_queue_id                uuid,
+  work_item_id                 uuid,
   assigned_user_id             uuid,
   related_type                 varchar(40),
   related_id                   uuid,
+  message_count                integer NOT NULL DEFAULT 0,
   last_message_at              timestamptz,
+  last_sender_type             varchar(40) CHECK (last_sender_type IN ('CUSTOMER', 'STAFF', 'SYSTEM', 'BOT')),
   unread_customer              integer NOT NULL DEFAULT 0,
   unread_staff                 integer NOT NULL DEFAULT 0,
   closed_at                    timestamptz,
+  closed_by                    varchar(64),
+  reopened_count               integer NOT NULL DEFAULT 0,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -55,14 +62,21 @@ COMMENT ON COLUMN secure_message_thread.row_version IS 'Optimistic lock version;
 COMMENT ON COLUMN secure_message_thread.customer_id IS 'Customer';
 COMMENT ON COLUMN secure_message_thread.subject IS 'Subject';
 COMMENT ON COLUMN secure_message_thread.topic IS 'Topic code (CARDS, PAYMENTS, LOANS, GENERAL)';
-COMMENT ON COLUMN secure_message_thread.status IS 'Status';
-COMMENT ON COLUMN secure_message_thread.assigned_user_id IS 'Staff member handling it';
+COMMENT ON COLUMN secure_message_thread.status IS 'Status (changes through messages and close / reopen)';
+COMMENT ON COLUMN secure_message_thread.opened_by IS 'Who opened the thread';
+COMMENT ON COLUMN secure_message_thread.work_queue_id IS 'CRM work queue the thread is routed to';
+COMMENT ON COLUMN secure_message_thread.work_item_id IS 'CRM work item tracking the thread';
+COMMENT ON COLUMN secure_message_thread.assigned_user_id IS 'Staff member handling it (set through assign)';
 COMMENT ON COLUMN secure_message_thread.related_type IS 'Related object (SERVICE_CASE, ACCOUNT, CARD, LOAN)';
 COMMENT ON COLUMN secure_message_thread.related_id IS 'Related object id';
+COMMENT ON COLUMN secure_message_thread.message_count IS 'Messages in the thread (incl. internal notes)';
 COMMENT ON COLUMN secure_message_thread.last_message_at IS 'Last message time';
+COMMENT ON COLUMN secure_message_thread.last_sender_type IS 'Sender of the last customer-visible message';
 COMMENT ON COLUMN secure_message_thread.unread_customer IS 'Messages unread by the customer';
 COMMENT ON COLUMN secure_message_thread.unread_staff IS 'Messages unread by staff';
 COMMENT ON COLUMN secure_message_thread.closed_at IS 'Close time';
+COMMENT ON COLUMN secure_message_thread.closed_by IS 'Principal that closed the thread';
+COMMENT ON COLUMN secure_message_thread.reopened_count IS 'Times reopened';
 COMMENT ON COLUMN secure_message_thread.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN secure_message_thread.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN secure_message_thread.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -70,6 +84,8 @@ COMMENT ON COLUMN secure_message_thread.custom_field_4 IS 'Tenant-defined custom
 COMMENT ON COLUMN secure_message_thread.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_secure_message_thread_tenant ON secure_message_thread (tenant_id, created_at);
 CREATE INDEX ix_secure_message_thread_customer_id ON secure_message_thread (customer_id);
+CREATE INDEX ix_secure_message_thread_work_queue_id ON secure_message_thread (work_queue_id);
+CREATE INDEX ix_secure_message_thread_work_item_id ON secure_message_thread (work_item_id);
 CREATE INDEX ix_secure_message_thread_assigned_user_id ON secure_message_thread (assigned_user_id);
 ALTER TABLE secure_message_thread ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON secure_message_thread USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -93,7 +109,8 @@ CREATE TABLE secure_message (
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_secure_message_1 UNIQUE (secure_message_thread_id, client_message_id)
 );
 COMMENT ON TABLE secure_message IS 'One message in a secure thread with attachments and read receipt. Append-only.';
 COMMENT ON COLUMN secure_message.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -104,7 +121,7 @@ COMMENT ON COLUMN secure_message.secure_message_thread_id IS 'Thread';
 COMMENT ON COLUMN secure_message.sender_type IS 'Who sent it';
 COMMENT ON COLUMN secure_message.sender_user_id IS 'Staff sender';
 COMMENT ON COLUMN secure_message.body IS 'Message text [PII]';
-COMMENT ON COLUMN secure_message.attachment_document_ids IS 'Attached documents';
+COMMENT ON COLUMN secure_message.attachment_document_ids IS 'Attached documents (document-service ids, verified AVAILABLE)';
 COMMENT ON COLUMN secure_message.is_internal_note IS 'Staff-only note, hidden from the customer';
 COMMENT ON COLUMN secure_message.notification_id IS 'Push/email alert sent about it';
 COMMENT ON COLUMN secure_message.client_message_id IS 'Client-side id for de-duplication';
@@ -170,7 +187,7 @@ CREATE TABLE announcement (
   row_version                  integer NOT NULL DEFAULT 1,
   title                        varchar(160) NOT NULL,
   body                         varchar(2000) NOT NULL,
-  placement                    varchar(40) NOT NULL,
+  placement                    varchar(40) NOT NULL CHECK (placement IN ('HOME_BANNER', 'LOGIN', 'INBOX', 'MODAL')),
   status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SCHEDULED', 'LIVE', 'EXPIRED', 'WITHDRAWN')),
   segment_ids                  jsonb,
   apps                         jsonb,
@@ -181,6 +198,10 @@ CREATE TABLE announcement (
   dismissible                  boolean NOT NULL DEFAULT true,
   starts_at                    timestamptz NOT NULL,
   ends_at                      timestamptz,
+  published_at                 timestamptz,
+  published_by                 varchar(64),
+  withdrawn_at                 timestamptz,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -197,17 +218,21 @@ COMMENT ON COLUMN announcement.updated_by IS 'Principal that last updated the ro
 COMMENT ON COLUMN announcement.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN announcement.title IS 'Title';
 COMMENT ON COLUMN announcement.body IS 'Body';
-COMMENT ON COLUMN announcement.placement IS 'HOME_BANNER, LOGIN, INBOX, MODAL';
-COMMENT ON COLUMN announcement.status IS 'Status';
-COMMENT ON COLUMN announcement.segment_ids IS 'Target segments (empty = everyone)';
-COMMENT ON COLUMN announcement.apps IS 'Target apps (customer-mobile, customer-web, business-portal)';
-COMMENT ON COLUMN announcement.languages IS 'Translations per language';
+COMMENT ON COLUMN announcement.placement IS 'Where it is shown';
+COMMENT ON COLUMN announcement.status IS 'Status (changes through publish / withdraw and the schedule)';
+COMMENT ON COLUMN announcement.segment_ids IS 'Target customer segments (empty = everyone)';
+COMMENT ON COLUMN announcement.apps IS 'Target apps (empty = all)';
+COMMENT ON COLUMN announcement.languages IS 'Translations per language ({"fr": {"title": ..., "body": ...}})';
 COMMENT ON COLUMN announcement.image_document_id IS 'Image';
 COMMENT ON COLUMN announcement.deeplink IS 'Call to action';
-COMMENT ON COLUMN announcement.priority IS 'Display priority';
+COMMENT ON COLUMN announcement.priority IS 'Display priority (lower first)';
 COMMENT ON COLUMN announcement.dismissible IS 'Customer can dismiss';
 COMMENT ON COLUMN announcement.starts_at IS 'Start';
 COMMENT ON COLUMN announcement.ends_at IS 'End';
+COMMENT ON COLUMN announcement.published_at IS 'Publication time';
+COMMENT ON COLUMN announcement.published_by IS 'Principal that published';
+COMMENT ON COLUMN announcement.withdrawn_at IS 'Withdrawal time';
+COMMENT ON COLUMN announcement.status_reason IS 'Reason of the withdrawal';
 COMMENT ON COLUMN announcement.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN announcement.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN announcement.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -218,6 +243,42 @@ CREATE INDEX ix_announcement_image_document_id ON announcement (image_document_i
 ALTER TABLE announcement ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON announcement USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_announcement_touch BEFORE UPDATE ON announcement FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- announcement_dismissal: A customer dismissed an announcement (it is no longer shown to them)
+CREATE TABLE announcement_dismissal (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  announcement_id              uuid NOT NULL REFERENCES announcement(id),
+  customer_id                  uuid NOT NULL,
+  dismissed_at                 timestamptz NOT NULL DEFAULT now(),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_announcement_dismissal_1 UNIQUE (announcement_id, customer_id)
+);
+COMMENT ON TABLE announcement_dismissal IS 'A customer dismissed an announcement (it is no longer shown to them)';
+COMMENT ON COLUMN announcement_dismissal.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN announcement_dismissal.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN announcement_dismissal.created_at IS 'Creation time';
+COMMENT ON COLUMN announcement_dismissal.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN announcement_dismissal.announcement_id IS 'Announcement';
+COMMENT ON COLUMN announcement_dismissal.customer_id IS 'Customer';
+COMMENT ON COLUMN announcement_dismissal.dismissed_at IS 'Dismissal time';
+COMMENT ON COLUMN announcement_dismissal.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN announcement_dismissal.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN announcement_dismissal.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN announcement_dismissal.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN announcement_dismissal.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_announcement_dismissal_tenant ON announcement_dismissal (tenant_id, created_at);
+CREATE INDEX ix_announcement_dismissal_announcement_id ON announcement_dismissal (announcement_id);
+CREATE INDEX ix_announcement_dismissal_customer_id ON announcement_dismissal (customer_id);
+ALTER TABLE announcement_dismissal ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON announcement_dismissal USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_announcement_dismissal_append_only BEFORE UPDATE OR DELETE ON announcement_dismissal FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).

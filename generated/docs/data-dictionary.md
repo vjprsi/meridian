@@ -1930,7 +1930,7 @@ Loyalty programs: earn rules on spend and behaviour, points accounts with an app
 
 #### `rewards_program`
 
-A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings
 
 API: /v1/rewards/programs · Requirements: ENG-01
 
@@ -1946,19 +1946,24 @@ API: /v1/rewards/programs · Requirements: ENG-01
 | code | varchar(32) | no | UQ | code | Program code |
 | name | varchar(120) | no |  | name | Display name |
 | program_type | varchar(40) (RewardProgramType) | no |  | program_type | Points, cashback, miles or hybrid |
-| status | varchar(40) (RewardProgramStatus) | no |  | status | Lifecycle status |
+| status | varchar(40) (RewardProgramStatus) | no |  | status (read-only) | Lifecycle status (changes through activate / pause / end) |
 | points_name | varchar(40) | yes |  | points_name | Branded name of the points currency, e.g. Stars |
 | point_value | numeric(28,8) | yes |  | point_value | Monetary value of one point for redemption |
 | value_currency | char(3) | yes |  | value_currency | Currency of point_value and cashback |
-| points_expiry_months | integer | yes |  | points_expiry_months | Months until earned points expire (empty = never) |
-| funding_ledger_account_id | uuid | yes | ref → ledger_account | funding_ledger_account_id | Ledger account funding rewards liability |
+| points_expiry_months | integer | yes |  | points_expiry_months | Months after the earn date until earned points expire (empty = never) |
+| tier_period_months | integer | no |  | tier_period_months | Rolling window over which tier qualification is measured; an earned tier is kept for the same period |
+| ledger_id | uuid | yes | ref → ledger | ledger_id | Ledger book of reward payouts (cashback, statement credits) |
+| funding_ledger_account_id | uuid | yes | ref → ledger_account | funding_ledger_account_id | Ledger account funding reward payouts (debited) |
 | liability_ledger_account_id | uuid | yes | ref → ledger_account | liability_ledger_account_id | Ledger account holding outstanding rewards liability |
 | eligible_product_ids | jsonb | yes |  | eligible_product_ids | Products whose customers can enrol (empty = all) |
-| auto_enrol | boolean | no |  | auto_enrol | Enrol eligible customers automatically |
+| auto_enrol | boolean | no |  | auto_enrol | Enrol eligible customers automatically on their first qualifying transaction |
 | terms_document_id | uuid | yes | ref → document | terms_document_id | Program terms and conditions |
 | starts_on | date | no |  | starts_on | Start date |
 | ends_on | date | yes |  | ends_on | End date |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved activation |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Activation approval time |
+| approval_comment | varchar(500) | yes |  | approval_comment (read-only) | Checker comment |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last pause or end |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -1983,11 +1988,11 @@ API: /v1/rewards/tiers · Requirements: ENG-01
 | rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
 | code | varchar(32) | no |  | code | Tier code |
 | name | varchar(80) | no |  | name | Display name |
-| rank | integer | no |  | rank | Order, 1 = lowest |
-| qualify_spend | numeric(28,8) | yes |  | qualify_spend | Annual spend needed to reach the tier |
-| qualify_points | bigint | yes |  | qualify_points | Points earned in the period needed to reach the tier |
-| earn_multiplier | numeric(18,10) | no |  | earn_multiplier | Multiplier applied to base earn |
-| benefits | jsonb | yes |  | benefits | Tier benefits (fee waivers, lounge access, FX discounts) |
+| rank | integer | no |  | rank | Order, 1 = lowest (base tier) |
+| qualify_spend | numeric(28,8) | yes |  | qualify_spend | Spend in the tier period that qualifies for the tier (either threshold qualifies) |
+| qualify_points | bigint | yes |  | qualify_points | Points earned in the tier period that qualify for the tier (either threshold qualifies) |
+| earn_multiplier | numeric(18,10) | no |  | earn_multiplier | Multiplier applied to base points earn |
+| benefits | jsonb | yes |  | benefits | Tier benefits ({code, description}: fee waivers, lounge access, FX discounts) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2012,26 +2017,30 @@ API: /v1/rewards/rules · Requirements: ENG-01
 | rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
 | name | varchar(120) | no |  | name | Rule name |
 | trigger | varchar(40) (RewardRuleTrigger) | no |  | trigger | Event that earns |
-| status | varchar(40) (RewardRuleStatus) | no |  | status | Status |
+| status | varchar(40) (RewardRuleStatus) | no |  | status (read-only) | Status (changes through activate / deactivate) |
 | priority | integer | no |  | priority | Lower evaluates first |
-| stackable | boolean | no |  | stackable | Can combine with other matching rules |
+| stackable | boolean | no |  | stackable | Can combine with other matching rules; a non-stackable rule that wins on priority is applied alone |
 | mcc_include | jsonb | yes |  | mcc_include | MCC codes that qualify (empty = any) |
 | mcc_exclude | jsonb | yes |  | mcc_exclude | MCC codes excluded (e.g. gambling, quasi-cash) |
-| merchant_ids | jsonb | yes |  | merchant_ids | Specific merchants (partner offers) |
-| product_ids | jsonb | yes |  | product_ids | Products that qualify |
-| channels | jsonb | yes |  | channels | Channels that qualify (POS, ECOM, CONTACTLESS, WALLET) |
-| countries | jsonb | yes |  | countries | Merchant countries that qualify |
+| merchant_ids | jsonb | yes |  | merchant_ids | Merchant / card acceptor ids that qualify (partner offers; empty = any) |
+| product_ids | jsonb | yes |  | product_ids | Products that qualify (empty = any) |
+| channels | jsonb | yes |  | channels | Channels that qualify (empty = any) |
+| countries | jsonb | yes |  | countries | Merchant countries that qualify (empty = any) |
 | min_amount | numeric(28,8) | yes |  | min_amount | Minimum transaction amount |
 | points_per_unit | numeric(18,10) | yes |  | points_per_unit | Points earned per unit of currency spent |
 | cashback_rate | numeric(18,10) | yes |  | cashback_rate | Cashback as a fraction of the amount |
 | fixed_award | numeric(28,8) | yes |  | fixed_award | Fixed points or cashback per qualifying event |
 | multiplier | numeric(18,10) | no |  | multiplier | Promotional multiplier |
-| cap_amount | numeric(28,8) | yes |  | cap_amount | Maximum award per cap period |
+| cap_amount | numeric(28,8) | yes |  | cap_amount | Maximum award (points or cashback) per customer and cap period |
 | cap_period | varchar(40) (RewardCapPeriod) | yes |  | cap_period | Period the cap applies to |
-| valid_days_of_week | jsonb | yes |  | valid_days_of_week | Days of week the rule applies (e.g. weekend boosts) |
+| valid_days_of_week | jsonb | yes |  | valid_days_of_week | ISO days of week the rule applies (1=Monday..7=Sunday; empty = every day) |
+| valid_time_from | varchar(5) | yes |  | valid_time_from | Daily window start HH:mm in the rule time zone (empty = all day) |
+| valid_time_to | varchar(5) | yes |  | valid_time_to | Daily window end HH:mm (exclusive; may wrap past midnight) |
+| time_zone | varchar(40) | no |  | time_zone | IANA time zone of the day and time windows and cap periods |
 | valid_from | timestamptz | no |  | valid_from | Effective from |
 | valid_to | timestamptz | yes |  | valid_to | Effective to |
 | settle_after_days | integer | no |  | settle_after_days | Days before pending awards confirm (dispute window) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last deactivation |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2055,16 +2064,64 @@ API: /v1/rewards/points-accounts · Requirements: ENG-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| status | varchar(40) (PointsAccountStatus) | no |  | status | Status |
-| reward_tier_id | uuid | yes | FK → reward_tier | reward_tier_id | Current tier |
-| tier_qualified_until | date | yes |  | tier_qualified_until | Tier valid until |
+| product_id | uuid | yes | ref → product | product_id | Product through which the customer is eligible |
+| default_credit_account_id | uuid | yes | ref → deposit_account | default_credit_account_id | Account credited with cashback and statement credits by default |
+| status | varchar(40) (PointsAccountStatus) | no |  | status (read-only) | Status (changes through suspend / reactivate / close) |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last status change |
+| reward_tier_id | uuid | yes | FK → reward_tier | reward_tier_id (read-only) | Current tier (set through tier evaluation) |
+| tier_qualified_until | date | yes |  | tier_qualified_until (read-only) | Tier kept until (requalification date) |
+| tier_spend | numeric(28,8) | no |  | tier_spend (read-only) | Qualifying spend in the tier period at the last evaluation |
+| tier_points | bigint | no |  | tier_points (read-only) | Points earned in the tier period at the last evaluation |
+| tier_evaluated_at | timestamptz | yes |  | tier_evaluated_at (read-only) | Last tier evaluation |
 | available_points | bigint | no |  | available_points (read-only) | Redeemable points |
 | pending_points | bigint | no |  | pending_points (read-only) | Points awaiting confirmation |
 | lifetime_earned | bigint | no |  | lifetime_earned (read-only) | All points ever earned |
 | lifetime_redeemed | bigint | no |  | lifetime_redeemed (read-only) | All points ever redeemed |
 | expiring_points | bigint | no |  | expiring_points (read-only) | Points expiring in the next 30 days |
 | next_expiry_date | date | yes |  | next_expiry_date (read-only) | Next expiry date |
-| enrolled_at | timestamptz | no |  | enrolled_at | Enrolment time |
+| enrolled_at | timestamptz | no |  | enrolled_at (read-only) | Enrolment time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `reward_transaction`
+
+A qualifying transaction evaluated against a program's earn rules, with its awards (idempotent per source)
+
+API: /v1/rewards/transactions · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program evaluated |
+| points_account_id | uuid | yes | FK → points_account | points_account_id (read-only) | Points account credited |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| trigger | varchar(40) (RewardRuleTrigger) | no |  | trigger | Kind of event |
+| source_type | varchar(40) | no |  | source_type | CARD_AUTHORIZATION, CARD_CLEARING, PAYMENT, WALLET_TRANSACTION, ... |
+| source_id | uuid | no |  | source_id | Source transaction id |
+| amount | numeric(28,8) | no |  | amount | Transaction amount (positive) |
+| currency | char(3) | no |  | currency | Currency |
+| mcc | varchar(4) | yes |  | mcc | Merchant category code |
+| merchant_id | varchar(64) | yes |  | merchant_id | Merchant / card acceptor id |
+| merchant_country | char(2) | yes |  | merchant_country | Merchant country |
+| channel | varchar(40) (RewardChannel) | yes |  | channel | Channel |
+| product_id | uuid | yes | ref → product | product_id | Product the transaction was made with |
+| transaction_at | timestamptz | no |  | transaction_at | Transaction time |
+| credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account to credit cashback to (default: the points account's) |
+| status | varchar(40) (RewardTransactionStatus) | no |  | status (read-only) | Outcome |
+| points_awarded | bigint | no |  | points_awarded (read-only) | Points awarded |
+| cashback_awarded | numeric(28,8) | no |  | cashback_awarded (read-only) | Cashback awarded |
+| awards | jsonb | yes |  | awards (read-only) | Per-rule breakdown ({reward_rule_id, points, cashback, capped}) |
+| reversed_at | timestamptz | yes |  | reversed_at (read-only) | Reversal time |
+| reversal_reason | varchar(255) | yes |  | reversal_reason (read-only) | Why reversed (refund, chargeback) |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2088,13 +2145,50 @@ API: /v1/rewards/points-entries · Requirements: ENG-01
 | points | bigint | no |  | points | Signed points (positive earn, negative redeem/expire) |
 | balance_after | bigint | no |  | balance_after (read-only) | Available balance after the entry |
 | is_pending | boolean | no |  | is_pending | Earned but not yet confirmed |
+| confirm_after | timestamptz | yes |  | confirm_after | When a pending earn confirms |
+| confirms_id | uuid | yes | FK → points_ledger_entry | confirms_id | Pending entry this entry confirms |
+| lot_id | uuid | yes | FK → points_ledger_entry | lot_id | Earn lot consumed (EXPIRE entries) |
 | reward_rule_id | uuid | yes | FK → reward_rule | reward_rule_id | Rule that produced an earn |
-| source_type | varchar(40) | yes |  | source_type | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL |
+| reward_transaction_id | uuid | yes | FK → reward_transaction | reward_transaction_id | Transaction that produced an earn |
+| transaction_amount | numeric(28,8) | yes |  | transaction_amount | Qualifying transaction amount |
+| currency | char(3) | yes |  | currency | Currency of transaction_amount |
+| source_type | varchar(40) | yes |  | source_type | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, ADJUSTMENT, TRANSFER |
 | source_id | uuid | yes |  | source_id | Source object id |
+| counterparty_points_account_id | uuid | yes | FK → points_account | counterparty_points_account_id | Other account of a transfer |
 | expires_on | date | yes |  | expires_on | Expiry date of earned points |
 | reversal_of_id | uuid | yes | FK → points_ledger_entry | reversal_of_id | Entry this one reverses |
 | reason | varchar(255) | yes |  | reason | Adjustment reason |
 | idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Prevents double awards |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `points_adjustment`
+
+A manual points adjustment under maker-checker control, applied to the ledger when approved
+
+API: /v1/rewards/points-adjustments · Requirements: ENG-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| points_account_id | uuid | no | FK → points_account | points_account_id | Points account |
+| points | bigint | no |  | points | Signed points to add (positive) or remove (negative) |
+| reason | varchar(255) | no |  | reason | Business reason |
+| status | varchar(40) (PointsAdjustmentStatus) | no |  | status (read-only) | Status (changes through approve / reject) |
+| requested_by | varchar(64) | yes |  | requested_by (read-only) | Maker |
+| decided_by | varchar(64) | yes |  | decided_by (read-only) | Checker |
+| decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
+| decision_comment | varchar(500) | yes |  | decision_comment (read-only) | Checker comment or rejection reason |
+| points_ledger_entry_id | uuid | yes | FK → points_ledger_entry | points_ledger_entry_id (read-only) | Entry written when applied |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2118,18 +2212,22 @@ API: /v1/rewards/cashback · Requirements: ENG-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | rewards_program_id | uuid | no | FK → rewards_program | rewards_program_id | Program |
 | reward_rule_id | uuid | yes | FK → reward_rule | reward_rule_id | Rule applied |
+| reward_transaction_id | uuid | yes | FK → reward_transaction | reward_transaction_id | Evaluated transaction |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | source_type | varchar(40) | no |  | source_type | CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION |
 | source_id | uuid | no |  | source_id | Qualifying transaction |
 | transaction_amount | numeric(28,8) | no |  | transaction_amount | Qualifying amount |
 | cashback_amount | numeric(28,8) | no |  | cashback_amount | Cashback awarded |
 | currency | char(3) | no |  | currency | Currency |
-| status | varchar(40) (CashbackStatus) | no |  | status | Status |
-| confirm_after | timestamptz | yes |  | confirm_after | When the award confirms (after dispute window) |
+| status | varchar(40) (CashbackStatus) | no |  | status (read-only) | Status |
+| confirm_after | timestamptz | yes |  | confirm_after (read-only) | When the award confirms (after the dispute window) |
 | credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account credited |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting of the payout |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting of the payout |
 | paid_at | timestamptz | yes |  | paid_at (read-only) | Payout time |
-| reversal_reason | varchar(255) | yes |  | reversal_reason | Why reversed (refund, chargeback) |
+| payout_attempts | integer | no |  | payout_attempts (read-only) | Payout attempts |
+| failure_reason | varchar(500) | yes |  | failure_reason (read-only) | Last payout failure |
+| reversal_reason | varchar(255) | yes |  | reversal_reason (read-only) | Why reversed (refund, chargeback) |
+| reversal_journal_entry_id | uuid | yes | ref → journal_entry | reversal_journal_entry_id (read-only) | Ledger reversal of a paid award |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2155,8 +2253,8 @@ API: /v1/rewards/catalog · Requirements: ENG-01
 | sku | varchar(64) | no |  | sku | Catalogue SKU |
 | name | varchar(160) | no |  | name | Display name |
 | item_type | varchar(40) (RewardCatalogItemType) | no |  | item_type | Redemption type |
-| points_cost | bigint | no |  | points_cost | Points required |
-| cash_value | numeric(28,8) | yes |  | cash_value | Monetary value delivered |
+| points_cost | bigint | no |  | points_cost | Points required per unit |
+| cash_value | numeric(28,8) | yes |  | cash_value | Monetary value delivered per unit |
 | currency | char(3) | yes |  | currency | Currency of cash_value |
 | partner_name | varchar(120) | yes |  | partner_name | Fulfilment partner (airline, voucher provider) |
 | partner_sku | varchar(64) | yes |  | partner_sku | Partner's product code |
@@ -2188,18 +2286,20 @@ API: /v1/rewards/redemptions · Requirements: ENG-01
 | points_account_id | uuid | no | FK → points_account | points_account_id | Points account |
 | reward_catalog_item_id | uuid | no | FK → reward_catalog_item | reward_catalog_item_id | Item redeemed |
 | quantity | integer | no |  | quantity | Quantity |
-| points_spent | bigint | no |  | points_spent | Points debited |
-| cash_value | numeric(28,8) | yes |  | cash_value | Value delivered |
-| currency | char(3) | yes |  | currency | Currency |
-| status | varchar(40) (RedemptionStatus) | no |  | status | Status |
-| credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account for statement credit |
+| points_spent | bigint | no |  | points_spent (read-only) | Points debited |
+| cash_value | numeric(28,8) | yes |  | cash_value (read-only) | Value delivered |
+| currency | char(3) | yes |  | currency (read-only) | Currency |
+| status | varchar(40) (RedemptionStatus) | no |  | status (read-only) | Status |
+| credit_account_id | uuid | yes | ref → deposit_account | credit_account_id | Account for statement credit / cash transfer (default: the points account's) |
 | partner_member_id | varchar(64) | yes |  | partner_member_id | Loyalty number at the partner (airline miles) PII |
-| voucher_code | varchar(128) | yes |  | — | Issued voucher code secret |
-| partner_reference | varchar(128) | yes |  | partner_reference | Fulfilment reference |
-| points_ledger_entry_id | uuid | yes | FK → points_ledger_entry | points_ledger_entry_id | Debit entry |
-| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Ledger posting for statement credit |
+| voucher_code | varchar(128) | yes |  | voucher_code (read-only) | Issued voucher code PII |
+| partner_reference | varchar(128) | yes |  | partner_reference (read-only) | Fulfilment reference |
+| points_ledger_entry_id | uuid | yes | FK → points_ledger_entry | points_ledger_entry_id (read-only) | Debit entry |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Ledger posting for statement credit |
 | fulfilled_at | timestamptz | yes |  | fulfilled_at (read-only) | Fulfilment time |
 | failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Failure reason |
+| cancelled_at | timestamptz | yes |  | cancelled_at (read-only) | Cancellation time |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation reason |
 | idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -2211,7 +2311,7 @@ API: /v1/rewards/redemptions · Requirements: ENG-01
 
 Refer-a-friend program with qualification criteria and rewards for referrer and referee
 
-API: /v1/referrals/programs · Requirements: ENG-02
+API: /v1/referral-programs · Requirements: ENG-02
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2224,19 +2324,23 @@ API: /v1/referrals/programs · Requirements: ENG-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | code | varchar(32) | no | UQ | code | Program code |
 | name | varchar(120) | no |  | name | Display name |
-| status | varchar(40) (ReferralProgramStatus) | no |  | status | Status |
-| qualification_rules | jsonb | no |  | qualification_rules | E.g. account opened + first deposit >= X within N days |
+| status | varchar(40) (ReferralProgramStatus) | no |  | status (read-only) | Status (changes through activate / pause / end) |
+| qualification_rules | jsonb | no |  | qualification_rules | Events the referee must complete, all within qualify_within_days ({event: ReferralEventType, min_amount}) |
 | qualify_within_days | integer | no |  | qualify_within_days | Days the referee has to qualify |
 | referrer_reward | numeric(28,8) | yes |  | referrer_reward | Cash reward to the referrer |
 | referee_reward | numeric(28,8) | yes |  | referee_reward | Cash reward to the referee |
 | referrer_points | bigint | yes |  | referrer_points | Points reward to the referrer |
 | referee_points | bigint | yes |  | referee_points | Points reward to the referee |
+| rewards_program_id | uuid | yes | FK → rewards_program | rewards_program_id | Program whose points accounts receive points rewards |
 | currency | char(3) | yes |  | currency | Reward currency |
-| max_referrals_per_customer | integer | yes |  | max_referrals_per_customer | Cap per referrer |
-| budget_amount | numeric(28,8) | yes |  | budget_amount | Total program budget |
+| max_referrals_per_customer | integer | yes |  | max_referrals_per_customer | Cap of rewarded referrals per referrer |
+| budget_amount | numeric(28,8) | yes |  | budget_amount | Total cash budget of the program |
+| spent_amount | numeric(28,8) | no |  | spent_amount (read-only) | Cash rewards paid so far |
+| ledger_id | uuid | yes | ref → ledger | ledger_id | Ledger book of the payouts |
 | funding_ledger_account_id | uuid | yes | ref → ledger_account | funding_ledger_account_id | Account funding payouts |
 | starts_on | date | no |  | starts_on | Start |
 | ends_on | date | yes |  | ends_on | End |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last pause or end |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2260,17 +2364,54 @@ API: /v1/referrals · Requirements: ENG-02
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | referral_program_id | uuid | no | FK → referral_program | referral_program_id | Program |
 | referrer_customer_id | uuid | no | ref → customer | referrer_customer_id | Referrer |
-| referral_code | varchar(32) | no |  | referral_code | Code shared by the referrer |
-| referee_customer_id | uuid | yes | ref → customer | referee_customer_id | Referee once signed up |
+| referral_code | varchar(32) | no |  | referral_code (read-only) | Code shared by the referrer (server-generated, one per referrer and program) |
+| is_code_holder | boolean | no |  | is_code_holder (read-only) | The referrer's code record rather than an individual referral |
+| referee_customer_id | uuid | yes | ref → customer | referee_customer_id (read-only) | Referee once signed up |
 | referee_contact | varchar(320) | yes |  | referee_contact | Invited phone or email PII |
-| status | varchar(40) (ReferralStatus) | no |  | status | Status |
-| signed_up_at | timestamptz | yes |  | signed_up_at | Referee sign-up time |
-| qualify_by | timestamptz | yes |  | qualify_by | Deadline to qualify |
+| referrer_account_id | uuid | yes | ref → deposit_account | referrer_account_id | Account credited with the referrer's cash reward |
+| referee_account_id | uuid | yes | ref → deposit_account | referee_account_id (read-only) | Account credited with the referee's cash reward (given at sign-up) |
+| status | varchar(40) (ReferralStatus) | no |  | status (read-only) | Status |
+| signed_up_at | timestamptz | yes |  | signed_up_at (read-only) | Referee sign-up time |
+| qualify_by | timestamptz | yes |  | qualify_by (read-only) | Deadline to qualify |
+| qualification_progress | jsonb | yes |  | qualification_progress (read-only) | Qualification rules met so far ({event, met_at, amount}) |
 | qualified_at | timestamptz | yes |  | qualified_at (read-only) | Qualification time |
-| referrer_payout_journal_entry_id | uuid | yes | ref → journal_entry | referrer_payout_journal_entry_id | Referrer reward posting |
-| referee_payout_journal_entry_id | uuid | yes | ref → journal_entry | referee_payout_journal_entry_id | Referee reward posting |
-| rejection_reason | varchar(255) | yes |  | rejection_reason | Why rejected (self-referral, fraud) |
-| fraud_score | numeric(18,10) | yes |  | fraud_score | Fraud score at qualification |
+| rewarded_at | timestamptz | yes |  | rewarded_at (read-only) | Time both rewards were paid |
+| referrer_payout_journal_entry_id | uuid | yes | ref → journal_entry | referrer_payout_journal_entry_id (read-only) | Referrer reward posting |
+| referee_payout_journal_entry_id | uuid | yes | ref → journal_entry | referee_payout_journal_entry_id (read-only) | Referee reward posting |
+| referrer_points_entry_id | uuid | yes |  | referrer_points_entry_id (read-only) | Referrer points ledger entry |
+| referee_points_entry_id | uuid | yes |  | referee_points_entry_id (read-only) | Referee points ledger entry |
+| payout_failure_reason | varchar(500) | yes |  | payout_failure_reason (read-only) | Last payout failure |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Why rejected (self-referral, device reuse, fraud) |
+| fraud_score | numeric(18,10) | yes |  | fraud_score (read-only) | Fraud score at sign-up (0..1) |
+| device_hash | varchar(64) | yes |  | — | SHA-256 of the referee's (or, for the code record, the referrer's) device fingerprint |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `rewards_eod_run`
+
+One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+
+API: /v1/rewards/eod-runs · Requirements: ENG-01, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (RewardsEodJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (EngagementJobStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2302,9 +2443,40 @@ API: /v1/insights/categories · Requirements: ENG-03
 | parent_id | uuid | yes | FK → spend_category | parent_id | Parent category |
 | icon | varchar(64) | yes |  | icon | Icon key |
 | color | varchar(16) | yes |  | color | Display colour |
-| mcc_codes | jsonb | yes |  | mcc_codes | MCC codes mapped by default |
-| translations | jsonb | yes |  | translations | Names per language |
+| mcc_codes | jsonb | yes |  | mcc_codes | MCC codes mapped to this category by default |
+| translations | jsonb | yes |  | translations | Names per language ({"fr": "Courses"}) |
 | is_income | boolean | no |  | is_income | Income category (salary, refunds) |
+| is_active | boolean | no |  | is_active | Active |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `merchant_rule`
+
+Merchant clean-name rule - maps a raw card descriptor to a clean merchant name, logo and category
+
+API: /v1/insights/merchant-rules · Requirements: ENG-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| match_type | varchar(40) (MerchantMatchType) | no |  | match_type | How pattern is matched against the raw descriptor (case-insensitive) |
+| pattern | varchar(255) | no |  | pattern | Text or regular expression matched against the raw descriptor |
+| clean_name | varchar(160) | no |  | clean_name | Clean merchant name |
+| merchant_id | uuid | yes | ref → merchant | merchant_id | Internal merchant |
+| logo_url | varchar(500) | yes |  | logo_url | Logo URL |
+| website | varchar(255) | yes |  | website | Merchant website |
+| mcc | varchar(4) | yes |  | mcc | MCC to assume when the transaction has none |
+| spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Category to assign (empty = derive from MCC) |
+| priority | integer | no |  | priority | Lower matches first |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -2314,7 +2486,7 @@ API: /v1/insights/categories · Requirements: ENG-03
 
 #### `transaction_enrichment` (append-only)
 
-Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only; a re-categorisation supersedes the previous row.
 
 API: /v1/insights/enrichments · Requirements: ENG-03
 
@@ -2338,14 +2510,17 @@ API: /v1/insights/enrichments · Requirements: ENG-03
 | merchant_website | varchar(255) | yes |  | merchant_website | Merchant website |
 | mcc | varchar(4) | yes |  | mcc | Merchant category code |
 | spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Assigned category |
-| category_confidence | numeric(18,10) | yes |  | category_confidence | Model confidence 0..1 |
+| category_source | varchar(40) (CategorySource) | no |  | category_source | Where the category came from |
+| category_confidence | numeric(18,10) | yes |  | category_confidence | Confidence 0..1 |
+| merchant_rule_id | uuid | yes | FK → merchant_rule | merchant_rule_id | Merchant rule applied |
+| category_override_rule_id | uuid | yes | FK → category_override_rule | category_override_rule_id | Customer override rule applied |
 | is_recurring | boolean | no |  | is_recurring | Part of a recurring series |
 | recurring_payment_id | uuid | yes | FK → recurring_payment | recurring_payment_id | Detected recurring series |
 | geo_city | varchar(100) | yes |  | geo_city | City |
 | geo_country | char(2) | yes |  | geo_country | Country |
 | geo_lat | numeric(18,10) | yes |  | geo_lat | Latitude |
 | geo_lon | numeric(18,10) | yes |  | geo_lon | Longitude |
-| enrichment_provider | varchar(40) | yes |  | enrichment_provider | INTERNAL or external provider |
+| enrichment_provider | varchar(40) | yes |  | enrichment_provider | INTERNAL, CUSTOMER or external provider |
 | model_version | varchar(32) | yes |  | model_version | Categorisation model version |
 | supersedes_id | uuid | yes | FK → transaction_enrichment | supersedes_id | Earlier enrichment this one replaces |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
@@ -2370,12 +2545,14 @@ API: /v1/insights/category-rules · Requirements: ENG-03
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| match_merchant_name | varchar(160) | yes |  | match_merchant_name | Merchant name to match |
-| match_description_pattern | varchar(255) | yes |  | match_description_pattern | Regex on raw descriptor |
-| match_amount_min | numeric(28,8) | yes |  | match_amount_min | Minimum amount |
-| match_amount_max | numeric(28,8) | yes |  | match_amount_max | Maximum amount |
+| match_merchant_name | varchar(160) | yes |  | match_merchant_name | Clean merchant name to match (case-insensitive) |
+| match_description_pattern | varchar(255) | yes |  | match_description_pattern | Regex on the raw descriptor |
+| match_amount_min | numeric(28,8) | yes |  | match_amount_min | Minimum absolute amount |
+| match_amount_max | numeric(28,8) | yes |  | match_amount_max | Maximum absolute amount |
 | spend_category_id | uuid | no | FK → spend_category | spend_category_id | Category to apply |
-| apply_to_past | boolean | no |  | apply_to_past | Re-categorise historical transactions |
+| priority | integer | no |  | priority | Lower matches first |
+| apply_to_past | boolean | no |  | apply_to_past | Re-categorise historical transactions on create |
+| applied_count | integer | no |  | applied_count (read-only) | Transactions re-categorised by the rule |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -2400,13 +2577,14 @@ API: /v1/insights/budgets · Requirements: ENG-03
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | name | varchar(120) | no |  | name | Budget name |
-| spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Category (empty = all spending) |
+| spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Category incl. its subcategories (empty = all spending) |
 | period_type | varchar(40) (BudgetPeriodType) | no |  | period_type | Budget period |
 | amount | numeric(28,8) | no |  | amount | Budget amount per period |
 | currency | char(3) | no |  | currency | Currency |
 | rollover | boolean | no |  | rollover | Carry unspent amount to next period |
 | alert_threshold_pct | numeric(18,10) | no |  | alert_threshold_pct | Alert when spend reaches this share |
-| status | varchar(40) (BudgetStatus) | no |  | status | Status |
+| notify_customer | boolean | no |  | notify_customer | Send threshold and exceeded alerts through notification-service |
+| status | varchar(40) (BudgetStatus) | no |  | status (read-only) | Status (changes through pause / resume / archive) |
 | starts_on | date | no |  | starts_on | First period start |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -2431,8 +2609,9 @@ API: /v1/insights/budget-periods, /v1/insights/spending · Requirements: ENG-03
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | budget_id | uuid | no | FK → budget | budget_id | Budget |
 | period_start | date | no |  | period_start | Period start |
-| period_end | date | no |  | period_end | Period end |
+| period_end | date | no |  | period_end | Period end (inclusive) |
 | budget_amount | numeric(28,8) | no |  | budget_amount | Budget incl. rollover |
+| rollover_amount | numeric(28,8) | no |  | rollover_amount (read-only) | Unspent amount carried from the previous period |
 | spent_amount | numeric(28,8) | no |  | spent_amount (read-only) | Spent so far |
 | remaining_amount | numeric(28,8) | no |  | remaining_amount (read-only) | Remaining |
 | transaction_count | integer | no |  | transaction_count (read-only) | Transactions counted |
@@ -2446,7 +2625,7 @@ API: /v1/insights/budget-periods, /v1/insights/spending · Requirements: ENG-03
 
 #### `recurring_payment`
 
-Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+Detected subscription or recurring payment (streaming, utilities, rent, salary) with next expected charge
 
 API: /v1/insights/recurring-payments · Requirements: ENG-03
 
@@ -2463,17 +2642,21 @@ API: /v1/insights/recurring-payments · Requirements: ENG-03
 | merchant_clean_name | varchar(160) | no |  | merchant_clean_name | Merchant |
 | merchant_id | uuid | yes | ref → merchant | merchant_id | Internal merchant when known |
 | spend_category_id | uuid | yes | FK → spend_category | spend_category_id | Category |
-| frequency | varchar(40) (RecurringFrequency) | no |  | frequency | Detected frequency |
-| typical_amount | numeric(28,8) | no |  | typical_amount | Typical amount |
-| last_amount | numeric(28,8) | yes |  | last_amount | Most recent amount |
-| currency | char(3) | no |  | currency | Currency |
-| first_seen_at | timestamptz | no |  | first_seen_at | First charge |
-| last_seen_at | timestamptz | no |  | last_seen_at | Latest charge |
-| next_expected_at | timestamptz | yes |  | next_expected_at | Predicted next charge |
-| occurrences | integer | no |  | occurrences | Charges matched |
-| status | varchar(40) (RecurringPaymentStatus) | no |  | status | Status |
+| is_income | boolean | no |  | is_income (read-only) | Recurring inflow (salary, benefits) rather than a payment |
+| frequency | varchar(40) (RecurringFrequency) | no |  | frequency (read-only) | Detected frequency |
+| typical_amount | numeric(28,8) | no |  | typical_amount (read-only) | Typical (median) absolute amount |
+| last_amount | numeric(28,8) | yes |  | last_amount (read-only) | Most recent absolute amount |
+| previous_amount | numeric(28,8) | yes |  | previous_amount (read-only) | Amount before the last price change |
+| price_changed_at | timestamptz | yes |  | price_changed_at (read-only) | Last detected price change |
+| currency | char(3) | no |  | currency (read-only) | Currency |
+| first_seen_at | timestamptz | no |  | first_seen_at (read-only) | First charge |
+| last_seen_at | timestamptz | no |  | last_seen_at (read-only) | Latest charge |
+| next_expected_at | timestamptz | yes |  | next_expected_at (read-only) | Predicted next charge |
+| occurrences | integer | no |  | occurrences (read-only) | Charges matched |
+| status | varchar(40) (RecurringPaymentStatus) | no |  | status (read-only) | Status (changes through confirm / dismiss / block-card-charges) |
 | card_id | uuid | yes | ref → card | card_id | Card the subscription charges |
-| detection_confidence | numeric(18,10) | yes |  | detection_confidence | Confidence 0..1 |
+| card_control_id | uuid | yes | ref → card_control | card_control_id (read-only) | Merchant block created on the card |
+| detection_confidence | numeric(18,10) | yes |  | detection_confidence (read-only) | Confidence 0..1 |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2503,16 +2686,19 @@ API: /v1/insights/cards · Requirements: ENG-03, NOT-01
 | data | jsonb | yes |  | data | Supporting figures (amounts, categories, dates) |
 | action_label | varchar(60) | yes |  | action_label | Call-to-action label |
 | action_deeplink | varchar(500) | yes |  | action_deeplink | App deep link |
-| related_type | varchar(40) | yes |  | related_type | BUDGET, RECURRING_PAYMENT, ACCOUNT, CARD |
+| related_type | varchar(40) | yes |  | related_type | BUDGET, BUDGET_PERIOD, RECURRING_PAYMENT, ACCOUNT, CARD, SPEND_CATEGORY, FORECAST |
 | related_id | uuid | yes |  | related_id | Related object |
-| delivery_status | varchar(40) (InsightDeliveryStatus) | no |  | delivery_status | Delivery status |
-| notification_id | uuid | yes | ref → notification | notification_id | Push or in-app notification sent |
-| generated_at | timestamptz | no |  | generated_at | Generation time |
-| seen_at | timestamptz | yes |  | seen_at | Seen time |
-| acted_at | timestamptz | yes |  | acted_at | Action time |
+| dedupe_key | varchar(128) | no |  | dedupe_key (read-only) | Business key preventing the same insight twice |
+| delivery_status | varchar(40) (InsightDeliveryStatus) | no |  | delivery_status (read-only) | Delivery status (changes through delivery and the card actions) |
+| notification_id | uuid | yes | ref → notification | notification_id (read-only) | Push or in-app notification sent |
+| generated_at | timestamptz | no |  | generated_at (read-only) | Generation time |
+| delivered_at | timestamptz | yes |  | delivered_at (read-only) | Delivery time |
+| seen_at | timestamptz | yes |  | seen_at (read-only) | Seen time |
+| acted_at | timestamptz | yes |  | acted_at (read-only) | Action time |
+| dismissed_at | timestamptz | yes |  | dismissed_at (read-only) | Dismissal time |
 | expires_at | timestamptz | yes |  | expires_at | Expiry |
-| model_version | varchar(32) | yes |  | model_version | Generating model / rule version |
-| feedback_useful | boolean | yes |  | feedback_useful | Customer feedback |
+| model_version | varchar(32) | yes |  | model_version (read-only) | Generating model / rule version |
+| feedback_useful | boolean | yes |  | feedback_useful (read-only) | Customer feedback |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2521,7 +2707,7 @@ API: /v1/insights/cards · Requirements: ENG-03, NOT-01
 
 #### `cash_flow_forecast` (append-only)
 
-Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+Projected daily balance for a customer account over the next 7-90 days. Append-only snapshots.
 
 API: /v1/insights/forecasts · Requirements: ENG-03
 
@@ -2532,17 +2718,47 @@ API: /v1/insights/forecasts · Requirements: ENG-03
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| deposit_account_id | uuid | yes | ref → deposit_account | deposit_account_id | Account forecast |
-| as_of | timestamptz | no |  | as_of | Forecast generation time |
-| horizon_days | integer | no |  | horizon_days | Horizon |
-| currency | char(3) | no |  | currency | Currency |
-| starting_balance | numeric(28,8) | no |  | starting_balance | Balance at as_of |
-| lowest_balance | numeric(28,8) | no |  | lowest_balance | Lowest projected balance |
-| lowest_balance_date | date | yes |  | lowest_balance_date | Date of lowest balance |
-| projected_points | jsonb | no |  | projected_points | Daily projected balances with expected inflows/outflows |
-| expected_income | numeric(28,8) | yes |  | expected_income | Expected income in the horizon |
-| expected_bills | numeric(28,8) | yes |  | expected_bills | Expected recurring outflows |
-| model_version | varchar(32) | no |  | model_version | Model version |
+| deposit_account_id | uuid | no | ref → deposit_account | deposit_account_id | Account forecast |
+| horizon_days | integer | no |  | horizon_days | Horizon (7-90 days) |
+| low_balance_threshold | numeric(28,8) | yes |  | low_balance_threshold | Alert when the projected balance falls below this (default: service configuration) |
+| as_of | timestamptz | no |  | as_of (read-only) | Forecast generation time |
+| currency | char(3) | no |  | currency (read-only) | Currency |
+| starting_balance | numeric(28,8) | no |  | starting_balance (read-only) | Available balance at as_of |
+| lowest_balance | numeric(28,8) | no |  | lowest_balance (read-only) | Lowest projected balance |
+| lowest_balance_date | date | yes |  | lowest_balance_date (read-only) | Date of lowest balance |
+| projected_points | jsonb | no |  | projected_points (read-only) | Daily projected balances ({date, balance, inflows, outflows, items}) |
+| expected_income | numeric(28,8) | yes |  | expected_income (read-only) | Expected income in the horizon |
+| expected_bills | numeric(28,8) | yes |  | expected_bills (read-only) | Expected recurring outflows |
+| expected_discretionary | numeric(28,8) | yes |  | expected_discretionary (read-only) | Expected non-recurring net outflow (trailing average) |
+| model_version | varchar(32) | no |  | model_version (read-only) | Model version |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `insights_job_run`
+
+One batch job execution per tenant, job and business date (makes the batch actions idempotent)
+
+API: /v1/insights/job-runs · Requirements: ENG-03, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (InsightsJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (EngagementJobStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2572,21 +2788,31 @@ API: /v1/campaigns · Requirements: ENG-04
 | code | varchar(32) | no | UQ | code | Campaign code |
 | name | varchar(160) | no |  | name | Name |
 | objective | varchar(255) | yes |  | objective | Business objective |
-| status | varchar(40) (CampaignStatus) | no |  | status | Status |
-| segment_ids | jsonb | no |  | segment_ids | Target customer_segment ids |
+| status | varchar(40) (CampaignStatus) | no |  | status (read-only) | Status (changes through the campaign actions) |
+| segment_ids | jsonb | no |  | segment_ids | Target customer_segment ids (a member must be in at least one) |
 | exclusion_segment_ids | jsonb | yes |  | exclusion_segment_ids | Segments excluded |
-| channels | jsonb | no |  | channels | Channels used (CampaignChannel values) |
+| channels | jsonb | no |  | channels | Channels used, in preference order |
 | start_at | timestamptz | no |  | start_at | Start |
 | end_at | timestamptz | yes |  | end_at | End |
-| send_window | jsonb | yes |  | send_window | Allowed send hours per channel and timezone |
-| frequency_cap | integer | yes |  | frequency_cap | Max messages per customer per week |
-| budget_amount | numeric(28,8) | yes |  | budget_amount | Budget |
+| send_window | jsonb | yes |  | send_window | Allowed send hours ({start_hour, end_hour, time_zone}); empty = any time |
+| frequency_cap | integer | yes |  | frequency_cap | Max campaign messages per customer in a rolling 7 days |
+| budget_amount | numeric(28,8) | yes |  | budget_amount | Budget cap |
 | currency | char(3) | yes |  | currency | Budget currency |
-| control_group_pct | numeric(18,10) | no |  | control_group_pct | Hold-out share for uplift measurement |
+| cost_per_message | numeric(28,8) | no |  | cost_per_message | Cost booked per message sent (budget consumption) |
+| spent_amount | numeric(28,8) | no |  | spent_amount (read-only) | Budget consumed |
+| control_group_pct | numeric(18,10) | no |  | control_group_pct | Hold-out share for uplift measurement (0..0.5) |
 | requires_marketing_consent | boolean | no |  | requires_marketing_consent | Only customers with marketing consent |
 | owner_user_id | uuid | yes | ref → app_user | owner_user_id | Campaign owner |
+| audience_size | integer | no |  | audience_size (read-only) | Members selected (incl. control) |
+| audience_built_at | timestamptz | yes |  | audience_built_at (read-only) | Last audience build |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
 | approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
 | approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| approval_comment | varchar(500) | yes |  | approval_comment (read-only) | Checker comment |
+| launched_at | timestamptz | yes |  | launched_at (read-only) | Time sending started |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | Completion time |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last pause, rejection or cancellation |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2597,7 +2823,7 @@ API: /v1/campaigns · Requirements: ENG-04
 
 A/B variant of a campaign with its message content per channel
 
-API: /v1/campaigns/variants · Requirements: ENG-04
+API: /v1/campaign-variants · Requirements: ENG-04
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2610,7 +2836,7 @@ API: /v1/campaigns/variants · Requirements: ENG-04
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | campaign_id | uuid | no | FK → campaign | campaign_id | Campaign |
 | code | varchar(16) | no |  | code | Variant code (A, B, ...) |
-| traffic_share | numeric(18,10) | no |  | traffic_share | Share of the audience |
+| traffic_share | numeric(18,10) | no |  | traffic_share | Share of the treated audience (shares of a campaign's codes are normalised) |
 | channel | varchar(40) (CampaignChannel) | no |  | channel | Channel |
 | notification_template_code | varchar(64) | yes |  | notification_template_code | Notification template used |
 | subject | varchar(200) | yes |  | subject | Subject / title |
@@ -2642,17 +2868,21 @@ API: /v1/offers · Requirements: ENG-04
 | code | varchar(32) | no | UQ | code | Offer code |
 | name | varchar(160) | no |  | name | Name |
 | offer_type | varchar(40) (OfferType) | no |  | offer_type | Offer type |
-| status | varchar(40) (OfferStatus) | no |  | status | Status |
+| status | varchar(40) (OfferStatus) | no |  | status (read-only) | Status (changes through activate / pause / withdraw and expiry) |
 | product_id | uuid | yes | ref → product | product_id | Product offered |
 | product_version_id | uuid | yes | ref → product_version | product_version_id | Product version |
-| eligibility_rules | jsonb | yes |  | eligibility_rules | Eligibility (segments, scores, balances) |
+| eligibility_rules | jsonb | yes |  | eligibility_rules | Eligibility ({segment_ids, exclusion_segment_ids, min_score, max_score}) |
 | terms | jsonb | no |  | terms | Offer terms (amount, rate, fee waiver, duration) |
 | max_amount | numeric(28,8) | yes |  | max_amount | Maximum amount for credit offers |
 | currency | char(3) | yes |  | currency | Currency |
+| max_assignments | integer | yes |  | max_assignments | Cap on assignments (offer budget) |
+| assigned_count | integer | no |  | assigned_count (read-only) | Assignments made |
+| accepted_count | integer | no |  | accepted_count (read-only) | Assignments accepted |
 | valid_from | timestamptz | no |  | valid_from | Valid from |
 | valid_to | timestamptz | no |  | valid_to | Valid to |
 | acceptance_flow | varchar(40) | yes |  | acceptance_flow | IN_APP_ONE_TAP, APPLICATION, BRANCH |
 | disclosure_document_id | uuid | yes | ref → document | disclosure_document_id | Regulatory disclosure |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the last pause or withdrawal |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2663,7 +2893,7 @@ API: /v1/offers · Requirements: ENG-04
 
 An offer assigned to a specific customer, tracked from shown to accepted or expired
 
-API: /v1/offers/assignments · Requirements: ENG-04
+API: /v1/offer-assignments · Requirements: ENG-04
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2677,18 +2907,19 @@ API: /v1/offers/assignments · Requirements: ENG-04
 | campaign_offer_id | uuid | no | FK → campaign_offer | campaign_offer_id | Offer |
 | campaign_id | uuid | yes | FK → campaign | campaign_id | Campaign that assigned it |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| status | varchar(40) (OfferAssignmentStatus) | no |  | status | Response status |
+| status | varchar(40) (OfferAssignmentStatus) | no |  | status (read-only) | Response status |
 | personalised_terms | jsonb | yes |  | personalised_terms | Customer-specific terms (approved amount, rate) |
 | score | numeric(18,10) | yes |  | score | Propensity / risk score at assignment |
 | model_version | varchar(32) | yes |  | model_version | Model used |
-| consent_snapshot_id | uuid | yes | FK → marketing_consent_snapshot | consent_snapshot_id | Marketing consent snapshot proving permission |
-| assigned_at | timestamptz | no |  | assigned_at | Assignment time |
-| shown_at | timestamptz | yes |  | shown_at | First shown |
-| clicked_at | timestamptz | yes |  | clicked_at | First clicked |
-| responded_at | timestamptz | yes |  | responded_at | Accept or decline time |
+| consent_snapshot_id | uuid | yes | FK → marketing_consent_snapshot | consent_snapshot_id (read-only) | Marketing consent snapshot proving permission |
+| assigned_at | timestamptz | no |  | assigned_at (read-only) | Assignment time |
+| shown_at | timestamptz | yes |  | shown_at (read-only) | First shown |
+| clicked_at | timestamptz | yes |  | clicked_at (read-only) | First clicked |
+| responded_at | timestamptz | yes |  | responded_at (read-only) | Accept or decline time |
+| decline_reason | varchar(255) | yes |  | decline_reason (read-only) | Reason given on decline |
 | expires_at | timestamptz | no |  | expires_at | Expiry |
-| resulting_object_type | varchar(40) | yes |  | resulting_object_type | LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT |
-| resulting_object_id | uuid | yes |  | resulting_object_id | Object created on acceptance |
+| resulting_object_type | varchar(40) | yes |  | resulting_object_type (read-only) | LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT |
+| resulting_object_id | uuid | yes |  | resulting_object_id (read-only) | Object created on acceptance |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2697,9 +2928,9 @@ API: /v1/offers/assignments · Requirements: ENG-04
 
 #### `marketing_consent_snapshot` (append-only)
 
-Immutable record of the customer's marketing consent at the time a campaign targeted them
+Immutable record of the customer's marketing consent at the time a campaign or offer targeted them
 
-API: /v1/campaigns/consent-snapshots · Requirements: ENG-04, CIF-04
+API: /v1/campaign-consent-snapshots · Requirements: ENG-04, CIF-04
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2710,9 +2941,10 @@ API: /v1/campaigns/consent-snapshots · Requirements: ENG-04, CIF-04
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | consent_id | uuid | yes | ref → consent | consent_id | Consent record evaluated |
 | campaign_id | uuid | yes | FK → campaign | campaign_id | Campaign |
+| campaign_offer_id | uuid | yes | FK → campaign_offer | campaign_offer_id | Offer (offer assignments) |
 | channel | varchar(40) (CampaignChannel) | no |  | channel | Channel checked |
 | is_permitted | boolean | no |  | is_permitted | Whether contact was allowed |
-| reason | varchar(255) | yes |  | reason | Why not permitted (opt-out, quiet hours, frequency cap) |
+| reason | varchar(255) | yes |  | reason | Why not permitted (no consent, withdrawn, expired, frequency cap, check failed) |
 | checked_at | timestamptz | no |  | checked_at | Check time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -2722,9 +2954,9 @@ API: /v1/campaigns/consent-snapshots · Requirements: ENG-04, CIF-04
 
 #### `campaign_audience_member`
 
-Customer selected into a campaign run with variant or control-group allocation
+Customer selected into a campaign with variant or control-group allocation and engagement tracking
 
-API: /v1/campaigns/audience · Requirements: ENG-04
+API: /v1/campaign-audience-members · Requirements: ENG-04
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2737,15 +2969,20 @@ API: /v1/campaigns/audience · Requirements: ENG-04
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | campaign_id | uuid | no | FK → campaign | campaign_id | Campaign |
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
-| campaign_variant_id | uuid | yes | FK → campaign_variant | campaign_variant_id | Variant (empty = control group) |
-| is_control | boolean | no |  | is_control | Hold-out member |
-| marketing_consent_snapshot_id | uuid | yes | FK → marketing_consent_snapshot | marketing_consent_snapshot_id | Consent evidence |
-| notification_id | uuid | yes | ref → notification | notification_id | Message sent |
-| sent_at | timestamptz | yes |  | sent_at | Send time |
-| opened_at | timestamptz | yes |  | opened_at | Open time |
-| clicked_at | timestamptz | yes |  | clicked_at | Click time |
-| converted_at | timestamptz | yes |  | converted_at | Conversion time |
-| unsubscribed_at | timestamptz | yes |  | unsubscribed_at | Opt-out from this campaign |
+| campaign_variant_id | uuid | yes | FK → campaign_variant | campaign_variant_id (read-only) | Variant (empty = control group) |
+| variant_code | varchar(16) | yes |  | variant_code (read-only) | Variant code allocated (empty = control group) |
+| channel | varchar(40) (CampaignChannel) | yes |  | channel (read-only) | Channel of the message |
+| is_control | boolean | no |  | is_control (read-only) | Hold-out member |
+| allocation_bucket | numeric(18,10) | yes |  | allocation_bucket (read-only) | Deterministic hash bucket in [0, 1) used for allocation |
+| marketing_consent_snapshot_id | uuid | yes | FK → marketing_consent_snapshot | marketing_consent_snapshot_id (read-only) | Consent evidence |
+| notification_id | uuid | yes | ref → notification | notification_id (read-only) | Message sent |
+| sent_at | timestamptz | yes |  | sent_at (read-only) | Send time |
+| send_failure_reason | varchar(255) | yes |  | send_failure_reason (read-only) | Last send failure |
+| opened_at | timestamptz | yes |  | opened_at (read-only) | Open time |
+| clicked_at | timestamptz | yes |  | clicked_at (read-only) | Click time |
+| converted_at | timestamptz | yes |  | converted_at (read-only) | Conversion time |
+| revenue | numeric(28,8) | yes |  | revenue (read-only) | Attributed revenue |
+| unsubscribed_at | timestamptz | yes |  | unsubscribed_at (read-only) | Opt-out from this campaign |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2754,9 +2991,9 @@ API: /v1/campaigns/audience · Requirements: ENG-04
 
 #### `campaign_metric` (append-only)
 
-Daily performance metrics per campaign and variant. Append-only.
+Daily performance metrics per campaign and variant (counts for the day; rates and uplift cumulative). Append-only.
 
-API: /v1/campaigns/metrics · Requirements: ENG-04
+API: /v1/campaign-metrics · Requirements: ENG-04
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |
@@ -2765,18 +3002,52 @@ API: /v1/campaigns/metrics · Requirements: ENG-04
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
 | campaign_id | uuid | no | FK → campaign | campaign_id | Campaign |
-| campaign_variant_id | uuid | yes | FK → campaign_variant | campaign_variant_id | Variant (empty = total) |
+| campaign_variant_id | uuid | yes | FK → campaign_variant | campaign_variant_id | Variant (empty = campaign total) |
+| variant_code | varchar(16) | yes |  | variant_code | Variant code (empty = campaign total) |
 | metric_date | date | no |  | metric_date | Day |
-| audience | integer | no |  | audience | Members targeted |
+| audience | integer | no |  | audience | Members targeted (cumulative) |
 | sent | integer | no |  | sent | Messages sent |
 | delivered | integer | no |  | delivered | Delivered |
+| impressions | integer | no |  | impressions | Offer impressions (assignments shown) |
 | opened | integer | no |  | opened | Opened |
 | clicked | integer | no |  | clicked | Clicked |
 | converted | integer | no |  | converted | Converted |
 | unsubscribed | integer | no |  | unsubscribed | Opt-outs |
 | revenue | numeric(28,8) | no |  | revenue | Attributed revenue |
 | cost | numeric(28,8) | no |  | cost | Spend |
-| uplift_pct | numeric(18,10) | yes |  | uplift_pct | Conversion uplift vs control group |
+| ctr | numeric(18,10) | yes |  | ctr | Click-through rate to date (clicked / sent) |
+| conversion_rate | numeric(18,10) | yes |  | conversion_rate | Conversion rate to date (converted / treated members) |
+| control_audience | integer | no |  | control_audience | Control-group members |
+| control_converted | integer | no |  | control_converted | Control-group conversions to date |
+| uplift_pct | numeric(18,10) | yes |  | uplift_pct | Conversion uplift vs control group to date ((treated - control) / control) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `campaign_job_run`
+
+One batch job execution per tenant, job and business date (makes the batch actions idempotent)
+
+API: /v1/campaign-job-runs · Requirements: ENG-04, OPS-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| job | varchar(40) (CampaignJob) | no |  | job | Job |
+| business_date | date | no |  | business_date | Business date processed |
+| status | varchar(40) (EngagementJobStatus) | no |  | status (read-only) | Outcome; COMPLETED runs are replayed, others may be re-run |
+| attempts | integer | no |  | attempts (read-only) | Executions for this job and date |
+| result | jsonb | yes |  | result (read-only) | Counts and per-item errors of the last execution |
+| started_at | timestamptz | no |  | started_at (read-only) | Start of the last execution |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | End of the last execution |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2806,14 +3077,21 @@ API: /v1/inbox/threads · Requirements: ENG-05
 | customer_id | uuid | no | ref → customer | customer_id | Customer |
 | subject | varchar(200) | no |  | subject | Subject |
 | topic | varchar(64) | yes |  | topic | Topic code (CARDS, PAYMENTS, LOANS, GENERAL) |
-| status | varchar(40) (SecureThreadStatus) | no |  | status | Status |
-| assigned_user_id | uuid | yes | ref → app_user | assigned_user_id | Staff member handling it |
+| status | varchar(40) (SecureThreadStatus) | no |  | status (read-only) | Status (changes through messages and close / reopen) |
+| opened_by | varchar(40) (SecureMessageSender) | no |  | opened_by | Who opened the thread |
+| work_queue_id | uuid | yes | ref → work_queue | work_queue_id | CRM work queue the thread is routed to |
+| work_item_id | uuid | yes | ref → work_item | work_item_id (read-only) | CRM work item tracking the thread |
+| assigned_user_id | uuid | yes | ref → app_user | assigned_user_id (read-only) | Staff member handling it (set through assign) |
 | related_type | varchar(40) | yes |  | related_type | Related object (SERVICE_CASE, ACCOUNT, CARD, LOAN) |
 | related_id | uuid | yes |  | related_id | Related object id |
+| message_count | integer | no |  | message_count (read-only) | Messages in the thread (incl. internal notes) |
 | last_message_at | timestamptz | yes |  | last_message_at (read-only) | Last message time |
+| last_sender_type | varchar(40) (SecureMessageSender) | yes |  | last_sender_type (read-only) | Sender of the last customer-visible message |
 | unread_customer | integer | no |  | unread_customer (read-only) | Messages unread by the customer |
 | unread_staff | integer | no |  | unread_staff (read-only) | Messages unread by staff |
 | closed_at | timestamptz | yes |  | closed_at (read-only) | Close time |
+| closed_by | varchar(64) | yes |  | closed_by (read-only) | Principal that closed the thread |
+| reopened_count | integer | no |  | reopened_count (read-only) | Times reopened |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -2836,7 +3114,7 @@ API: /v1/inbox/messages · Requirements: ENG-05
 | sender_type | varchar(40) (SecureMessageSender) | no |  | sender_type | Who sent it |
 | sender_user_id | uuid | yes | ref → app_user | sender_user_id | Staff sender |
 | body | text | no |  | body | Message text PII |
-| attachment_document_ids | jsonb | yes |  | attachment_document_ids | Attached documents |
+| attachment_document_ids | jsonb | yes |  | attachment_document_ids | Attached documents (document-service ids, verified AVAILABLE) |
 | is_internal_note | boolean | no |  | is_internal_note | Staff-only note, hidden from the customer |
 | notification_id | uuid | yes | ref → notification | notification_id | Push/email alert sent about it |
 | client_message_id | varchar(64) | yes |  | client_message_id | Client-side id for de-duplication |
@@ -2885,17 +3163,42 @@ API: /v1/inbox/announcements · Requirements: ENG-05, NOT-01
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | title | varchar(160) | no |  | title | Title |
 | body | varchar(2000) | no |  | body | Body |
-| placement | varchar(40) | no |  | placement | HOME_BANNER, LOGIN, INBOX, MODAL |
-| status | varchar(40) (AnnouncementStatus) | no |  | status | Status |
-| segment_ids | jsonb | yes |  | segment_ids | Target segments (empty = everyone) |
-| apps | jsonb | yes |  | apps | Target apps (customer-mobile, customer-web, business-portal) |
-| languages | jsonb | yes |  | languages | Translations per language |
+| placement | varchar(40) (AnnouncementPlacement) | no |  | placement | Where it is shown |
+| status | varchar(40) (AnnouncementStatus) | no |  | status (read-only) | Status (changes through publish / withdraw and the schedule) |
+| segment_ids | jsonb | yes |  | segment_ids | Target customer segments (empty = everyone) |
+| apps | jsonb | yes |  | apps | Target apps (empty = all) |
+| languages | jsonb | yes |  | languages | Translations per language ({"fr": {"title": ..., "body": ...}}) |
 | image_document_id | uuid | yes | ref → document | image_document_id | Image |
 | deeplink | varchar(500) | yes |  | deeplink | Call to action |
-| priority | integer | no |  | priority | Display priority |
+| priority | integer | no |  | priority | Display priority (lower first) |
 | dismissible | boolean | no |  | dismissible | Customer can dismiss |
 | starts_at | timestamptz | no |  | starts_at | Start |
 | ends_at | timestamptz | yes |  | ends_at | End |
+| published_at | timestamptz | yes |  | published_at (read-only) | Publication time |
+| published_by | varchar(64) | yes |  | published_by (read-only) | Principal that published |
+| withdrawn_at | timestamptz | yes |  | withdrawn_at (read-only) | Withdrawal time |
+| status_reason | varchar(255) | yes |  | status_reason (read-only) | Reason of the withdrawal |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `announcement_dismissal` (append-only)
+
+A customer dismissed an announcement (it is no longer shown to them)
+
+API: internal only · Requirements: ENG-05
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| announcement_id | uuid | no | FK → announcement | announcement_id | Announcement |
+| customer_id | uuid | no | ref → customer | customer_id | Customer |
+| dismissed_at | timestamptz | no |  | dismissed_at | Dismissal time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

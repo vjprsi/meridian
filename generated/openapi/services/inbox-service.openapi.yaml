@@ -62,6 +62,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: work_queue_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -232,7 +237,7 @@ paths:
   /v1/inbox/threads/{id}/messages:
     get:
       operationId: secureMessageThreadsMessages
-      summary: Messages in the thread
+      summary: Messages in the thread (internal notes only when include_internal=true)
       tags:
       - Secure Message Threads
       security:
@@ -245,6 +250,11 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: include_internal
+        in: query
+        required: false
+        schema:
+          type: boolean
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -314,7 +324,7 @@ paths:
   /v1/inbox/threads/{id}/read:
     post:
       operationId: secureMessageThreadsRead
-      summary: Mark all messages read for the caller
+      summary: Mark all messages from the other party read for the caller
       tags:
       - Secure Message Threads
       security:
@@ -345,6 +355,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureMessageThreadsReadRequest'
       x-requirements:
       - ENG-05
       x-service: inbox-service
@@ -354,7 +370,7 @@ paths:
   /v1/inbox/threads/{id}/assign:
     post:
       operationId: secureMessageThreadsAssign
-      summary: Assign to a staff member
+      summary: Assign to a staff member (and its CRM work item)
       tags:
       - Secure Message Threads
       security:
@@ -431,6 +447,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureMessageThreadsCloseRequest'
       x-requirements:
       - ENG-05
       x-service: inbox-service
@@ -471,6 +493,12 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecureMessageThreadsReopenRequest'
       x-requirements:
       - ENG-05
       x-service: inbox-service
@@ -505,6 +533,10 @@ paths:
           - STAFF
           - SYSTEM
           - BOT
+      - name: is_internal_note
+        in: query
+        schema:
+          type: boolean
       - name: custom_field_1
         in: query
         schema:
@@ -651,7 +683,11 @@ paths:
         in: query
         schema:
           type: string
-          maxLength: 40
+          enum:
+          - HOME_BANNER
+          - LOGIN
+          - INBOX
+          - MODAL
       - name: custom_field_1
         in: query
         schema:
@@ -849,7 +885,7 @@ paths:
   /v1/inbox/announcements/{id}/publish:
     post:
       operationId: announcementsPublish
-      summary: Publish
+      summary: Publish (SCHEDULED until starts_at, then LIVE)
       tags:
       - Announcements
       security:
@@ -921,6 +957,55 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementsWithdrawRequest'
+      x-requirements:
+      - ENG-05
+      - NOT-01
+      x-service: inbox-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: announcement
+  /v1/inbox/announcements/{id}/dismiss:
+    post:
+      operationId: announcementsDismiss
+      summary: The customer dismissed the announcement
+      tags:
+      - Announcements
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementsDismissRequest'
       x-requirements:
       - ENG-05
       - NOT-01
@@ -931,13 +1016,45 @@ paths:
   /v1/inbox/announcements/active:
     get:
       operationId: announcementsActive
-      summary: Announcements active for the calling customer and app
+      summary: Announcements active for the customer and app (segments, schedule, dismissals)
       tags:
       - Announcements
       security:
       - oauth2:
         - engagement:read
       parameters:
+      - name: customer_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: app
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - CUSTOMER_MOBILE
+          - CUSTOMER_WEB
+          - BUSINESS_PORTAL
+          - AGENT_APP
+      - name: placement
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - HOME_BANNER
+          - LOGIN
+          - INBOX
+          - MODAL
+      - name: language
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 10
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -959,6 +1076,43 @@ paths:
       x-service: inbox-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
       x-required-scope: engagement:read
+      x-table: announcement
+  /v1/inbox/announcements/refresh-status:
+    post:
+      operationId: announcementsRefreshStatus
+      summary: Move due announcements live and expire ended ones (called by the scheduler)
+      tags:
+      - Announcements
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-05
+      - NOT-01
+      x-service: inbox-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
       x-table: announcement
 components:
   schemas:
@@ -1039,13 +1193,44 @@ components:
       properties:
         body:
           type: string
+        sender_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - SYSTEM
+          - BOT
+        sender_user_id:
+          type: string
+          format: uuid
         attachment_document_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            format: uuid
         is_internal_note:
           type: boolean
+        client_message_id:
+          type: string
+          maxLength: 64
       required:
       - body
+      - sender_type
+    SecureMessageThreadsReadRequest:
+      type: object
+      properties:
+        reader_type:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - SYSTEM
+          - BOT
+        reader_user_id:
+          type: string
+          format: uuid
+      required:
+      - reader_type
     SecureMessageThreadsAssignRequest:
       type: object
       properties:
@@ -1054,6 +1239,18 @@ components:
           format: uuid
       required:
       - assigned_user_id
+    SecureMessageThreadsCloseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    SecureMessageThreadsReopenRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     SecureMessageReceiptPage:
       type: object
       description: One page of SecureMessageReceipt results (newest first)
@@ -1090,6 +1287,20 @@ components:
       required:
       - data
       - has_more
+    AnnouncementsWithdrawRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    AnnouncementsDismissRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+      required:
+      - customer_id
     Announcement:
       type: object
       description: In-app banner or announcement targeted to all customers or segments
@@ -1138,8 +1349,12 @@ components:
           description: Body
         placement:
           type: string
-          maxLength: 40
-          description: HOME_BANNER, LOGIN, INBOX, MODAL
+          enum:
+          - HOME_BANNER
+          - LOGIN
+          - INBOX
+          - MODAL
+          description: Where it is shown
         status:
           type: string
           enum:
@@ -1148,25 +1363,34 @@ components:
           - LIVE
           - EXPIRED
           - WITHDRAWN
-          description: Status
+          description: Status (changes through publish / withdraw and the schedule)
+          readOnly: true
         segment_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Target segments (empty = everyone)
+          items:
+            type: string
+            format: uuid
+          description: Target customer segments (empty = everyone)
         apps:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Target apps (customer-mobile, customer-web, business-portal)
+          items:
+            type: string
+            enum:
+            - CUSTOMER_MOBILE
+            - CUSTOMER_WEB
+            - BUSINESS_PORTAL
+            - AGENT_APP
+          description: Target apps (empty = all)
         languages:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Translations per language
+          description: 'Translations per language ({"fr": {"title": ..., "body": ...}})'
         image_document_id:
           type:
           - string
@@ -1182,7 +1406,7 @@ components:
         priority:
           type: integer
           format: int32
-          description: Display priority
+          description: Display priority (lower first)
         dismissible:
           type: boolean
           description: Customer can dismiss
@@ -1196,6 +1420,34 @@ components:
           - 'null'
           format: date-time
           description: End
+        published_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Publication time
+          readOnly: true
+        published_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that published
+          readOnly: true
+        withdrawn_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Withdrawal time
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the withdrawal
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -1251,29 +1503,32 @@ components:
           description: Body
         placement:
           type: string
-          maxLength: 40
-          description: HOME_BANNER, LOGIN, INBOX, MODAL
-        status:
-          type: string
           enum:
-          - DRAFT
-          - SCHEDULED
-          - LIVE
-          - EXPIRED
-          - WITHDRAWN
-          description: Status
+          - HOME_BANNER
+          - LOGIN
+          - INBOX
+          - MODAL
+          description: Where it is shown
         segment_ids:
-          type: object
-          additionalProperties: true
-          description: Target segments (empty = everyone)
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Target customer segments (empty = everyone)
         apps:
-          type: object
-          additionalProperties: true
-          description: Target apps (customer-mobile, customer-web, business-portal)
+          type: array
+          items:
+            type: string
+            enum:
+            - CUSTOMER_MOBILE
+            - CUSTOMER_WEB
+            - BUSINESS_PORTAL
+            - AGENT_APP
+          description: Target apps (empty = all)
         languages:
           type: object
           additionalProperties: true
-          description: Translations per language
+          description: 'Translations per language ({"fr": {"title": ..., "body": ...}})'
         image_document_id:
           type: string
           format: uuid
@@ -1285,7 +1540,7 @@ components:
         priority:
           type: integer
           format: int32
-          description: Display priority
+          description: Display priority (lower first)
         dismissible:
           type: boolean
           description: Customer can dismiss
@@ -1335,29 +1590,32 @@ components:
           description: Body
         placement:
           type: string
-          maxLength: 40
-          description: HOME_BANNER, LOGIN, INBOX, MODAL
-        status:
-          type: string
           enum:
-          - DRAFT
-          - SCHEDULED
-          - LIVE
-          - EXPIRED
-          - WITHDRAWN
-          description: Status
+          - HOME_BANNER
+          - LOGIN
+          - INBOX
+          - MODAL
+          description: Where it is shown
         segment_ids:
-          type: object
-          additionalProperties: true
-          description: Target segments (empty = everyone)
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Target customer segments (empty = everyone)
         apps:
-          type: object
-          additionalProperties: true
-          description: Target apps (customer-mobile, customer-web, business-portal)
+          type: array
+          items:
+            type: string
+            enum:
+            - CUSTOMER_MOBILE
+            - CUSTOMER_WEB
+            - BUSINESS_PORTAL
+            - AGENT_APP
+          description: Target apps (empty = all)
         languages:
           type: object
           additionalProperties: true
-          description: Translations per language
+          description: 'Translations per language ({"fr": {"title": ..., "body": ...}})'
         image_document_id:
           type: string
           format: uuid
@@ -1369,7 +1627,7 @@ components:
         priority:
           type: integer
           format: int32
-          description: Display priority
+          description: Display priority (lower first)
         dismissible:
           type: boolean
           description: Customer can dismiss
@@ -1445,10 +1703,12 @@ components:
           description: Message text
         attachment_document_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Attached documents
+          items:
+            type: string
+            format: uuid
+          description: Attached documents (document-service ids, verified AVAILABLE)
         is_internal_note:
           type: boolean
           description: Staff-only note, hidden from the customer
@@ -1639,13 +1899,36 @@ components:
           - AWAITING_CUSTOMER
           - AWAITING_BANK
           - CLOSED
-          description: Status
+          description: Status (changes through messages and close / reopen)
+          readOnly: true
+        opened_by:
+          type: string
+          enum:
+          - CUSTOMER
+          - STAFF
+          - SYSTEM
+          - BOT
+          description: Who opened the thread
+        work_queue_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: CRM work queue the thread is routed to
+        work_item_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: CRM work item tracking the thread
+          readOnly: true
         assigned_user_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Staff member handling it
+          description: Staff member handling it (set through assign)
+          readOnly: true
         related_type:
           type:
           - string
@@ -1658,12 +1941,28 @@ components:
           - 'null'
           format: uuid
           description: Related object id
+        message_count:
+          type: integer
+          format: int32
+          description: Messages in the thread (incl. internal notes)
+          readOnly: true
         last_message_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Last message time
+          readOnly: true
+        last_sender_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CUSTOMER
+          - STAFF
+          - SYSTEM
+          - BOT
+          description: Sender of the last customer-visible message
           readOnly: true
         unread_customer:
           type: integer
@@ -1681,6 +1980,18 @@ components:
           - 'null'
           format: date-time
           description: Close time
+          readOnly: true
+        closed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that closed the thread
+          readOnly: true
+        reopened_count:
+          type: integer
+          format: int32
+          description: Times reopened
           readOnly: true
         custom_field_1:
           type:
@@ -1720,8 +2031,11 @@ components:
       - customer_id
       - subject
       - status
+      - opened_by
+      - message_count
       - unread_customer
       - unread_staff
+      - reopened_count
     SecureMessageThreadCreate:
       type: object
       properties:
@@ -1737,18 +2051,18 @@ components:
           type: string
           maxLength: 64
           description: Topic code (CARDS, PAYMENTS, LOANS, GENERAL)
-        status:
+        opened_by:
           type: string
           enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_BANK
-          - CLOSED
-          description: Status
-        assigned_user_id:
+          - CUSTOMER
+          - STAFF
+          - SYSTEM
+          - BOT
+          description: Who opened the thread
+        work_queue_id:
           type: string
           format: uuid
-          description: Staff member handling it
+          description: CRM work queue the thread is routed to
         related_type:
           type: string
           maxLength: 40
@@ -1777,6 +2091,17 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+        initial_message:
+          type: string
+          description: First message of the thread, sent by opened_by (write-only; not stored as a column)
+          writeOnly: true
+        initial_attachment_document_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Attachments of the first message (document-service ids) (write-only; not stored as a column)
+          writeOnly: true
       required:
       - customer_id
       - subject
@@ -1795,18 +2120,18 @@ components:
           type: string
           maxLength: 64
           description: Topic code (CARDS, PAYMENTS, LOANS, GENERAL)
-        status:
+        opened_by:
           type: string
           enum:
-          - OPEN
-          - AWAITING_CUSTOMER
-          - AWAITING_BANK
-          - CLOSED
-          description: Status
-        assigned_user_id:
+          - CUSTOMER
+          - STAFF
+          - SYSTEM
+          - BOT
+          description: Who opened the thread
+        work_queue_id:
           type: string
           format: uuid
-          description: Staff member handling it
+          description: CRM work queue the thread is routed to
         related_type:
           type: string
           maxLength: 40

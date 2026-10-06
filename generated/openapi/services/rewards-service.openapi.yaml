@@ -18,13 +18,17 @@ security:
 - oauth2: []
 tags:
 - name: Rewards Programs
-  description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+  description: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings
 - name: Reward Tiers
   description: Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits
 - name: Reward Rules
   description: Earn rule - what earns points or cashback, at what rate, with caps, multipliers and time windows
+- name: Reward Transactions
+  description: A qualifying transaction evaluated against a program's earn rules, with its awards (idempotent per source)
 - name: Points Accounts
   description: A customer's points account within a program with running balances and tier
+- name: Points Adjustments
+  description: A manual points adjustment under maker-checker control, applied to the ledger when approved
 - name: Points Ledger Entries
   description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
 - name: Cashback Transactions
@@ -37,6 +41,8 @@ tags:
   description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
 - name: Referrals
   description: One referral from a referrer to a referee, tracked through qualification to payout
+- name: Rewards Eod Runs
+  description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
 paths:
   /v1/rewards/programs:
     get:
@@ -240,7 +246,7 @@ paths:
   /v1/rewards/programs/{id}/activate:
     post:
       operationId: rewardsProgramsActivate
-      summary: Activate a program (checker)
+      summary: Activate (checker, different from the maker) or resume a paused program
       tags:
       - Rewards Programs
       security:
@@ -950,7 +956,7 @@ paths:
   /v1/rewards/rules/simulate:
     post:
       operationId: rewardRulesSimulate
-      summary: Simulate earnings for a sample transaction
+      summary: Simulate the awards of a sample transaction (no side effects)
       tags:
       - Reward Rules
       security:
@@ -959,8 +965,14 @@ paths:
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -983,6 +995,270 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: reward_rule
+  /v1/rewards/transactions:
+    get:
+      operationId: rewardTransactionsList
+      summary: List reward transactions
+      tags:
+      - Reward Transactions
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: rewards_program_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+      - name: source_type
+        in: query
+        schema:
+          type: string
+          maxLength: 40
+      - name: source_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - AWARDED
+          - NO_AWARD
+          - REVERSED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardTransactionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: reward_transaction
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: rewardTransactionsCreate
+      summary: Create reward transaction
+      tags:
+      - Reward Transactions
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardTransactionCreate'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: reward_transaction
+      x-crud: true
+      x-crud-create: true
+  /v1/rewards/transactions/{id}:
+    get:
+      operationId: rewardTransactionsGet
+      summary: Retrieve reward transaction
+      tags:
+      - Reward Transactions
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: reward_transaction
+      x-crud: true
+      x-crud-get: true
+  /v1/rewards/transactions/ingest:
+    post:
+      operationId: rewardTransactionsIngest
+      summary: Evaluate a transaction against every active program the customer is (or can be auto-) enrolled in
+      tags:
+      - Reward Transactions
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardTransactionsIngestRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: reward_transaction
+  /v1/rewards/transactions/{id}/reverse:
+    post:
+      operationId: rewardTransactionsReverse
+      summary: Reverse every award of the transaction (refund or chargeback)
+      tags:
+      - Reward Transactions
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardTransactionsReverseRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: reward_transaction
   /v1/rewards/points-accounts:
     get:
       operationId: pointsAccountsList
@@ -1177,10 +1453,47 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
       x-required-scope: engagement:read
       x-table: points_account
+  /v1/rewards/points-accounts/{id}/lots:
+    get:
+      operationId: pointsAccountsLots
+      summary: Open earn lots in FIFO order with remaining points and expiry dates
+      tags:
+      - Points Accounts
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: points_account
   /v1/rewards/points-accounts/{id}/adjust:
     post:
       operationId: pointsAccountsAdjust
-      summary: Manual points adjustment (maker-checker)
+      summary: Request a manual points adjustment (applied when a different user approves)
       tags:
       - Points Accounts
       security:
@@ -1200,7 +1513,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PointsAccount'
+                $ref: '#/components/schemas/PointsAdjustment'
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1226,7 +1539,7 @@ paths:
   /v1/rewards/points-accounts/{id}/transfer:
     post:
       operationId: pointsAccountsTransfer
-      summary: Transfer points to another member
+      summary: Transfer points to another member of the same program
       tags:
       - Points Accounts
       security:
@@ -1315,10 +1628,102 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: points_account
+  /v1/rewards/points-accounts/{id}/reactivate:
+    post:
+      operationId: pointsAccountsReactivate
+      summary: Lift a suspension
+      tags:
+      - Points Accounts
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointsAccountsReactivateRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: points_account
+  /v1/rewards/points-accounts/{id}/close:
+    post:
+      operationId: pointsAccountsClose
+      summary: Close the account; remaining points are forfeited
+      tags:
+      - Points Accounts
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsAccount'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointsAccountsCloseRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: points_account
   /v1/rewards/points-accounts/{id}/recalculate-tier:
     post:
       operationId: pointsAccountsRecalculateTier
-      summary: Re-evaluate tier qualification
+      summary: Re-evaluate tier qualification now
       tags:
       - Points Accounts
       security:
@@ -1355,6 +1760,206 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: points_account
+  /v1/rewards/points-adjustments:
+    get:
+      operationId: pointsAdjustmentsList
+      summary: List points adjustments
+      tags:
+      - Points Adjustments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: points_account_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPLIED
+          - REJECTED
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsAdjustmentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: points_adjustment
+      x-crud: true
+      x-crud-list: true
+  /v1/rewards/points-adjustments/{id}:
+    get:
+      operationId: pointsAdjustmentsGet
+      summary: Retrieve points adjustment
+      tags:
+      - Points Adjustments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: points_adjustment
+      x-crud: true
+      x-crud-get: true
+  /v1/rewards/points-adjustments/{id}/approve:
+    post:
+      operationId: pointsAdjustmentsApprove
+      summary: Approve and apply the adjustment (checker)
+      tags:
+      - Points Adjustments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointsAdjustmentsApproveRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: points_adjustment
+  /v1/rewards/points-adjustments/{id}/reject:
+    post:
+      operationId: pointsAdjustmentsReject
+      summary: Reject the adjustment (checker)
+      tags:
+      - Points Adjustments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PointsAdjustment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PointsAdjustmentsRejectRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: points_adjustment
   /v1/rewards/points-entries:
     get:
       operationId: pointsLedgerEntriesList
@@ -1605,7 +2210,7 @@ paths:
   /v1/rewards/cashback/{id}/reverse:
     post:
       operationId: cashbackTransactionsReverse
-      summary: Reverse cashback (refund or chargeback)
+      summary: Reverse cashback (refund or chargeback); a paid award is clawed back in the ledger
       tags:
       - Cashback Transactions
       security:
@@ -1652,6 +2257,46 @@ paths:
     post:
       operationId: cashbackTransactionsConfirm
       summary: Confirm a pending award early
+      tags:
+      - Cashback Transactions
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashbackTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: cashback_transaction
+  /v1/rewards/cashback/{id}/pay:
+    post:
+      operationId: cashbackTransactionsPay
+      summary: Pay a confirmed award to the customer's account now
       tags:
       - Cashback Transactions
       security:
@@ -2116,7 +2761,7 @@ paths:
   /v1/rewards/redemptions/{id}/retry:
     post:
       operationId: redemptionsRetry
-      summary: Retry partner fulfilment
+      summary: Retry a failed fulfilment
       tags:
       - Redemptions
       security:
@@ -2153,7 +2798,99 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: redemption
-  /v1/referrals/programs:
+  /v1/rewards/redemptions/{id}/fulfil:
+    post:
+      operationId: redemptionsFulfil
+      summary: Record partner fulfilment
+      tags:
+      - Redemptions
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Redemption'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedemptionsFulfilRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: redemption
+  /v1/rewards/redemptions/{id}/fail:
+    post:
+      operationId: redemptionsFail
+      summary: Record a partner fulfilment failure
+      tags:
+      - Redemptions
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Redemption'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedemptionsFailRequest'
+      x-requirements:
+      - ENG-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: redemption
+  /v1/referral-programs:
     get:
       operationId: referralProgramsList
       summary: List referral programs
@@ -2259,7 +2996,7 @@ paths:
       x-table: referral_program
       x-crud: true
       x-crud-create: true
-  /v1/referrals/programs/{id}:
+  /v1/referral-programs/{id}:
     get:
       operationId: referralProgramsGet
       summary: Retrieve referral program
@@ -2339,10 +3076,10 @@ paths:
       x-table: referral_program
       x-crud: true
       x-crud-update: true
-  /v1/referrals/programs/{id}/activate:
+  /v1/referral-programs/{id}/activate:
     post:
       operationId: referralProgramsActivate
-      summary: Activate the program
+      summary: Activate or resume the program
       tags:
       - Referral Programs
       security:
@@ -2379,7 +3116,7 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: referral_program
-  /v1/referrals/programs/{id}/pause:
+  /v1/referral-programs/{id}/pause:
     post:
       operationId: referralProgramsPause
       summary: Pause the program
@@ -2419,6 +3156,52 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ReferralProgramsPauseRequest'
+      x-requirements:
+      - ENG-02
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: referral_program
+  /v1/referral-programs/{id}/end:
+    post:
+      operationId: referralProgramsEnd
+      summary: End the program
+      tags:
+      - Referral Programs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralProgram'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralProgramsEndRequest'
       x-requirements:
       - ENG-02
       x-service: rewards-service
@@ -2471,6 +3254,10 @@ paths:
         schema:
           type: string
           maxLength: 32
+      - name: is_code_holder
+        in: query
+        schema:
+          type: boolean
       - name: custom_field_1
         in: query
         schema:
@@ -2631,10 +3418,138 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: referral
+  /v1/referrals/sign-up:
+    post:
+      operationId: referralsSignUp
+      summary: A referee signed up with a referral code (self-referral and device-reuse checks)
+      tags:
+      - Referrals
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Referral'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralsSignUpRequest'
+      x-requirements:
+      - ENG-02
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: referral
+  /v1/referrals/qualification-events:
+    post:
+      operationId: referralsQualificationEvents
+      summary: A referee completed a qualifying event (account opened, deposit, spend)
+      tags:
+      - Referrals
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralsQualificationEventsRequest'
+      x-requirements:
+      - ENG-02
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: referral
   /v1/referrals/{id}/qualify:
     post:
       operationId: referralsQualify
-      summary: Mark the referral qualified and pay rewards
+      summary: Mark the referral qualified (manual override) and pay rewards
+      tags:
+      - Referrals
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Referral'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralsQualifyRequest'
+      x-requirements:
+      - ENG-02
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: referral
+  /v1/referrals/{id}/pay:
+    post:
+      operationId: referralsPay
+      summary: Pay (or retry) the rewards of a qualified referral
       tags:
       - Referrals
       security:
@@ -2717,6 +3632,345 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: referral
+  /v1/rewards/eod-runs:
+    get:
+      operationId: rewardsEodRunsList
+      summary: List rewards eod runs
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - POINTS_CONFIRMATION
+          - POINTS_EXPIRY
+          - CASHBACK_PAYOUT
+          - TIER_REQUALIFICATION
+          - REFERRAL_EXPIRY
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardsEodRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: rewards_eod_run
+      x-crud: true
+      x-crud-list: true
+  /v1/rewards/eod-runs/{id}:
+    get:
+      operationId: rewardsEodRunsGet
+      summary: Retrieve rewards eod run
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardsEodRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: rewards_eod_run
+      x-crud: true
+      x-crud-get: true
+  /v1/rewards/eod-runs/points-confirmation:
+    post:
+      operationId: rewardsEodRunsPointsConfirmation
+      summary: End of day - confirm pending points and cashback whose dispute window ended by the end of business_date (idempotent
+        per business date)
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: rewards_eod_run
+  /v1/rewards/eod-runs/points-expiry:
+    post:
+      operationId: rewardsEodRunsPointsExpiry
+      summary: End of day - expire points lots (FIFO by earn date) whose expiry date is on or before business_date (idempotent
+        per business date)
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: rewards_eod_run
+  /v1/rewards/eod-runs/cashback-payout:
+    post:
+      operationId: rewardsEodRunsCashbackPayout
+      summary: End of day - pay confirmed cashback to customers' accounts through the ledger (idempotent per business date)
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: rewards_eod_run
+  /v1/rewards/eod-runs/tier-requalification:
+    post:
+      operationId: rewardsEodRunsTierRequalification
+      summary: End of day - re-evaluate tiers whose qualification period ended on or before business_date (idempotent per
+        business date)
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: rewards_eod_run
+  /v1/rewards/eod-runs/referral-expiry:
+    post:
+      operationId: rewardsEodRunsReferralExpiry
+      summary: End of day - expire referrals whose qualification deadline passed by the end of business_date (idempotent per
+        business date)
+      tags:
+      - Rewards Eod Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-01
+      - OPS-01
+      x-service: rewards-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: rewards_eod_run
 components:
   schemas:
     Problem:
@@ -2793,6 +4047,9 @@ components:
         ends_on:
           type: string
           format: date
+        reason:
+          type: string
+          maxLength: 255
       required:
       - ends_on
     RewardTierPage:
@@ -2843,12 +4100,160 @@ components:
         rewards_program_id:
           type: string
           format: uuid
-        transaction:
-          type: object
-          additionalProperties: true
+        customer_id:
+          type: string
+          format: uuid
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        mcc:
+          type: string
+          maxLength: 4
+        merchant_id:
+          type: string
+          maxLength: 64
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        channel:
+          type: string
+          enum:
+          - POS
+          - ECOM
+          - CONTACTLESS
+          - ATM
+          - WALLET
+          - BILL_PAYMENT
+          - TRANSFER
+          - BRANCH
+          - OTHER
+        product_id:
+          type: string
+          format: uuid
+        transaction_at:
+          type: string
+          format: date-time
       required:
       - rewards_program_id
-      - transaction
+      - trigger
+      - amount
+      - currency
+    RewardTransactionPage:
+      type: object
+      description: One page of RewardTransaction results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardTransaction'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    RewardTransactionsIngestRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+        source_type:
+          type: string
+          maxLength: 40
+        source_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        mcc:
+          type: string
+          maxLength: 4
+        merchant_id:
+          type: string
+          maxLength: 64
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
+        channel:
+          type: string
+          enum:
+          - POS
+          - ECOM
+          - CONTACTLESS
+          - ATM
+          - WALLET
+          - BILL_PAYMENT
+          - TRANSFER
+          - BRANCH
+          - OTHER
+        product_id:
+          type: string
+          format: uuid
+        transaction_at:
+          type: string
+          format: date-time
+        credit_account_id:
+          type: string
+          format: uuid
+      required:
+      - customer_id
+      - trigger
+      - source_type
+      - source_id
+      - amount
+      - currency
+    RewardTransactionsReverseRequest:
+      type: object
+      properties:
+        reversal_reason:
+          type: string
+          maxLength: 255
+      required:
+      - reversal_reason
     PointsAccountPage:
       type: object
       description: One page of PointsAccount results (newest first)
@@ -2906,10 +4311,59 @@ components:
         points:
           type: integer
           format: int64
+        reason:
+          type: string
+          maxLength: 255
       required:
       - to_points_account_id
       - points
     PointsAccountsSuspendRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    PointsAccountsReactivateRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    PointsAccountsCloseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    PointsAdjustmentPage:
+      type: object
+      description: One page of PointsAdjustment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PointsAdjustment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PointsAdjustmentsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    PointsAdjustmentsRejectRequest:
       type: object
       properties:
         reason:
@@ -2987,6 +4441,22 @@ components:
           maxLength: 255
       required:
       - reason
+    RedemptionsFulfilRequest:
+      type: object
+      properties:
+        partner_reference:
+          type: string
+          maxLength: 128
+      required:
+      - partner_reference
+    RedemptionsFailRequest:
+      type: object
+      properties:
+        failure_reason:
+          type: string
+          maxLength: 255
+      required:
+      - failure_reason
     ReferralProgramPage:
       type: object
       description: One page of ReferralProgram results (newest first)
@@ -3013,6 +4483,12 @@ components:
           maxLength: 255
       required:
       - reason
+    ReferralProgramsEndRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     ReferralPage:
       type: object
       description: One page of Referral results (newest first)
@@ -3040,9 +4516,70 @@ components:
         customer_id:
           type: string
           format: uuid
+        device_fingerprint:
+          type: string
+          maxLength: 128
       required:
       - referral_program_id
       - customer_id
+    ReferralsSignUpRequest:
+      type: object
+      properties:
+        referral_code:
+          type: string
+          maxLength: 32
+        referee_customer_id:
+          type: string
+          format: uuid
+        referee_account_id:
+          type: string
+          format: uuid
+        referee_contact:
+          type: string
+          maxLength: 320
+        device_fingerprint:
+          type: string
+          maxLength: 128
+      required:
+      - referral_code
+      - referee_customer_id
+    ReferralsQualificationEventsRequest:
+      type: object
+      properties:
+        referee_customer_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          enum:
+          - ACCOUNT_OPENED
+          - KYC_VERIFIED
+          - FIRST_DEPOSIT
+          - DEPOSIT
+          - CARD_SPEND
+          - DIRECT_DEPOSIT
+          - LOAN_DISBURSED
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        occurred_at:
+          type: string
+          format: date-time
+      required:
+      - referee_customer_id
+      - event_type
+    ReferralsQualifyRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
     ReferralsRejectRequest:
       type: object
       properties:
@@ -3051,6 +4588,24 @@ components:
           maxLength: 255
       required:
       - rejection_reason
+    RewardsEodRunPage:
+      type: object
+      description: One page of RewardsEodRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardsEodRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CashbackTransaction:
       type: object
       description: A cashback award for a qualifying transaction, paid to the customer's account after settlement
@@ -3099,6 +4654,12 @@ components:
           - 'null'
           format: uuid
           description: Rule applied
+        reward_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Evaluated transaction
         customer_id:
           type: string
           format: uuid
@@ -3136,12 +4697,14 @@ components:
           - REVERSED
           - CANCELLED
           description: Status
+          readOnly: true
         confirm_after:
           type:
           - string
           - 'null'
           format: date-time
-          description: When the award confirms (after dispute window)
+          description: When the award confirms (after the dispute window)
+          readOnly: true
         credit_account_id:
           type:
           - string
@@ -3154,6 +4717,7 @@ components:
           - 'null'
           format: uuid
           description: Ledger posting of the payout
+          readOnly: true
         paid_at:
           type:
           - string
@@ -3161,12 +4725,32 @@ components:
           format: date-time
           description: Payout time
           readOnly: true
+        payout_attempts:
+          type: integer
+          format: int32
+          description: Payout attempts
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Last payout failure
+          readOnly: true
         reversal_reason:
           type:
           - string
           - 'null'
           maxLength: 255
           description: Why reversed (refund, chargeback)
+          readOnly: true
+        reversal_journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger reversal of a paid award
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3210,6 +4794,7 @@ components:
       - cashback_amount
       - currency
       - status
+      - payout_attempts
     PointsAccount:
       type: object
       description: A customer's points account within a program with running balances and tier
@@ -3256,25 +4841,66 @@ components:
           type: string
           format: uuid
           description: Customer
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product through which the customer is eligible
+        default_credit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account credited with cashback and statement credits by default
         status:
           type: string
           enum:
           - ACTIVE
           - SUSPENDED
           - CLOSED
-          description: Status
+          description: Status (changes through suspend / reactivate / close)
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last status change
+          readOnly: true
         reward_tier_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Current tier
+          description: Current tier (set through tier evaluation)
+          readOnly: true
         tier_qualified_until:
           type:
           - string
           - 'null'
           format: date
-          description: Tier valid until
+          description: Tier kept until (requalification date)
+          readOnly: true
+        tier_spend:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Qualifying spend in the tier period at the last evaluation
+          readOnly: true
+        tier_points:
+          type: integer
+          format: int64
+          description: Points earned in the tier period at the last evaluation
+          readOnly: true
+        tier_evaluated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last tier evaluation
+          readOnly: true
         available_points:
           type: integer
           format: int64
@@ -3311,6 +4937,7 @@ components:
           type: string
           format: date-time
           description: Enrolment time
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3349,6 +4976,8 @@ components:
       - rewards_program_id
       - customer_id
       - status
+      - tier_spend
+      - tier_points
       - available_points
       - pending_points
       - lifetime_earned
@@ -3366,25 +4995,14 @@ components:
           type: string
           format: uuid
           description: Customer
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-          description: Status
-        reward_tier_id:
+        product_id:
           type: string
           format: uuid
-          description: Current tier
-        tier_qualified_until:
+          description: Product through which the customer is eligible
+        default_credit_account_id:
           type: string
-          format: date
-          description: Tier valid until
-        enrolled_at:
-          type: string
-          format: date-time
-          description: Enrolment time
+          format: uuid
+          description: Account credited with cashback and statement credits by default
         custom_field_1:
           type: string
           maxLength: 500
@@ -3408,6 +5026,138 @@ components:
       required:
       - rewards_program_id
       - customer_id
+    PointsAdjustment:
+      type: object
+      description: A manual points adjustment under maker-checker control, applied to the ledger when approved
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        points_account_id:
+          type: string
+          format: uuid
+          description: Points account
+        points:
+          type: integer
+          format: int64
+          description: Signed points to add (positive) or remove (negative)
+        reason:
+          type: string
+          maxLength: 255
+          description: Business reason
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - APPLIED
+          - REJECTED
+          description: Status (changes through approve / reject)
+          readOnly: true
+        requested_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        decided_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Decision time
+          readOnly: true
+        decision_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment or rejection reason
+          readOnly: true
+        points_ledger_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Entry written when applied
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - points_account_id
+      - points
+      - reason
+      - status
     PointsLedgerEntry:
       type: object
       description: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
@@ -3457,24 +5207,68 @@ components:
         is_pending:
           type: boolean
           description: Earned but not yet confirmed
+        confirm_after:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When a pending earn confirms
+        confirms_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Pending entry this entry confirms
+        lot_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Earn lot consumed (EXPIRE entries)
         reward_rule_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Rule that produced an earn
+        reward_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Transaction that produced an earn
+        transaction_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Qualifying transaction amount
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of transaction_amount (ISO 4217)
         source_type:
           type:
           - string
           - 'null'
           maxLength: 40
-          description: CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL
+          description: CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, ADJUSTMENT, TRANSFER
         source_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Source object id
+        counterparty_points_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Other account of a transfer
         expires_on:
           type:
           - string
@@ -3591,6 +5385,7 @@ components:
           type: integer
           format: int64
           description: Points debited
+          readOnly: true
         cash_value:
           type:
           - string
@@ -3599,12 +5394,14 @@ components:
           examples:
           - '125.50'
           description: Value delivered
+          readOnly: true
         currency:
           type:
           - string
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+          readOnly: true
         status:
           type: string
           enum:
@@ -3615,36 +5412,47 @@ components:
           - CANCELLED
           - REVERSED
           description: Status
+          readOnly: true
         credit_account_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Account for statement credit
+          description: 'Account for statement credit / cash transfer (default: the points account''s)'
         partner_member_id:
           type:
           - string
           - 'null'
           maxLength: 64
           description: Loyalty number at the partner (airline miles)
+        voucher_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Issued voucher code
+          readOnly: true
         partner_reference:
           type:
           - string
           - 'null'
           maxLength: 128
           description: Fulfilment reference
+          readOnly: true
         points_ledger_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Debit entry
+          readOnly: true
         journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Ledger posting for statement credit
+          readOnly: true
         fulfilled_at:
           type:
           - string
@@ -3658,6 +5466,20 @@ components:
           - 'null'
           maxLength: 255
           description: Failure reason
+          readOnly: true
+        cancelled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Cancellation time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation reason
           readOnly: true
         idempotency_key:
           type: string
@@ -3720,50 +5542,14 @@ components:
           type: integer
           format: int32
           description: Quantity
-        points_spent:
-          type: integer
-          format: int64
-          description: Points debited
-        cash_value:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Value delivered
-        currency:
-          type: string
-          pattern: ^[A-Z]{3}$
-          description: Currency (ISO 4217)
-        status:
-          type: string
-          enum:
-          - REQUESTED
-          - PROCESSING
-          - FULFILLED
-          - FAILED
-          - CANCELLED
-          - REVERSED
-          description: Status
         credit_account_id:
           type: string
           format: uuid
-          description: Account for statement credit
+          description: 'Account for statement credit / cash transfer (default: the points account''s)'
         partner_member_id:
           type: string
           maxLength: 64
           description: Loyalty number at the partner (airline miles)
-        partner_reference:
-          type: string
-          maxLength: 128
-          description: Fulfilment reference
-        points_ledger_entry_id:
-          type: string
-          format: uuid
-          description: Debit entry
-        journal_entry_id:
-          type: string
-          format: uuid
-          description: Ledger posting for statement credit
         custom_field_1:
           type: string
           maxLength: 500
@@ -3787,7 +5573,6 @@ components:
       required:
       - points_account_id
       - reward_catalog_item_id
-      - points_spent
     Referral:
       type: object
       description: One referral from a referrer to a referee, tracked through qualification to payout
@@ -3837,19 +5622,38 @@ components:
         referral_code:
           type: string
           maxLength: 32
-          description: Code shared by the referrer
+          description: Code shared by the referrer (server-generated, one per referrer and program)
+          readOnly: true
+        is_code_holder:
+          type: boolean
+          description: The referrer's code record rather than an individual referral
+          readOnly: true
         referee_customer_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Referee once signed up
+          readOnly: true
         referee_contact:
           type:
           - string
           - 'null'
           maxLength: 320
           description: Invited phone or email
+        referrer_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account credited with the referrer's cash reward
+        referee_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Account credited with the referee's cash reward (given at sign-up)
+          readOnly: true
         status:
           type: string
           enum:
@@ -3861,18 +5665,28 @@ components:
           - EXPIRED
           - REJECTED
           description: Status
+          readOnly: true
         signed_up_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Referee sign-up time
+          readOnly: true
         qualify_by:
           type:
           - string
           - 'null'
           format: date-time
           description: Deadline to qualify
+          readOnly: true
+        qualification_progress:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Qualification rules met so far ({event, met_at, amount})
+          readOnly: true
         qualified_at:
           type:
           - string
@@ -3880,24 +5694,55 @@ components:
           format: date-time
           description: Qualification time
           readOnly: true
+        rewarded_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time both rewards were paid
+          readOnly: true
         referrer_payout_journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Referrer reward posting
+          readOnly: true
         referee_payout_journal_entry_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Referee reward posting
+          readOnly: true
+        referrer_points_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Referrer points ledger entry
+          readOnly: true
+        referee_points_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Referee points ledger entry
+          readOnly: true
+        payout_failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Last payout failure
+          readOnly: true
         rejection_reason:
           type:
           - string
           - 'null'
           maxLength: 255
-          description: Why rejected (self-referral, fraud)
+          description: Why rejected (self-referral, device reuse, fraud)
+          readOnly: true
         fraud_score:
           type:
           - string
@@ -3905,7 +5750,8 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Fraud score at qualification
+          description: Fraud score at sign-up (0..1)
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3944,6 +5790,7 @@ components:
       - referral_program_id
       - referrer_customer_id
       - referral_code
+      - is_code_holder
       - status
     ReferralCreate:
       type: object
@@ -3956,55 +5803,14 @@ components:
           type: string
           format: uuid
           description: Referrer
-        referral_code:
-          type: string
-          maxLength: 32
-          description: Code shared by the referrer
-        referee_customer_id:
-          type: string
-          format: uuid
-          description: Referee once signed up
         referee_contact:
           type: string
           maxLength: 320
           description: Invited phone or email
-        status:
-          type: string
-          enum:
-          - INVITED
-          - SIGNED_UP
-          - QUALIFYING
-          - QUALIFIED
-          - REWARDED
-          - EXPIRED
-          - REJECTED
-          description: Status
-        signed_up_at:
-          type: string
-          format: date-time
-          description: Referee sign-up time
-        qualify_by:
-          type: string
-          format: date-time
-          description: Deadline to qualify
-        referrer_payout_journal_entry_id:
+        referrer_account_id:
           type: string
           format: uuid
-          description: Referrer reward posting
-        referee_payout_journal_entry_id:
-          type: string
-          format: uuid
-          description: Referee reward posting
-        rejection_reason:
-          type: string
-          maxLength: 255
-          description: Why rejected (self-referral, fraud)
-        fraud_score:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Fraud score at qualification
+          description: Account credited with the referrer's cash reward
         custom_field_1:
           type: string
           maxLength: 500
@@ -4028,7 +5834,6 @@ components:
       required:
       - referral_program_id
       - referrer_customer_id
-      - referral_code
     ReferralProgram:
       type: object
       description: Refer-a-friend program with qualification criteria and rewards for referrer and referee
@@ -4082,11 +5887,12 @@ components:
           - ACTIVE
           - PAUSED
           - ENDED
-          description: Status
+          description: Status (changes through activate / pause / end)
+          readOnly: true
         qualification_rules:
-          type: object
-          additionalProperties: true
-          description: E.g. account opened + first deposit >= X within N days
+          type: array
+          items: {}
+          description: 'Events the referee must complete, all within qualify_within_days ({event: ReferralEventType, min_amount})'
         qualify_within_days:
           type: integer
           format: int32
@@ -4119,6 +5925,12 @@ components:
           - 'null'
           format: int64
           description: Points reward to the referee
+        rewards_program_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Program whose points accounts receive points rewards
         currency:
           type:
           - string
@@ -4130,7 +5942,7 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Cap per referrer
+          description: Cap of rewarded referrals per referrer
         budget_amount:
           type:
           - string
@@ -4138,7 +5950,20 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Total program budget
+          description: Total cash budget of the program
+        spent_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cash rewards paid so far
+          readOnly: true
+        ledger_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger book of the payouts
         funding_ledger_account_id:
           type:
           - string
@@ -4155,6 +5980,13 @@ components:
           - 'null'
           format: date
           description: End
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last pause or end
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -4195,6 +6027,7 @@ components:
       - status
       - qualification_rules
       - qualify_within_days
+      - spent_amount
       - starts_on
     ReferralProgramCreate:
       type: object
@@ -4207,18 +6040,10 @@ components:
           type: string
           maxLength: 120
           description: Display name
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          description: Status
         qualification_rules:
-          type: object
-          additionalProperties: true
-          description: E.g. account opened + first deposit >= X within N days
+          type: array
+          items: {}
+          description: 'Events the referee must complete, all within qualify_within_days ({event: ReferralEventType, min_amount})'
         qualify_within_days:
           type: integer
           format: int32
@@ -4243,6 +6068,10 @@ components:
           type: integer
           format: int64
           description: Points reward to the referee
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program whose points accounts receive points rewards
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -4250,13 +6079,17 @@ components:
         max_referrals_per_customer:
           type: integer
           format: int32
-          description: Cap per referrer
+          description: Cap of rewarded referrals per referrer
         budget_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Total program budget
+          description: Total cash budget of the program
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book of the payouts
         funding_ledger_account_id:
           type: string
           format: uuid
@@ -4305,18 +6138,10 @@ components:
           type: string
           maxLength: 120
           description: Display name
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          description: Status
         qualification_rules:
-          type: object
-          additionalProperties: true
-          description: E.g. account opened + first deposit >= X within N days
+          type: array
+          items: {}
+          description: 'Events the referee must complete, all within qualify_within_days ({event: ReferralEventType, min_amount})'
         qualify_within_days:
           type: integer
           format: int32
@@ -4341,6 +6166,10 @@ components:
           type: integer
           format: int64
           description: Points reward to the referee
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program whose points accounts receive points rewards
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -4348,13 +6177,17 @@ components:
         max_referrals_per_customer:
           type: integer
           format: int32
-          description: Cap per referrer
+          description: Cap of rewarded referrals per referrer
         budget_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Total program budget
+          description: Total cash budget of the program
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book of the payouts
         funding_ledger_account_id:
           type: string
           format: uuid
@@ -4451,7 +6284,7 @@ components:
         points_cost:
           type: integer
           format: int64
-          description: Points required
+          description: Points required per unit
         cash_value:
           type:
           - string
@@ -4459,7 +6292,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Monetary value delivered
+          description: Monetary value delivered per unit
         currency:
           type:
           - string
@@ -4569,13 +6402,13 @@ components:
         points_cost:
           type: integer
           format: int64
-          description: Points required
+          description: Points required per unit
         cash_value:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Monetary value delivered
+          description: Monetary value delivered per unit
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -4658,13 +6491,13 @@ components:
         points_cost:
           type: integer
           format: int64
-          description: Points required
+          description: Points required per unit
         cash_value:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Monetary value delivered
+          description: Monetary value delivered per unit
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -4777,50 +6610,73 @@ components:
           - DRAFT
           - ACTIVE
           - INACTIVE
-          description: Status
+          description: Status (changes through activate / deactivate)
+          readOnly: true
         priority:
           type: integer
           format: int32
           description: Lower evaluates first
         stackable:
           type: boolean
-          description: Can combine with other matching rules
+          description: Can combine with other matching rules; a non-stackable rule that wins on priority is applied alone
         mcc_include:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            maxLength: 255
           description: MCC codes that qualify (empty = any)
         mcc_exclude:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            maxLength: 255
           description: MCC codes excluded (e.g. gambling, quasi-cash)
         merchant_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Specific merchants (partner offers)
+          items:
+            type: string
+            maxLength: 255
+          description: Merchant / card acceptor ids that qualify (partner offers; empty = any)
         product_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Products that qualify
+          items:
+            type: string
+            format: uuid
+          description: Products that qualify (empty = any)
         channels:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
+          items:
+            type: string
+            enum:
+            - POS
+            - ECOM
+            - CONTACTLESS
+            - ATM
+            - WALLET
+            - BILL_PAYMENT
+            - TRANSFER
+            - BRANCH
+            - OTHER
+          description: Channels that qualify (empty = any)
         countries:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Merchant countries that qualify
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: ISO 3166-1 alpha-2
+          description: Merchant countries that qualify (empty = any)
         min_amount:
           type:
           - string
@@ -4866,7 +6722,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Maximum award per cap period
+          description: Maximum award (points or cashback) per customer and cap period
         cap_period:
           type:
           - string
@@ -4882,10 +6738,28 @@ components:
           description: Period the cap applies to
         valid_days_of_week:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Days of week the rule applies (e.g. weekend boosts)
+          items:
+            type: integer
+            format: int32
+          description: ISO days of week the rule applies (1=Monday..7=Sunday; empty = every day)
+        valid_time_from:
+          type:
+          - string
+          - 'null'
+          maxLength: 5
+          description: Daily window start HH:mm in the rule time zone (empty = all day)
+        valid_time_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 5
+          description: Daily window end HH:mm (exclusive; may wrap past midnight)
+        time_zone:
+          type: string
+          maxLength: 40
+          description: IANA time zone of the day and time windows and cap periods
         valid_from:
           type: string
           format: date-time
@@ -4900,6 +6774,13 @@ components:
           type: integer
           format: int32
           description: Days before pending awards confirm (dispute window)
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last deactivation
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -4942,6 +6823,7 @@ components:
       - priority
       - stackable
       - multiplier
+      - time_zone
       - valid_from
       - settle_after_days
     RewardRuleCreate:
@@ -4968,44 +6850,59 @@ components:
           - REFERRAL
           - MANUAL
           description: Event that earns
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          description: Status
         priority:
           type: integer
           format: int32
           description: Lower evaluates first
         stackable:
           type: boolean
-          description: Can combine with other matching rules
+          description: Can combine with other matching rules; a non-stackable rule that wins on priority is applied alone
         mcc_include:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 255
           description: MCC codes that qualify (empty = any)
         mcc_exclude:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 255
           description: MCC codes excluded (e.g. gambling, quasi-cash)
         merchant_ids:
-          type: object
-          additionalProperties: true
-          description: Specific merchants (partner offers)
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          description: Merchant / card acceptor ids that qualify (partner offers; empty = any)
         product_ids:
-          type: object
-          additionalProperties: true
-          description: Products that qualify
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Products that qualify (empty = any)
         channels:
-          type: object
-          additionalProperties: true
-          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
+          type: array
+          items:
+            type: string
+            enum:
+            - POS
+            - ECOM
+            - CONTACTLESS
+            - ATM
+            - WALLET
+            - BILL_PAYMENT
+            - TRANSFER
+            - BRANCH
+            - OTHER
+          description: Channels that qualify (empty = any)
         countries:
-          type: object
-          additionalProperties: true
-          description: Merchant countries that qualify
+          type: array
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: ISO 3166-1 alpha-2
+          description: Merchant countries that qualify (empty = any)
         min_amount:
           type: string
           format: decimal
@@ -5041,7 +6938,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Maximum award per cap period
+          description: Maximum award (points or cashback) per customer and cap period
         cap_period:
           type: string
           enum:
@@ -5054,9 +6951,23 @@ components:
           - LIFETIME
           description: Period the cap applies to
         valid_days_of_week:
-          type: object
-          additionalProperties: true
-          description: Days of week the rule applies (e.g. weekend boosts)
+          type: array
+          items:
+            type: integer
+            format: int32
+          description: ISO days of week the rule applies (1=Monday..7=Sunday; empty = every day)
+        valid_time_from:
+          type: string
+          maxLength: 5
+          description: Daily window start HH:mm in the rule time zone (empty = all day)
+        valid_time_to:
+          type: string
+          maxLength: 5
+          description: Daily window end HH:mm (exclusive; may wrap past midnight)
+        time_zone:
+          type: string
+          maxLength: 40
+          description: IANA time zone of the day and time windows and cap periods
         valid_from:
           type: string
           format: date-time
@@ -5118,44 +7029,59 @@ components:
           - REFERRAL
           - MANUAL
           description: Event that earns
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - INACTIVE
-          description: Status
         priority:
           type: integer
           format: int32
           description: Lower evaluates first
         stackable:
           type: boolean
-          description: Can combine with other matching rules
+          description: Can combine with other matching rules; a non-stackable rule that wins on priority is applied alone
         mcc_include:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 255
           description: MCC codes that qualify (empty = any)
         mcc_exclude:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            maxLength: 255
           description: MCC codes excluded (e.g. gambling, quasi-cash)
         merchant_ids:
-          type: object
-          additionalProperties: true
-          description: Specific merchants (partner offers)
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          description: Merchant / card acceptor ids that qualify (partner offers; empty = any)
         product_ids:
-          type: object
-          additionalProperties: true
-          description: Products that qualify
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Products that qualify (empty = any)
         channels:
-          type: object
-          additionalProperties: true
-          description: Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)
+          type: array
+          items:
+            type: string
+            enum:
+            - POS
+            - ECOM
+            - CONTACTLESS
+            - ATM
+            - WALLET
+            - BILL_PAYMENT
+            - TRANSFER
+            - BRANCH
+            - OTHER
+          description: Channels that qualify (empty = any)
         countries:
-          type: object
-          additionalProperties: true
-          description: Merchant countries that qualify
+          type: array
+          items:
+            type: string
+            pattern: ^[A-Z]{2}$
+            description: ISO 3166-1 alpha-2
+          description: Merchant countries that qualify (empty = any)
         min_amount:
           type: string
           format: decimal
@@ -5191,7 +7117,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Maximum award per cap period
+          description: Maximum award (points or cashback) per customer and cap period
         cap_period:
           type: string
           enum:
@@ -5204,9 +7130,23 @@ components:
           - LIFETIME
           description: Period the cap applies to
         valid_days_of_week:
-          type: object
-          additionalProperties: true
-          description: Days of week the rule applies (e.g. weekend boosts)
+          type: array
+          items:
+            type: integer
+            format: int32
+          description: ISO days of week the rule applies (1=Monday..7=Sunday; empty = every day)
+        valid_time_from:
+          type: string
+          maxLength: 5
+          description: Daily window start HH:mm in the rule time zone (empty = all day)
+        valid_time_to:
+          type: string
+          maxLength: 5
+          description: Daily window end HH:mm (exclusive; may wrap past midnight)
+        time_zone:
+          type: string
+          maxLength: 40
+          description: IANA time zone of the day and time windows and cap periods
         valid_from:
           type: string
           format: date-time
@@ -5292,7 +7232,7 @@ components:
         rank:
           type: integer
           format: int32
-          description: Order, 1 = lowest
+          description: Order, 1 = lowest (base tier)
         qualify_spend:
           type:
           - string
@@ -5300,25 +7240,25 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Annual spend needed to reach the tier
+          description: Spend in the tier period that qualifies for the tier (either threshold qualifies)
         qualify_points:
           type:
           - integer
           - 'null'
           format: int64
-          description: Points earned in the period needed to reach the tier
+          description: Points earned in the tier period that qualify for the tier (either threshold qualifies)
         earn_multiplier:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Multiplier applied to base earn
+          description: Multiplier applied to base points earn
         benefits:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: Tier benefits (fee waivers, lounge access, FX discounts)
+          items: {}
+          description: 'Tier benefits ({code, description}: fee waivers, lounge access, FX discounts)'
         custom_field_1:
           type:
           - string
@@ -5377,27 +7317,27 @@ components:
         rank:
           type: integer
           format: int32
-          description: Order, 1 = lowest
+          description: Order, 1 = lowest (base tier)
         qualify_spend:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Annual spend needed to reach the tier
+          description: Spend in the tier period that qualifies for the tier (either threshold qualifies)
         qualify_points:
           type: integer
           format: int64
-          description: Points earned in the period needed to reach the tier
+          description: Points earned in the tier period that qualify for the tier (either threshold qualifies)
         earn_multiplier:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Multiplier applied to base earn
+          description: Multiplier applied to base points earn
         benefits:
-          type: object
-          additionalProperties: true
-          description: Tier benefits (fee waivers, lounge access, FX discounts)
+          type: array
+          items: {}
+          description: 'Tier benefits ({code, description}: fee waivers, lounge access, FX discounts)'
         custom_field_1:
           type: string
           maxLength: 500
@@ -5441,27 +7381,27 @@ components:
         rank:
           type: integer
           format: int32
-          description: Order, 1 = lowest
+          description: Order, 1 = lowest (base tier)
         qualify_spend:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Annual spend needed to reach the tier
+          description: Spend in the tier period that qualifies for the tier (either threshold qualifies)
         qualify_points:
           type: integer
           format: int64
-          description: Points earned in the period needed to reach the tier
+          description: Points earned in the tier period that qualify for the tier (either threshold qualifies)
         earn_multiplier:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Multiplier applied to base earn
+          description: Multiplier applied to base points earn
         benefits:
-          type: object
-          additionalProperties: true
-          description: Tier benefits (fee waivers, lounge access, FX discounts)
+          type: array
+          items: {}
+          description: 'Tier benefits ({code, description}: fee waivers, lounge access, FX discounts)'
         custom_field_1:
           type: string
           maxLength: 500
@@ -5482,9 +7422,460 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    RewardTransaction:
+      type: object
+      description: A qualifying transaction evaluated against a program's earn rules, with its awards (idempotent per source)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program evaluated
+        points_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Points account credited
+          readOnly: true
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+          description: Kind of event
+        source_type:
+          type: string
+          maxLength: 40
+          description: CARD_AUTHORIZATION, CARD_CLEARING, PAYMENT, WALLET_TRANSACTION, ...
+        source_id:
+          type: string
+          format: uuid
+          description: Source transaction id
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Transaction amount (positive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        mcc:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: Merchant category code
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant / card acceptor id
+        merchant_country:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - POS
+          - ECOM
+          - CONTACTLESS
+          - ATM
+          - WALLET
+          - BILL_PAYMENT
+          - TRANSFER
+          - BRANCH
+          - OTHER
+          description: Channel
+        product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product the transaction was made with
+        transaction_at:
+          type: string
+          format: date-time
+          description: Transaction time
+        credit_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Account to credit cashback to (default: the points account''s)'
+        status:
+          type: string
+          enum:
+          - AWARDED
+          - NO_AWARD
+          - REVERSED
+          description: Outcome
+          readOnly: true
+        points_awarded:
+          type: integer
+          format: int64
+          description: Points awarded
+          readOnly: true
+        cashback_awarded:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cashback awarded
+          readOnly: true
+        awards:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: Per-rule breakdown ({reward_rule_id, points, cashback, capped})
+          readOnly: true
+        reversed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Reversal time
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why reversed (refund, chargeback)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - rewards_program_id
+      - customer_id
+      - trigger
+      - source_type
+      - source_id
+      - amount
+      - currency
+      - transaction_at
+      - status
+      - points_awarded
+      - cashback_awarded
+    RewardTransactionCreate:
+      type: object
+      properties:
+        rewards_program_id:
+          type: string
+          format: uuid
+          description: Program evaluated
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer
+        trigger:
+          type: string
+          enum:
+          - CARD_SPEND
+          - WALLET_PAYMENT
+          - BILL_PAYMENT
+          - ACCOUNT_OPENING
+          - DIRECT_DEPOSIT
+          - BALANCE_HELD
+          - LOAN_REPAYMENT
+          - REFERRAL
+          - MANUAL
+          description: Kind of event
+        source_type:
+          type: string
+          maxLength: 40
+          description: CARD_AUTHORIZATION, CARD_CLEARING, PAYMENT, WALLET_TRANSACTION, ...
+        source_id:
+          type: string
+          format: uuid
+          description: Source transaction id
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Transaction amount (positive)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        mcc:
+          type: string
+          maxLength: 4
+          description: Merchant category code
+        merchant_id:
+          type: string
+          maxLength: 64
+          description: Merchant / card acceptor id
+        merchant_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Merchant country (ISO 3166-1 alpha-2)
+        channel:
+          type: string
+          enum:
+          - POS
+          - ECOM
+          - CONTACTLESS
+          - ATM
+          - WALLET
+          - BILL_PAYMENT
+          - TRANSFER
+          - BRANCH
+          - OTHER
+          description: Channel
+        product_id:
+          type: string
+          format: uuid
+          description: Product the transaction was made with
+        transaction_at:
+          type: string
+          format: date-time
+          description: Transaction time
+        credit_account_id:
+          type: string
+          format: uuid
+          description: 'Account to credit cashback to (default: the points account''s)'
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - rewards_program_id
+      - customer_id
+      - trigger
+      - source_type
+      - source_id
+      - amount
+      - currency
+      - transaction_at
+    RewardsEodRun:
+      type: object
+      description: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - POINTS_CONFIRMATION
+          - POINTS_EXPIRY
+          - CASHBACK_PAYOUT
+          - TIER_REQUALIFICATION
+          - REFERRAL_EXPIRY
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     RewardsProgram:
       type: object
-      description: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+      description: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings
       properties:
         id:
           type: string
@@ -5543,7 +7934,8 @@ components:
           - ACTIVE
           - PAUSED
           - ENDED
-          description: Lifecycle status
+          description: Lifecycle status (changes through activate / pause / end)
+          readOnly: true
         points_name:
           type:
           - string
@@ -5569,13 +7961,23 @@ components:
           - integer
           - 'null'
           format: int32
-          description: Months until earned points expire (empty = never)
+          description: Months after the earn date until earned points expire (empty = never)
+        tier_period_months:
+          type: integer
+          format: int32
+          description: Rolling window over which tier qualification is measured; an earned tier is kept for the same period
+        ledger_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Ledger book of reward payouts (cashback, statement credits)
         funding_ledger_account_id:
           type:
           - string
           - 'null'
           format: uuid
-          description: Ledger account funding rewards liability
+          description: Ledger account funding reward payouts (debited)
         liability_ledger_account_id:
           type:
           - string
@@ -5584,13 +7986,15 @@ components:
           description: Ledger account holding outstanding rewards liability
         eligible_product_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            format: uuid
           description: Products whose customers can enrol (empty = all)
         auto_enrol:
           type: boolean
-          description: Enrol eligible customers automatically
+          description: Enrol eligible customers automatically on their first qualifying transaction
         terms_document_id:
           type:
           - string
@@ -5613,6 +8017,27 @@ components:
           - 'null'
           maxLength: 64
           description: Checker who approved activation
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Activation approval time
+          readOnly: true
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last pause or end
           readOnly: true
         custom_field_1:
           type:
@@ -5653,6 +8078,7 @@ components:
       - name
       - program_type
       - status
+      - tier_period_months
       - auto_enrol
       - starts_on
     RewardsProgramCreate:
@@ -5674,14 +8100,6 @@ components:
           - MILES
           - HYBRID
           description: Points, cashback, miles or hybrid
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          description: Lifecycle status
         points_name:
           type: string
           maxLength: 40
@@ -5699,22 +8117,32 @@ components:
         points_expiry_months:
           type: integer
           format: int32
-          description: Months until earned points expire (empty = never)
+          description: Months after the earn date until earned points expire (empty = never)
+        tier_period_months:
+          type: integer
+          format: int32
+          description: Rolling window over which tier qualification is measured; an earned tier is kept for the same period
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book of reward payouts (cashback, statement credits)
         funding_ledger_account_id:
           type: string
           format: uuid
-          description: Ledger account funding rewards liability
+          description: Ledger account funding reward payouts (debited)
         liability_ledger_account_id:
           type: string
           format: uuid
           description: Ledger account holding outstanding rewards liability
         eligible_product_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            format: uuid
           description: Products whose customers can enrol (empty = all)
         auto_enrol:
           type: boolean
-          description: Enrol eligible customers automatically
+          description: Enrol eligible customers automatically on their first qualifying transaction
         terms_document_id:
           type: string
           format: uuid
@@ -5771,14 +8199,6 @@ components:
           - MILES
           - HYBRID
           description: Points, cashback, miles or hybrid
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - ENDED
-          description: Lifecycle status
         points_name:
           type: string
           maxLength: 40
@@ -5796,22 +8216,32 @@ components:
         points_expiry_months:
           type: integer
           format: int32
-          description: Months until earned points expire (empty = never)
+          description: Months after the earn date until earned points expire (empty = never)
+        tier_period_months:
+          type: integer
+          format: int32
+          description: Rolling window over which tier qualification is measured; an earned tier is kept for the same period
+        ledger_id:
+          type: string
+          format: uuid
+          description: Ledger book of reward payouts (cashback, statement credits)
         funding_ledger_account_id:
           type: string
           format: uuid
-          description: Ledger account funding rewards liability
+          description: Ledger account funding reward payouts (debited)
         liability_ledger_account_id:
           type: string
           format: uuid
           description: Ledger account holding outstanding rewards liability
         eligible_product_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            format: uuid
           description: Products whose customers can enrol (empty = all)
         auto_enrol:
           type: boolean
-          description: Enrol eligible customers automatically
+          description: Enrol eligible customers automatically on their first qualifying transaction
         terms_document_id:
           type: string
           format: uuid

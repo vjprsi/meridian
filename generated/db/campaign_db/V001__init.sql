@@ -40,11 +40,21 @@ CREATE TABLE campaign (
   frequency_cap                integer,
   budget_amount                numeric(28,8),
   currency                     char(3),
+  cost_per_message             numeric(28,8) NOT NULL DEFAULT 0,
+  spent_amount                 numeric(28,8) NOT NULL DEFAULT 0,
   control_group_pct            numeric(18,10) NOT NULL DEFAULT 0,
   requires_marketing_consent   boolean NOT NULL DEFAULT true,
   owner_user_id                uuid,
+  audience_size                integer NOT NULL DEFAULT 0,
+  audience_built_at            timestamptz,
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
   approved_by                  varchar(64),
   approved_at                  timestamptz,
+  approval_comment             varchar(500),
+  launched_at                  timestamptz,
+  completed_at                 timestamptz,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -63,21 +73,31 @@ COMMENT ON COLUMN campaign.row_version IS 'Optimistic lock version; send as If-M
 COMMENT ON COLUMN campaign.code IS 'Campaign code';
 COMMENT ON COLUMN campaign.name IS 'Name';
 COMMENT ON COLUMN campaign.objective IS 'Business objective';
-COMMENT ON COLUMN campaign.status IS 'Status';
-COMMENT ON COLUMN campaign.segment_ids IS 'Target customer_segment ids';
+COMMENT ON COLUMN campaign.status IS 'Status (changes through the campaign actions)';
+COMMENT ON COLUMN campaign.segment_ids IS 'Target customer_segment ids (a member must be in at least one)';
 COMMENT ON COLUMN campaign.exclusion_segment_ids IS 'Segments excluded';
-COMMENT ON COLUMN campaign.channels IS 'Channels used (CampaignChannel values)';
+COMMENT ON COLUMN campaign.channels IS 'Channels used, in preference order';
 COMMENT ON COLUMN campaign.start_at IS 'Start';
 COMMENT ON COLUMN campaign.end_at IS 'End';
-COMMENT ON COLUMN campaign.send_window IS 'Allowed send hours per channel and timezone';
-COMMENT ON COLUMN campaign.frequency_cap IS 'Max messages per customer per week';
-COMMENT ON COLUMN campaign.budget_amount IS 'Budget';
+COMMENT ON COLUMN campaign.send_window IS 'Allowed send hours ({start_hour, end_hour, time_zone}); empty = any time';
+COMMENT ON COLUMN campaign.frequency_cap IS 'Max campaign messages per customer in a rolling 7 days';
+COMMENT ON COLUMN campaign.budget_amount IS 'Budget cap';
 COMMENT ON COLUMN campaign.currency IS 'Budget currency';
-COMMENT ON COLUMN campaign.control_group_pct IS 'Hold-out share for uplift measurement';
+COMMENT ON COLUMN campaign.cost_per_message IS 'Cost booked per message sent (budget consumption)';
+COMMENT ON COLUMN campaign.spent_amount IS 'Budget consumed';
+COMMENT ON COLUMN campaign.control_group_pct IS 'Hold-out share for uplift measurement (0..0.5)';
 COMMENT ON COLUMN campaign.requires_marketing_consent IS 'Only customers with marketing consent';
 COMMENT ON COLUMN campaign.owner_user_id IS 'Campaign owner';
+COMMENT ON COLUMN campaign.audience_size IS 'Members selected (incl. control)';
+COMMENT ON COLUMN campaign.audience_built_at IS 'Last audience build';
+COMMENT ON COLUMN campaign.submitted_by IS 'Maker who submitted';
+COMMENT ON COLUMN campaign.submitted_at IS 'Submission time';
 COMMENT ON COLUMN campaign.approved_by IS 'Checker';
 COMMENT ON COLUMN campaign.approved_at IS 'Approval time';
+COMMENT ON COLUMN campaign.approval_comment IS 'Checker comment';
+COMMENT ON COLUMN campaign.launched_at IS 'Time sending started';
+COMMENT ON COLUMN campaign.completed_at IS 'Completion time';
+COMMENT ON COLUMN campaign.status_reason IS 'Reason of the last pause, rejection or cancellation';
 COMMENT ON COLUMN campaign.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -108,10 +128,14 @@ CREATE TABLE campaign_offer (
   terms                        jsonb NOT NULL,
   max_amount                   numeric(28,8),
   currency                     char(3),
+  max_assignments              integer,
+  assigned_count               integer NOT NULL DEFAULT 0,
+  accepted_count               integer NOT NULL DEFAULT 0,
   valid_from                   timestamptz NOT NULL,
   valid_to                     timestamptz NOT NULL,
   acceptance_flow              varchar(40),
   disclosure_document_id       uuid,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -130,17 +154,21 @@ COMMENT ON COLUMN campaign_offer.row_version IS 'Optimistic lock version; send a
 COMMENT ON COLUMN campaign_offer.code IS 'Offer code';
 COMMENT ON COLUMN campaign_offer.name IS 'Name';
 COMMENT ON COLUMN campaign_offer.offer_type IS 'Offer type';
-COMMENT ON COLUMN campaign_offer.status IS 'Status';
+COMMENT ON COLUMN campaign_offer.status IS 'Status (changes through activate / pause / withdraw and expiry)';
 COMMENT ON COLUMN campaign_offer.product_id IS 'Product offered';
 COMMENT ON COLUMN campaign_offer.product_version_id IS 'Product version';
-COMMENT ON COLUMN campaign_offer.eligibility_rules IS 'Eligibility (segments, scores, balances)';
+COMMENT ON COLUMN campaign_offer.eligibility_rules IS 'Eligibility ({segment_ids, exclusion_segment_ids, min_score, max_score})';
 COMMENT ON COLUMN campaign_offer.terms IS 'Offer terms (amount, rate, fee waiver, duration)';
 COMMENT ON COLUMN campaign_offer.max_amount IS 'Maximum amount for credit offers';
 COMMENT ON COLUMN campaign_offer.currency IS 'Currency';
+COMMENT ON COLUMN campaign_offer.max_assignments IS 'Cap on assignments (offer budget)';
+COMMENT ON COLUMN campaign_offer.assigned_count IS 'Assignments made';
+COMMENT ON COLUMN campaign_offer.accepted_count IS 'Assignments accepted';
 COMMENT ON COLUMN campaign_offer.valid_from IS 'Valid from';
 COMMENT ON COLUMN campaign_offer.valid_to IS 'Valid to';
 COMMENT ON COLUMN campaign_offer.acceptance_flow IS 'IN_APP_ONE_TAP, APPLICATION, BRANCH';
 COMMENT ON COLUMN campaign_offer.disclosure_document_id IS 'Regulatory disclosure';
+COMMENT ON COLUMN campaign_offer.status_reason IS 'Reason of the last pause or withdrawal';
 COMMENT ON COLUMN campaign_offer.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign_offer.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign_offer.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -154,7 +182,7 @@ ALTER TABLE campaign_offer ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON campaign_offer USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_campaign_offer_touch BEFORE UPDATE ON campaign_offer FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- marketing_consent_snapshot: Immutable record of the customer's marketing consent at the time a campaign targeted them
+-- marketing_consent_snapshot: Immutable record of the customer's marketing consent at the time a campaign or offer targeted them
 CREATE TABLE marketing_consent_snapshot (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -163,6 +191,7 @@ CREATE TABLE marketing_consent_snapshot (
   customer_id                  uuid NOT NULL,
   consent_id                   uuid,
   campaign_id                  uuid REFERENCES campaign(id),
+  campaign_offer_id            uuid REFERENCES campaign_offer(id),
   channel                      varchar(40) NOT NULL CHECK (channel IN ('PUSH', 'SMS', 'EMAIL', 'IN_APP', 'WHATSAPP', 'USSD', 'BRANCH', 'CALL_CENTER')),
   is_permitted                 boolean NOT NULL,
   reason                       varchar(255),
@@ -173,7 +202,7 @@ CREATE TABLE marketing_consent_snapshot (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE marketing_consent_snapshot IS 'Immutable record of the customer''s marketing consent at the time a campaign targeted them';
+COMMENT ON TABLE marketing_consent_snapshot IS 'Immutable record of the customer''s marketing consent at the time a campaign or offer targeted them';
 COMMENT ON COLUMN marketing_consent_snapshot.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN marketing_consent_snapshot.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN marketing_consent_snapshot.created_at IS 'Creation time';
@@ -181,9 +210,10 @@ COMMENT ON COLUMN marketing_consent_snapshot.created_by IS 'Principal that creat
 COMMENT ON COLUMN marketing_consent_snapshot.customer_id IS 'Customer';
 COMMENT ON COLUMN marketing_consent_snapshot.consent_id IS 'Consent record evaluated';
 COMMENT ON COLUMN marketing_consent_snapshot.campaign_id IS 'Campaign';
+COMMENT ON COLUMN marketing_consent_snapshot.campaign_offer_id IS 'Offer (offer assignments)';
 COMMENT ON COLUMN marketing_consent_snapshot.channel IS 'Channel checked';
 COMMENT ON COLUMN marketing_consent_snapshot.is_permitted IS 'Whether contact was allowed';
-COMMENT ON COLUMN marketing_consent_snapshot.reason IS 'Why not permitted (opt-out, quiet hours, frequency cap)';
+COMMENT ON COLUMN marketing_consent_snapshot.reason IS 'Why not permitted (no consent, withdrawn, expired, frequency cap, check failed)';
 COMMENT ON COLUMN marketing_consent_snapshot.checked_at IS 'Check time';
 COMMENT ON COLUMN marketing_consent_snapshot.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN marketing_consent_snapshot.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -194,9 +224,58 @@ CREATE INDEX ix_marketing_consent_snapshot_tenant ON marketing_consent_snapshot 
 CREATE INDEX ix_marketing_consent_snapshot_customer_id ON marketing_consent_snapshot (customer_id);
 CREATE INDEX ix_marketing_consent_snapshot_consent_id ON marketing_consent_snapshot (consent_id);
 CREATE INDEX ix_marketing_consent_snapshot_campaign_id ON marketing_consent_snapshot (campaign_id);
+CREATE INDEX ix_marketing_consent_snapshot_campaign_offer_id ON marketing_consent_snapshot (campaign_offer_id);
 ALTER TABLE marketing_consent_snapshot ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON marketing_consent_snapshot USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_marketing_consent_snapshot_append_only BEFORE UPDATE OR DELETE ON marketing_consent_snapshot FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- campaign_job_run: One batch job execution per tenant, job and business date (makes the batch actions idempotent)
+CREATE TABLE campaign_job_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('LIFECYCLE', 'METRICS_ROLLUP', 'OFFER_EXPIRY')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_campaign_job_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE campaign_job_run IS 'One batch job execution per tenant, job and business date (makes the batch actions idempotent)';
+COMMENT ON COLUMN campaign_job_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN campaign_job_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN campaign_job_run.created_at IS 'Creation time';
+COMMENT ON COLUMN campaign_job_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN campaign_job_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN campaign_job_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN campaign_job_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN campaign_job_run.job IS 'Job';
+COMMENT ON COLUMN campaign_job_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN campaign_job_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN campaign_job_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN campaign_job_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN campaign_job_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN campaign_job_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN campaign_job_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN campaign_job_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN campaign_job_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN campaign_job_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN campaign_job_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_campaign_job_run_tenant ON campaign_job_run (tenant_id, created_at);
+ALTER TABLE campaign_job_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON campaign_job_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_campaign_job_run_touch BEFORE UPDATE ON campaign_job_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- campaign_variant: A/B variant of a campaign with its message content per channel
 CREATE TABLE campaign_variant (
@@ -234,7 +313,7 @@ COMMENT ON COLUMN campaign_variant.updated_by IS 'Principal that last updated th
 COMMENT ON COLUMN campaign_variant.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN campaign_variant.campaign_id IS 'Campaign';
 COMMENT ON COLUMN campaign_variant.code IS 'Variant code (A, B, ...)';
-COMMENT ON COLUMN campaign_variant.traffic_share IS 'Share of the audience';
+COMMENT ON COLUMN campaign_variant.traffic_share IS 'Share of the treated audience (shares of a campaign''s codes are normalised)';
 COMMENT ON COLUMN campaign_variant.channel IS 'Channel';
 COMMENT ON COLUMN campaign_variant.notification_template_code IS 'Notification template used';
 COMMENT ON COLUMN campaign_variant.subject IS 'Subject / title';
@@ -276,6 +355,7 @@ CREATE TABLE offer_assignment (
   shown_at                     timestamptz,
   clicked_at                   timestamptz,
   responded_at                 timestamptz,
+  decline_reason               varchar(255),
   expires_at                   timestamptz NOT NULL,
   resulting_object_type        varchar(40),
   resulting_object_id          uuid,
@@ -306,6 +386,7 @@ COMMENT ON COLUMN offer_assignment.assigned_at IS 'Assignment time';
 COMMENT ON COLUMN offer_assignment.shown_at IS 'First shown';
 COMMENT ON COLUMN offer_assignment.clicked_at IS 'First clicked';
 COMMENT ON COLUMN offer_assignment.responded_at IS 'Accept or decline time';
+COMMENT ON COLUMN offer_assignment.decline_reason IS 'Reason given on decline';
 COMMENT ON COLUMN offer_assignment.expires_at IS 'Expiry';
 COMMENT ON COLUMN offer_assignment.resulting_object_type IS 'LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT';
 COMMENT ON COLUMN offer_assignment.resulting_object_id IS 'Object created on acceptance';
@@ -323,7 +404,7 @@ ALTER TABLE offer_assignment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON offer_assignment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_offer_assignment_touch BEFORE UPDATE ON offer_assignment FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- campaign_audience_member: Customer selected into a campaign run with variant or control-group allocation
+-- campaign_audience_member: Customer selected into a campaign with variant or control-group allocation and engagement tracking
 CREATE TABLE campaign_audience_member (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -335,13 +416,18 @@ CREATE TABLE campaign_audience_member (
   campaign_id                  uuid NOT NULL REFERENCES campaign(id),
   customer_id                  uuid NOT NULL,
   campaign_variant_id          uuid REFERENCES campaign_variant(id),
+  variant_code                 varchar(16),
+  channel                      varchar(40) CHECK (channel IN ('PUSH', 'SMS', 'EMAIL', 'IN_APP', 'WHATSAPP', 'USSD', 'BRANCH', 'CALL_CENTER')),
   is_control                   boolean NOT NULL DEFAULT false,
+  allocation_bucket            numeric(18,10),
   marketing_consent_snapshot_id uuid REFERENCES marketing_consent_snapshot(id),
   notification_id              uuid,
   sent_at                      timestamptz,
+  send_failure_reason          varchar(255),
   opened_at                    timestamptz,
   clicked_at                   timestamptz,
   converted_at                 timestamptz,
+  revenue                      numeric(28,8),
   unsubscribed_at              timestamptz,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -350,7 +436,7 @@ CREATE TABLE campaign_audience_member (
   custom_field_5               varchar(500),
   CONSTRAINT uq_campaign_audience_member_1 UNIQUE (campaign_id, customer_id)
 );
-COMMENT ON TABLE campaign_audience_member IS 'Customer selected into a campaign run with variant or control-group allocation';
+COMMENT ON TABLE campaign_audience_member IS 'Customer selected into a campaign with variant or control-group allocation and engagement tracking';
 COMMENT ON COLUMN campaign_audience_member.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN campaign_audience_member.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN campaign_audience_member.created_at IS 'Creation time';
@@ -361,13 +447,18 @@ COMMENT ON COLUMN campaign_audience_member.row_version IS 'Optimistic lock versi
 COMMENT ON COLUMN campaign_audience_member.campaign_id IS 'Campaign';
 COMMENT ON COLUMN campaign_audience_member.customer_id IS 'Customer';
 COMMENT ON COLUMN campaign_audience_member.campaign_variant_id IS 'Variant (empty = control group)';
+COMMENT ON COLUMN campaign_audience_member.variant_code IS 'Variant code allocated (empty = control group)';
+COMMENT ON COLUMN campaign_audience_member.channel IS 'Channel of the message';
 COMMENT ON COLUMN campaign_audience_member.is_control IS 'Hold-out member';
+COMMENT ON COLUMN campaign_audience_member.allocation_bucket IS 'Deterministic hash bucket in [0, 1) used for allocation';
 COMMENT ON COLUMN campaign_audience_member.marketing_consent_snapshot_id IS 'Consent evidence';
 COMMENT ON COLUMN campaign_audience_member.notification_id IS 'Message sent';
 COMMENT ON COLUMN campaign_audience_member.sent_at IS 'Send time';
+COMMENT ON COLUMN campaign_audience_member.send_failure_reason IS 'Last send failure';
 COMMENT ON COLUMN campaign_audience_member.opened_at IS 'Open time';
 COMMENT ON COLUMN campaign_audience_member.clicked_at IS 'Click time';
 COMMENT ON COLUMN campaign_audience_member.converted_at IS 'Conversion time';
+COMMENT ON COLUMN campaign_audience_member.revenue IS 'Attributed revenue';
 COMMENT ON COLUMN campaign_audience_member.unsubscribed_at IS 'Opt-out from this campaign';
 COMMENT ON COLUMN campaign_audience_member.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign_audience_member.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -384,7 +475,7 @@ ALTER TABLE campaign_audience_member ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON campaign_audience_member USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_campaign_audience_member_touch BEFORE UPDATE ON campaign_audience_member FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- campaign_metric: Daily performance metrics per campaign and variant. Append-only.
+-- campaign_metric: Daily performance metrics per campaign and variant (counts for the day; rates and uplift cumulative). Append-only.
 CREATE TABLE campaign_metric (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -392,16 +483,22 @@ CREATE TABLE campaign_metric (
   created_by                   varchar(64),
   campaign_id                  uuid NOT NULL REFERENCES campaign(id),
   campaign_variant_id          uuid REFERENCES campaign_variant(id),
+  variant_code                 varchar(16),
   metric_date                  date NOT NULL,
   audience                     integer NOT NULL DEFAULT 0,
   sent                         integer NOT NULL DEFAULT 0,
   delivered                    integer NOT NULL DEFAULT 0,
+  impressions                  integer NOT NULL DEFAULT 0,
   opened                       integer NOT NULL DEFAULT 0,
   clicked                      integer NOT NULL DEFAULT 0,
   converted                    integer NOT NULL DEFAULT 0,
   unsubscribed                 integer NOT NULL DEFAULT 0,
   revenue                      numeric(28,8) NOT NULL DEFAULT 0,
   cost                         numeric(28,8) NOT NULL DEFAULT 0,
+  ctr                          numeric(18,10),
+  conversion_rate              numeric(18,10),
+  control_audience             integer NOT NULL DEFAULT 0,
+  control_converted            integer NOT NULL DEFAULT 0,
   uplift_pct                   numeric(18,10),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -410,24 +507,30 @@ CREATE TABLE campaign_metric (
   custom_field_5               varchar(500),
   CONSTRAINT uq_campaign_metric_1 UNIQUE (campaign_id, campaign_variant_id, metric_date)
 );
-COMMENT ON TABLE campaign_metric IS 'Daily performance metrics per campaign and variant. Append-only.';
+COMMENT ON TABLE campaign_metric IS 'Daily performance metrics per campaign and variant (counts for the day; rates and uplift cumulative). Append-only.';
 COMMENT ON COLUMN campaign_metric.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN campaign_metric.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN campaign_metric.created_at IS 'Creation time';
 COMMENT ON COLUMN campaign_metric.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN campaign_metric.campaign_id IS 'Campaign';
-COMMENT ON COLUMN campaign_metric.campaign_variant_id IS 'Variant (empty = total)';
+COMMENT ON COLUMN campaign_metric.campaign_variant_id IS 'Variant (empty = campaign total)';
+COMMENT ON COLUMN campaign_metric.variant_code IS 'Variant code (empty = campaign total)';
 COMMENT ON COLUMN campaign_metric.metric_date IS 'Day';
-COMMENT ON COLUMN campaign_metric.audience IS 'Members targeted';
+COMMENT ON COLUMN campaign_metric.audience IS 'Members targeted (cumulative)';
 COMMENT ON COLUMN campaign_metric.sent IS 'Messages sent';
 COMMENT ON COLUMN campaign_metric.delivered IS 'Delivered';
+COMMENT ON COLUMN campaign_metric.impressions IS 'Offer impressions (assignments shown)';
 COMMENT ON COLUMN campaign_metric.opened IS 'Opened';
 COMMENT ON COLUMN campaign_metric.clicked IS 'Clicked';
 COMMENT ON COLUMN campaign_metric.converted IS 'Converted';
 COMMENT ON COLUMN campaign_metric.unsubscribed IS 'Opt-outs';
 COMMENT ON COLUMN campaign_metric.revenue IS 'Attributed revenue';
 COMMENT ON COLUMN campaign_metric.cost IS 'Spend';
-COMMENT ON COLUMN campaign_metric.uplift_pct IS 'Conversion uplift vs control group';
+COMMENT ON COLUMN campaign_metric.ctr IS 'Click-through rate to date (clicked / sent)';
+COMMENT ON COLUMN campaign_metric.conversion_rate IS 'Conversion rate to date (converted / treated members)';
+COMMENT ON COLUMN campaign_metric.control_audience IS 'Control-group members';
+COMMENT ON COLUMN campaign_metric.control_converted IS 'Control-group conversions to date';
+COMMENT ON COLUMN campaign_metric.uplift_pct IS 'Conversion uplift vs control group to date ((treated - control) / control)';
 COMMENT ON COLUMN campaign_metric.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign_metric.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN campaign_metric.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';

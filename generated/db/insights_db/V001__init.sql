@@ -56,8 +56,8 @@ COMMENT ON COLUMN spend_category.level IS 'Taxonomy level';
 COMMENT ON COLUMN spend_category.parent_id IS 'Parent category';
 COMMENT ON COLUMN spend_category.icon IS 'Icon key';
 COMMENT ON COLUMN spend_category.color IS 'Display colour';
-COMMENT ON COLUMN spend_category.mcc_codes IS 'MCC codes mapped by default';
-COMMENT ON COLUMN spend_category.translations IS 'Names per language';
+COMMENT ON COLUMN spend_category.mcc_codes IS 'MCC codes mapped to this category by default';
+COMMENT ON COLUMN spend_category.translations IS 'Names per language ({"fr": "Courses"})';
 COMMENT ON COLUMN spend_category.is_income IS 'Income category (salary, refunds)';
 COMMENT ON COLUMN spend_category.is_active IS 'Active';
 COMMENT ON COLUMN spend_category.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -67,6 +67,61 @@ COMMENT ON COLUMN spend_category.custom_field_4 IS 'Tenant-defined custom field 
 COMMENT ON COLUMN spend_category.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_spend_category_parent_id ON spend_category (parent_id);
 CREATE TRIGGER trg_spend_category_touch BEFORE UPDATE ON spend_category FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- merchant_rule: Merchant clean-name rule - maps a raw card descriptor to a clean merchant name, logo and category
+CREATE TABLE merchant_rule (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  match_type                   varchar(40) NOT NULL DEFAULT 'CONTAINS' CHECK (match_type IN ('CONTAINS', 'PREFIX', 'REGEX')),
+  pattern                      varchar(255) NOT NULL,
+  clean_name                   varchar(160) NOT NULL,
+  merchant_id                  uuid,
+  logo_url                     varchar(500),
+  website                      varchar(255),
+  mcc                          varchar(4),
+  spend_category_id            uuid REFERENCES spend_category(id),
+  priority                     integer NOT NULL DEFAULT 100,
+  is_active                    boolean NOT NULL DEFAULT true,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE merchant_rule IS 'Merchant clean-name rule - maps a raw card descriptor to a clean merchant name, logo and category';
+COMMENT ON COLUMN merchant_rule.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN merchant_rule.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN merchant_rule.created_at IS 'Creation time';
+COMMENT ON COLUMN merchant_rule.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN merchant_rule.updated_at IS 'Last update time';
+COMMENT ON COLUMN merchant_rule.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN merchant_rule.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN merchant_rule.match_type IS 'How pattern is matched against the raw descriptor (case-insensitive)';
+COMMENT ON COLUMN merchant_rule.pattern IS 'Text or regular expression matched against the raw descriptor';
+COMMENT ON COLUMN merchant_rule.clean_name IS 'Clean merchant name';
+COMMENT ON COLUMN merchant_rule.merchant_id IS 'Internal merchant';
+COMMENT ON COLUMN merchant_rule.logo_url IS 'Logo URL';
+COMMENT ON COLUMN merchant_rule.website IS 'Merchant website';
+COMMENT ON COLUMN merchant_rule.mcc IS 'MCC to assume when the transaction has none';
+COMMENT ON COLUMN merchant_rule.spend_category_id IS 'Category to assign (empty = derive from MCC)';
+COMMENT ON COLUMN merchant_rule.priority IS 'Lower matches first';
+COMMENT ON COLUMN merchant_rule.is_active IS 'Active';
+COMMENT ON COLUMN merchant_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN merchant_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN merchant_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN merchant_rule.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN merchant_rule.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_merchant_rule_tenant ON merchant_rule (tenant_id, created_at);
+CREATE INDEX ix_merchant_rule_merchant_id ON merchant_rule (merchant_id);
+CREATE INDEX ix_merchant_rule_spend_category_id ON merchant_rule (spend_category_id);
+ALTER TABLE merchant_rule ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON merchant_rule USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_merchant_rule_touch BEFORE UPDATE ON merchant_rule FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- category_override_rule: Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
 CREATE TABLE category_override_rule (
@@ -83,7 +138,9 @@ CREATE TABLE category_override_rule (
   match_amount_min             numeric(28,8),
   match_amount_max             numeric(28,8),
   spend_category_id            uuid NOT NULL REFERENCES spend_category(id),
+  priority                     integer NOT NULL DEFAULT 100,
   apply_to_past                boolean NOT NULL DEFAULT true,
+  applied_count                integer NOT NULL DEFAULT 0,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -100,12 +157,14 @@ COMMENT ON COLUMN category_override_rule.updated_at IS 'Last update time';
 COMMENT ON COLUMN category_override_rule.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN category_override_rule.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN category_override_rule.customer_id IS 'Customer';
-COMMENT ON COLUMN category_override_rule.match_merchant_name IS 'Merchant name to match';
-COMMENT ON COLUMN category_override_rule.match_description_pattern IS 'Regex on raw descriptor';
-COMMENT ON COLUMN category_override_rule.match_amount_min IS 'Minimum amount';
-COMMENT ON COLUMN category_override_rule.match_amount_max IS 'Maximum amount';
+COMMENT ON COLUMN category_override_rule.match_merchant_name IS 'Clean merchant name to match (case-insensitive)';
+COMMENT ON COLUMN category_override_rule.match_description_pattern IS 'Regex on the raw descriptor';
+COMMENT ON COLUMN category_override_rule.match_amount_min IS 'Minimum absolute amount';
+COMMENT ON COLUMN category_override_rule.match_amount_max IS 'Maximum absolute amount';
 COMMENT ON COLUMN category_override_rule.spend_category_id IS 'Category to apply';
-COMMENT ON COLUMN category_override_rule.apply_to_past IS 'Re-categorise historical transactions';
+COMMENT ON COLUMN category_override_rule.priority IS 'Lower matches first';
+COMMENT ON COLUMN category_override_rule.apply_to_past IS 'Re-categorise historical transactions on create';
+COMMENT ON COLUMN category_override_rule.applied_count IS 'Transactions re-categorised by the rule';
 COMMENT ON COLUMN category_override_rule.is_active IS 'Active';
 COMMENT ON COLUMN category_override_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN category_override_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -136,6 +195,7 @@ CREATE TABLE budget (
   currency                     char(3) NOT NULL,
   rollover                     boolean NOT NULL DEFAULT false,
   alert_threshold_pct          numeric(18,10) NOT NULL DEFAULT 0.8,
+  notify_customer              boolean NOT NULL DEFAULT true,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED', 'ARCHIVED')),
   starts_on                    date NOT NULL,
   custom_field_1               varchar(500),
@@ -154,13 +214,14 @@ COMMENT ON COLUMN budget.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN budget.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN budget.customer_id IS 'Customer';
 COMMENT ON COLUMN budget.name IS 'Budget name';
-COMMENT ON COLUMN budget.spend_category_id IS 'Category (empty = all spending)';
+COMMENT ON COLUMN budget.spend_category_id IS 'Category incl. its subcategories (empty = all spending)';
 COMMENT ON COLUMN budget.period_type IS 'Budget period';
 COMMENT ON COLUMN budget.amount IS 'Budget amount per period';
 COMMENT ON COLUMN budget.currency IS 'Currency';
 COMMENT ON COLUMN budget.rollover IS 'Carry unspent amount to next period';
 COMMENT ON COLUMN budget.alert_threshold_pct IS 'Alert when spend reaches this share';
-COMMENT ON COLUMN budget.status IS 'Status';
+COMMENT ON COLUMN budget.notify_customer IS 'Send threshold and exceeded alerts through notification-service';
+COMMENT ON COLUMN budget.status IS 'Status (changes through pause / resume / archive)';
 COMMENT ON COLUMN budget.starts_on IS 'First period start';
 COMMENT ON COLUMN budget.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN budget.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -187,6 +248,7 @@ CREATE TABLE budget_period (
   period_start                 date NOT NULL,
   period_end                   date NOT NULL,
   budget_amount                numeric(28,8) NOT NULL,
+  rollover_amount              numeric(28,8) NOT NULL DEFAULT 0,
   spent_amount                 numeric(28,8) NOT NULL DEFAULT 0,
   remaining_amount             numeric(28,8) NOT NULL DEFAULT 0,
   transaction_count            integer NOT NULL DEFAULT 0,
@@ -209,8 +271,9 @@ COMMENT ON COLUMN budget_period.updated_by IS 'Principal that last updated the r
 COMMENT ON COLUMN budget_period.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN budget_period.budget_id IS 'Budget';
 COMMENT ON COLUMN budget_period.period_start IS 'Period start';
-COMMENT ON COLUMN budget_period.period_end IS 'Period end';
+COMMENT ON COLUMN budget_period.period_end IS 'Period end (inclusive)';
 COMMENT ON COLUMN budget_period.budget_amount IS 'Budget incl. rollover';
+COMMENT ON COLUMN budget_period.rollover_amount IS 'Unspent amount carried from the previous period';
 COMMENT ON COLUMN budget_period.spent_amount IS 'Spent so far';
 COMMENT ON COLUMN budget_period.remaining_amount IS 'Remaining';
 COMMENT ON COLUMN budget_period.transaction_count IS 'Transactions counted';
@@ -227,7 +290,7 @@ ALTER TABLE budget_period ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON budget_period USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_budget_period_touch BEFORE UPDATE ON budget_period FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- recurring_payment: Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+-- recurring_payment: Detected subscription or recurring payment (streaming, utilities, rent, salary) with next expected charge
 CREATE TABLE recurring_payment (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -240,9 +303,12 @@ CREATE TABLE recurring_payment (
   merchant_clean_name          varchar(160) NOT NULL,
   merchant_id                  uuid,
   spend_category_id            uuid REFERENCES spend_category(id),
+  is_income                    boolean NOT NULL DEFAULT false,
   frequency                    varchar(40) NOT NULL CHECK (frequency IN ('WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY', 'IRREGULAR')),
   typical_amount               numeric(28,8) NOT NULL,
   last_amount                  numeric(28,8),
+  previous_amount              numeric(28,8),
+  price_changed_at             timestamptz,
   currency                     char(3) NOT NULL,
   first_seen_at                timestamptz NOT NULL,
   last_seen_at                 timestamptz NOT NULL,
@@ -250,6 +316,7 @@ CREATE TABLE recurring_payment (
   occurrences                  integer NOT NULL DEFAULT 0,
   status                       varchar(40) NOT NULL DEFAULT 'DETECTED' CHECK (status IN ('DETECTED', 'CONFIRMED', 'DISMISSED', 'CANCELLED_BY_CUSTOMER', 'INACTIVE')),
   card_id                      uuid,
+  card_control_id              uuid,
   detection_confidence         numeric(18,10),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -257,7 +324,7 @@ CREATE TABLE recurring_payment (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE recurring_payment IS 'Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge';
+COMMENT ON TABLE recurring_payment IS 'Detected subscription or recurring payment (streaming, utilities, rent, salary) with next expected charge';
 COMMENT ON COLUMN recurring_payment.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN recurring_payment.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN recurring_payment.created_at IS 'Creation time';
@@ -269,16 +336,20 @@ COMMENT ON COLUMN recurring_payment.customer_id IS 'Customer';
 COMMENT ON COLUMN recurring_payment.merchant_clean_name IS 'Merchant';
 COMMENT ON COLUMN recurring_payment.merchant_id IS 'Internal merchant when known';
 COMMENT ON COLUMN recurring_payment.spend_category_id IS 'Category';
+COMMENT ON COLUMN recurring_payment.is_income IS 'Recurring inflow (salary, benefits) rather than a payment';
 COMMENT ON COLUMN recurring_payment.frequency IS 'Detected frequency';
-COMMENT ON COLUMN recurring_payment.typical_amount IS 'Typical amount';
-COMMENT ON COLUMN recurring_payment.last_amount IS 'Most recent amount';
+COMMENT ON COLUMN recurring_payment.typical_amount IS 'Typical (median) absolute amount';
+COMMENT ON COLUMN recurring_payment.last_amount IS 'Most recent absolute amount';
+COMMENT ON COLUMN recurring_payment.previous_amount IS 'Amount before the last price change';
+COMMENT ON COLUMN recurring_payment.price_changed_at IS 'Last detected price change';
 COMMENT ON COLUMN recurring_payment.currency IS 'Currency';
 COMMENT ON COLUMN recurring_payment.first_seen_at IS 'First charge';
 COMMENT ON COLUMN recurring_payment.last_seen_at IS 'Latest charge';
 COMMENT ON COLUMN recurring_payment.next_expected_at IS 'Predicted next charge';
 COMMENT ON COLUMN recurring_payment.occurrences IS 'Charges matched';
-COMMENT ON COLUMN recurring_payment.status IS 'Status';
+COMMENT ON COLUMN recurring_payment.status IS 'Status (changes through confirm / dismiss / block-card-charges)';
 COMMENT ON COLUMN recurring_payment.card_id IS 'Card the subscription charges';
+COMMENT ON COLUMN recurring_payment.card_control_id IS 'Merchant block created on the card';
 COMMENT ON COLUMN recurring_payment.detection_confidence IS 'Confidence 0..1';
 COMMENT ON COLUMN recurring_payment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN recurring_payment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -290,6 +361,7 @@ CREATE INDEX ix_recurring_payment_customer_id ON recurring_payment (customer_id)
 CREATE INDEX ix_recurring_payment_merchant_id ON recurring_payment (merchant_id);
 CREATE INDEX ix_recurring_payment_spend_category_id ON recurring_payment (spend_category_id);
 CREATE INDEX ix_recurring_payment_card_id ON recurring_payment (card_id);
+CREATE INDEX ix_recurring_payment_card_control_id ON recurring_payment (card_control_id);
 ALTER TABLE recurring_payment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recurring_payment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recurring_payment_touch BEFORE UPDATE ON recurring_payment FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -313,11 +385,14 @@ CREATE TABLE financial_insight (
   action_deeplink              varchar(500),
   related_type                 varchar(40),
   related_id                   uuid,
+  dedupe_key                   varchar(128) NOT NULL,
   delivery_status              varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (delivery_status IN ('PENDING', 'DELIVERED', 'SEEN', 'DISMISSED', 'ACTED', 'EXPIRED')),
   notification_id              uuid,
   generated_at                 timestamptz NOT NULL DEFAULT now(),
+  delivered_at                 timestamptz,
   seen_at                      timestamptz,
   acted_at                     timestamptz,
+  dismissed_at                 timestamptz,
   expires_at                   timestamptz,
   model_version                varchar(32),
   feedback_useful              boolean,
@@ -325,7 +400,8 @@ CREATE TABLE financial_insight (
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
-  custom_field_5               varchar(500)
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_financial_insight_1 UNIQUE (tenant_id, customer_id, dedupe_key)
 );
 COMMENT ON TABLE financial_insight IS 'An insight card for a customer (spend spike, low-balance forecast, new subscription) and its delivery';
 COMMENT ON COLUMN financial_insight.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -343,13 +419,16 @@ COMMENT ON COLUMN financial_insight.body IS 'Card text';
 COMMENT ON COLUMN financial_insight.data IS 'Supporting figures (amounts, categories, dates)';
 COMMENT ON COLUMN financial_insight.action_label IS 'Call-to-action label';
 COMMENT ON COLUMN financial_insight.action_deeplink IS 'App deep link';
-COMMENT ON COLUMN financial_insight.related_type IS 'BUDGET, RECURRING_PAYMENT, ACCOUNT, CARD';
+COMMENT ON COLUMN financial_insight.related_type IS 'BUDGET, BUDGET_PERIOD, RECURRING_PAYMENT, ACCOUNT, CARD, SPEND_CATEGORY, FORECAST';
 COMMENT ON COLUMN financial_insight.related_id IS 'Related object';
-COMMENT ON COLUMN financial_insight.delivery_status IS 'Delivery status';
+COMMENT ON COLUMN financial_insight.dedupe_key IS 'Business key preventing the same insight twice';
+COMMENT ON COLUMN financial_insight.delivery_status IS 'Delivery status (changes through delivery and the card actions)';
 COMMENT ON COLUMN financial_insight.notification_id IS 'Push or in-app notification sent';
 COMMENT ON COLUMN financial_insight.generated_at IS 'Generation time';
+COMMENT ON COLUMN financial_insight.delivered_at IS 'Delivery time';
 COMMENT ON COLUMN financial_insight.seen_at IS 'Seen time';
 COMMENT ON COLUMN financial_insight.acted_at IS 'Action time';
+COMMENT ON COLUMN financial_insight.dismissed_at IS 'Dismissal time';
 COMMENT ON COLUMN financial_insight.expires_at IS 'Expiry';
 COMMENT ON COLUMN financial_insight.model_version IS 'Generating model / rule version';
 COMMENT ON COLUMN financial_insight.feedback_useful IS 'Customer feedback';
@@ -365,16 +444,17 @@ ALTER TABLE financial_insight ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON financial_insight USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_financial_insight_touch BEFORE UPDATE ON financial_insight FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- cash_flow_forecast: Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+-- cash_flow_forecast: Projected daily balance for a customer account over the next 7-90 days. Append-only snapshots.
 CREATE TABLE cash_flow_forecast (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
   customer_id                  uuid NOT NULL,
-  deposit_account_id           uuid,
+  deposit_account_id           uuid NOT NULL,
+  horizon_days                 integer NOT NULL DEFAULT 30,
+  low_balance_threshold        numeric(28,8),
   as_of                        timestamptz NOT NULL,
-  horizon_days                 integer NOT NULL,
   currency                     char(3) NOT NULL,
   starting_balance             numeric(28,8) NOT NULL,
   lowest_balance               numeric(28,8) NOT NULL,
@@ -382,6 +462,7 @@ CREATE TABLE cash_flow_forecast (
   projected_points             jsonb NOT NULL,
   expected_income              numeric(28,8),
   expected_bills               numeric(28,8),
+  expected_discretionary       numeric(28,8),
   model_version                varchar(32) NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -389,22 +470,24 @@ CREATE TABLE cash_flow_forecast (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE cash_flow_forecast IS 'Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.';
+COMMENT ON TABLE cash_flow_forecast IS 'Projected daily balance for a customer account over the next 7-90 days. Append-only snapshots.';
 COMMENT ON COLUMN cash_flow_forecast.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN cash_flow_forecast.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN cash_flow_forecast.created_at IS 'Creation time';
 COMMENT ON COLUMN cash_flow_forecast.created_by IS 'Principal that created the row';
 COMMENT ON COLUMN cash_flow_forecast.customer_id IS 'Customer';
 COMMENT ON COLUMN cash_flow_forecast.deposit_account_id IS 'Account forecast';
+COMMENT ON COLUMN cash_flow_forecast.horizon_days IS 'Horizon (7-90 days)';
+COMMENT ON COLUMN cash_flow_forecast.low_balance_threshold IS 'Alert when the projected balance falls below this (default: service configuration)';
 COMMENT ON COLUMN cash_flow_forecast.as_of IS 'Forecast generation time';
-COMMENT ON COLUMN cash_flow_forecast.horizon_days IS 'Horizon';
 COMMENT ON COLUMN cash_flow_forecast.currency IS 'Currency';
-COMMENT ON COLUMN cash_flow_forecast.starting_balance IS 'Balance at as_of';
+COMMENT ON COLUMN cash_flow_forecast.starting_balance IS 'Available balance at as_of';
 COMMENT ON COLUMN cash_flow_forecast.lowest_balance IS 'Lowest projected balance';
 COMMENT ON COLUMN cash_flow_forecast.lowest_balance_date IS 'Date of lowest balance';
-COMMENT ON COLUMN cash_flow_forecast.projected_points IS 'Daily projected balances with expected inflows/outflows';
+COMMENT ON COLUMN cash_flow_forecast.projected_points IS 'Daily projected balances ({date, balance, inflows, outflows, items})';
 COMMENT ON COLUMN cash_flow_forecast.expected_income IS 'Expected income in the horizon';
 COMMENT ON COLUMN cash_flow_forecast.expected_bills IS 'Expected recurring outflows';
+COMMENT ON COLUMN cash_flow_forecast.expected_discretionary IS 'Expected non-recurring net outflow (trailing average)';
 COMMENT ON COLUMN cash_flow_forecast.model_version IS 'Model version';
 COMMENT ON COLUMN cash_flow_forecast.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cash_flow_forecast.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -418,7 +501,55 @@ ALTER TABLE cash_flow_forecast ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON cash_flow_forecast USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_cash_flow_forecast_append_only BEFORE UPDATE OR DELETE ON cash_flow_forecast FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
--- transaction_enrichment: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+-- insights_job_run: One batch job execution per tenant, job and business date (makes the batch actions idempotent)
+CREATE TABLE insights_job_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('RECURRING_DETECTION', 'INSIGHT_GENERATION', 'BUDGET_ROLLOVER', 'INSIGHT_EXPIRY')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_insights_job_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE insights_job_run IS 'One batch job execution per tenant, job and business date (makes the batch actions idempotent)';
+COMMENT ON COLUMN insights_job_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN insights_job_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN insights_job_run.created_at IS 'Creation time';
+COMMENT ON COLUMN insights_job_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN insights_job_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN insights_job_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN insights_job_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN insights_job_run.job IS 'Job';
+COMMENT ON COLUMN insights_job_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN insights_job_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN insights_job_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN insights_job_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN insights_job_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN insights_job_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN insights_job_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN insights_job_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN insights_job_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN insights_job_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN insights_job_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_insights_job_run_tenant ON insights_job_run (tenant_id, created_at);
+ALTER TABLE insights_job_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON insights_job_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_insights_job_run_touch BEFORE UPDATE ON insights_job_run FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- transaction_enrichment: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only; a re-categorisation supersedes the previous row.
 CREATE TABLE transaction_enrichment (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -438,7 +569,10 @@ CREATE TABLE transaction_enrichment (
   merchant_website             varchar(255),
   mcc                          varchar(4),
   spend_category_id            uuid REFERENCES spend_category(id),
+  category_source              varchar(40) NOT NULL DEFAULT 'DEFAULT' CHECK (category_source IN ('CUSTOMER', 'OVERRIDE_RULE', 'MERCHANT_RULE', 'MCC', 'INCOME', 'DEFAULT')),
   category_confidence          numeric(18,10),
+  merchant_rule_id             uuid REFERENCES merchant_rule(id),
+  category_override_rule_id    uuid REFERENCES category_override_rule(id),
   is_recurring                 boolean NOT NULL DEFAULT false,
   recurring_payment_id         uuid REFERENCES recurring_payment(id),
   geo_city                     varchar(100),
@@ -454,7 +588,7 @@ CREATE TABLE transaction_enrichment (
   custom_field_4               varchar(500),
   custom_field_5               varchar(500)
 );
-COMMENT ON TABLE transaction_enrichment IS 'Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.';
+COMMENT ON TABLE transaction_enrichment IS 'Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only; a re-categorisation supersedes the previous row.';
 COMMENT ON COLUMN transaction_enrichment.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN transaction_enrichment.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN transaction_enrichment.created_at IS 'Creation time';
@@ -473,14 +607,17 @@ COMMENT ON COLUMN transaction_enrichment.merchant_logo_url IS 'Logo URL';
 COMMENT ON COLUMN transaction_enrichment.merchant_website IS 'Merchant website';
 COMMENT ON COLUMN transaction_enrichment.mcc IS 'Merchant category code';
 COMMENT ON COLUMN transaction_enrichment.spend_category_id IS 'Assigned category';
-COMMENT ON COLUMN transaction_enrichment.category_confidence IS 'Model confidence 0..1';
+COMMENT ON COLUMN transaction_enrichment.category_source IS 'Where the category came from';
+COMMENT ON COLUMN transaction_enrichment.category_confidence IS 'Confidence 0..1';
+COMMENT ON COLUMN transaction_enrichment.merchant_rule_id IS 'Merchant rule applied';
+COMMENT ON COLUMN transaction_enrichment.category_override_rule_id IS 'Customer override rule applied';
 COMMENT ON COLUMN transaction_enrichment.is_recurring IS 'Part of a recurring series';
 COMMENT ON COLUMN transaction_enrichment.recurring_payment_id IS 'Detected recurring series';
 COMMENT ON COLUMN transaction_enrichment.geo_city IS 'City';
 COMMENT ON COLUMN transaction_enrichment.geo_country IS 'Country';
 COMMENT ON COLUMN transaction_enrichment.geo_lat IS 'Latitude';
 COMMENT ON COLUMN transaction_enrichment.geo_lon IS 'Longitude';
-COMMENT ON COLUMN transaction_enrichment.enrichment_provider IS 'INTERNAL or external provider';
+COMMENT ON COLUMN transaction_enrichment.enrichment_provider IS 'INTERNAL, CUSTOMER or external provider';
 COMMENT ON COLUMN transaction_enrichment.model_version IS 'Categorisation model version';
 COMMENT ON COLUMN transaction_enrichment.supersedes_id IS 'Earlier enrichment this one replaces';
 COMMENT ON COLUMN transaction_enrichment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
@@ -494,9 +631,12 @@ CREATE INDEX ix_transaction_enrichment_source_id ON transaction_enrichment (sour
 CREATE INDEX ix_transaction_enrichment_account_ref ON transaction_enrichment (account_ref);
 CREATE INDEX ix_transaction_enrichment_merchant_id ON transaction_enrichment (merchant_id);
 CREATE INDEX ix_transaction_enrichment_spend_category_id ON transaction_enrichment (spend_category_id);
+CREATE INDEX ix_transaction_enrichment_merchant_rule_id ON transaction_enrichment (merchant_rule_id);
+CREATE INDEX ix_transaction_enrichment_category_override_rule_id ON transaction_enrichment (category_override_rule_id);
 CREATE INDEX ix_transaction_enrichment_recurring_payment_id ON transaction_enrichment (recurring_payment_id);
 CREATE INDEX ix_transaction_enrichment_supersedes_id ON transaction_enrichment (supersedes_id);
 CREATE INDEX ix_transaction_enrichment_c1 ON transaction_enrichment (customer_id, transaction_at);
+CREATE INDEX ix_transaction_enrichment_c2 ON transaction_enrichment (source_type, source_id);
 ALTER TABLE transaction_enrichment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON transaction_enrichment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_transaction_enrichment_append_only BEFORE UPDATE OR DELETE ON transaction_enrichment FOR EACH ROW EXECUTE FUNCTION forbid_mutation();

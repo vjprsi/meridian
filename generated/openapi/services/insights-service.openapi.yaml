@@ -19,8 +19,11 @@ security:
 tags:
 - name: Spend Categories
   description: Spending category taxonomy (group, category, subcategory) used for enrichment and budgets
+- name: Merchant Rules
+  description: Merchant clean-name rule - maps a raw card descriptor to a clean merchant name, logo and category
 - name: Transaction Enrichments
-  description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+  description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only;
+    a re-categorisation supersedes the previous row.
 - name: Category Override Rules
   description: Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
 - name: Budgets
@@ -28,13 +31,15 @@ tags:
 - name: Budget Periods
   description: Actuals for one period of a budget
 - name: Recurring Payments
-  description: Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+  description: Detected subscription or recurring payment (streaming, utilities, rent, salary) with next expected charge
 - name: Financial Insights
   description: An insight card for a customer (spend spike, low-balance forecast, new subscription) and its delivery
 - name: Cash Flow Forecasts
-  description: Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+  description: Projected daily balance for a customer account over the next 7-90 days. Append-only snapshots.
 - name: Spending Summaries
   description: Spending analytics computed from enrichments
+- name: Insights Job Runs
+  description: One batch job execution per tenant, job and business date (makes the batch actions idempotent)
 paths:
   /v1/insights/categories:
     get:
@@ -71,6 +76,11 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 64
       - name: custom_field_1
         in: query
         schema:
@@ -238,6 +248,268 @@ paths:
       x-table: spend_category
       x-crud: true
       x-crud-update: true
+  /v1/insights/merchant-rules:
+    get:
+      operationId: merchantRulesList
+      summary: List merchant rules
+      tags:
+      - Merchant Rules
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: match_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CONTAINS
+          - PREFIX
+          - REGEX
+      - name: spend_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRulePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: merchant_rule
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: merchantRulesCreate
+      summary: Create merchant rule
+      tags:
+      - Merchant Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantRuleCreate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: merchant_rule
+      x-crud: true
+      x-crud-create: true
+  /v1/insights/merchant-rules/{id}:
+    get:
+      operationId: merchantRulesGet
+      summary: Retrieve merchant rule
+      tags:
+      - Merchant Rules
+      security:
+      - oauth2:
+        - engagement:read
+      parameters: &id007
+      - &id006
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: merchant_rule
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: merchantRulesUpdate
+      summary: Update merchant rule
+      tags:
+      - Merchant Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - *id006
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantRule'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantRuleUpdate'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: merchant_rule
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: merchantRulesDelete
+      summary: Delete merchant rule
+      tags:
+      - Merchant Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters: *id007
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: merchant_rule
+      x-crud: true
+      x-crud-delete: true
+  /v1/insights/merchant-rules/test:
+    post:
+      operationId: merchantRulesTest
+      summary: Run the enrichment rules on a descriptor (no side effects)
+      tags:
+      - Merchant Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantRulesTestRequest'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: merchant_rule
   /v1/insights/enrichments:
     get:
       operationId: transactionEnrichmentsList
@@ -281,6 +553,11 @@ paths:
         in: query
         schema:
           type: boolean
+      - name: recurring_payment_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -365,7 +642,7 @@ paths:
   /v1/insights/enrichments/enrich:
     post:
       operationId: transactionEnrichmentsEnrich
-      summary: Enrich a transaction synchronously
+      summary: Enrich a transaction synchronously (idempotent per source transaction)
       tags:
       - Transaction Enrichments
       security:
@@ -401,6 +678,52 @@ paths:
       x-service: insights-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
+      x-table: transaction_enrichment
+  /v1/insights/enrichments/current:
+    get:
+      operationId: transactionEnrichmentsCurrent
+      summary: Current (not superseded) enrichment of a source transaction
+      tags:
+      - Transaction Enrichments
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: source_type
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - CARD_AUTHORIZATION
+          - CARD_CLEARING
+          - PAYMENT
+          - WALLET_TRANSACTION
+          - DEPOSIT_TRANSACTION
+      - name: source_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionEnrichment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
       x-table: transaction_enrichment
   /v1/insights/enrichments/{id}/recategorise:
     post:
@@ -568,8 +891,8 @@ paths:
       security:
       - oauth2:
         - engagement:read
-      parameters: &id007
-      - &id006
+      parameters: &id009
+      - &id008
         name: id
         in: path
         required: true
@@ -606,7 +929,7 @@ paths:
       - oauth2:
         - engagement:write
       parameters:
-      - *id006
+      - *id008
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -647,7 +970,7 @@ paths:
       security:
       - oauth2:
         - engagement:write
-      parameters: *id007
+      parameters: *id009
       responses:
         '204':
           description: No content
@@ -665,6 +988,48 @@ paths:
       x-table: category_override_rule
       x-crud: true
       x-crud-delete: true
+  /v1/insights/category-rules/{id}/apply:
+    post:
+      operationId: categoryOverrideRulesApply
+      summary: Re-categorise the customer's past transactions that match the rule
+      tags:
+      - Category Override Rules
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: category_override_rule
   /v1/insights/budgets:
     get:
       operationId: budgetsList
@@ -798,8 +1163,8 @@ paths:
       security:
       - oauth2:
         - engagement:read
-      parameters: &id009
-      - &id008
+      parameters: &id011
+      - &id010
         name: id
         in: path
         required: true
@@ -836,7 +1201,7 @@ paths:
       - oauth2:
         - engagement:write
       parameters:
-      - *id008
+      - *id010
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -877,7 +1242,7 @@ paths:
       security:
       - oauth2:
         - engagement:write
-      parameters: *id009
+      parameters: *id011
       responses:
         '204':
           description: No content
@@ -932,18 +1297,57 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
       x-required-scope: engagement:read
       x-table: budget
-  /v1/insights/budgets/suggest:
+  /v1/insights/budgets/{id}/current-period:
+    get:
+      operationId: budgetsCurrentPeriod
+      summary: The period containing today, opened and recomputed if needed
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetPeriod'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: budget
+  /v1/insights/budgets/{id}/pause:
     post:
-      operationId: budgetsSuggest
-      summary: Suggest budgets from past spending
+      operationId: budgetsPause
+      summary: Pause tracking and alerts
       tags:
       - Budgets
       security:
       - oauth2:
         - engagement:write
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
@@ -951,7 +1355,123 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BudgetPage'
+                $ref: '#/components/schemas/Budget'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: budget
+  /v1/insights/budgets/{id}/resume:
+    post:
+      operationId: budgetsResume
+      summary: Resume a paused budget
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: budget
+  /v1/insights/budgets/{id}/archive:
+    post:
+      operationId: budgetsArchive
+      summary: Archive the budget
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Budget'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: budget
+  /v1/insights/budgets/suggest:
+    post:
+      operationId: budgetsSuggest
+      summary: Suggest budgets from the customer's past spending
+      tags:
+      - Budgets
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1119,6 +1639,10 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: is_income
+        in: query
+        schema:
+          type: boolean
       - name: custom_field_1
         in: query
         schema:
@@ -1173,7 +1697,7 @@ paths:
       - oauth2:
         - engagement:read
       parameters:
-      - &id010
+      - &id012
         name: id
         in: path
         required: true
@@ -1210,7 +1734,7 @@ paths:
       - oauth2:
         - engagement:write
       parameters:
-      - *id010
+      - *id012
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -1326,7 +1850,7 @@ paths:
   /v1/insights/recurring-payments/{id}/block-card-charges:
     post:
       operationId: recurringPaymentsBlockCardCharges
-      summary: Block future charges from this merchant on the card
+      summary: Block future charges from this merchant on the card (card-service merchant control)
       tags:
       - Recurring Payments
       security:
@@ -1357,6 +1881,54 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringPaymentsBlockCardChargesRequest'
+      x-requirements:
+      - ENG-03
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: recurring_payment
+  /v1/insights/recurring-payments/detect:
+    post:
+      operationId: recurringPaymentsDetect
+      summary: Detect recurring payments in a customer's history now
+      tags:
+      - Recurring Payments
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringPaymentsDetectRequest'
       x-requirements:
       - ENG-03
       x-service: insights-service
@@ -1418,6 +1990,11 @@ paths:
           - DISMISSED
           - ACTED
           - EXPIRED
+      - name: related_id
+        in: query
+        schema:
+          type: string
+          format: uuid
       - name: custom_field_1
         in: query
         schema:
@@ -1583,6 +2160,47 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: financial_insight
+  /v1/insights/cards/{id}/acted:
+    post:
+      operationId: financialInsightsActed
+      summary: The customer followed the call to action
+      tags:
+      - Financial Insights
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialInsight'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - NOT-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: financial_insight
   /v1/insights/cards/{id}/feedback:
     post:
       operationId: financialInsightsFeedback
@@ -1633,15 +2251,13 @@ paths:
   /v1/insights/cards/generate:
     post:
       operationId: financialInsightsGenerate
-      summary: Generate insights for a customer now
+      summary: Generate insights for a customer now (spend spikes, subscriptions, low-balance forecast)
       tags:
       - Financial Insights
       security:
       - oauth2:
         - engagement:write
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
@@ -1649,7 +2265,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FinancialInsightPage'
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1820,16 +2438,46 @@ paths:
   /v1/insights/spending/by-category:
     get:
       operationId: spendingSummariesByCategory
-      summary: Spend per category for a customer and date range (?customer_id=&from=&to=)
+      summary: Spend and income per category for a customer and date range
       tags:
       - Spending Summaries
       security:
       - oauth2:
         - engagement:read
-      parameters: []
+      parameters:
+      - name: customer_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1845,16 +2493,52 @@ paths:
   /v1/insights/spending/by-merchant:
     get:
       operationId: spendingSummariesByMerchant
-      summary: Top merchants for a customer and date range
+      summary: Top merchants by spend for a customer and date range
       tags:
       - Spending Summaries
       security:
       - oauth2:
         - engagement:read
-      parameters: []
+      parameters:
+      - name: customer_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1870,16 +2554,40 @@ paths:
   /v1/insights/spending/trend:
     get:
       operationId: spendingSummariesTrend
-      summary: Monthly income vs spend trend
+      summary: Monthly income vs spend trend (default 6 months)
       tags:
       - Spending Summaries
       security:
       - oauth2:
         - engagement:read
-      parameters: []
+      parameters:
+      - name: customer_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: months
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1892,6 +2600,298 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
       x-required-scope: engagement:read
       x-table: budget_period
+  /v1/insights/job-runs:
+    get:
+      operationId: insightsJobRunsList
+      summary: List insights job runs
+      tags:
+      - Insights Job Runs
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - RECURRING_DETECTION
+          - INSIGHT_GENERATION
+          - BUDGET_ROLLOVER
+          - INSIGHT_EXPIRY
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightsJobRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-03
+      - OPS-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: insights_job_run
+      x-crud: true
+      x-crud-list: true
+  /v1/insights/job-runs/{id}:
+    get:
+      operationId: insightsJobRunsGet
+      summary: Retrieve insights job run
+      tags:
+      - Insights Job Runs
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightsJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-03
+      - OPS-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: insights_job_run
+      x-crud: true
+      x-crud-get: true
+  /v1/insights/job-runs/recurring-detection:
+    post:
+      operationId: insightsJobRunsRecurringDetection
+      summary: Batch - detect recurring payments for every customer with recent activity and retire stale series (idempotent
+        per business date)
+      tags:
+      - Insights Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - OPS-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: insights_job_run
+  /v1/insights/job-runs/insight-generation:
+    post:
+      operationId: insightsJobRunsInsightGeneration
+      summary: Batch - generate insights for every customer with recent activity (idempotent per business date)
+      tags:
+      - Insights Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - OPS-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: insights_job_run
+  /v1/insights/job-runs/budget-rollover:
+    post:
+      operationId: insightsJobRunsBudgetRollover
+      summary: End of day - open the next budget periods, carrying rollover amounts (idempotent per business date)
+      tags:
+      - Insights Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - OPS-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: insights_job_run
+  /v1/insights/job-runs/insight-expiry:
+    post:
+      operationId: insightsJobRunsInsightExpiry
+      summary: End of day - expire insight cards past their expiry (idempotent per business date)
+      tags:
+      - Insights Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-03
+      - OPS-01
+      x-service: insights-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: insights_job_run
 components:
   schemas:
     Problem:
@@ -1948,6 +2948,40 @@ components:
       required:
       - data
       - has_more
+    MerchantRulePage:
+      type: object
+      description: One page of MerchantRule results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantRule'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MerchantRulesTestRequest:
+      type: object
+      properties:
+        raw_description:
+          type: string
+          maxLength: 500
+        mcc:
+          type: string
+          maxLength: 4
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - raw_description
     TransactionEnrichmentPage:
       type: object
       description: One page of TransactionEnrichment results (newest first)
@@ -1969,6 +3003,9 @@ components:
     TransactionEnrichmentsEnrichRequest:
       type: object
       properties:
+        customer_id:
+          type: string
+          format: uuid
         source_type:
           type: string
           enum:
@@ -1980,9 +3017,12 @@ components:
         source_id:
           type: string
           format: uuid
-        raw_description:
+        account_ref:
           type: string
-          maxLength: 500
+          format: uuid
+        transaction_at:
+          type: string
+          format: date-time
         amount:
           type: string
           format: decimal
@@ -1992,10 +3032,24 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: ISO 4217
+        raw_description:
+          type: string
+          maxLength: 500
         mcc:
           type: string
           maxLength: 4
+        merchant_id:
+          type: string
+          format: uuid
+        geo_city:
+          type: string
+          maxLength: 100
+        geo_country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: ISO 3166-1 alpha-2
       required:
+      - customer_id
       - source_type
       - source_id
       - amount
@@ -2070,6 +3124,9 @@ components:
         customer_id:
           type: string
           format: uuid
+        months:
+          type: integer
+          format: int32
       required:
       - customer_id
     RecurringPaymentPage:
@@ -2090,6 +3147,26 @@ components:
       required:
       - data
       - has_more
+    RecurringPaymentsBlockCardChargesRequest:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+        merchant_ref:
+          type: string
+          maxLength: 64
+    RecurringPaymentsDetectRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        lookback_days:
+          type: integer
+          format: int32
+      required:
+      - customer_id
     FinancialInsightPage:
       type: object
       description: One page of FinancialInsight results (newest first)
@@ -2121,6 +3198,9 @@ components:
         customer_id:
           type: string
           format: uuid
+        deposit_account_id:
+          type: string
+          format: uuid
       required:
       - customer_id
     CashFlowForecastPage:
@@ -2131,6 +3211,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CashFlowForecast'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    InsightsJobRunPage:
+      type: object
+      description: One page of InsightsJobRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightsJobRun'
         next_cursor:
           type:
           - string
@@ -2192,7 +3290,7 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Category (empty = all spending)
+          description: Category incl. its subcategories (empty = all spending)
         period_type:
           type: string
           enum:
@@ -2220,13 +3318,17 @@ components:
           examples:
           - '125.50'
           description: Alert when spend reaches this share
+        notify_customer:
+          type: boolean
+          description: Send threshold and exceeded alerts through notification-service
         status:
           type: string
           enum:
           - ACTIVE
           - PAUSED
           - ARCHIVED
-          description: Status
+          description: Status (changes through pause / resume / archive)
+          readOnly: true
         starts_on:
           type: string
           format: date
@@ -2273,6 +3375,7 @@ components:
       - currency
       - rollover
       - alert_threshold_pct
+      - notify_customer
       - status
       - starts_on
     BudgetCreate:
@@ -2289,7 +3392,7 @@ components:
         spend_category_id:
           type: string
           format: uuid
-          description: Category (empty = all spending)
+          description: Category incl. its subcategories (empty = all spending)
         period_type:
           type: string
           enum:
@@ -2317,13 +3420,9 @@ components:
           examples:
           - '125.50'
           description: Alert when spend reaches this share
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - PAUSED
-          - ARCHIVED
-          description: Status
+        notify_customer:
+          type: boolean
+          description: Send threshold and exceeded alerts through notification-service
         starts_on:
           type: string
           format: date
@@ -2368,7 +3467,7 @@ components:
         spend_category_id:
           type: string
           format: uuid
-          description: Category (empty = all spending)
+          description: Category incl. its subcategories (empty = all spending)
         period_type:
           type: string
           enum:
@@ -2396,13 +3495,9 @@ components:
           examples:
           - '125.50'
           description: Alert when spend reaches this share
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - PAUSED
-          - ARCHIVED
-          description: Status
+        notify_customer:
+          type: boolean
+          description: Send threshold and exceeded alerts through notification-service
         starts_on:
           type: string
           format: date
@@ -2476,13 +3571,20 @@ components:
         period_end:
           type: string
           format: date
-          description: Period end
+          description: Period end (inclusive)
         budget_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Budget incl. rollover
+        rollover_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Unspent amount carried from the previous period
+          readOnly: true
         spent_amount:
           type: string
           format: decimal
@@ -2555,12 +3657,13 @@ components:
       - period_start
       - period_end
       - budget_amount
+      - rollover_amount
       - spent_amount
       - remaining_amount
       - transaction_count
     CashFlowForecast:
       type: object
-      description: Projected daily balance for a customer account over the next 30-90 days. Append-only snapshots.
+      description: Projected daily balance for a customer account over the next 7-90 days. Append-only snapshots.
       properties:
         id:
           type: string
@@ -2584,45 +3687,57 @@ components:
           format: uuid
           description: Customer
         deposit_account_id:
+          type: string
+          format: uuid
+          description: Account forecast
+        horizon_days:
+          type: integer
+          format: int32
+          description: Horizon (7-90 days)
+        low_balance_threshold:
           type:
           - string
           - 'null'
-          format: uuid
-          description: Account forecast
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'Alert when the projected balance falls below this (default: service configuration)'
         as_of:
           type: string
           format: date-time
           description: Forecast generation time
-        horizon_days:
-          type: integer
-          format: int32
-          description: Horizon
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+          readOnly: true
         starting_balance:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Balance at as_of
+          description: Available balance at as_of
+          readOnly: true
         lowest_balance:
           type: string
           format: decimal
           examples:
           - '125.50'
           description: Lowest projected balance
+          readOnly: true
         lowest_balance_date:
           type:
           - string
           - 'null'
           format: date
           description: Date of lowest balance
+          readOnly: true
         projected_points:
-          type: object
-          additionalProperties: true
-          description: Daily projected balances with expected inflows/outflows
+          type: array
+          items: {}
+          description: Daily projected balances ({date, balance, inflows, outflows, items})
+          readOnly: true
         expected_income:
           type:
           - string
@@ -2631,6 +3746,7 @@ components:
           examples:
           - '125.50'
           description: Expected income in the horizon
+          readOnly: true
         expected_bills:
           type:
           - string
@@ -2639,10 +3755,21 @@ components:
           examples:
           - '125.50'
           description: Expected recurring outflows
+          readOnly: true
+        expected_discretionary:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Expected non-recurring net outflow (trailing average)
+          readOnly: true
         model_version:
           type: string
           maxLength: 32
           description: Model version
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2677,8 +3804,9 @@ components:
       - id
       - created_at
       - customer_id
-      - as_of
+      - deposit_account_id
       - horizon_days
+      - as_of
       - currency
       - starting_balance
       - lowest_balance
@@ -2695,54 +3823,16 @@ components:
           type: string
           format: uuid
           description: Account forecast
-        as_of:
-          type: string
-          format: date-time
-          description: Forecast generation time
         horizon_days:
           type: integer
           format: int32
-          description: Horizon
-        currency:
-          type: string
-          pattern: ^[A-Z]{3}$
-          description: Currency (ISO 4217)
-        starting_balance:
+          description: Horizon (7-90 days)
+        low_balance_threshold:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Balance at as_of
-        lowest_balance:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Lowest projected balance
-        lowest_balance_date:
-          type: string
-          format: date
-          description: Date of lowest balance
-        projected_points:
-          type: object
-          additionalProperties: true
-          description: Daily projected balances with expected inflows/outflows
-        expected_income:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Expected income in the horizon
-        expected_bills:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Expected recurring outflows
-        model_version:
-          type: string
-          maxLength: 32
-          description: Model version
+          description: 'Alert when the projected balance falls below this (default: service configuration)'
         custom_field_1:
           type: string
           maxLength: 500
@@ -2765,13 +3855,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
       required:
       - customer_id
-      - as_of
-      - horizon_days
-      - currency
-      - starting_balance
-      - lowest_balance
-      - projected_points
-      - model_version
+      - deposit_account_id
     CategoryOverrideRule:
       type: object
       description: Customer-defined rule to recategorise matching transactions (e.g. always tag merchant X as Business)
@@ -2819,13 +3903,13 @@ components:
           - string
           - 'null'
           maxLength: 160
-          description: Merchant name to match
+          description: Clean merchant name to match (case-insensitive)
         match_description_pattern:
           type:
           - string
           - 'null'
           maxLength: 255
-          description: Regex on raw descriptor
+          description: Regex on the raw descriptor
         match_amount_min:
           type:
           - string
@@ -2833,7 +3917,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Minimum amount
+          description: Minimum absolute amount
         match_amount_max:
           type:
           - string
@@ -2841,14 +3925,23 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Maximum amount
+          description: Maximum absolute amount
         spend_category_id:
           type: string
           format: uuid
           description: Category to apply
+        priority:
+          type: integer
+          format: int32
+          description: Lower matches first
         apply_to_past:
           type: boolean
-          description: Re-categorise historical transactions
+          description: Re-categorise historical transactions on create
+        applied_count:
+          type: integer
+          format: int32
+          description: Transactions re-categorised by the rule
+          readOnly: true
         is_active:
           type: boolean
           description: Active
@@ -2889,7 +3982,9 @@ components:
       - row_version
       - customer_id
       - spend_category_id
+      - priority
       - apply_to_past
+      - applied_count
       - is_active
     CategoryOverrideRuleCreate:
       type: object
@@ -2901,30 +3996,34 @@ components:
         match_merchant_name:
           type: string
           maxLength: 160
-          description: Merchant name to match
+          description: Clean merchant name to match (case-insensitive)
         match_description_pattern:
           type: string
           maxLength: 255
-          description: Regex on raw descriptor
+          description: Regex on the raw descriptor
         match_amount_min:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Minimum amount
+          description: Minimum absolute amount
         match_amount_max:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Maximum amount
+          description: Maximum absolute amount
         spend_category_id:
           type: string
           format: uuid
           description: Category to apply
+        priority:
+          type: integer
+          format: int32
+          description: Lower matches first
         apply_to_past:
           type: boolean
-          description: Re-categorise historical transactions
+          description: Re-categorise historical transactions on create
         is_active:
           type: boolean
           description: Active
@@ -2961,30 +4060,34 @@ components:
         match_merchant_name:
           type: string
           maxLength: 160
-          description: Merchant name to match
+          description: Clean merchant name to match (case-insensitive)
         match_description_pattern:
           type: string
           maxLength: 255
-          description: Regex on raw descriptor
+          description: Regex on the raw descriptor
         match_amount_min:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Minimum amount
+          description: Minimum absolute amount
         match_amount_max:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Maximum amount
+          description: Maximum absolute amount
         spend_category_id:
           type: string
           format: uuid
           description: Category to apply
+        priority:
+          type: integer
+          format: int32
+          description: Lower matches first
         apply_to_past:
           type: boolean
-          description: Re-categorise historical transactions
+          description: Re-categorise historical transactions on create
         is_active:
           type: boolean
           description: Active
@@ -3104,13 +4207,18 @@ components:
           - string
           - 'null'
           maxLength: 40
-          description: BUDGET, RECURRING_PAYMENT, ACCOUNT, CARD
+          description: BUDGET, BUDGET_PERIOD, RECURRING_PAYMENT, ACCOUNT, CARD, SPEND_CATEGORY, FORECAST
         related_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Related object
+        dedupe_key:
+          type: string
+          maxLength: 128
+          description: Business key preventing the same insight twice
+          readOnly: true
         delivery_status:
           type: string
           enum:
@@ -3120,29 +4228,48 @@ components:
           - DISMISSED
           - ACTED
           - EXPIRED
-          description: Delivery status
+          description: Delivery status (changes through delivery and the card actions)
+          readOnly: true
         notification_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Push or in-app notification sent
+          readOnly: true
         generated_at:
           type: string
           format: date-time
           description: Generation time
+          readOnly: true
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Delivery time
+          readOnly: true
         seen_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Seen time
+          readOnly: true
         acted_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Action time
+          readOnly: true
+        dismissed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Dismissal time
+          readOnly: true
         expires_at:
           type:
           - string
@@ -3155,11 +4282,13 @@ components:
           - 'null'
           maxLength: 32
           description: Generating model / rule version
+          readOnly: true
         feedback_useful:
           type:
           - boolean
           - 'null'
           description: Customer feedback
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3200,11 +4329,397 @@ components:
       - severity
       - title
       - body
+      - dedupe_key
       - delivery_status
       - generated_at
+    InsightsJobRun:
+      type: object
+      description: One batch job execution per tenant, job and business date (makes the batch actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - RECURRING_DETECTION
+          - INSIGHT_GENERATION
+          - BUDGET_ROLLOVER
+          - INSIGHT_EXPIRY
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
+    MerchantRule:
+      type: object
+      description: Merchant clean-name rule - maps a raw card descriptor to a clean merchant name, logo and category
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        match_type:
+          type: string
+          enum:
+          - CONTAINS
+          - PREFIX
+          - REGEX
+          description: How pattern is matched against the raw descriptor (case-insensitive)
+        pattern:
+          type: string
+          maxLength: 255
+          description: Text or regular expression matched against the raw descriptor
+        clean_name:
+          type: string
+          maxLength: 160
+          description: Clean merchant name
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Internal merchant
+        logo_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Logo URL
+        website:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Merchant website
+        mcc:
+          type:
+          - string
+          - 'null'
+          maxLength: 4
+          description: MCC to assume when the transaction has none
+        spend_category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Category to assign (empty = derive from MCC)
+        priority:
+          type: integer
+          format: int32
+          description: Lower matches first
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - match_type
+      - pattern
+      - clean_name
+      - priority
+      - is_active
+    MerchantRuleCreate:
+      type: object
+      properties:
+        match_type:
+          type: string
+          enum:
+          - CONTAINS
+          - PREFIX
+          - REGEX
+          description: How pattern is matched against the raw descriptor (case-insensitive)
+        pattern:
+          type: string
+          maxLength: 255
+          description: Text or regular expression matched against the raw descriptor
+        clean_name:
+          type: string
+          maxLength: 160
+          description: Clean merchant name
+        merchant_id:
+          type: string
+          format: uuid
+          description: Internal merchant
+        logo_url:
+          type: string
+          maxLength: 500
+          description: Logo URL
+        website:
+          type: string
+          maxLength: 255
+          description: Merchant website
+        mcc:
+          type: string
+          maxLength: 4
+          description: MCC to assume when the transaction has none
+        spend_category_id:
+          type: string
+          format: uuid
+          description: Category to assign (empty = derive from MCC)
+        priority:
+          type: integer
+          format: int32
+          description: Lower matches first
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - pattern
+      - clean_name
+    MerchantRuleUpdate:
+      type: object
+      properties:
+        match_type:
+          type: string
+          enum:
+          - CONTAINS
+          - PREFIX
+          - REGEX
+          description: How pattern is matched against the raw descriptor (case-insensitive)
+        pattern:
+          type: string
+          maxLength: 255
+          description: Text or regular expression matched against the raw descriptor
+        clean_name:
+          type: string
+          maxLength: 160
+          description: Clean merchant name
+        merchant_id:
+          type: string
+          format: uuid
+          description: Internal merchant
+        logo_url:
+          type: string
+          maxLength: 500
+          description: Logo URL
+        website:
+          type: string
+          maxLength: 255
+          description: Merchant website
+        mcc:
+          type: string
+          maxLength: 4
+          description: MCC to assume when the transaction has none
+        spend_category_id:
+          type: string
+          format: uuid
+          description: Category to assign (empty = derive from MCC)
+        priority:
+          type: integer
+          format: int32
+          description: Lower matches first
+        is_active:
+          type: boolean
+          description: Active
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     RecurringPayment:
       type: object
-      description: Detected subscription or recurring payment (streaming, utilities, rent) with next expected charge
+      description: Detected subscription or recurring payment (streaming, utilities, rent, salary) with next expected charge
       properties:
         id:
           type: string
@@ -3260,6 +4775,10 @@ components:
           - 'null'
           format: uuid
           description: Category
+        is_income:
+          type: boolean
+          description: Recurring inflow (salary, benefits) rather than a payment
+          readOnly: true
         frequency:
           type: string
           enum:
@@ -3270,12 +4789,14 @@ components:
           - YEARLY
           - IRREGULAR
           description: Detected frequency
+          readOnly: true
         typical_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Typical amount
+          description: Typical (median) absolute amount
+          readOnly: true
         last_amount:
           type:
           - string
@@ -3283,29 +4804,51 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Most recent amount
+          description: Most recent absolute amount
+          readOnly: true
+        previous_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount before the last price change
+          readOnly: true
+        price_changed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last detected price change
+          readOnly: true
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+          readOnly: true
         first_seen_at:
           type: string
           format: date-time
           description: First charge
+          readOnly: true
         last_seen_at:
           type: string
           format: date-time
           description: Latest charge
+          readOnly: true
         next_expected_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Predicted next charge
+          readOnly: true
         occurrences:
           type: integer
           format: int32
           description: Charges matched
+          readOnly: true
         status:
           type: string
           enum:
@@ -3314,13 +4857,21 @@ components:
           - DISMISSED
           - CANCELLED_BY_CUSTOMER
           - INACTIVE
-          description: Status
+          description: Status (changes through confirm / dismiss / block-card-charges)
+          readOnly: true
         card_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Card the subscription charges
+        card_control_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant block created on the card
+          readOnly: true
         detection_confidence:
           type:
           - string
@@ -3329,6 +4880,7 @@ components:
           examples:
           - '125.50'
           description: Confidence 0..1
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -3366,6 +4918,7 @@ components:
       - row_version
       - customer_id
       - merchant_clean_name
+      - is_income
       - frequency
       - typical_amount
       - currency
@@ -3392,67 +4945,10 @@ components:
           type: string
           format: uuid
           description: Category
-        frequency:
-          type: string
-          enum:
-          - WEEKLY
-          - BIWEEKLY
-          - MONTHLY
-          - QUARTERLY
-          - YEARLY
-          - IRREGULAR
-          description: Detected frequency
-        typical_amount:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Typical amount
-        last_amount:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Most recent amount
-        currency:
-          type: string
-          pattern: ^[A-Z]{3}$
-          description: Currency (ISO 4217)
-        first_seen_at:
-          type: string
-          format: date-time
-          description: First charge
-        last_seen_at:
-          type: string
-          format: date-time
-          description: Latest charge
-        next_expected_at:
-          type: string
-          format: date-time
-          description: Predicted next charge
-        occurrences:
-          type: integer
-          format: int32
-          description: Charges matched
-        status:
-          type: string
-          enum:
-          - DETECTED
-          - CONFIRMED
-          - DISMISSED
-          - CANCELLED_BY_CUSTOMER
-          - INACTIVE
-          description: Status
         card_id:
           type: string
           format: uuid
           description: Card the subscription charges
-        detection_confidence:
-          type: string
-          format: decimal
-          examples:
-          - '125.50'
-          description: Confidence 0..1
         custom_field_1:
           type: string
           maxLength: 500
@@ -3546,16 +5042,18 @@ components:
           description: Display colour
         mcc_codes:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
-          description: MCC codes mapped by default
+          items:
+            type: string
+            maxLength: 255
+          description: MCC codes mapped to this category by default
         translations:
           type:
           - object
           - 'null'
           additionalProperties: true
-          description: Names per language
+          description: 'Names per language ({"fr": "Courses"})'
         is_income:
           type: boolean
           description: Income category (salary, refunds)
@@ -3633,13 +5131,15 @@ components:
           maxLength: 16
           description: Display colour
         mcc_codes:
-          type: object
-          additionalProperties: true
-          description: MCC codes mapped by default
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          description: MCC codes mapped to this category by default
         translations:
           type: object
           additionalProperties: true
-          description: Names per language
+          description: 'Names per language ({"fr": "Courses"})'
         is_income:
           type: boolean
           description: Income category (salary, refunds)
@@ -3701,13 +5201,15 @@ components:
           maxLength: 16
           description: Display colour
         mcc_codes:
-          type: object
-          additionalProperties: true
-          description: MCC codes mapped by default
+          type: array
+          items:
+            type: string
+            maxLength: 255
+          description: MCC codes mapped to this category by default
         translations:
           type: object
           additionalProperties: true
-          description: Names per language
+          description: 'Names per language ({"fr": "Courses"})'
         is_income:
           type: boolean
           description: Income category (salary, refunds)
@@ -3736,7 +5238,8 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     TransactionEnrichment:
       type: object
-      description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only.
+      description: Enrichment result for one customer transaction (clean merchant, logo, category, geo, recurring). Append-only;
+        a re-categorisation supersedes the previous row.
       properties:
         id:
           type: string
@@ -3834,6 +5337,16 @@ components:
           - 'null'
           format: uuid
           description: Assigned category
+        category_source:
+          type: string
+          enum:
+          - CUSTOMER
+          - OVERRIDE_RULE
+          - MERCHANT_RULE
+          - MCC
+          - INCOME
+          - DEFAULT
+          description: Where the category came from
         category_confidence:
           type:
           - string
@@ -3841,7 +5354,19 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Model confidence 0..1
+          description: Confidence 0..1
+        merchant_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant rule applied
+        category_override_rule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer override rule applied
         is_recurring:
           type: boolean
           description: Part of a recurring series
@@ -3884,7 +5409,7 @@ components:
           - string
           - 'null'
           maxLength: 40
-          description: INTERNAL or external provider
+          description: INTERNAL, CUSTOMER or external provider
         model_version:
           type:
           - string
@@ -3936,6 +5461,7 @@ components:
       - transaction_at
       - amount
       - currency
+      - category_source
       - is_recurring
   parameters:
     IdempotencyKey:

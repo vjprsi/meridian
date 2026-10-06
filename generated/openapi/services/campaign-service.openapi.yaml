@@ -26,11 +26,13 @@ tags:
 - name: Offer Assignments
   description: An offer assigned to a specific customer, tracked from shown to accepted or expired
 - name: Marketing Consent Snapshots
-  description: Immutable record of the customer's marketing consent at the time a campaign targeted them
+  description: Immutable record of the customer's marketing consent at the time a campaign or offer targeted them
 - name: Campaign Audience
-  description: Customer selected into a campaign run with variant or control-group allocation
+  description: Customer selected into a campaign with variant or control-group allocation and engagement tracking
 - name: Campaign Metrics
-  description: Daily performance metrics per campaign and variant. Append-only.
+  description: Daily performance metrics per campaign and variant (counts for the day; rates and uplift cumulative). Append-only.
+- name: Campaign Job Runs
+  description: One batch job execution per tenant, job and business date (makes the batch actions idempotent)
 paths:
   /v1/campaigns:
     get:
@@ -273,7 +275,7 @@ paths:
   /v1/campaigns/{id}/approve:
     post:
       operationId: campaignsApprove
-      summary: Approve (checker)
+      summary: Approve (checker, different from the submitter); the campaign becomes SCHEDULED
       tags:
       - Campaigns
       security:
@@ -316,10 +318,56 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: campaign
+  /v1/campaigns/{id}/reject:
+    post:
+      operationId: campaignsReject
+      summary: Return to draft (checker)
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignsRejectRequest'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign
   /v1/campaigns/{id}/schedule:
     post:
       operationId: campaignsSchedule
-      summary: Schedule the campaign
+      summary: Change the schedule
       tags:
       - Campaigns
       security:
@@ -356,6 +404,185 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CampaignsScheduleRequest'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign
+  /v1/campaigns/{id}/build-audience:
+    post:
+      operationId: campaignsBuildAudience
+      summary: 'Select the audience from candidate customers: segment membership and exclusions (customer-service), marketing
+        consent snapshot, frequency cap, deterministic A/B / control allocation'
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignsBuildAudienceRequest'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign
+  /v1/campaigns/{id}/preview-audience:
+    post:
+      operationId: campaignsPreviewAudience
+      summary: Count and sample the audience after consent and exclusions (no side effects)
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignsPreviewAudienceRequest'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign
+  /v1/campaigns/{id}/launch:
+    post:
+      operationId: campaignsLaunch
+      summary: Start sending now
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign
+  /v1/campaigns/{id}/dispatch:
+    post:
+      operationId: campaignsDispatch
+      summary: Send pending messages of a running campaign (within budget and send window)
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - ENG-04
       x-service: campaign-service
@@ -448,6 +675,46 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: campaign
+  /v1/campaigns/{id}/complete:
+    post:
+      operationId: campaignsComplete
+      summary: Complete the campaign
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign
   /v1/campaigns/{id}/cancel:
     post:
       operationId: campaignsCancel
@@ -488,42 +755,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CampaignsCancelRequest'
-      x-requirements:
-      - ENG-04
-      x-service: campaign-service
-      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
-      x-required-scope: engagement:write
-      x-table: campaign
-  /v1/campaigns/{id}/preview-audience:
-    post:
-      operationId: campaignsPreviewAudience
-      summary: Count and sample the audience after consent and exclusions
-      tags:
-      - Campaigns
-      security:
-      - oauth2:
-        - engagement:write
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '204':
-          description: No content
-        '400': *id001
-        '401': *id002
-        '403': *id003
-        '429': *id004
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unprocessable'
       x-requirements:
       - ENG-04
       x-service: campaign-service
@@ -641,7 +872,44 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
       x-required-scope: engagement:read
       x-table: campaign
-  /v1/campaigns/variants:
+  /v1/campaigns/{id}/performance:
+    get:
+      operationId: campaignsPerformance
+      summary: Cumulative performance per variant and control group with uplift
+      tags:
+      - Campaigns
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: campaign
+  /v1/campaign-variants:
     get:
       operationId: campaignVariantsList
       summary: List campaign variants
@@ -756,7 +1024,7 @@ paths:
       x-table: campaign_variant
       x-crud: true
       x-crud-create: true
-  /v1/campaigns/variants/{id}:
+  /v1/campaign-variants/{id}:
     get:
       operationId: campaignVariantsGet
       summary: Retrieve campaign variant
@@ -862,7 +1130,7 @@ paths:
       x-table: campaign_variant
       x-crud: true
       x-crud-delete: true
-  /v1/campaigns/variants/{id}/test-send:
+  /v1/campaign-variants/{id}/test-send:
     post:
       operationId: campaignVariantsTestSend
       summary: Send the variant to a test recipient
@@ -880,8 +1148,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1112,7 +1386,7 @@ paths:
   /v1/offers/{id}/activate:
     post:
       operationId: campaignOffersActivate
-      summary: Activate the offer
+      summary: Activate or resume the offer
       tags:
       - Campaign Offers
       security:
@@ -1143,6 +1417,52 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_offer
+  /v1/offers/{id}/pause:
+    post:
+      operationId: campaignOffersPause
+      summary: Stop new assignments
+      tags:
+      - Campaign Offers
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignOffer'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignOffersPauseRequest'
       x-requirements:
       - ENG-04
       x-service: campaign-service
@@ -1198,7 +1518,7 @@ paths:
   /v1/offers/{id}/assign:
     post:
       operationId: campaignOffersAssign
-      summary: Assign to customers (explicit list or segment)
+      summary: Assign to customers after eligibility and marketing consent checks
       tags:
       - Campaign Offers
       security:
@@ -1213,8 +1533,14 @@ paths:
           format: uuid
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
-        '204':
-          description: No content
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
         '400': *id001
         '401': *id002
         '403': *id003
@@ -1237,7 +1563,7 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: campaign_offer
-  /v1/offers/assignments:
+  /v1/offer-assignments:
     get:
       operationId: offerAssignmentsList
       summary: List offer assignments
@@ -1322,7 +1648,7 @@ paths:
       x-table: offer_assignment
       x-crud: true
       x-crud-list: true
-  /v1/offers/assignments/{id}:
+  /v1/offer-assignments/{id}:
     get:
       operationId: offerAssignmentsGet
       summary: Retrieve offer assignment
@@ -1359,7 +1685,7 @@ paths:
       x-table: offer_assignment
       x-crud: true
       x-crud-get: true
-  /v1/offers/assignments/{id}/shown:
+  /v1/offer-assignments/{id}/shown:
     post:
       operationId: offerAssignmentsShown
       summary: Record that the offer was shown
@@ -1399,7 +1725,7 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: offer_assignment
-  /v1/offers/assignments/{id}/clicked:
+  /v1/offer-assignments/{id}/clicked:
     post:
       operationId: offerAssignmentsClicked
       summary: Record a click
@@ -1439,7 +1765,7 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: offer_assignment
-  /v1/offers/assignments/{id}/accept:
+  /v1/offer-assignments/{id}/accept:
     post:
       operationId: offerAssignmentsAccept
       summary: Customer accepts; starts the product flow
@@ -1473,13 +1799,19 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OfferAssignmentsAcceptRequest'
       x-requirements:
       - ENG-04
       x-service: campaign-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: offer_assignment
-  /v1/offers/assignments/{id}/decline:
+  /v1/offer-assignments/{id}/decline:
     post:
       operationId: offerAssignmentsDecline
       summary: Customer declines
@@ -1525,16 +1857,22 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: offer_assignment
-  /v1/offers/assignments/for-customer:
+  /v1/offer-assignments/for-customer:
     get:
       operationId: offerAssignmentsForCustomer
-      summary: Active offers for a customer (?customer_id=)
+      summary: Open offers for a customer
       tags:
       - Offer Assignments
       security:
       - oauth2:
         - engagement:read
       parameters:
+      - name: customer_id
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
       - $ref: '#/components/parameters/Limit'
       - $ref: '#/components/parameters/Cursor'
       responses:
@@ -1556,7 +1894,7 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
       x-required-scope: engagement:read
       x-table: offer_assignment
-  /v1/campaigns/consent-snapshots:
+  /v1/campaign-consent-snapshots:
     get:
       operationId: marketingConsentSnapshotsList
       summary: List marketing consent snapshots
@@ -1576,6 +1914,11 @@ paths:
           type: string
           format: uuid
       - name: campaign_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: campaign_offer_id
         in: query
         schema:
           type: string
@@ -1642,7 +1985,7 @@ paths:
       x-table: marketing_consent_snapshot
       x-crud: true
       x-crud-list: true
-  /v1/campaigns/consent-snapshots/{id}:
+  /v1/campaign-consent-snapshots/{id}:
     get:
       operationId: marketingConsentSnapshotsGet
       summary: Retrieve marketing consent snapshot
@@ -1680,7 +2023,7 @@ paths:
       x-table: marketing_consent_snapshot
       x-crud: true
       x-crud-get: true
-  /v1/campaigns/audience:
+  /v1/campaign-audience-members:
     get:
       operationId: campaignAudienceList
       summary: List campaign audience
@@ -1757,7 +2100,7 @@ paths:
       x-table: campaign_audience_member
       x-crud: true
       x-crud-list: true
-  /v1/campaigns/audience/{id}:
+  /v1/campaign-audience-members/{id}:
     get:
       operationId: campaignAudienceGet
       summary: Retrieve campaign audience
@@ -1794,7 +2137,133 @@ paths:
       x-table: campaign_audience_member
       x-crud: true
       x-crud-get: true
-  /v1/campaigns/audience/{id}/unsubscribe:
+  /v1/campaign-audience-members/{id}/opened:
+    post:
+      operationId: campaignAudienceOpened
+      summary: Record that the message was opened
+      tags:
+      - Campaign Audience
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignAudienceMember'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_audience_member
+  /v1/campaign-audience-members/{id}/clicked:
+    post:
+      operationId: campaignAudienceClicked
+      summary: Record a click on the message
+      tags:
+      - Campaign Audience
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignAudienceMember'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_audience_member
+  /v1/campaign-audience-members/{id}/converted:
+    post:
+      operationId: campaignAudienceConverted
+      summary: Record a conversion (treated or control member)
+      tags:
+      - Campaign Audience
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignAudienceMember'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignAudienceConvertedRequest'
+      x-requirements:
+      - ENG-04
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_audience_member
+  /v1/campaign-audience-members/{id}/unsubscribe:
     post:
       operationId: campaignAudienceUnsubscribe
       summary: Opt the customer out of this campaign
@@ -1834,7 +2303,7 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
       x-required-scope: engagement:write
       x-table: campaign_audience_member
-  /v1/campaigns/metrics:
+  /v1/campaign-metrics:
     get:
       operationId: campaignMetricsList
       summary: List campaign metrics
@@ -1907,7 +2376,7 @@ paths:
       x-table: campaign_metric
       x-crud: true
       x-crud-list: true
-  /v1/campaigns/metrics/{id}:
+  /v1/campaign-metrics/{id}:
     get:
       operationId: campaignMetricsGet
       summary: Retrieve campaign metric
@@ -1944,6 +2413,254 @@ paths:
       x-table: campaign_metric
       x-crud: true
       x-crud-get: true
+  /v1/campaign-job-runs:
+    get:
+      operationId: campaignJobRunsList
+      summary: List campaign job runs
+      tags:
+      - Campaign Job Runs
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: job
+        in: query
+        schema:
+          type: string
+          enum:
+          - LIFECYCLE
+          - METRICS_ROLLUP
+          - OFFER_EXPIRY
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignJobRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - ENG-04
+      - OPS-01
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: campaign_job_run
+      x-crud: true
+      x-crud-list: true
+  /v1/campaign-job-runs/{id}:
+    get:
+      operationId: campaignJobRunsGet
+      summary: Retrieve campaign job run
+      tags:
+      - Campaign Job Runs
+      security:
+      - oauth2:
+        - engagement:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignJobRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - ENG-04
+      - OPS-01
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:read")'
+      x-required-scope: engagement:read
+      x-table: campaign_job_run
+      x-crud: true
+      x-crud-get: true
+  /v1/campaign-job-runs/lifecycle:
+    post:
+      operationId: campaignJobRunsLifecycle
+      summary: Batch - launch scheduled campaigns that are due and complete campaigns past their end (idempotent per business
+        date)
+      tags:
+      - Campaign Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      - OPS-01
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_job_run
+  /v1/campaign-job-runs/metrics-rollup:
+    post:
+      operationId: campaignJobRunsMetricsRollup
+      summary: End of day - roll up the day's campaign metrics per variant and in total (idempotent per business date)
+      tags:
+      - Campaign Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      - OPS-01
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_job_run
+  /v1/campaign-job-runs/offer-expiry:
+    post:
+      operationId: campaignJobRunsOfferExpiry
+      summary: End of day - expire offers and open assignments past their validity (idempotent per business date)
+      tags:
+      - Campaign Job Runs
+      security:
+      - oauth2:
+        - engagement:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - ENG-04
+      - OPS-01
+      x-service: campaign-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("engagement:write")'
+      x-required-scope: engagement:write
+      x-table: campaign_job_run
 components:
   schemas:
     Problem:
@@ -2006,14 +2723,45 @@ components:
         comment:
           type: string
           maxLength: 500
+    CampaignsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     CampaignsScheduleRequest:
       type: object
       properties:
         start_at:
           type: string
           format: date-time
+        end_at:
+          type: string
+          format: date-time
       required:
       - start_at
+    CampaignsBuildAudienceRequest:
+      type: object
+      properties:
+        customer_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - customer_ids
+    CampaignsPreviewAudienceRequest:
+      type: object
+      properties:
+        customer_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - customer_ids
     CampaignsPauseRequest:
       type: object
       properties:
@@ -2110,6 +2858,14 @@ components:
       required:
       - data
       - has_more
+    CampaignOffersPauseRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
     CampaignOffersWithdrawRequest:
       type: object
       properties:
@@ -2122,16 +2878,26 @@ components:
       type: object
       properties:
         customer_ids:
-          type: object
-          additionalProperties: true
-        segment_id:
+          type: array
+          items:
+            type: string
+            format: uuid
+        campaign_id:
           type: string
           format: uuid
         expires_at:
           type: string
           format: date-time
+        score:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        personalised_terms:
+          type: object
+          additionalProperties: true
       required:
-      - expires_at
+      - customer_ids
     OfferAssignmentPage:
       type: object
       description: One page of OfferAssignment results (newest first)
@@ -2150,6 +2916,15 @@ components:
       required:
       - data
       - has_more
+    OfferAssignmentsAcceptRequest:
+      type: object
+      properties:
+        resulting_object_type:
+          type: string
+          maxLength: 40
+        resulting_object_id:
+          type: string
+          format: uuid
     OfferAssignmentsDeclineRequest:
       type: object
       properties:
@@ -2164,6 +2939,32 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MarketingConsentSnapshot'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    CampaignAudienceConvertedRequest:
+      type: object
+      properties:
+        revenue:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+    CampaignJobRunPage:
+      type: object
+      description: One page of CampaignJobRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignJobRun'
         next_cursor:
           type:
           - string
@@ -2236,21 +3037,36 @@ components:
           - PAUSED
           - COMPLETED
           - CANCELLED
-          description: Status
+          description: Status (changes through the campaign actions)
+          readOnly: true
         segment_ids:
-          type: object
-          additionalProperties: true
-          description: Target customer_segment ids
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Target customer_segment ids (a member must be in at least one)
         exclusion_segment_ids:
           type:
-          - object
+          - array
           - 'null'
-          additionalProperties: true
+          items:
+            type: string
+            format: uuid
           description: Segments excluded
         channels:
-          type: object
-          additionalProperties: true
-          description: Channels used (CampaignChannel values)
+          type: array
+          items:
+            type: string
+            enum:
+            - PUSH
+            - SMS
+            - EMAIL
+            - IN_APP
+            - WHATSAPP
+            - USSD
+            - BRANCH
+            - CALL_CENTER
+          description: Channels used, in preference order
         start_at:
           type: string
           format: date-time
@@ -2266,13 +3082,13 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Allowed send hours per channel and timezone
+          description: Allowed send hours ({start_hour, end_hour, time_zone}); empty = any time
         frequency_cap:
           type:
           - integer
           - 'null'
           format: int32
-          description: Max messages per customer per week
+          description: Max campaign messages per customer in a rolling 7 days
         budget_amount:
           type:
           - string
@@ -2280,19 +3096,32 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Budget
+          description: Budget cap
         currency:
           type:
           - string
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Budget currency (ISO 4217)
+        cost_per_message:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cost booked per message sent (budget consumption)
+        spent_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Budget consumed
+          readOnly: true
         control_group_pct:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Hold-out share for uplift measurement
+          description: Hold-out share for uplift measurement (0..0.5)
         requires_marketing_consent:
           type: boolean
           description: Only customers with marketing consent
@@ -2302,6 +3131,32 @@ components:
           - 'null'
           format: uuid
           description: Campaign owner
+        audience_size:
+          type: integer
+          format: int32
+          description: Members selected (incl. control)
+          readOnly: true
+        audience_built_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Last audience build
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
         approved_by:
           type:
           - string
@@ -2315,6 +3170,34 @@ components:
           - 'null'
           format: date-time
           description: Approval time
+          readOnly: true
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Checker comment
+          readOnly: true
+        launched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time sending started
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completion time
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last pause, rejection or cancellation
           readOnly: true
         custom_field_1:
           type:
@@ -2357,8 +3240,11 @@ components:
       - segment_ids
       - channels
       - start_at
+      - cost_per_message
+      - spent_amount
       - control_group_pct
       - requires_marketing_consent
+      - audience_size
     CampaignCreate:
       type: object
       properties:
@@ -2374,29 +3260,32 @@ components:
           type: string
           maxLength: 255
           description: Business objective
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - SCHEDULED
-          - RUNNING
-          - PAUSED
-          - COMPLETED
-          - CANCELLED
-          description: Status
         segment_ids:
-          type: object
-          additionalProperties: true
-          description: Target customer_segment ids
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Target customer_segment ids (a member must be in at least one)
         exclusion_segment_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            format: uuid
           description: Segments excluded
         channels:
-          type: object
-          additionalProperties: true
-          description: Channels used (CampaignChannel values)
+          type: array
+          items:
+            type: string
+            enum:
+            - PUSH
+            - SMS
+            - EMAIL
+            - IN_APP
+            - WHATSAPP
+            - USSD
+            - BRANCH
+            - CALL_CENTER
+          description: Channels used, in preference order
         start_at:
           type: string
           format: date-time
@@ -2408,27 +3297,33 @@ components:
         send_window:
           type: object
           additionalProperties: true
-          description: Allowed send hours per channel and timezone
+          description: Allowed send hours ({start_hour, end_hour, time_zone}); empty = any time
         frequency_cap:
           type: integer
           format: int32
-          description: Max messages per customer per week
+          description: Max campaign messages per customer in a rolling 7 days
         budget_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Budget
+          description: Budget cap
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Budget currency (ISO 4217)
+        cost_per_message:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cost booked per message sent (budget consumption)
         control_group_pct:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Hold-out share for uplift measurement
+          description: Hold-out share for uplift measurement (0..0.5)
         requires_marketing_consent:
           type: boolean
           description: Only customers with marketing consent
@@ -2477,29 +3372,32 @@ components:
           type: string
           maxLength: 255
           description: Business objective
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - PENDING_APPROVAL
-          - SCHEDULED
-          - RUNNING
-          - PAUSED
-          - COMPLETED
-          - CANCELLED
-          description: Status
         segment_ids:
-          type: object
-          additionalProperties: true
-          description: Target customer_segment ids
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Target customer_segment ids (a member must be in at least one)
         exclusion_segment_ids:
-          type: object
-          additionalProperties: true
+          type: array
+          items:
+            type: string
+            format: uuid
           description: Segments excluded
         channels:
-          type: object
-          additionalProperties: true
-          description: Channels used (CampaignChannel values)
+          type: array
+          items:
+            type: string
+            enum:
+            - PUSH
+            - SMS
+            - EMAIL
+            - IN_APP
+            - WHATSAPP
+            - USSD
+            - BRANCH
+            - CALL_CENTER
+          description: Channels used, in preference order
         start_at:
           type: string
           format: date-time
@@ -2511,27 +3409,33 @@ components:
         send_window:
           type: object
           additionalProperties: true
-          description: Allowed send hours per channel and timezone
+          description: Allowed send hours ({start_hour, end_hour, time_zone}); empty = any time
         frequency_cap:
           type: integer
           format: int32
-          description: Max messages per customer per week
+          description: Max campaign messages per customer in a rolling 7 days
         budget_amount:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Budget
+          description: Budget cap
         currency:
           type: string
           pattern: ^[A-Z]{3}$
           description: Budget currency (ISO 4217)
+        cost_per_message:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Cost booked per message sent (budget consumption)
         control_group_pct:
           type: string
           format: decimal
           examples:
           - '125.50'
-          description: Hold-out share for uplift measurement
+          description: Hold-out share for uplift measurement (0..0.5)
         requires_marketing_consent:
           type: boolean
           description: Only customers with marketing consent
@@ -2561,7 +3465,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     CampaignAudienceMember:
       type: object
-      description: Customer selected into a campaign run with variant or control-group allocation
+      description: Customer selected into a campaign with variant or control-group allocation and engagement tracking
       properties:
         id:
           type: string
@@ -2611,51 +3515,107 @@ components:
           - 'null'
           format: uuid
           description: Variant (empty = control group)
+          readOnly: true
+        variant_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Variant code allocated (empty = control group)
+          readOnly: true
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PUSH
+          - SMS
+          - EMAIL
+          - IN_APP
+          - WHATSAPP
+          - USSD
+          - BRANCH
+          - CALL_CENTER
+          description: Channel of the message
+          readOnly: true
         is_control:
           type: boolean
           description: Hold-out member
+          readOnly: true
+        allocation_bucket:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Deterministic hash bucket in [0, 1) used for allocation
+          readOnly: true
         marketing_consent_snapshot_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Consent evidence
+          readOnly: true
         notification_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Message sent
+          readOnly: true
         sent_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Send time
+          readOnly: true
+        send_failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Last send failure
+          readOnly: true
         opened_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Open time
+          readOnly: true
         clicked_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Click time
+          readOnly: true
         converted_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Conversion time
+          readOnly: true
+        revenue:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Attributed revenue
+          readOnly: true
         unsubscribed_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Opt-out from this campaign
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2694,9 +3654,130 @@ components:
       - campaign_id
       - customer_id
       - is_control
+    CampaignJobRun:
+      type: object
+      description: One batch job execution per tenant, job and business date (makes the batch actions idempotent)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        job:
+          type: string
+          enum:
+          - LIFECYCLE
+          - METRICS_ROLLUP
+          - OFFER_EXPIRY
+          description: Job
+        business_date:
+          type: string
+          format: date
+          description: Business date processed
+        status:
+          type: string
+          enum:
+          - RUNNING
+          - COMPLETED
+          - COMPLETED_WITH_ERRORS
+          description: Outcome; COMPLETED runs are replayed, others may be re-run
+          readOnly: true
+        attempts:
+          type: integer
+          format: int32
+          description: Executions for this job and date
+          readOnly: true
+        result:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Counts and per-item errors of the last execution
+          readOnly: true
+        started_at:
+          type: string
+          format: date-time
+          description: Start of the last execution
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End of the last execution
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - job
+      - business_date
+      - status
+      - attempts
+      - started_at
     CampaignMetric:
       type: object
-      description: Daily performance metrics per campaign and variant. Append-only.
+      description: Daily performance metrics per campaign and variant (counts for the day; rates and uplift cumulative). Append-only.
       properties:
         id:
           type: string
@@ -2724,7 +3805,13 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Variant (empty = total)
+          description: Variant (empty = campaign total)
+        variant_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 16
+          description: Variant code (empty = campaign total)
         metric_date:
           type: string
           format: date
@@ -2732,7 +3819,7 @@ components:
         audience:
           type: integer
           format: int32
-          description: Members targeted
+          description: Members targeted (cumulative)
         sent:
           type: integer
           format: int32
@@ -2741,6 +3828,10 @@ components:
           type: integer
           format: int32
           description: Delivered
+        impressions:
+          type: integer
+          format: int32
+          description: Offer impressions (assignments shown)
         opened:
           type: integer
           format: int32
@@ -2769,6 +3860,30 @@ components:
           examples:
           - '125.50'
           description: Spend
+        ctr:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Click-through rate to date (clicked / sent)
+        conversion_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Conversion rate to date (converted / treated members)
+        control_audience:
+          type: integer
+          format: int32
+          description: Control-group members
+        control_converted:
+          type: integer
+          format: int32
+          description: Control-group conversions to date
         uplift_pct:
           type:
           - string
@@ -2776,7 +3891,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Conversion uplift vs control group
+          description: Conversion uplift vs control group to date ((treated - control) / control)
         custom_field_1:
           type:
           - string
@@ -2815,12 +3930,15 @@ components:
       - audience
       - sent
       - delivered
+      - impressions
       - opened
       - clicked
       - converted
       - unsubscribed
       - revenue
       - cost
+      - control_audience
+      - control_converted
     CampaignOffer:
       type: object
       description: A personalised offer (pre-approved loan, card upgrade, rate promotion) with eligibility and terms
@@ -2887,7 +4005,8 @@ components:
           - PAUSED
           - EXPIRED
           - WITHDRAWN
-          description: Status
+          description: Status (changes through activate / pause / withdraw and expiry)
+          readOnly: true
         product_id:
           type:
           - string
@@ -2905,7 +4024,7 @@ components:
           - object
           - 'null'
           additionalProperties: true
-          description: Eligibility (segments, scores, balances)
+          description: Eligibility ({segment_ids, exclusion_segment_ids, min_score, max_score})
         terms:
           type: object
           additionalProperties: true
@@ -2924,6 +4043,22 @@ components:
           - 'null'
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        max_assignments:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Cap on assignments (offer budget)
+        assigned_count:
+          type: integer
+          format: int32
+          description: Assignments made
+          readOnly: true
+        accepted_count:
+          type: integer
+          format: int32
+          description: Assignments accepted
+          readOnly: true
         valid_from:
           type: string
           format: date-time
@@ -2944,6 +4079,13 @@ components:
           - 'null'
           format: uuid
           description: Regulatory disclosure
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason of the last pause or withdrawal
+          readOnly: true
         custom_field_1:
           type:
           - string
@@ -2984,6 +4126,8 @@ components:
       - offer_type
       - status
       - terms
+      - assigned_count
+      - accepted_count
       - valid_from
       - valid_to
     CampaignOfferCreate:
@@ -3009,15 +4153,6 @@ components:
           - PRODUCT_CROSS_SELL
           - OVERDRAFT
           description: Offer type
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - EXPIRED
-          - WITHDRAWN
-          description: Status
         product_id:
           type: string
           format: uuid
@@ -3029,7 +4164,7 @@ components:
         eligibility_rules:
           type: object
           additionalProperties: true
-          description: Eligibility (segments, scores, balances)
+          description: Eligibility ({segment_ids, exclusion_segment_ids, min_score, max_score})
         terms:
           type: object
           additionalProperties: true
@@ -3044,6 +4179,10 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        max_assignments:
+          type: integer
+          format: int32
+          description: Cap on assignments (offer budget)
         valid_from:
           type: string
           format: date-time
@@ -3110,15 +4249,6 @@ components:
           - PRODUCT_CROSS_SELL
           - OVERDRAFT
           description: Offer type
-        status:
-          type: string
-          enum:
-          - DRAFT
-          - ACTIVE
-          - PAUSED
-          - EXPIRED
-          - WITHDRAWN
-          description: Status
         product_id:
           type: string
           format: uuid
@@ -3130,7 +4260,7 @@ components:
         eligibility_rules:
           type: object
           additionalProperties: true
-          description: Eligibility (segments, scores, balances)
+          description: Eligibility ({segment_ids, exclusion_segment_ids, min_score, max_score})
         terms:
           type: object
           additionalProperties: true
@@ -3145,6 +4275,10 @@ components:
           type: string
           pattern: ^[A-Z]{3}$
           description: Currency (ISO 4217)
+        max_assignments:
+          type: integer
+          format: int32
+          description: Cap on assignments (offer budget)
         valid_from:
           type: string
           format: date-time
@@ -3232,7 +4366,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Share of the audience
+          description: Share of the treated audience (shares of a campaign's codes are normalised)
         channel:
           type: string
           enum:
@@ -3335,7 +4469,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Share of the audience
+          description: Share of the treated audience (shares of a campaign's codes are normalised)
         channel:
           type: string
           enum:
@@ -3412,7 +4546,7 @@ components:
           format: decimal
           examples:
           - '125.50'
-          description: Share of the audience
+          description: Share of the treated audience (shares of a campaign's codes are normalised)
         channel:
           type: string
           enum:
@@ -3470,7 +4604,7 @@ components:
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     MarketingConsentSnapshot:
       type: object
-      description: Immutable record of the customer's marketing consent at the time a campaign targeted them
+      description: Immutable record of the customer's marketing consent at the time a campaign or offer targeted them
       properties:
         id:
           type: string
@@ -3505,6 +4639,12 @@ components:
           - 'null'
           format: uuid
           description: Campaign
+        campaign_offer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Offer (offer assignments)
         channel:
           type: string
           enum:
@@ -3525,7 +4665,7 @@ components:
           - string
           - 'null'
           maxLength: 255
-          description: Why not permitted (opt-out, quiet hours, frequency cap)
+          description: Why not permitted (no consent, withdrawn, expired, frequency cap, check failed)
         checked_at:
           type: string
           format: date-time
@@ -3630,6 +4770,7 @@ components:
           - EXPIRED
           - WITHDRAWN
           description: Response status
+          readOnly: true
         personalised_terms:
           type:
           - object
@@ -3656,28 +4797,40 @@ components:
           - 'null'
           format: uuid
           description: Marketing consent snapshot proving permission
+          readOnly: true
         assigned_at:
           type: string
           format: date-time
           description: Assignment time
+          readOnly: true
         shown_at:
           type:
           - string
           - 'null'
           format: date-time
           description: First shown
+          readOnly: true
         clicked_at:
           type:
           - string
           - 'null'
           format: date-time
           description: First clicked
+          readOnly: true
         responded_at:
           type:
           - string
           - 'null'
           format: date-time
           description: Accept or decline time
+          readOnly: true
+        decline_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason given on decline
+          readOnly: true
         expires_at:
           type: string
           format: date-time
@@ -3688,12 +4841,14 @@ components:
           - 'null'
           maxLength: 40
           description: LOAN_APPLICATION, CREDIT_LINE, CARD, DEPOSIT_ACCOUNT
+          readOnly: true
         resulting_object_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Object created on acceptance
+          readOnly: true
         custom_field_1:
           type:
           - string

@@ -18,7 +18,7 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- rewards_program: A loyalty program (points, cashback or miles) with currency, expiry and funding settings
+-- rewards_program: A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings
 CREATE TABLE rewards_program (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
@@ -35,6 +35,8 @@ CREATE TABLE rewards_program (
   point_value                  numeric(28,8),
   value_currency               char(3),
   points_expiry_months         integer,
+  tier_period_months           integer NOT NULL DEFAULT 12,
+  ledger_id                    uuid,
   funding_ledger_account_id    uuid,
   liability_ledger_account_id  uuid,
   eligible_product_ids         jsonb,
@@ -43,6 +45,9 @@ CREATE TABLE rewards_program (
   starts_on                    date NOT NULL,
   ends_on                      date,
   approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  approval_comment             varchar(500),
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -50,7 +55,7 @@ CREATE TABLE rewards_program (
   custom_field_5               varchar(500),
   CONSTRAINT uq_rewards_program_code UNIQUE (tenant_id, code)
 );
-COMMENT ON TABLE rewards_program IS 'A loyalty program (points, cashback or miles) with currency, expiry and funding settings';
+COMMENT ON TABLE rewards_program IS 'A loyalty program (points, cashback or miles) with currency, expiry, tier and funding settings';
 COMMENT ON COLUMN rewards_program.id IS 'Unique id (UUIDv7, time-ordered)';
 COMMENT ON COLUMN rewards_program.tenant_id IS 'Owning tenant; enforced by row-level security';
 COMMENT ON COLUMN rewards_program.created_at IS 'Creation time';
@@ -61,25 +66,31 @@ COMMENT ON COLUMN rewards_program.row_version IS 'Optimistic lock version; send 
 COMMENT ON COLUMN rewards_program.code IS 'Program code';
 COMMENT ON COLUMN rewards_program.name IS 'Display name';
 COMMENT ON COLUMN rewards_program.program_type IS 'Points, cashback, miles or hybrid';
-COMMENT ON COLUMN rewards_program.status IS 'Lifecycle status';
+COMMENT ON COLUMN rewards_program.status IS 'Lifecycle status (changes through activate / pause / end)';
 COMMENT ON COLUMN rewards_program.points_name IS 'Branded name of the points currency, e.g. Stars';
 COMMENT ON COLUMN rewards_program.point_value IS 'Monetary value of one point for redemption';
 COMMENT ON COLUMN rewards_program.value_currency IS 'Currency of point_value and cashback';
-COMMENT ON COLUMN rewards_program.points_expiry_months IS 'Months until earned points expire (empty = never)';
-COMMENT ON COLUMN rewards_program.funding_ledger_account_id IS 'Ledger account funding rewards liability';
+COMMENT ON COLUMN rewards_program.points_expiry_months IS 'Months after the earn date until earned points expire (empty = never)';
+COMMENT ON COLUMN rewards_program.tier_period_months IS 'Rolling window over which tier qualification is measured; an earned tier is kept for the same period';
+COMMENT ON COLUMN rewards_program.ledger_id IS 'Ledger book of reward payouts (cashback, statement credits)';
+COMMENT ON COLUMN rewards_program.funding_ledger_account_id IS 'Ledger account funding reward payouts (debited)';
 COMMENT ON COLUMN rewards_program.liability_ledger_account_id IS 'Ledger account holding outstanding rewards liability';
 COMMENT ON COLUMN rewards_program.eligible_product_ids IS 'Products whose customers can enrol (empty = all)';
-COMMENT ON COLUMN rewards_program.auto_enrol IS 'Enrol eligible customers automatically';
+COMMENT ON COLUMN rewards_program.auto_enrol IS 'Enrol eligible customers automatically on their first qualifying transaction';
 COMMENT ON COLUMN rewards_program.terms_document_id IS 'Program terms and conditions';
 COMMENT ON COLUMN rewards_program.starts_on IS 'Start date';
 COMMENT ON COLUMN rewards_program.ends_on IS 'End date';
 COMMENT ON COLUMN rewards_program.approved_by IS 'Checker who approved activation';
+COMMENT ON COLUMN rewards_program.approved_at IS 'Activation approval time';
+COMMENT ON COLUMN rewards_program.approval_comment IS 'Checker comment';
+COMMENT ON COLUMN rewards_program.status_reason IS 'Reason of the last pause or end';
 COMMENT ON COLUMN rewards_program.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rewards_program.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rewards_program.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rewards_program.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN rewards_program.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_rewards_program_tenant ON rewards_program (tenant_id, created_at);
+CREATE INDEX ix_rewards_program_ledger_id ON rewards_program (ledger_id);
 CREATE INDEX ix_rewards_program_funding_ledger_account_id ON rewards_program (funding_ledger_account_id);
 CREATE INDEX ix_rewards_program_liability_ledger_account_id ON rewards_program (liability_ledger_account_id);
 CREATE INDEX ix_rewards_program_terms_document_id ON rewards_program (terms_document_id);
@@ -109,7 +120,8 @@ CREATE TABLE reward_tier (
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500),
-  CONSTRAINT uq_reward_tier_1 UNIQUE (rewards_program_id, code)
+  CONSTRAINT uq_reward_tier_1 UNIQUE (rewards_program_id, code),
+  CONSTRAINT uq_reward_tier_2 UNIQUE (rewards_program_id, rank)
 );
 COMMENT ON TABLE reward_tier IS 'Status level within a program (e.g. Silver, Gold) with qualification thresholds and benefits';
 COMMENT ON COLUMN reward_tier.id IS 'Unique id (UUIDv7, time-ordered)';
@@ -122,11 +134,11 @@ COMMENT ON COLUMN reward_tier.row_version IS 'Optimistic lock version; send as I
 COMMENT ON COLUMN reward_tier.rewards_program_id IS 'Program';
 COMMENT ON COLUMN reward_tier.code IS 'Tier code';
 COMMENT ON COLUMN reward_tier.name IS 'Display name';
-COMMENT ON COLUMN reward_tier.rank IS 'Order, 1 = lowest';
-COMMENT ON COLUMN reward_tier.qualify_spend IS 'Annual spend needed to reach the tier';
-COMMENT ON COLUMN reward_tier.qualify_points IS 'Points earned in the period needed to reach the tier';
-COMMENT ON COLUMN reward_tier.earn_multiplier IS 'Multiplier applied to base earn';
-COMMENT ON COLUMN reward_tier.benefits IS 'Tier benefits (fee waivers, lounge access, FX discounts)';
+COMMENT ON COLUMN reward_tier.rank IS 'Order, 1 = lowest (base tier)';
+COMMENT ON COLUMN reward_tier.qualify_spend IS 'Spend in the tier period that qualifies for the tier (either threshold qualifies)';
+COMMENT ON COLUMN reward_tier.qualify_points IS 'Points earned in the tier period that qualify for the tier (either threshold qualifies)';
+COMMENT ON COLUMN reward_tier.earn_multiplier IS 'Multiplier applied to base points earn';
+COMMENT ON COLUMN reward_tier.benefits IS 'Tier benefits ({code, description}: fee waivers, lounge access, FX discounts)';
 COMMENT ON COLUMN reward_tier.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN reward_tier.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN reward_tier.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -167,9 +179,13 @@ CREATE TABLE reward_rule (
   cap_amount                   numeric(28,8),
   cap_period                   varchar(40) CHECK (cap_period IN ('TRANSACTION', 'DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR', 'LIFETIME')),
   valid_days_of_week           jsonb,
+  valid_time_from              varchar(5),
+  valid_time_to                varchar(5),
+  time_zone                    varchar(40) NOT NULL DEFAULT 'UTC',
   valid_from                   timestamptz NOT NULL,
   valid_to                     timestamptz,
   settle_after_days            integer NOT NULL DEFAULT 0,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -187,26 +203,30 @@ COMMENT ON COLUMN reward_rule.row_version IS 'Optimistic lock version; send as I
 COMMENT ON COLUMN reward_rule.rewards_program_id IS 'Program';
 COMMENT ON COLUMN reward_rule.name IS 'Rule name';
 COMMENT ON COLUMN reward_rule.trigger IS 'Event that earns';
-COMMENT ON COLUMN reward_rule.status IS 'Status';
+COMMENT ON COLUMN reward_rule.status IS 'Status (changes through activate / deactivate)';
 COMMENT ON COLUMN reward_rule.priority IS 'Lower evaluates first';
-COMMENT ON COLUMN reward_rule.stackable IS 'Can combine with other matching rules';
+COMMENT ON COLUMN reward_rule.stackable IS 'Can combine with other matching rules; a non-stackable rule that wins on priority is applied alone';
 COMMENT ON COLUMN reward_rule.mcc_include IS 'MCC codes that qualify (empty = any)';
 COMMENT ON COLUMN reward_rule.mcc_exclude IS 'MCC codes excluded (e.g. gambling, quasi-cash)';
-COMMENT ON COLUMN reward_rule.merchant_ids IS 'Specific merchants (partner offers)';
-COMMENT ON COLUMN reward_rule.product_ids IS 'Products that qualify';
-COMMENT ON COLUMN reward_rule.channels IS 'Channels that qualify (POS, ECOM, CONTACTLESS, WALLET)';
-COMMENT ON COLUMN reward_rule.countries IS 'Merchant countries that qualify';
+COMMENT ON COLUMN reward_rule.merchant_ids IS 'Merchant / card acceptor ids that qualify (partner offers; empty = any)';
+COMMENT ON COLUMN reward_rule.product_ids IS 'Products that qualify (empty = any)';
+COMMENT ON COLUMN reward_rule.channels IS 'Channels that qualify (empty = any)';
+COMMENT ON COLUMN reward_rule.countries IS 'Merchant countries that qualify (empty = any)';
 COMMENT ON COLUMN reward_rule.min_amount IS 'Minimum transaction amount';
 COMMENT ON COLUMN reward_rule.points_per_unit IS 'Points earned per unit of currency spent';
 COMMENT ON COLUMN reward_rule.cashback_rate IS 'Cashback as a fraction of the amount';
 COMMENT ON COLUMN reward_rule.fixed_award IS 'Fixed points or cashback per qualifying event';
 COMMENT ON COLUMN reward_rule.multiplier IS 'Promotional multiplier';
-COMMENT ON COLUMN reward_rule.cap_amount IS 'Maximum award per cap period';
+COMMENT ON COLUMN reward_rule.cap_amount IS 'Maximum award (points or cashback) per customer and cap period';
 COMMENT ON COLUMN reward_rule.cap_period IS 'Period the cap applies to';
-COMMENT ON COLUMN reward_rule.valid_days_of_week IS 'Days of week the rule applies (e.g. weekend boosts)';
+COMMENT ON COLUMN reward_rule.valid_days_of_week IS 'ISO days of week the rule applies (1=Monday..7=Sunday; empty = every day)';
+COMMENT ON COLUMN reward_rule.valid_time_from IS 'Daily window start HH:mm in the rule time zone (empty = all day)';
+COMMENT ON COLUMN reward_rule.valid_time_to IS 'Daily window end HH:mm (exclusive; may wrap past midnight)';
+COMMENT ON COLUMN reward_rule.time_zone IS 'IANA time zone of the day and time windows and cap periods';
 COMMENT ON COLUMN reward_rule.valid_from IS 'Effective from';
 COMMENT ON COLUMN reward_rule.valid_to IS 'Effective to';
 COMMENT ON COLUMN reward_rule.settle_after_days IS 'Days before pending awards confirm (dispute window)';
+COMMENT ON COLUMN reward_rule.status_reason IS 'Reason of the last deactivation';
 COMMENT ON COLUMN reward_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN reward_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN reward_rule.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -229,9 +249,15 @@ CREATE TABLE points_account (
   row_version                  integer NOT NULL DEFAULT 1,
   rewards_program_id           uuid NOT NULL REFERENCES rewards_program(id),
   customer_id                  uuid NOT NULL,
+  product_id                   uuid,
+  default_credit_account_id    uuid,
   status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'CLOSED')),
+  status_reason                varchar(255),
   reward_tier_id               uuid REFERENCES reward_tier(id),
   tier_qualified_until         date,
+  tier_spend                   numeric(28,8) NOT NULL DEFAULT 0,
+  tier_points                  bigint NOT NULL DEFAULT 0,
+  tier_evaluated_at            timestamptz,
   available_points             bigint NOT NULL DEFAULT 0,
   pending_points               bigint NOT NULL DEFAULT 0,
   lifetime_earned              bigint NOT NULL DEFAULT 0,
@@ -256,9 +282,15 @@ COMMENT ON COLUMN points_account.updated_by IS 'Principal that last updated the 
 COMMENT ON COLUMN points_account.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN points_account.rewards_program_id IS 'Program';
 COMMENT ON COLUMN points_account.customer_id IS 'Customer';
-COMMENT ON COLUMN points_account.status IS 'Status';
-COMMENT ON COLUMN points_account.reward_tier_id IS 'Current tier';
-COMMENT ON COLUMN points_account.tier_qualified_until IS 'Tier valid until';
+COMMENT ON COLUMN points_account.product_id IS 'Product through which the customer is eligible';
+COMMENT ON COLUMN points_account.default_credit_account_id IS 'Account credited with cashback and statement credits by default';
+COMMENT ON COLUMN points_account.status IS 'Status (changes through suspend / reactivate / close)';
+COMMENT ON COLUMN points_account.status_reason IS 'Reason of the last status change';
+COMMENT ON COLUMN points_account.reward_tier_id IS 'Current tier (set through tier evaluation)';
+COMMENT ON COLUMN points_account.tier_qualified_until IS 'Tier kept until (requalification date)';
+COMMENT ON COLUMN points_account.tier_spend IS 'Qualifying spend in the tier period at the last evaluation';
+COMMENT ON COLUMN points_account.tier_points IS 'Points earned in the tier period at the last evaluation';
+COMMENT ON COLUMN points_account.tier_evaluated_at IS 'Last tier evaluation';
 COMMENT ON COLUMN points_account.available_points IS 'Redeemable points';
 COMMENT ON COLUMN points_account.pending_points IS 'Points awaiting confirmation';
 COMMENT ON COLUMN points_account.lifetime_earned IS 'All points ever earned';
@@ -274,10 +306,95 @@ COMMENT ON COLUMN points_account.custom_field_5 IS 'Tenant-defined custom field 
 CREATE INDEX ix_points_account_tenant ON points_account (tenant_id, created_at);
 CREATE INDEX ix_points_account_rewards_program_id ON points_account (rewards_program_id);
 CREATE INDEX ix_points_account_customer_id ON points_account (customer_id);
+CREATE INDEX ix_points_account_product_id ON points_account (product_id);
+CREATE INDEX ix_points_account_default_credit_account_id ON points_account (default_credit_account_id);
 CREATE INDEX ix_points_account_reward_tier_id ON points_account (reward_tier_id);
 ALTER TABLE points_account ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON points_account USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_points_account_touch BEFORE UPDATE ON points_account FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- reward_transaction: A qualifying transaction evaluated against a program's earn rules, with its awards (idempotent per source)
+CREATE TABLE reward_transaction (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  rewards_program_id           uuid NOT NULL REFERENCES rewards_program(id),
+  points_account_id            uuid REFERENCES points_account(id),
+  customer_id                  uuid NOT NULL,
+  trigger                      varchar(40) NOT NULL CHECK (trigger IN ('CARD_SPEND', 'WALLET_PAYMENT', 'BILL_PAYMENT', 'ACCOUNT_OPENING', 'DIRECT_DEPOSIT', 'BALANCE_HELD', 'LOAN_REPAYMENT', 'REFERRAL', 'MANUAL')),
+  source_type                  varchar(40) NOT NULL,
+  source_id                    uuid NOT NULL,
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  mcc                          varchar(4),
+  merchant_id                  varchar(64),
+  merchant_country             char(2),
+  channel                      varchar(40) CHECK (channel IN ('POS', 'ECOM', 'CONTACTLESS', 'ATM', 'WALLET', 'BILL_PAYMENT', 'TRANSFER', 'BRANCH', 'OTHER')),
+  product_id                   uuid,
+  transaction_at               timestamptz NOT NULL,
+  credit_account_id            uuid,
+  status                       varchar(40) NOT NULL DEFAULT 'AWARDED' CHECK (status IN ('AWARDED', 'NO_AWARD', 'REVERSED')),
+  points_awarded               bigint NOT NULL DEFAULT 0,
+  cashback_awarded             numeric(28,8) NOT NULL DEFAULT 0,
+  awards                       jsonb,
+  reversed_at                  timestamptz,
+  reversal_reason              varchar(255),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_reward_transaction_1 UNIQUE (tenant_id, rewards_program_id, source_type, source_id)
+);
+COMMENT ON TABLE reward_transaction IS 'A qualifying transaction evaluated against a program''s earn rules, with its awards (idempotent per source)';
+COMMENT ON COLUMN reward_transaction.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN reward_transaction.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN reward_transaction.created_at IS 'Creation time';
+COMMENT ON COLUMN reward_transaction.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN reward_transaction.updated_at IS 'Last update time';
+COMMENT ON COLUMN reward_transaction.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN reward_transaction.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN reward_transaction.rewards_program_id IS 'Program evaluated';
+COMMENT ON COLUMN reward_transaction.points_account_id IS 'Points account credited';
+COMMENT ON COLUMN reward_transaction.customer_id IS 'Customer';
+COMMENT ON COLUMN reward_transaction.trigger IS 'Kind of event';
+COMMENT ON COLUMN reward_transaction.source_type IS 'CARD_AUTHORIZATION, CARD_CLEARING, PAYMENT, WALLET_TRANSACTION, ...';
+COMMENT ON COLUMN reward_transaction.source_id IS 'Source transaction id';
+COMMENT ON COLUMN reward_transaction.amount IS 'Transaction amount (positive)';
+COMMENT ON COLUMN reward_transaction.currency IS 'Currency';
+COMMENT ON COLUMN reward_transaction.mcc IS 'Merchant category code';
+COMMENT ON COLUMN reward_transaction.merchant_id IS 'Merchant / card acceptor id';
+COMMENT ON COLUMN reward_transaction.merchant_country IS 'Merchant country';
+COMMENT ON COLUMN reward_transaction.channel IS 'Channel';
+COMMENT ON COLUMN reward_transaction.product_id IS 'Product the transaction was made with';
+COMMENT ON COLUMN reward_transaction.transaction_at IS 'Transaction time';
+COMMENT ON COLUMN reward_transaction.credit_account_id IS 'Account to credit cashback to (default: the points account''s)';
+COMMENT ON COLUMN reward_transaction.status IS 'Outcome';
+COMMENT ON COLUMN reward_transaction.points_awarded IS 'Points awarded';
+COMMENT ON COLUMN reward_transaction.cashback_awarded IS 'Cashback awarded';
+COMMENT ON COLUMN reward_transaction.awards IS 'Per-rule breakdown ({reward_rule_id, points, cashback, capped})';
+COMMENT ON COLUMN reward_transaction.reversed_at IS 'Reversal time';
+COMMENT ON COLUMN reward_transaction.reversal_reason IS 'Why reversed (refund, chargeback)';
+COMMENT ON COLUMN reward_transaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN reward_transaction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN reward_transaction.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN reward_transaction.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN reward_transaction.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_reward_transaction_tenant ON reward_transaction (tenant_id, created_at);
+CREATE INDEX ix_reward_transaction_rewards_program_id ON reward_transaction (rewards_program_id);
+CREATE INDEX ix_reward_transaction_points_account_id ON reward_transaction (points_account_id);
+CREATE INDEX ix_reward_transaction_customer_id ON reward_transaction (customer_id);
+CREATE INDEX ix_reward_transaction_source_id ON reward_transaction (source_id);
+CREATE INDEX ix_reward_transaction_product_id ON reward_transaction (product_id);
+CREATE INDEX ix_reward_transaction_credit_account_id ON reward_transaction (credit_account_id);
+CREATE INDEX ix_reward_transaction_c1 ON reward_transaction (customer_id, transaction_at);
+ALTER TABLE reward_transaction ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON reward_transaction USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_reward_transaction_touch BEFORE UPDATE ON reward_transaction FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- points_ledger_entry: Append-only movement of points (earn, redeem, expire, adjust); balances derive from it
 CREATE TABLE points_ledger_entry (
@@ -290,9 +407,16 @@ CREATE TABLE points_ledger_entry (
   points                       bigint NOT NULL,
   balance_after                bigint NOT NULL,
   is_pending                   boolean NOT NULL DEFAULT false,
+  confirm_after                timestamptz,
+  confirms_id                  uuid REFERENCES points_ledger_entry(id),
+  lot_id                       uuid REFERENCES points_ledger_entry(id),
   reward_rule_id               uuid REFERENCES reward_rule(id),
+  reward_transaction_id        uuid REFERENCES reward_transaction(id),
+  transaction_amount           numeric(28,8),
+  currency                     char(3),
   source_type                  varchar(40),
   source_id                    uuid,
+  counterparty_points_account_id uuid REFERENCES points_account(id),
   expires_on                   date,
   reversal_of_id               uuid REFERENCES points_ledger_entry(id),
   reason                       varchar(255),
@@ -314,9 +438,16 @@ COMMENT ON COLUMN points_ledger_entry.entry_type IS 'Movement type';
 COMMENT ON COLUMN points_ledger_entry.points IS 'Signed points (positive earn, negative redeem/expire)';
 COMMENT ON COLUMN points_ledger_entry.balance_after IS 'Available balance after the entry';
 COMMENT ON COLUMN points_ledger_entry.is_pending IS 'Earned but not yet confirmed';
+COMMENT ON COLUMN points_ledger_entry.confirm_after IS 'When a pending earn confirms';
+COMMENT ON COLUMN points_ledger_entry.confirms_id IS 'Pending entry this entry confirms';
+COMMENT ON COLUMN points_ledger_entry.lot_id IS 'Earn lot consumed (EXPIRE entries)';
 COMMENT ON COLUMN points_ledger_entry.reward_rule_id IS 'Rule that produced an earn';
-COMMENT ON COLUMN points_ledger_entry.source_type IS 'CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, MANUAL';
+COMMENT ON COLUMN points_ledger_entry.reward_transaction_id IS 'Transaction that produced an earn';
+COMMENT ON COLUMN points_ledger_entry.transaction_amount IS 'Qualifying transaction amount';
+COMMENT ON COLUMN points_ledger_entry.currency IS 'Currency of transaction_amount';
+COMMENT ON COLUMN points_ledger_entry.source_type IS 'CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION, REDEMPTION, REFERRAL, ADJUSTMENT, TRANSFER';
 COMMENT ON COLUMN points_ledger_entry.source_id IS 'Source object id';
+COMMENT ON COLUMN points_ledger_entry.counterparty_points_account_id IS 'Other account of a transfer';
 COMMENT ON COLUMN points_ledger_entry.expires_on IS 'Expiry date of earned points';
 COMMENT ON COLUMN points_ledger_entry.reversal_of_id IS 'Entry this one reverses';
 COMMENT ON COLUMN points_ledger_entry.reason IS 'Adjustment reason';
@@ -328,12 +459,69 @@ COMMENT ON COLUMN points_ledger_entry.custom_field_4 IS 'Tenant-defined custom f
 COMMENT ON COLUMN points_ledger_entry.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_points_ledger_entry_tenant ON points_ledger_entry (tenant_id, created_at);
 CREATE INDEX ix_points_ledger_entry_points_account_id ON points_ledger_entry (points_account_id);
+CREATE INDEX ix_points_ledger_entry_confirms_id ON points_ledger_entry (confirms_id);
+CREATE INDEX ix_points_ledger_entry_lot_id ON points_ledger_entry (lot_id);
 CREATE INDEX ix_points_ledger_entry_reward_rule_id ON points_ledger_entry (reward_rule_id);
+CREATE INDEX ix_points_ledger_entry_reward_transaction_id ON points_ledger_entry (reward_transaction_id);
 CREATE INDEX ix_points_ledger_entry_source_id ON points_ledger_entry (source_id);
+CREATE INDEX ix_points_ledger_entry_counterparty_points_account_id ON points_ledger_entry (counterparty_points_account_id);
 CREATE INDEX ix_points_ledger_entry_reversal_of_id ON points_ledger_entry (reversal_of_id);
 ALTER TABLE points_ledger_entry ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON points_ledger_entry USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_points_ledger_entry_append_only BEFORE UPDATE OR DELETE ON points_ledger_entry FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- points_adjustment: A manual points adjustment under maker-checker control, applied to the ledger when approved
+CREATE TABLE points_adjustment (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  points_account_id            uuid NOT NULL REFERENCES points_account(id),
+  points                       bigint NOT NULL,
+  reason                       varchar(255) NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'APPLIED', 'REJECTED')),
+  requested_by                 varchar(64),
+  decided_by                   varchar(64),
+  decided_at                   timestamptz,
+  decision_comment             varchar(500),
+  points_ledger_entry_id       uuid REFERENCES points_ledger_entry(id),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE points_adjustment IS 'A manual points adjustment under maker-checker control, applied to the ledger when approved';
+COMMENT ON COLUMN points_adjustment.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN points_adjustment.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN points_adjustment.created_at IS 'Creation time';
+COMMENT ON COLUMN points_adjustment.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN points_adjustment.updated_at IS 'Last update time';
+COMMENT ON COLUMN points_adjustment.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN points_adjustment.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN points_adjustment.points_account_id IS 'Points account';
+COMMENT ON COLUMN points_adjustment.points IS 'Signed points to add (positive) or remove (negative)';
+COMMENT ON COLUMN points_adjustment.reason IS 'Business reason';
+COMMENT ON COLUMN points_adjustment.status IS 'Status (changes through approve / reject)';
+COMMENT ON COLUMN points_adjustment.requested_by IS 'Maker';
+COMMENT ON COLUMN points_adjustment.decided_by IS 'Checker';
+COMMENT ON COLUMN points_adjustment.decided_at IS 'Decision time';
+COMMENT ON COLUMN points_adjustment.decision_comment IS 'Checker comment or rejection reason';
+COMMENT ON COLUMN points_adjustment.points_ledger_entry_id IS 'Entry written when applied';
+COMMENT ON COLUMN points_adjustment.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN points_adjustment.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN points_adjustment.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN points_adjustment.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN points_adjustment.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_points_adjustment_tenant ON points_adjustment (tenant_id, created_at);
+CREATE INDEX ix_points_adjustment_points_account_id ON points_adjustment (points_account_id);
+CREATE INDEX ix_points_adjustment_points_ledger_entry_id ON points_adjustment (points_ledger_entry_id);
+ALTER TABLE points_adjustment ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON points_adjustment USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_points_adjustment_touch BEFORE UPDATE ON points_adjustment FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- cashback_transaction: A cashback award for a qualifying transaction, paid to the customer's account after settlement
 CREATE TABLE cashback_transaction (
@@ -346,6 +534,7 @@ CREATE TABLE cashback_transaction (
   row_version                  integer NOT NULL DEFAULT 1,
   rewards_program_id           uuid NOT NULL REFERENCES rewards_program(id),
   reward_rule_id               uuid REFERENCES reward_rule(id),
+  reward_transaction_id        uuid REFERENCES reward_transaction(id),
   customer_id                  uuid NOT NULL,
   source_type                  varchar(40) NOT NULL,
   source_id                    uuid NOT NULL,
@@ -357,7 +546,10 @@ CREATE TABLE cashback_transaction (
   credit_account_id            uuid,
   journal_entry_id             uuid,
   paid_at                      timestamptz,
+  payout_attempts              integer NOT NULL DEFAULT 0,
+  failure_reason               varchar(500),
   reversal_reason              varchar(255),
+  reversal_journal_entry_id    uuid,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -375,6 +567,7 @@ COMMENT ON COLUMN cashback_transaction.updated_by IS 'Principal that last update
 COMMENT ON COLUMN cashback_transaction.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN cashback_transaction.rewards_program_id IS 'Program';
 COMMENT ON COLUMN cashback_transaction.reward_rule_id IS 'Rule applied';
+COMMENT ON COLUMN cashback_transaction.reward_transaction_id IS 'Evaluated transaction';
 COMMENT ON COLUMN cashback_transaction.customer_id IS 'Customer';
 COMMENT ON COLUMN cashback_transaction.source_type IS 'CARD_AUTHORIZATION, PAYMENT, WALLET_TRANSACTION';
 COMMENT ON COLUMN cashback_transaction.source_id IS 'Qualifying transaction';
@@ -382,11 +575,14 @@ COMMENT ON COLUMN cashback_transaction.transaction_amount IS 'Qualifying amount'
 COMMENT ON COLUMN cashback_transaction.cashback_amount IS 'Cashback awarded';
 COMMENT ON COLUMN cashback_transaction.currency IS 'Currency';
 COMMENT ON COLUMN cashback_transaction.status IS 'Status';
-COMMENT ON COLUMN cashback_transaction.confirm_after IS 'When the award confirms (after dispute window)';
+COMMENT ON COLUMN cashback_transaction.confirm_after IS 'When the award confirms (after the dispute window)';
 COMMENT ON COLUMN cashback_transaction.credit_account_id IS 'Account credited';
 COMMENT ON COLUMN cashback_transaction.journal_entry_id IS 'Ledger posting of the payout';
 COMMENT ON COLUMN cashback_transaction.paid_at IS 'Payout time';
+COMMENT ON COLUMN cashback_transaction.payout_attempts IS 'Payout attempts';
+COMMENT ON COLUMN cashback_transaction.failure_reason IS 'Last payout failure';
 COMMENT ON COLUMN cashback_transaction.reversal_reason IS 'Why reversed (refund, chargeback)';
+COMMENT ON COLUMN cashback_transaction.reversal_journal_entry_id IS 'Ledger reversal of a paid award';
 COMMENT ON COLUMN cashback_transaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cashback_transaction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN cashback_transaction.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -395,10 +591,12 @@ COMMENT ON COLUMN cashback_transaction.custom_field_5 IS 'Tenant-defined custom 
 CREATE INDEX ix_cashback_transaction_tenant ON cashback_transaction (tenant_id, created_at);
 CREATE INDEX ix_cashback_transaction_rewards_program_id ON cashback_transaction (rewards_program_id);
 CREATE INDEX ix_cashback_transaction_reward_rule_id ON cashback_transaction (reward_rule_id);
+CREATE INDEX ix_cashback_transaction_reward_transaction_id ON cashback_transaction (reward_transaction_id);
 CREATE INDEX ix_cashback_transaction_customer_id ON cashback_transaction (customer_id);
 CREATE INDEX ix_cashback_transaction_source_id ON cashback_transaction (source_id);
 CREATE INDEX ix_cashback_transaction_credit_account_id ON cashback_transaction (credit_account_id);
 CREATE INDEX ix_cashback_transaction_journal_entry_id ON cashback_transaction (journal_entry_id);
+CREATE INDEX ix_cashback_transaction_reversal_journal_entry_id ON cashback_transaction (reversal_journal_entry_id);
 ALTER TABLE cashback_transaction ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON cashback_transaction USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_cashback_transaction_touch BEFORE UPDATE ON cashback_transaction FOR EACH ROW EXECUTE FUNCTION touch_row();
@@ -444,8 +642,8 @@ COMMENT ON COLUMN reward_catalog_item.rewards_program_id IS 'Program';
 COMMENT ON COLUMN reward_catalog_item.sku IS 'Catalogue SKU';
 COMMENT ON COLUMN reward_catalog_item.name IS 'Display name';
 COMMENT ON COLUMN reward_catalog_item.item_type IS 'Redemption type';
-COMMENT ON COLUMN reward_catalog_item.points_cost IS 'Points required';
-COMMENT ON COLUMN reward_catalog_item.cash_value IS 'Monetary value delivered';
+COMMENT ON COLUMN reward_catalog_item.points_cost IS 'Points required per unit';
+COMMENT ON COLUMN reward_catalog_item.cash_value IS 'Monetary value delivered per unit';
 COMMENT ON COLUMN reward_catalog_item.currency IS 'Currency of cash_value';
 COMMENT ON COLUMN reward_catalog_item.partner_name IS 'Fulfilment partner (airline, voucher provider)';
 COMMENT ON COLUMN reward_catalog_item.partner_sku IS 'Partner''s product code';
@@ -489,6 +687,8 @@ CREATE TABLE redemption (
   journal_entry_id             uuid,
   fulfilled_at                 timestamptz,
   failure_reason               varchar(255),
+  cancelled_at                 timestamptz,
+  cancel_reason                varchar(255),
   idempotency_key              varchar(128) NOT NULL,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -512,14 +712,16 @@ COMMENT ON COLUMN redemption.points_spent IS 'Points debited';
 COMMENT ON COLUMN redemption.cash_value IS 'Value delivered';
 COMMENT ON COLUMN redemption.currency IS 'Currency';
 COMMENT ON COLUMN redemption.status IS 'Status';
-COMMENT ON COLUMN redemption.credit_account_id IS 'Account for statement credit';
+COMMENT ON COLUMN redemption.credit_account_id IS 'Account for statement credit / cash transfer (default: the points account''s)';
 COMMENT ON COLUMN redemption.partner_member_id IS 'Loyalty number at the partner (airline miles) [PII]';
-COMMENT ON COLUMN redemption.voucher_code IS 'Issued voucher code [SECRET]';
+COMMENT ON COLUMN redemption.voucher_code IS 'Issued voucher code [PII]';
 COMMENT ON COLUMN redemption.partner_reference IS 'Fulfilment reference';
 COMMENT ON COLUMN redemption.points_ledger_entry_id IS 'Debit entry';
 COMMENT ON COLUMN redemption.journal_entry_id IS 'Ledger posting for statement credit';
 COMMENT ON COLUMN redemption.fulfilled_at IS 'Fulfilment time';
 COMMENT ON COLUMN redemption.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN redemption.cancelled_at IS 'Cancellation time';
+COMMENT ON COLUMN redemption.cancel_reason IS 'Cancellation reason';
 COMMENT ON COLUMN redemption.idempotency_key IS 'Client key';
 COMMENT ON COLUMN redemption.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN redemption.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -554,12 +756,16 @@ CREATE TABLE referral_program (
   referee_reward               numeric(28,8),
   referrer_points              bigint,
   referee_points               bigint,
+  rewards_program_id           uuid REFERENCES rewards_program(id),
   currency                     char(3),
   max_referrals_per_customer   integer,
   budget_amount                numeric(28,8),
+  spent_amount                 numeric(28,8) NOT NULL DEFAULT 0,
+  ledger_id                    uuid,
   funding_ledger_account_id    uuid,
   starts_on                    date NOT NULL,
   ends_on                      date,
+  status_reason                varchar(255),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -577,25 +783,31 @@ COMMENT ON COLUMN referral_program.updated_by IS 'Principal that last updated th
 COMMENT ON COLUMN referral_program.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN referral_program.code IS 'Program code';
 COMMENT ON COLUMN referral_program.name IS 'Display name';
-COMMENT ON COLUMN referral_program.status IS 'Status';
-COMMENT ON COLUMN referral_program.qualification_rules IS 'E.g. account opened + first deposit >= X within N days';
+COMMENT ON COLUMN referral_program.status IS 'Status (changes through activate / pause / end)';
+COMMENT ON COLUMN referral_program.qualification_rules IS 'Events the referee must complete, all within qualify_within_days ({event: ReferralEventType, min_amount})';
 COMMENT ON COLUMN referral_program.qualify_within_days IS 'Days the referee has to qualify';
 COMMENT ON COLUMN referral_program.referrer_reward IS 'Cash reward to the referrer';
 COMMENT ON COLUMN referral_program.referee_reward IS 'Cash reward to the referee';
 COMMENT ON COLUMN referral_program.referrer_points IS 'Points reward to the referrer';
 COMMENT ON COLUMN referral_program.referee_points IS 'Points reward to the referee';
+COMMENT ON COLUMN referral_program.rewards_program_id IS 'Program whose points accounts receive points rewards';
 COMMENT ON COLUMN referral_program.currency IS 'Reward currency';
-COMMENT ON COLUMN referral_program.max_referrals_per_customer IS 'Cap per referrer';
-COMMENT ON COLUMN referral_program.budget_amount IS 'Total program budget';
+COMMENT ON COLUMN referral_program.max_referrals_per_customer IS 'Cap of rewarded referrals per referrer';
+COMMENT ON COLUMN referral_program.budget_amount IS 'Total cash budget of the program';
+COMMENT ON COLUMN referral_program.spent_amount IS 'Cash rewards paid so far';
+COMMENT ON COLUMN referral_program.ledger_id IS 'Ledger book of the payouts';
 COMMENT ON COLUMN referral_program.funding_ledger_account_id IS 'Account funding payouts';
 COMMENT ON COLUMN referral_program.starts_on IS 'Start';
 COMMENT ON COLUMN referral_program.ends_on IS 'End';
+COMMENT ON COLUMN referral_program.status_reason IS 'Reason of the last pause or end';
 COMMENT ON COLUMN referral_program.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN referral_program.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN referral_program.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN referral_program.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN referral_program.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_referral_program_tenant ON referral_program (tenant_id, created_at);
+CREATE INDEX ix_referral_program_rewards_program_id ON referral_program (rewards_program_id);
+CREATE INDEX ix_referral_program_ledger_id ON referral_program (ledger_id);
 CREATE INDEX ix_referral_program_funding_ledger_account_id ON referral_program (funding_ledger_account_id);
 ALTER TABLE referral_program ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON referral_program USING (tenant_id = current_setting('app.tenant_id')::uuid);
@@ -613,16 +825,25 @@ CREATE TABLE referral (
   referral_program_id          uuid NOT NULL REFERENCES referral_program(id),
   referrer_customer_id         uuid NOT NULL,
   referral_code                varchar(32) NOT NULL,
+  is_code_holder               boolean NOT NULL DEFAULT false,
   referee_customer_id          uuid,
   referee_contact              varchar(320),
+  referrer_account_id          uuid,
+  referee_account_id           uuid,
   status                       varchar(40) NOT NULL DEFAULT 'INVITED' CHECK (status IN ('INVITED', 'SIGNED_UP', 'QUALIFYING', 'QUALIFIED', 'REWARDED', 'EXPIRED', 'REJECTED')),
   signed_up_at                 timestamptz,
   qualify_by                   timestamptz,
+  qualification_progress       jsonb,
   qualified_at                 timestamptz,
+  rewarded_at                  timestamptz,
   referrer_payout_journal_entry_id uuid,
   referee_payout_journal_entry_id uuid,
+  referrer_points_entry_id     uuid,
+  referee_points_entry_id      uuid,
+  payout_failure_reason        varchar(500),
   rejection_reason             varchar(255),
   fraud_score                  numeric(18,10),
+  device_hash                  varchar(64),
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
@@ -639,17 +860,26 @@ COMMENT ON COLUMN referral.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN referral.row_version IS 'Optimistic lock version; send as If-Match';
 COMMENT ON COLUMN referral.referral_program_id IS 'Program';
 COMMENT ON COLUMN referral.referrer_customer_id IS 'Referrer';
-COMMENT ON COLUMN referral.referral_code IS 'Code shared by the referrer';
+COMMENT ON COLUMN referral.referral_code IS 'Code shared by the referrer (server-generated, one per referrer and program)';
+COMMENT ON COLUMN referral.is_code_holder IS 'The referrer''s code record rather than an individual referral';
 COMMENT ON COLUMN referral.referee_customer_id IS 'Referee once signed up';
 COMMENT ON COLUMN referral.referee_contact IS 'Invited phone or email [PII]';
+COMMENT ON COLUMN referral.referrer_account_id IS 'Account credited with the referrer''s cash reward';
+COMMENT ON COLUMN referral.referee_account_id IS 'Account credited with the referee''s cash reward (given at sign-up)';
 COMMENT ON COLUMN referral.status IS 'Status';
 COMMENT ON COLUMN referral.signed_up_at IS 'Referee sign-up time';
 COMMENT ON COLUMN referral.qualify_by IS 'Deadline to qualify';
+COMMENT ON COLUMN referral.qualification_progress IS 'Qualification rules met so far ({event, met_at, amount})';
 COMMENT ON COLUMN referral.qualified_at IS 'Qualification time';
+COMMENT ON COLUMN referral.rewarded_at IS 'Time both rewards were paid';
 COMMENT ON COLUMN referral.referrer_payout_journal_entry_id IS 'Referrer reward posting';
 COMMENT ON COLUMN referral.referee_payout_journal_entry_id IS 'Referee reward posting';
-COMMENT ON COLUMN referral.rejection_reason IS 'Why rejected (self-referral, fraud)';
-COMMENT ON COLUMN referral.fraud_score IS 'Fraud score at qualification';
+COMMENT ON COLUMN referral.referrer_points_entry_id IS 'Referrer points ledger entry';
+COMMENT ON COLUMN referral.referee_points_entry_id IS 'Referee points ledger entry';
+COMMENT ON COLUMN referral.payout_failure_reason IS 'Last payout failure';
+COMMENT ON COLUMN referral.rejection_reason IS 'Why rejected (self-referral, device reuse, fraud)';
+COMMENT ON COLUMN referral.fraud_score IS 'Fraud score at sign-up (0..1)';
+COMMENT ON COLUMN referral.device_hash IS 'SHA-256 of the referee''s (or, for the code record, the referrer''s) device fingerprint';
 COMMENT ON COLUMN referral.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN referral.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN referral.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
@@ -660,11 +890,61 @@ CREATE INDEX ix_referral_referral_program_id ON referral (referral_program_id);
 CREATE INDEX ix_referral_referrer_customer_id ON referral (referrer_customer_id);
 CREATE INDEX ix_referral_referral_code ON referral (referral_code);
 CREATE INDEX ix_referral_referee_customer_id ON referral (referee_customer_id);
+CREATE INDEX ix_referral_referrer_account_id ON referral (referrer_account_id);
+CREATE INDEX ix_referral_referee_account_id ON referral (referee_account_id);
 CREATE INDEX ix_referral_referrer_payout_journal_entry_id ON referral (referrer_payout_journal_entry_id);
 CREATE INDEX ix_referral_referee_payout_journal_entry_id ON referral (referee_payout_journal_entry_id);
 ALTER TABLE referral ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON referral USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_referral_touch BEFORE UPDATE ON referral FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- rewards_eod_run: One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)
+CREATE TABLE rewards_eod_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  job                          varchar(40) NOT NULL CHECK (job IN ('POINTS_CONFIRMATION', 'POINTS_EXPIRY', 'CASHBACK_PAYOUT', 'TIER_REQUALIFICATION', 'REFERRAL_EXPIRY')),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'RUNNING' CHECK (status IN ('RUNNING', 'COMPLETED', 'COMPLETED_WITH_ERRORS')),
+  attempts                     integer NOT NULL DEFAULT 1,
+  result                       jsonb,
+  started_at                   timestamptz NOT NULL DEFAULT now(),
+  completed_at                 timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_rewards_eod_run_1 UNIQUE (tenant_id, job, business_date)
+);
+COMMENT ON TABLE rewards_eod_run IS 'One end-of-day job execution per tenant, job and business date (makes the EOD actions idempotent)';
+COMMENT ON COLUMN rewards_eod_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN rewards_eod_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN rewards_eod_run.created_at IS 'Creation time';
+COMMENT ON COLUMN rewards_eod_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN rewards_eod_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN rewards_eod_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN rewards_eod_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN rewards_eod_run.job IS 'Job';
+COMMENT ON COLUMN rewards_eod_run.business_date IS 'Business date processed';
+COMMENT ON COLUMN rewards_eod_run.status IS 'Outcome; COMPLETED runs are replayed, others may be re-run';
+COMMENT ON COLUMN rewards_eod_run.attempts IS 'Executions for this job and date';
+COMMENT ON COLUMN rewards_eod_run.result IS 'Counts and per-item errors of the last execution';
+COMMENT ON COLUMN rewards_eod_run.started_at IS 'Start of the last execution';
+COMMENT ON COLUMN rewards_eod_run.completed_at IS 'End of the last execution';
+COMMENT ON COLUMN rewards_eod_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN rewards_eod_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN rewards_eod_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN rewards_eod_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN rewards_eod_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_rewards_eod_run_tenant ON rewards_eod_run (tenant_id, created_at);
+ALTER TABLE rewards_eod_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON rewards_eod_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_rewards_eod_run_touch BEFORE UPDATE ON rewards_eod_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium).
